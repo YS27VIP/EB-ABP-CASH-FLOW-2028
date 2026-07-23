@@ -79,22 +79,36 @@ function guardarConfig(ss, b) {
 
 /* Crea la pestaña si no existe, o corrige el encabezado si cambió (limpia datos viejos incompatibles). */
 /* Reemplaza la hoja "Historico" con el Excel importado (estructura plana para análisis). */
+/* Importa el histórico: reemplaza SOLO las empresas incluidas en el archivo; conserva las demás. */
 function guardarHistorico(ss, b) {
   var values = Array.isArray(b.values) ? b.values : [];
-  var sh = ss.getSheetByName(HIST_TAB);
-  if (!sh) sh = ss.insertSheet(HIST_TAB);
-  sh.clear();
+  if (!values.length) return json({ ok: false, error: 'Sin datos.' });
   var W = HIST_HEAD.length;
-  var out = [];
-  var hasHeader = values.length && String(values[0][0] || '').toUpperCase().indexOf('EMPRESA') >= 0;
-  if (!hasHeader) out.push(HIST_HEAD);
-  values.forEach(function (r) {
+  var hasHeader = String(values[0][0] || '').toUpperCase().indexOf('EMPRESA') >= 0;
+  var incoming = [];
+  (hasHeader ? values.slice(1) : values).forEach(function (r) {
     var vacia = true, o = [];
     for (var i = 0; i < W; i++) { var v = (r && r[i] !== undefined && r[i] !== null) ? r[i] : ''; if (v !== '') vacia = false; o.push(v); }
-    if (!vacia) out.push(o);
+    if (!vacia) incoming.push(o);
   });
-  if (out.length) { sh.getRange(1, 1, out.length, W).setValues(out); sh.getRange(1, 1, 1, W).setFontWeight('bold'); sh.setFrozenRows(1); }
-  return json({ ok: true, filas: Math.max(0, out.length - 1) });
+  var nuevas = {};
+  incoming.forEach(function (r) { nuevas[String(r[0]).trim().toUpperCase()] = true; });
+
+  var sh = ss.getSheetByName(HIST_TAB);
+  var conservadas = [];
+  if (sh) {
+    var data = sh.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      var em = String(data[i][0] || '').trim().toUpperCase();
+      if (em && !nuevas[em]) { var o2 = []; for (var j = 0; j < W; j++) o2.push(data[i][j] != null ? data[i][j] : ''); conservadas.push(o2); }
+    }
+  } else { sh = ss.insertSheet(HIST_TAB); }
+
+  var out = [HIST_HEAD].concat(conservadas).concat(incoming);
+  sh.clear();
+  sh.getRange(1, 1, out.length, W).setValues(out);
+  sh.getRange(1, 1, 1, W).setFontWeight('bold'); sh.setFrozenRows(1);
+  return json({ ok: true, filas: incoming.length, total: out.length - 1 });
 }
 
 function tabConHeader(ss, name, head) {

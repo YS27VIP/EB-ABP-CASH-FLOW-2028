@@ -461,7 +461,12 @@ function HistoricoScreen() {
       const canon = [HIST_HEAD.slice()]
       bestAoa.slice(1).forEach((r) => {
         if (!r || r.every((c) => c === '' || c == null)) return
-        canon.push(HIST_HEAD.map((_, ci) => { const i = idx[ci]; let v = i >= 0 ? r[i] : ''; if (v instanceof Date) v = v.toISOString().slice(0, 10); return v == null ? '' : v }))
+        canon.push(HIST_HEAD.map((_, ci) => {
+          const i = idx[ci]; let v = i >= 0 ? r[i] : ''
+          if (v instanceof Date) v = v.toISOString().slice(0, 10)
+          else if (ci === 6 && typeof v === 'number' && XLSX.SSF) v = XLSX.SSF.format('yyyy-mm-dd', v)
+          return v == null ? '' : v
+        }))
       })
       setBusy(true); setMsg(null)
       try {
@@ -489,10 +494,11 @@ function HistoricoScreen() {
     ]
     const instr = [
       ['COLUMNA', 'DESCRIPCIÓN / FORMATO'],
+      ['IMPORTANTE', 'Debes subir el histórico de UNIDADES, COSTO y VENTAS NETAS (mínimo estos tres rubros).'],
       ['EMPRESA', 'Nombre de la empresa (texto). Ej: ENERGY BRANDS'],
       ['AÑO', 'Año del registro (número). Ej: 2025'],
       ['TIPO', 'Escenario. Ej: SIN TAHO / CON TAHO'],
-      ['RUBRO', 'Rubro. Ej: UNIDADES, COSTO, VENTAS NETAS, MK, LOGISTICA...'],
+      ['RUBRO', 'Rubro. Obligatorios: UNIDADES, COSTO, VENTAS NETAS. Opcionales: MK, LOGISTICA...'],
       ['SBU', 'SBU. Ej: SBU 1 / SBU 2 / SBU 3'],
       ['MARCA', 'Marca. Ej: ALTRA, HOKA, UGG...'],
       ['MES', 'Fecha del mes en formato AAAA-MM-DD. Ej: 2025-06-01'],
@@ -525,6 +531,10 @@ function HistoricoScreen() {
         {busy && <span className="sub">Guardando…</span>}
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="note warn">
+        <b>Instrucciones:</b> descarga la plantilla, llénala y súbela. Debes subir el histórico de <b>Unidades</b>, <b>Costo</b> y <b>Venta Neta</b> (una fila por registro). La fecha (MES) en formato AAAA-MM-DD.
+        {' '}Al importar, se <b>reemplaza únicamente el histórico de la(s) empresa(s)</b> incluida(s) en el archivo; el de las demás empresas se mantiene.
+      </div>
       <div className="panel">
         <h3>Histórico <span className="unit">({filas} registro(s))</span></h3>
         <div className="sub">Base histórica plana para análisis (una fila por registro). Al importar un Excel con esta estructura, se guarda en la hoja <b>Historico</b> de la Google Sheet. Estructura: {HIST_HEAD.join(' · ')}.</div>
