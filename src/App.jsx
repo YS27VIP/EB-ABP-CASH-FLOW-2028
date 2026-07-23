@@ -640,7 +640,7 @@ function HistoricoScreen() {
 
       <div className="panel">
         <h3>AUP / AUC por cliente y marca — comparativo por año</h3>
-        <div className="sub">AUP = Ventas Netas / Unidades · AUC = Costo / Unidades. Elige el año o ambos para comparar el crecimiento.</div>
+        <div className="sub"><b>VN</b> = Ventas Netas · <b>AUP</b> = Average Unit Price (Ventas Netas / Unidades) · <b>AUC</b> = Average Unit Cost (Costo / Unidades). Elige el año o ambos para comparar el crecimiento.</div>
         <div className="toolbar" style={{ marginTop: 4 }}>
           <label>Vista</label>
           {[yA, yB].filter((y, i, a) => y && a.indexOf(y) === i).map((y) => (
@@ -656,19 +656,21 @@ function HistoricoScreen() {
           <table>
             <thead>
               {vista === 'ambos'
-                ? <tr><th className="l">Cliente</th><th>Marca</th><th>AUP {yA}</th><th>AUP {yB}</th><th>AUC {yA}</th><th>AUC {yB}</th><th>VN {yA}</th><th>VN {yB}</th><th>Peso {yA}</th><th>Peso {yB}</th></tr>
+                ? <tr><th className="l">Cliente</th><th>Marca</th><th className="ya">AUP {yA}</th><th className="yb">AUP {yB}</th><th className="ya">AUC {yA}</th><th className="yb">AUC {yB}</th><th className="ya">VN {yA}</th><th className="yb">VN {yB}</th><th>Crec. VN</th><th className="ya">Peso {yA}</th><th className="yb">Peso {yB}</th></tr>
                 : <tr><th className="l">Cliente</th><th>Marca</th><th>AUP {vista}</th><th>AUC {vista}</th><th>VN {vista}</th><th>Peso {vista}</th></tr>}
             </thead>
             <tbody>
-              {cmList.length === 0 && <tr><td className="l" colSpan={vista === 'ambos' ? 10 : 6}>Importa el histórico para ver el comparativo.</td></tr>}
+              {cmList.length === 0 && <tr><td className="l" colSpan={vista === 'ambos' ? 11 : 6}>Importa el histórico para ver el comparativo.</td></tr>}
               {cmList.slice(0, 100).map((o, i) => {
                 if (vista !== 'ambos') return <tr key={i}><td className="l">{o.cli}</td><td>{o.mar}</td><td>{money2(aupY(o, vista))}</td><td>{money2(aucY(o, vista))}</td><td>{money(vnCM(o, vista))}</td><td>{pct1(pesoCM(o, vista))}</td></tr>
+                const gv = crec(vnCM(o, yA), vnCM(o, yB))
                 return <tr key={i}>
                   <td className="l">{o.cli}</td><td>{o.mar}</td>
-                  <td>{money2(aupY(o, yA))}</td><td>{money2(aupY(o, yB))}</td>
-                  <td>{money2(aucY(o, yA))}</td><td>{money2(aucY(o, yB))}</td>
-                  <td>{money(vnCM(o, yA))}</td><td>{money(vnCM(o, yB))}</td>
-                  <td>{pct1(pesoCM(o, yA))}</td><td>{pct1(pesoCM(o, yB))}</td>
+                  <td className="ya">{money2(aupY(o, yA))}</td><td className="yb">{money2(aupY(o, yB))}</td>
+                  <td className="ya">{money2(aucY(o, yA))}</td><td className="yb">{money2(aucY(o, yB))}</td>
+                  <td className="ya">{money(vnCM(o, yA))}</td><td className="yb">{money(vnCM(o, yB))}</td>
+                  <td className={gv >= 0 ? 'pos' : 'neg'}>{(gv >= 0 ? '+' : '') + gv.toFixed(1)}%</td>
+                  <td className="ya">{pct1(pesoCM(o, yA))}</td><td className="yb">{pct1(pesoCM(o, yB))}</td>
                 </tr>
               })}
             </tbody>

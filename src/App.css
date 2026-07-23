@@ -66,6 +66,14 @@ tr.grandrow td.tot{color:#fff}
 .sburow td.tot{color:var(--odoo);font-weight:800}
 tr.catrow td{font-weight:700;background:#faf7f9}
 tr.catrow td.l{color:var(--odoo)}
+/* Diferenciar columnas por año en el comparativo */
+td.ya,th.ya{background:#eef4fb}
+td.yb,th.yb{background:#f6eef9}
+thead th.ya{color:#2b5c9b}
+thead th.yb{color:#8f4b7e}
+td.ya{border-left:1px solid #dbe6f5}
+td.yb{border-right:1px solid #ecd9f0}
+
 tr.secrow td{background:var(--odoo-d);color:#fff;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.5px;text-align:left}
 tr.sep td{height:12px;background:transparent;border:none}
 select optgroup{font-weight:700}
