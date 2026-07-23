@@ -6,7 +6,6 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1SWtgyQRVlkjn
 
 const MESES = ['ene-28','feb-28','mar-28','abr-28','may-28','jun-28','jul-28','ago-28','sep-28','oct-28','nov-28','dic-28']
 
-/* Marcas maestras (agrupación por defecto; las combinaciones reales se definen por empresa) */
 const DEFAULT_SBUS = {
   'SBU 1': ['ALTRA','FJALLRAVEN','HOKA','INJINJI','NORDA'],
   'SBU 2': ['ARIAT','BIRKENSTOCK','BLUNDSTONE','ECCO','FLOWER MOUNTAIN','UGG'],
@@ -15,18 +14,7 @@ const DEFAULT_SBUS = {
 const ALL_MARCAS = Object.values(DEFAULT_SBUS).flat()
 const SBU_NAMES = ['SBU 1', 'SBU 2', 'SBU 3']
 
-const ROLES = [
-  { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#714B67', tab: 'Cap_Ventas',
-    rubros: [{ k: 'UNIDADES', u: 'ud' }, { k: 'VIAJES', u: '$' }] },
-  { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',
-    rubros: [{ k: 'AUP', u: '$' }, { k: 'AUC', u: '$' }, { k: 'VIAJES', u: '$' }, { k: 'INVENTARIO COMPRAS', u: '$' }] },
-  { id: 'marketing', label: 'Marketing', icon: '🎯', color: '#d9822b', tab: 'Cap_Marketing', marketing: true },
-  { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica',
-    rubros: [{ k: 'LOGISTICA', u: '$' }] },
-  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#8f4b7e', tab: 'Cap_Director',
-    rubros: [{ k: 'VIAJES', u: '$' }, { k: 'CASH FLOW', u: '$' }] },
-]
-
+/* Desglose de Marketing */
 const MK_GROUPS = [
   { g: 'ATL', items: [{ c: '301', n: 'OOH' }, { c: '302', n: 'DOOH' }] },
   { g: 'BTL', items: [{ c: '303', n: 'FEE AGENCIA' }, { c: '304', n: 'EVENTOS / INAUGURACIONES' }, { c: '305', n: 'CARRERAS' }, { c: '306', n: 'OTROS' }] },
@@ -36,11 +24,29 @@ const MK_GROUPS = [
   { g: 'PRE VENTAS / SALES MEETING', items: [{ c: '340', n: 'ASIGNACION DE PRODUCTO' }, { c: '341', n: 'EVENTOS / REUNIONES' }, { c: '342', n: 'OTROS' }] },
 ]
 
+/* Desglose de Viajes (igual para todos los roles) */
+const VIAJES_GROUPS = [{ g: 'VIAJES', items: [
+  { c: '201', n: 'VIAJES A HEAD QUARTERS' }, { c: '202', n: 'VIAJES A MERCADO' }, { c: '203', n: 'EQUIPAJE' },
+  { c: '204', n: 'HOSPEDAJE' }, { c: '205', n: 'COMIDAS' }, { c: '206', n: 'TRASLADOS' }, { c: '207', n: 'PENALTY' },
+  { c: '208', n: 'ALQUILER AUTO' }, { c: '209', n: 'COMIDAS C/CLIENTES' }, { c: '210', n: 'COMBUSTIBLE' },
+  { c: '211', n: 'SEGURO DE VIAJE' }, { c: '212', n: 'OTROS' },
+] }]
+
+const VJ = { k: 'VIAJES', u: '$', detalle: VIAJES_GROUPS, extrasKey: 'viajes_extras' }
+
+const ROLES = [
+  { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#714B67', tab: 'Cap_Ventas',    rubros: [{ k: 'UNIDADES', u: 'ud' }, VJ] },
+  { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP', u: '$' }, { k: 'AUC', u: '$' }, VJ, { k: 'INVENTARIO COMPRAS', u: '$' }] },
+  { id: 'marketing', label: 'Marketing', icon: '🎯', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
+  { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
+  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [VJ, { k: 'CASH FLOW', u: '$' }] },
+  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#8f4b7e', tab: 'Cap_Director',  rubros: [VJ, { k: 'CASH FLOW', u: '$' }] },
+]
+
 /* ===== helpers ===== */
 const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n }
 const fmt = (v) => (v ? Math.round(v).toLocaleString('en-US') : '')
 
-/* SBUs efectivas para una empresa (según combinaciones); marcas sin asignar van a "Sin asignar" */
 function effSBUS(empresa, combos) {
   const c = combos[empresa]
   if (!c || !SBU_NAMES.some((s) => (c[s] || []).length)) return DEFAULT_SBUS
@@ -81,7 +87,6 @@ export default function App() {
     setEmpresa(nm)
   }
 
-  /* ----- MENÚ ----- */
   if (!role && roleId !== 'config') {
     return (
       <>
@@ -98,9 +103,7 @@ export default function App() {
             <div className="row2">
               <label className="who">Empresa:
                 <span className="inline">
-                  <select value={empresa} onChange={(e) => setEmpresa(e.target.value)}>
-                    {empresas.map((e) => <option key={e}>{e}</option>)}
-                  </select>
+                  <select value={empresa} onChange={(e) => setEmpresa(e.target.value)}>{empresas.map((e) => <option key={e}>{e}</option>)}</select>
                   <button className="btn" onClick={nuevaEmpresa}>＋ Nueva</button>
                 </span>
               </label>
@@ -126,21 +129,17 @@ export default function App() {
     )
   }
 
-  /* ----- COMBINACIONES ----- */
   if (roleId === 'config') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><div className="spacer"></div>
           <span className="rolechip" style={{ background: '#5b6470' }}>⚙️ Combinaciones</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        <main>
-          <ConfigScreen empresas={empresas} setEmpresas={setEmpresas} combos={combos} setCombos={setCombos} nuevaEmpresa={nuevaEmpresa} />
-        </main>
+        <main><ConfigScreen empresas={empresas} setEmpresas={setEmpresas} combos={combos} setCombos={setCombos} nuevaEmpresa={nuevaEmpresa} /></main>
       </>
     )
   }
 
-  /* ----- FORMULARIO DE ROL ----- */
   return (
     <>
       <header>
@@ -151,11 +150,206 @@ export default function App() {
         <span className="rolechip" style={{ background: role.color }}>{role.icon} {role.label}</span>
         <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button>
       </header>
-      <main>
-        {role.marketing
-          ? <MarketingForm role={role} usuario={usuario} empresa={empresa} sbus={sbus} />
-          : <GenericForm role={role} usuario={usuario} empresa={empresa} sbus={sbus} />}
-      </main>
+      <main><RoleForm role={role} usuario={usuario} empresa={empresa} sbus={sbus} /></main>
+    </>
+  )
+}
+
+/* ===== RoleForm: pestañas de rubro (simple o detalle) ===== */
+function RoleForm({ role, usuario, empresa, sbus }) {
+  const [tab, setTab] = useState(0)
+  const [data, setData] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const rb = role.rubros[tab]
+  const common = { role, rubro: rb, usuario, empresa, sbus, data, setData, saving, setSaving, msg, setMsg }
+
+  return (
+    <>
+      <div className="toolbar">
+        {role.rubros.map((r, i) => (<button key={r.k} className={'seg' + (i === tab ? ' active' : '')} onClick={() => { setTab(i); setMsg(null) }}>{r.k}</button>))}
+      </div>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      {rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} /> : <SimpleForm key={rb.k} {...common} />}
+    </>
+  )
+}
+
+/* ===== SimpleForm: un rubro, grid marca × mes ===== */
+function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving, setSaving, setMsg }) {
+  const key = (sbu, marca, mi) => `${rubro.k}|${sbu}|${marca}|${mi}`
+  const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  const marcas = marcasDe(sbus)
+
+  async function guardar() {
+    setSaving(true); setMsg(null)
+    const rows = []
+    marcas.forEach(({ sbu, marca }) => {
+      const meses = MESES.map((_, mi) => num(data[key(sbu, marca, mi)]))
+      if (meses.some((v) => v !== 0)) rows.push({ rubro: rubro.k, sbu, marca, meses })
+    })
+    await postRows(role, usuario, empresa, rows, setMsg)
+    setSaving(false)
+  }
+  function exportar() {
+    const aoa = [['EMPRESA', 'RUBRO', 'SBU', 'MARCA', ...MESES]]
+    marcas.forEach(({ sbu, marca }) => aoa.push([empresa, rubro.k, sbu, marca, ...MESES.map((_, mi) => num(data[key(sbu, marca, mi)]))]))
+    exportXlsx(aoa, `${role.tab}_${rubro.k}.xlsx`)
+  }
+  function importar(ev) {
+    const file = ev.target.files[0]; if (!file) return
+    importXlsx(file, (aoa) => {
+      const next = { ...data }
+      aoa.slice(1).forEach((r) => { const sbu = r[2], marca = r[3]; for (let mi = 0; mi < 12; mi++) { const v = num(r[4 + mi]); if (v) next[key(sbu, marca, mi)] = v } })
+      setData(next); setMsg({ t: 'ok', x: 'Datos importados. Revisa y pulsa Guardar.' })
+    })
+    ev.target.value = ''
+  }
+
+  return (
+    <>
+      <div className="toolbar">
+        <div className="spacer"></div>
+        <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
+        <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+      </div>
+      <div className="panel">
+        <h3>{role.label} — {rubro.k} <span className="unit">({rubro.u})</span></h3>
+        <div className="sub">Empresa <b>{empresa}</b>. Captura por marca y mes.</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
+            <tbody>
+              {Object.entries(sbus).map(([sbu, ms]) => (
+                <Fragment2 key={sbu}>
+                  <tr className="sburow"><td className="l" colSpan={14}>{sbu}</td></tr>
+                  {ms.map((marca) => {
+                    let tot = 0
+                    const celdas = MESES.map((_, mi) => { const k = key(sbu, marca, mi); const v = data[k] ?? ''; tot += num(v); return <td key={mi} className="cell"><input value={v} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })
+                    return <tr key={marca}><td className="l">{marca}</td>{celdas}<td className="tot">{fmt(tot)}</td></tr>
+                  })}
+                </Fragment2>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ===== DetalleForm: sub-rubros por marca (Marketing y Viajes) ===== */
+function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, data, setData, saving, setSaving, setMsg }) {
+  const marcas = marcasDe(sbus)
+  const [marca, setMarca] = useState(marcas[0].marca)
+  const [extras, setExtras] = useState(() => { try { return JSON.parse(localStorage.getItem(extrasKey) || '[]') } catch { return [] } })
+  const isTotal = String(marca).startsWith('TOTAL::')
+  const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
+  const multi = groups.length > 1
+
+  const extraItems = extras.map((e) => ({ c: '', n: e }))
+  const grupos = multi ? [...groups, { g: 'ADICIONALES', items: extraItems }] : [{ g: groups[0].g, items: [...groups[0].items, ...extraItems] }]
+
+  const key = (mca, id, mi) => `${rubro.k}|${mca}|${id}|${mi}`
+  const idDe = (g, it) => `${g}|${it.c}|${it.n}`
+  const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  const val = (mca, id, mi) => num(data[key(mca, id, mi)])
+  const sbuMarcas = sbus[sbu] || []
+  const valSbu = (id, mi) => sbuMarcas.reduce((s, m) => s + val(m, id, mi), 0)
+  const cell = (id, mi) => (isTotal ? valSbu(id, mi) : val(marca, id, mi))
+  const grpMes = (gr, mi) => gr.items.reduce((s, it) => s + cell(idDe(gr.g, it), mi), 0)
+  const grpTot = (gr) => MESES.reduce((a, _, mi) => a + grpMes(gr, mi), 0)
+  const totMes = (mi) => grupos.reduce((s, gr) => s + grpMes(gr, mi), 0)
+  const totalGeneral = MESES.reduce((a, _, mi) => a + totMes(mi), 0)
+
+  function agregarRubro() {
+    const n = window.prompt('Nombre del nuevo rubro (se agrega a TODAS las marcas):')
+    if (!n) return
+    const next = [...extras, n.trim().toUpperCase()]
+    setExtras(next)
+    try { localStorage.setItem(extrasKey, JSON.stringify(next)) } catch {}
+  }
+  async function guardar() {
+    setSaving(true); setMsg(null)
+    const rows = []
+    marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => {
+      const meses = MESES.map((_, mi) => val(mca, idDe(gr.g, it), mi))
+      if (meses.some((v) => v !== 0)) rows.push({ rubro: `${gr.g} - ${it.n}`, sbu: sb, marca: mca, meses })
+    })))
+    await postRows(role, usuario, empresa, rows, setMsg)
+    setSaving(false)
+  }
+  function exportar() {
+    const aoa = [['EMPRESA', 'GRUPO', 'RUBRO', 'SBU', 'MARCA', ...MESES]]
+    marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => {
+      aoa.push([empresa, gr.g, it.n, sb, mca, ...MESES.map((_, mi) => val(mca, idDe(gr.g, it), mi))])
+    })))
+    exportXlsx(aoa, `${role.tab}_${rubro.k}.xlsx`)
+  }
+  function importar(ev) {
+    const file = ev.target.files[0]; if (!file) return
+    const lookup = {}
+    grupos.forEach((gr) => gr.items.forEach((it) => { lookup[`${gr.g}|${it.n}`.toUpperCase()] = idDe(gr.g, it) }))
+    importXlsx(file, (aoa) => {
+      const next = { ...data }
+      aoa.slice(1).forEach((r) => { const id = lookup[`${r[1]}|${r[2]}`.toUpperCase()]; const mca = r[4]; if (!id || !mca) return; for (let mi = 0; mi < 12; mi++) { const v = num(r[5 + mi]); if (v) next[key(mca, id, mi)] = v } })
+      setData(next); setMsg({ t: 'ok', x: 'Datos importados. Revisa y pulsa Guardar.' })
+    })
+    ev.target.value = ''
+  }
+
+  return (
+    <>
+      <div className="toolbar">
+        <label>Marca</label>
+        <select value={marca} onChange={(e) => setMarca(e.target.value)}>
+          {Object.entries(sbus).map(([s, ms]) => (<optgroup key={s} label={s}>
+            <option value={`TOTAL::${s}`}>▣ TOTAL {s}</option>
+            {ms.map((m) => <option key={m} value={m}>{m}</option>)}
+          </optgroup>))}
+        </select>
+        {isTotal && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
+        <div className="spacer"></div>
+        <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>
+        <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
+        <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar todo'}</button>
+      </div>
+      <div className="panel">
+        <h3>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca} <span className="unit">(USD · {empresa})</span></h3>
+        <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : 'Captura por rubro y mes. Los rubros son iguales para todas las marcas.'} Total: <b>${fmt(totalGeneral)}</b></div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="cod">Cód.</th><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
+            <tbody>
+              {multi && <>
+                <tr className="secrow"><td colSpan={15}>RESUMEN POR CATEGORÍA</td></tr>
+                <tr className="grandrow"><td className="cod"></td><td className="l">PRESUPUESTO TOTAL</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totalGeneral)}</td></tr>
+                {grupos.map((gr) => (<tr key={'r' + gr.g} className="catrow"><td className="cod"></td><td className="l">{gr.g}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(grpMes(gr, mi))}</td>)}<td className="tot">{fmt(grpTot(gr))}</td></tr>))}
+                <tr className="sep"><td colSpan={15}></td></tr>
+                <tr className="secrow"><td colSpan={15}>DETALLE</td></tr>
+              </>}
+              {grupos.map((gr) => (
+                <Fragment2 key={gr.g}>
+                  {multi && <tr className="sburow"><td className="cod"></td><td className="l">{gr.g}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(grpMes(gr, mi))}</td>)}<td className="tot">{fmt(grpTot(gr))}</td></tr>}
+                  {gr.items.map((it) => {
+                    const id = idDe(gr.g, it)
+                    let tot = 0
+                    const celdas = MESES.map((_, mi) => {
+                      if (isTotal) { const v = valSbu(id, mi); tot += v; return <td key={mi} className="tot">{fmt(v)}</td> }
+                      const k = key(marca, id, mi); const v = data[k] ?? ''; tot += num(v)
+                      return <td key={mi} className="cell"><input value={v} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
+                    })
+                    return <tr key={id}><td className="cod">{it.c}</td><td className="l sub2">{it.n}</td>{celdas}<td className="tot">{fmt(tot)}</td></tr>
+                  })}
+                </Fragment2>
+              ))}
+              {!multi && <tr className="grandrow"><td className="cod"></td><td className="l">TOTAL</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totalGeneral)}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </>
   )
 }
@@ -167,12 +361,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
 
-  function seed(c) {
-    const m = {}
-    ALL_MARCAS.forEach((mk) => { m[mk] = '' })
-    if (c) SBU_NAMES.forEach((s) => (c[s] || []).forEach((mk) => { m[mk] = s }))
-    return m
-  }
+  function seed(c) { const m = {}; ALL_MARCAS.forEach((mk) => { m[mk] = '' }); if (c) SBU_NAMES.forEach((s) => (c[s] || []).forEach((mk) => { m[mk] = s })); return m }
   function cambiarEmpresa(e) { setEmpresa(e); setAsign(seed(combos[e])); setMsg(null) }
 
   async function guardar() {
@@ -182,15 +371,11 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
     try {
       const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'config', empresa, combos: cc }) })
       const j = await res.json()
-      if (j.ok) {
-        setCombos({ ...combos, [empresa]: cc })
-        if (!empresas.includes(empresa)) setEmpresas([...empresas, empresa])
-        setMsg({ t: 'ok', x: 'Combinaciones guardadas para ' + empresa + '.' })
-      } else setMsg({ t: 'bad', x: 'Error: ' + j.error })
+      if (j.ok) { setCombos({ ...combos, [empresa]: cc }); if (!empresas.includes(empresa)) setEmpresas([...empresas, empresa]); setMsg({ t: 'ok', x: 'Combinaciones guardadas para ' + empresa + '.' }) }
+      else setMsg({ t: 'bad', x: 'Error: ' + j.error })
     } catch (e) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + e.message }) }
     setSaving(false)
   }
-
   const cuenta = (s) => Object.values(asign).filter((v) => v === s).length
 
   return (
@@ -205,219 +390,18 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="panel">
         <h3>Combinaciones de SBU — {empresa}</h3>
-        <div className="sub">Asigna cada marca a una SBU. Puede ser distinto por empresa. Los totales por SBU se calculan con esto. ({cuenta('SBU 1')} en SBU 1 · {cuenta('SBU 2')} en SBU 2 · {cuenta('SBU 3')} en SBU 3)</div>
+        <div className="sub">Asigna cada marca a una SBU. Puede ser distinto por empresa. ({cuenta('SBU 1')} en SBU 1 · {cuenta('SBU 2')} en SBU 2 · {cuenta('SBU 3')} en SBU 3)</div>
         <div className="tablewrap">
           <table>
             <thead><tr><th className="l">Marca</th><th>SBU asignada</th></tr></thead>
             <tbody>
               {ALL_MARCAS.map((mk) => (
-                <tr key={mk}>
-                  <td className="l">{mk}</td>
-                  <td>
-                    <select value={asign[mk] || ''} onChange={(e) => setAsign({ ...asign, [mk]: e.target.value })}>
-                      <option value="">— sin asignar —</option>
-                      {SBU_NAMES.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
-  )
-}
-
-/* ===== FORMULARIO GENÉRICO ===== */
-function GenericForm({ role, usuario, empresa, sbus }) {
-  const [data, setData] = useState({})
-  const [tab, setTab] = useState(0)
-  const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState(null)
-  const rb = role.rubros[tab]
-  const key = (rubro, sbu, marca, mi) => `${rubro}|${sbu}|${marca}|${mi}`
-  const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
-  const marcas = marcasDe(sbus)
-
-  async function guardar() {
-    setSaving(true); setMsg(null)
-    const rows = []
-    role.rubros.forEach((r) => marcas.forEach(({ sbu, marca }) => {
-      const meses = MESES.map((_, mi) => num(data[key(r.k, sbu, marca, mi)]))
-      if (meses.some((v) => v !== 0)) rows.push({ rubro: r.k, sbu, marca, meses })
-    }))
-    await postRows(role, usuario, empresa, rows, setMsg)
-    setSaving(false)
-  }
-  function exportar() {
-    const aoa = [['EMPRESA', 'RUBRO', 'SBU', 'MARCA', ...MESES]]
-    role.rubros.forEach((r) => marcas.forEach(({ sbu, marca }) => {
-      aoa.push([empresa, r.k, sbu, marca, ...MESES.map((_, mi) => num(data[key(r.k, sbu, marca, mi)]))])
-    }))
-    exportXlsx(aoa, role.tab + '.xlsx')
-  }
-  function importar(ev) {
-    const file = ev.target.files[0]; if (!file) return
-    importXlsx(file, (aoa) => {
-      const next = { ...data }
-      aoa.slice(1).forEach((r) => { const rubro = r[1], sbu = r[2], marca = r[3]; for (let mi = 0; mi < 12; mi++) { const v = num(r[4 + mi]); if (v) next[key(rubro, sbu, marca, mi)] = v } })
-      setData(next); setMsg({ t: 'ok', x: 'Datos importados del Excel. Revisa y pulsa Guardar.' })
-    })
-    ev.target.value = ''
-  }
-
-  return (
-    <>
-      <div className="toolbar">
-        {role.rubros.map((r, i) => (<button key={r.k} className={'seg' + (i === tab ? ' active' : '')} onClick={() => setTab(i)}>{r.k}</button>))}
-        <div className="spacer"></div>
-        <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
-        <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
-        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
-      </div>
-      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      <div className="panel">
-        <h3>{role.label} — {rb.k} <span className="unit">({rb.u})</span></h3>
-        <div className="sub">Empresa <b>{empresa}</b>. Captura por marca y mes. Se guarda en <b>{role.tab}</b>.</div>
-        <div className="tablewrap">
-          <table>
-            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
-            <tbody>
-              {Object.entries(sbus).map(([sbu, ms]) => (
-                <Fragment2 key={sbu}>
-                  <tr className="sburow"><td className="l" colSpan={14}>{sbu}</td></tr>
-                  {ms.map((marca) => {
-                    let tot = 0
-                    const celdas = MESES.map((_, mi) => {
-                      const k = key(rb.k, sbu, marca, mi); const v = data[k] ?? ''; tot += num(v)
-                      return <td key={mi} className="cell"><input value={v} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
-                    })
-                    return <tr key={marca}><td className="l">{marca}</td>{celdas}<td className="tot">{fmt(tot)}</td></tr>
-                  })}
-                </Fragment2>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
-  )
-}
-
-/* ===== FORMULARIO DE MARKETING ===== */
-function MarketingForm({ role, usuario, empresa, sbus }) {
-  const marcas = marcasDe(sbus)
-  const [marca, setMarca] = useState(marcas[0].marca)
-  const [data, setData] = useState({})
-  const [extras, setExtras] = useState(() => { try { return JSON.parse(localStorage.getItem('mk_extras') || '[]') } catch { return [] } })
-  const [showSbu, setShowSbu] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState(null)
-  const sbu = sbuDe(sbus, marca)
-
-  const grupos = [...MK_GROUPS, { g: 'ADICIONALES', items: extras.map((e) => ({ c: '', n: e })) }]
-  const key = (mca, id, mi) => `${mca}|${id}|${mi}`
-  const idDe = (g, it) => `${g}|${it.c}|${it.n}`
-  const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
-  const val = (mca, id, mi) => num(data[key(mca, id, mi)])
-
-  function agregarRubro() {
-    const n = window.prompt('Nombre del nuevo rubro (se agrega a TODAS las marcas):')
-    if (!n) return
-    const next = [...extras, n.trim().toUpperCase()]
-    setExtras(next)
-    try { localStorage.setItem('mk_extras', JSON.stringify(next)) } catch {}
-  }
-
-  const sbuMarcas = sbus[sbu] || []
-  const valSbu = (id, mi) => sbuMarcas.reduce((s, m) => s + val(m, id, mi), 0)
-
-  async function guardar() {
-    setSaving(true); setMsg(null)
-    const rows = []
-    marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => {
-      const id = idDe(gr.g, it)
-      const meses = MESES.map((_, mi) => val(mca, id, mi))
-      if (meses.some((v) => v !== 0)) rows.push({ rubro: `${gr.g} - ${it.n}`, sbu: sb, marca: mca, meses })
-    })))
-    await postRows(role, usuario, empresa, rows, setMsg)
-    setSaving(false)
-  }
-  function exportar() {
-    const aoa = [['EMPRESA', 'GRUPO', 'RUBRO', 'SBU', 'MARCA', ...MESES]]
-    marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => {
-      aoa.push([empresa, gr.g, it.n, sb, mca, ...MESES.map((_, mi) => val(mca, idDe(gr.g, it), mi))])
-    })))
-    exportXlsx(aoa, 'Cap_Marketing.xlsx')
-  }
-  function importar(ev) {
-    const file = ev.target.files[0]; if (!file) return
-    const lookup = {}
-    grupos.forEach((gr) => gr.items.forEach((it) => { lookup[`${gr.g}|${it.n}`.toUpperCase()] = idDe(gr.g, it) }))
-    importXlsx(file, (aoa) => {
-      const next = { ...data }
-      aoa.slice(1).forEach((r) => {
-        const id = lookup[`${r[1]}|${r[2]}`.toUpperCase()]; const mca = r[4]
-        if (!id || !mca) return
-        for (let mi = 0; mi < 12; mi++) { const v = num(r[5 + mi]); if (v) next[key(mca, id, mi)] = v }
-      })
-      setData(next); setMsg({ t: 'ok', x: 'Datos importados del Excel. Revisa y pulsa Guardar.' })
-    })
-    ev.target.value = ''
-  }
-
-  const grpMes = (gr, mi) => gr.items.reduce((s, it) => s + (showSbu ? valSbu(idDe(gr.g, it), mi) : val(marca, idDe(gr.g, it), mi)), 0)
-  const grpTot = (gr) => MESES.reduce((a, _, mi) => a + grpMes(gr, mi), 0)
-  const totMes = (mi) => grupos.reduce((s, gr) => s + grpMes(gr, mi), 0)
-  const totalGeneral = MESES.reduce((a, _, mi) => a + totMes(mi), 0)
-
-  return (
-    <>
-      <div className="toolbar">
-        <label>Marca</label>
-        <select value={marca} onChange={(e) => setMarca(e.target.value)}>
-          {Object.entries(sbus).map(([s, ms]) => (<optgroup key={s} label={s}>{ms.map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>))}
-        </select>
-        <button className={'seg' + (showSbu ? ' active' : '')} onClick={() => setShowSbu((v) => !v)}>{showSbu ? `Viendo total ${sbu}` : `Ver total ${sbu}`}</button>
-        <div className="spacer"></div>
-        <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>
-        <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
-        <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
-        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar todo'}</button>
-      </div>
-      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      <div className="panel">
-        <h3>Marketing — {showSbu ? `TOTAL ${sbu}` : marca} <span className="unit">(USD · {empresa})</span></h3>
-        <div className="sub">
-          {showSbu ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : <>Captura por rubro y mes. Se guarda en <b>{role.tab}</b>. Los rubros son iguales para todas las marcas.</>}
-          {' '}Presupuesto total: <b>${fmt(totalGeneral)}</b>
-        </div>
-        <div className="tablewrap">
-          <table>
-            <thead><tr><th className="cod">Cód.</th><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
-            <tbody>
-              <tr className="secrow"><td colSpan={15}>RESUMEN POR CATEGORÍA</td></tr>
-              <tr className="grandrow"><td className="cod"></td><td className="l">PRESUPUESTO TOTAL</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totalGeneral)}</td></tr>
-              {grupos.map((gr) => (
-                <tr key={'r' + gr.g} className="catrow"><td className="cod"></td><td className="l">{gr.g}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(grpMes(gr, mi))}</td>)}<td className="tot">{fmt(grpTot(gr))}</td></tr>
-              ))}
-              <tr className="sep"><td colSpan={15}></td></tr>
-              <tr className="secrow"><td colSpan={15}>DETALLE</td></tr>
-              {grupos.map((gr) => (
-                <Fragment2 key={gr.g}>
-                  <tr className="sburow"><td className="cod"></td><td className="l">{gr.g}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(grpMes(gr, mi))}</td>)}<td className="tot">{fmt(grpTot(gr))}</td></tr>
-                  {gr.items.map((it) => {
-                    const id = idDe(gr.g, it)
-                    let tot = 0
-                    const celdas = MESES.map((_, mi) => {
-                      if (showSbu) { const v = valSbu(id, mi); tot += v; return <td key={mi} className="tot">{fmt(v)}</td> }
-                      const k = key(marca, id, mi); const v = data[k] ?? ''; tot += num(v)
-                      return <td key={mi} className="cell"><input value={v} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
-                    })
-                    return <tr key={id}><td className="cod">{it.c}</td><td className="l sub2">{it.n}</td>{celdas}<td className="tot">{fmt(tot)}</td></tr>
-                  })}
-                </Fragment2>
+                <tr key={mk}><td className="l">{mk}</td><td>
+                  <select value={asign[mk] || ''} onChange={(e) => setAsign({ ...asign, [mk]: e.target.value })}>
+                    <option value="">— sin asignar —</option>
+                    {SBU_NAMES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </td></tr>
               ))}
             </tbody>
           </table>
@@ -435,7 +419,7 @@ async function postRows(role, usuario, empresa, rows, setMsg) {
   try {
     const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ empresa, usuario: usuario || 'anónimo', rol: role.label, tab: role.tab, rows }) })
     const j = await res.json()
-    setMsg(j.ok ? { t: 'ok', x: `Guardado: ${j.filas} fila(s) en ${role.tab} (${empresa}).` } : { t: 'bad', x: 'Error: ' + j.error })
+    setMsg(j.ok ? { t: 'ok', x: `Guardado: ${j.filas} fila(s) (${empresa}).` } : { t: 'bad', x: 'Error: ' + j.error })
   } catch (e) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + e.message }) }
 }
 
@@ -451,9 +435,6 @@ function importXlsx(file, cb) {
   const XLSX = window.XLSX
   if (!XLSX) { alert('Excel aún se está cargando, intenta de nuevo.'); return }
   const reader = new FileReader()
-  reader.onload = (e) => {
-    try { const wb = XLSX.read(e.target.result, { type: 'array' }); const ws = wb.Sheets[wb.SheetNames[0]]; cb(XLSX.utils.sheet_to_json(ws, { header: 1 })) }
-    catch (err) { alert('No se pudo leer el Excel: ' + err.message) }
-  }
+  reader.onload = (e) => { try { const wb = XLSX.read(e.target.result, { type: 'array' }); const ws = wb.Sheets[wb.SheetNames[0]]; cb(XLSX.utils.sheet_to_json(ws, { header: 1 })) } catch (err) { alert('No se pudo leer el Excel: ' + err.message) } }
   reader.readAsArrayBuffer(file)
 }
