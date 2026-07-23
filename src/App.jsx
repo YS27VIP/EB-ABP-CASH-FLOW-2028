@@ -480,7 +480,7 @@ function HistoricoScreen() {
     reader.readAsArrayBuffer(file)
     ev.target.value = ''
   }
-  const dcell = (v) => { const s = v == null ? '' : String(v); const m = s.match(/^(\d{4}-\d{2}-\d{2})T/); return m ? m[1] : s }
+  const dcell = (v) => { const s = v == null ? '' : String(v); const m = s.match(/^(\d{4})-(\d{2})-\d{2}/); return m ? m[1] + '-' + m[2] : s }
   async function exportar() {
     try {
       const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json()
@@ -536,7 +536,7 @@ function HistoricoScreen() {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="note warn">
-        <b>Instrucciones:</b> descarga la plantilla, llénala y súbela. Debes subir el histórico de <b>Unidades</b>, <b>Costo</b> y <b>Venta Neta</b> (una fila por registro). La fecha (MES) en formato AAAA-MM-DD.
+        <b>Instrucciones:</b> Descarga la plantilla, llénala y súbela. Debes subir el histórico de <b>Unidades</b>, <b>Costo</b> y <b>Venta Neta</b> (una fila por registro). La fecha (MES) en formato AAAA-MM (año-mes).
         {' '}Al importar, se <b>reemplaza únicamente el histórico de la(s) empresa(s)</b> incluida(s) en el archivo; el de las demás empresas se mantiene.
       </div>
       <div className="panel">
