@@ -367,10 +367,10 @@ function MarketingForm({ role, usuario, empresa, sbus }) {
     ev.target.value = ''
   }
 
-  const totalGeneral = grupos.reduce((s, gr) => s + gr.items.reduce((ss, it) => {
-    const id = idDe(gr.g, it)
-    return ss + MESES.reduce((a, _, mi) => a + (showSbu ? valSbu(id, mi) : val(marca, id, mi)), 0)
-  }, 0), 0)
+  const grpMes = (gr, mi) => gr.items.reduce((s, it) => s + (showSbu ? valSbu(idDe(gr.g, it), mi) : val(marca, idDe(gr.g, it), mi)), 0)
+  const grpTot = (gr) => MESES.reduce((a, _, mi) => a + grpMes(gr, mi), 0)
+  const totMes = (mi) => grupos.reduce((s, gr) => s + grpMes(gr, mi), 0)
+  const totalGeneral = MESES.reduce((a, _, mi) => a + totMes(mi), 0)
 
   return (
     <>
@@ -387,6 +387,21 @@ function MarketingForm({ role, usuario, empresa, sbus }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar todo'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="panel">
+        <h3>Resumen por categoría — {showSbu ? `TOTAL ${sbu}` : marca}</h3>
+        <div className="sub">Totales por categoría y mes ({empresa}).</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
+            <tbody>
+              <tr className="grandrow"><td className="l">PRESUPUESTO TOTAL</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totalGeneral)}</td></tr>
+              {grupos.map((gr) => (
+                <tr key={gr.g} className="catrow"><td className="l">{gr.g}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(grpMes(gr, mi))}</td>)}<td className="tot">{fmt(grpTot(gr))}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
       <div className="panel">
         <h3>Marketing — {showSbu ? `TOTAL ${sbu}` : marca} <span className="unit">(USD · {empresa})</span></h3>
         <div className="sub">

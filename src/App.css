@@ -53,10 +53,10 @@ main.menu .hello .row2{justify-content:center}
 .unit{color:var(--muted);font-weight:500;font-size:13px}
 .sburow td{background:#faf7f9;font-weight:800;color:var(--odoo);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;text-align:left}
 td.cell{padding:2px}
-td.cell input{width:62px;border:1px solid transparent;background:transparent;border-radius:5px;padding:6px 6px;font:inherit;text-align:right;font-variant-numeric:tabular-nums}
+td.cell input{width:64px;border:1px solid transparent;background:transparent;border-radius:5px;padding:6px 6px;font:inherit;text-align:center;font-variant-numeric:tabular-nums}
 td.cell input:focus{border-color:var(--odoo);background:#fff;outline:none}
 td.cell input:hover{border-color:var(--line)}
-td.tot{font-weight:800;font-variant-numeric:tabular-nums}
+td.tot{font-weight:800;font-variant-numeric:tabular-nums;text-align:center}
 
 /* --- Marketing detalle --- */
 th.cod,td.cod{width:44px;color:var(--muted);font-size:11px;text-align:center}
@@ -64,4 +64,6 @@ td.l.sub2{padding-left:22px;font-weight:500}
 tr.grandrow td{background:var(--odoo);color:#fff;font-weight:800;border-top:2px solid var(--odoo-d)}
 tr.grandrow td.tot{color:#fff}
 .sburow td.tot{color:var(--odoo);font-weight:800}
+tr.catrow td{font-weight:700;background:#faf7f9}
+tr.catrow td.l{color:var(--odoo)}
 select optgroup{font-weight:700}
