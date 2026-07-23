@@ -41,3 +41,11 @@ td.cell input{width:62px;border:1px solid transparent;background:transparent;bor
 td.cell input:focus{border-color:var(--odoo);background:#fff;outline:none}
 td.cell input:hover{border-color:var(--line)}
 td.tot{font-weight:800;font-variant-numeric:tabular-nums}
+
+/* --- Marketing detalle --- */
+th.cod,td.cod{width:44px;color:var(--muted);font-size:11px;text-align:center}
+td.l.sub2{padding-left:22px;font-weight:500}
+tr.grandrow td{background:var(--odoo);color:#fff;font-weight:800;border-top:2px solid var(--odoo-d)}
+tr.grandrow td.tot{color:#fff}
+.sburow td.tot{color:var(--odoo);font-weight:800}
+select optgroup{font-weight:700}
