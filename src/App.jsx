@@ -639,41 +639,6 @@ function HistoricoScreen() {
       </div>
 
       <div className="panel">
-        <h3>Peso por cliente <span className="unit">(por Ventas Netas)</span></h3>
-        <div className="sub">Ventas netas y participación (% peso) de cada cliente, por año.</div>
-        <div className="toolbar" style={{ marginTop: 4 }}>
-          <label>Vista</label>
-          {[pYA, pYB].filter((y, i, a) => y && a.indexOf(y) === i).map((y) => <button key={y} className={'seg' + (pVista === y ? ' active' : '')} onClick={() => setPVista(y)}>{y}</button>)}
-          {pYA !== pYB && <button className={'seg' + (pVista === 'ambos' ? ' active' : '')} onClick={() => setPVista('ambos')}>Ambos</button>}
-          <label style={{ marginLeft: 8 }}>SBU</label>
-          <select value={pSbu} onChange={(e) => setPSbu(e.target.value)}><option value="">Todas</option>{sbuList.map((s) => <option key={s}>{s}</option>)}</select>
-          <label>Marca</label>
-          <select value={pMarca} onChange={(e) => setPMarca(e.target.value)}><option value="">Todas</option>{marcasList.map((m) => <option key={m}>{m}</option>)}</select>
-        </div>
-        <div className="tablewrap">
-          <table>
-            <thead>
-              {pVista === 'ambos'
-                ? <tr><th className="l">Cliente</th><th>VN {pYA}</th><th>% Peso {pYA}</th><th>VN {pYB}</th><th>% Peso {pYB}</th><th>Crec. VN</th></tr>
-                : <tr><th className="l">Cliente</th><th>Ventas Netas {pVista}</th><th>% Peso {pVista}</th></tr>}
-            </thead>
-            <tbody>
-              {pList.length === 0 && <tr><td className="l" colSpan={pVista === 'ambos' ? 6 : 3}>Sin ventas netas para los filtros.</td></tr>}
-              {pList.slice(0, 100).map((o, i) => {
-                if (pVista !== 'ambos') return <tr key={i}><td className="l">{o.cli}</td><td>{money(vnY(o, pVista))}</td><td>{pct1(pesoY(o, pVista))}</td></tr>
-                const vA = vnY(o, pYA), vB = vnY(o, pYB), g = crec(vA, vB)
-                return <tr key={i}><td className="l">{o.cli}</td><td>{money(vA)}</td><td>{pct1(pesoY(o, pYA))}</td><td>{money(vB)}</td><td>{pct1(pesoY(o, pYB))}</td><td className={g >= 0 ? 'pos' : 'neg'}>{(g >= 0 ? '+' : '') + g.toFixed(1)}%</td></tr>
-              })}
-              {pList.length > 0 && (pVista === 'ambos'
-                ? <tr className="grandrow"><td className="l">TOTAL</td><td>{money(totY[pYA] || 0)}</td><td>100.0%</td><td>{money(totY[pYB] || 0)}</td><td>100.0%</td><td></td></tr>
-                : <tr className="grandrow"><td className="l">TOTAL</td><td>{money(totY[pVista] || 0)}</td><td>100.0%</td></tr>)}
-            </tbody>
-          </table>
-        </div>
-        {pList.length > 100 && <div className="sub" style={{ marginTop: 8 }}>Mostrando 100 de {pList.length} clientes.</div>}
-      </div>
-
-      <div className="panel">
         <h3>AUP / AUC por cliente y marca — comparativo por año</h3>
         <div className="sub">AUP = Ventas Netas / Unidades · AUC = Costo / Unidades. Elige el año o ambos para comparar el crecimiento.</div>
         <div className="toolbar" style={{ marginTop: 4 }}>
