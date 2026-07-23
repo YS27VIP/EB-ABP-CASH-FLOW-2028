@@ -480,9 +480,13 @@ function HistoricoScreen() {
     reader.readAsArrayBuffer(file)
     ev.target.value = ''
   }
+  const dcell = (v) => { const s = v == null ? '' : String(v); const m = s.match(/^(\d{4}-\d{2}-\d{2})T/); return m ? m[1] : s }
   async function exportar() {
-    try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json(); if (j.ok && j.values && j.values.length) exportXlsx(j.values, 'Historico.xlsx'); else alert('Aún no hay histórico guardado.') }
-    catch (e) { alert('No se pudo: ' + e.message) }
+    try {
+      const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json()
+      if (j.ok && j.values && j.values.length) { const clean = j.values.map((row) => row.map((c) => dcell(c))); exportXlsx(clean, 'Historico.xlsx') }
+      else alert('Aún no hay histórico guardado.')
+    } catch (e) { alert('No se pudo: ' + e.message) }
   }
   function plantilla() {
     const XLSX = window.XLSX
@@ -543,7 +547,7 @@ function HistoricoScreen() {
             <thead><tr>{head.map((h, i) => <th key={i} className={i === 0 ? 'l' : ''}>{String(h)}</th>)}</tr></thead>
             <tbody>
               {preview.length === 0 && <tr><td className="l" colSpan={HIST_HEAD.length}>Aún no hay datos. Importa un Excel con la estructura de la plantilla.</td></tr>}
-              {preview.map((r, ri) => (<tr key={ri}>{head.map((_, ci) => <td key={ci} className={ci === 0 ? 'l' : ''}>{r[ci] != null ? String(r[ci]) : ''}</td>)}</tr>))}
+              {preview.map((r, ri) => (<tr key={ri}>{head.map((_, ci) => <td key={ci} className={ci === 0 ? 'l' : ''}>{dcell(r[ci])}</td>)}</tr>))}
             </tbody>
           </table>
         </div>
