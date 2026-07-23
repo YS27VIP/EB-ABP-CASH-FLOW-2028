@@ -765,7 +765,6 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
   const [marca, setMarca] = useState(marcas[0].marca)
   const [hist, setHist] = useState([])
   const [cats, setCats] = useState({})
-  const [modo, setModo] = useState('crec')
   const [growth, setGrowth] = useState(() => { try { return JSON.parse(localStorage.getItem('ventas_growth_' + empresa) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -781,13 +780,15 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
   const u2026 = {}, cliByMarca = {}
   hist.forEach((r) => { if (upper(r[3]).indexOf('UNIDAD') < 0) return; if (String(r[1]) !== '2026') return; const mi = mesIdx(r[6]); if (mi < 0) return; const mar = r[5], cli = r[8] || '(sin cliente)', k = cli + '|' + mar; (u2026[k] = u2026[k] || Array(12).fill(0))[mi] += num(r[7]); (cliByMarca[mar] = cliByMarca[mar] || new Set()).add(cli) })
   const clientes = [...(cliByMarca[marca] || [])].sort()
-  const gval = (cli, mi) => num(growth[cli + '|' + marca + '|' + mi])
+  const g = (cli) => num(growth[cli + '|' + marca])
   const u26 = (cli, mi) => (u2026[cli + '|' + marca] || [])[mi] || 0
-  const u28 = (cli, mi) => Math.round(u26(cli, mi) * (1 + gval(cli, mi) / 100))
-  const setG = (cli, mi, val) => setGrowth({ ...growth, [cli + '|' + marca + '|' + mi]: val })
-  const totMarcaSel = clientes.reduce((s, cli) => s + MESES.reduce((a, _, mi) => a + u28(cli, mi), 0), 0)
+  const u28 = (cli, mi) => Math.round(u26(cli, mi) * (1 + g(cli) / 100))
+  const setG = (cli, val) => setGrowth({ ...growth, [cli + '|' + marca]: val })
+  const t26 = (cli) => MESES.reduce((a, _, mi) => a + u26(cli, mi), 0)
+  const t28 = (cli) => MESES.reduce((a, _, mi) => a + u28(cli, mi), 0)
+  const totMarcaSel = clientes.reduce((s, cli) => s + t28(cli), 0)
   const totMarca = {}
-  Object.keys(u2026).forEach((k) => { const p = k.split('|'), cli = p[0], mar = p[1]; let t = 0; for (let mi = 0; mi < 12; mi++) t += Math.round((u2026[k][mi] || 0) * (1 + num(growth[cli + '|' + mar + '|' + mi]) / 100)); totMarca[mar] = (totMarca[mar] || 0) + t })
+  Object.keys(u2026).forEach((k) => { const p = k.split('|'), cli = p[0], mar = p[1], gg = num(growth[cli + '|' + mar]); let t = 0; for (let mi = 0; mi < 12; mi++) t += Math.round((u2026[k][mi] || 0) * (1 + gg / 100)); totMarca[mar] = (totMarca[mar] || 0) + t })
 
   async function guardar() {
     setSaving(true); setMsg(null)
@@ -796,12 +797,6 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
     await postToTab('Cap_Ventas', empresa, usuario, role.label, rows, setMsg)
     setSaving(false)
   }
-  const cell = (cli, mi) => {
-    if (modo === '2026') return <td key={mi} className="tot">{fmt(u26(cli, mi))}</td>
-    if (modo === '2028') return <td key={mi} className="tot">{fmt(u28(cli, mi))}</td>
-    const k = cli + '|' + marca + '|' + mi
-    return <td key={mi} className="cell"><input value={growth[k] ?? ''} onChange={(e) => setG(cli, mi, e.target.value)} inputMode="decimal" placeholder="%" /></td>
-  }
   const catList = cats[marca] || []
 
   return (
@@ -809,22 +804,34 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
       <div className="toolbar">
         <label>Marca</label>
         <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select>
-        <button className={'seg' + (modo === '2026' ? ' active' : '')} onClick={() => setModo('2026')}>2026 histórico</button>
-        <button className={'seg' + (modo === 'crec' ? ' active' : '')} onClick={() => setModo('crec')}>% Crecimiento</button>
-        <button className={'seg' + (modo === '2028' ? ' active' : '')} onClick={() => setModo('2028')}>2028 proyección</button>
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar marca'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="panel">
-        <h3>Ventas · Unidades 2028 — {marca} <span className="unit">({modo === '2026' ? 'unidades 2026' : modo === '2028' ? 'unidades 2028 = 2026 × (1+%)' : '% crecimiento mensual sobre 2026'})</span></h3>
-        <div className="sub">Empresa <b>{empresa}</b>. Clientes con histórico de unidades 2026. Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
+        <h3>Ventas · Unidades 2028 — {marca}</h3>
+        <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: se aplica a todos los meses de 2026 para proyectar 2028. La fila gris es el histórico 2026 (referencia). Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th className="l">Cliente</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+            <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
             <tbody>
-              {clientes.length === 0 && <tr><td className="l" colSpan={14}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico primero (unidades).</td></tr>}
-              {clientes.map((cli) => <tr key={cli}><td className="l">{cli}</td>{MESES.map((_, mi) => cell(cli, mi))}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + (modo === '2026' ? u26(cli, mi) : u28(cli, mi)), 0))}</td></tr>)}
+              {clientes.length === 0 && <tr><td className="l" colSpan={16}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico primero (unidades 2026).</td></tr>}
+              {clientes.map((cli) => (
+                <Fragment2 key={cli}>
+                  <tr>
+                    <td className="l" rowSpan={2}>{cli}</td>
+                    <td className="cell" rowSpan={2}><input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" /></td>
+                    <td className="yl">2026</td>
+                    {MESES.map((_, mi) => <td key={mi} className="ref">{fmt(u26(cli, mi))}</td>)}
+                    <td className="ref"><b>{fmt(t26(cli))}</b></td>
+                  </tr>
+                  <tr className="proy2028">
+                    <td className="yl proyl">2028</td>
+                    {MESES.map((_, mi) => <td key={mi} className="tot">{fmt(u28(cli, mi))}</td>)}
+                    <td className="tot">{fmt(t28(cli))}</td>
+                  </tr>
+                </Fragment2>
+              ))}
             </tbody>
           </table>
         </div>

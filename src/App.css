@@ -76,4 +76,11 @@ td.yb{border-right:1px solid #ecd9f0}
 
 tr.secrow td{background:var(--odoo-d);color:#fff;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.5px;text-align:left}
 tr.sep td{height:12px;background:transparent;border:none}
+
+/* Proyección de Ventas 2026 vs 2028 */
+td.ref{color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
+td.yl{font-weight:800;color:var(--muted);font-size:11px;text-align:center}
+td.yl.proyl{color:var(--odoo)}
+tr.proy2028 td{background:#f5f0f6}
+tr.proy2028 td.tot{color:var(--odoo)}
 select optgroup{font-weight:700}
