@@ -87,7 +87,7 @@ export default function App() {
     setEmpresa(nm)
   }
 
-  if (!role && roleId !== 'config') {
+  if (!role && roleId !== 'config' && roleId !== 'historico') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
@@ -119,13 +119,13 @@ export default function App() {
                 <span className="applabel">{r.label}</span>
               </button>
             ))}
-            <button className="app" onClick={() => setRoleId('config')}>
-              <span className="appicon" style={{ background: '#5b6470' }}>⚙️</span>
-              <span className="applabel">Combinaciones</span>
-            </button>
             <button className="app" onClick={() => setRoleId('historico')}>
               <span className="appicon" style={{ background: '#b0473b' }}>📊</span>
               <span className="applabel">Histórico</span>
+            </button>
+            <button className="app" onClick={() => setRoleId('config')}>
+              <span className="appicon" style={{ background: '#5b6470' }}>⚙️</span>
+              <span className="applabel">Combinaciones</span>
             </button>
           </div>
         </main>
