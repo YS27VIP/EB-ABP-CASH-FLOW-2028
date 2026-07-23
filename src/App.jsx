@@ -388,21 +388,6 @@ function MarketingForm({ role, usuario, empresa, sbus }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="panel">
-        <h3>Resumen por categoría — {showSbu ? `TOTAL ${sbu}` : marca}</h3>
-        <div className="sub">Totales por categoría y mes ({empresa}).</div>
-        <div className="tablewrap">
-          <table>
-            <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
-            <tbody>
-              <tr className="grandrow"><td className="l">PRESUPUESTO TOTAL</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totalGeneral)}</td></tr>
-              {grupos.map((gr) => (
-                <tr key={gr.g} className="catrow"><td className="l">{gr.g}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(grpMes(gr, mi))}</td>)}<td className="tot">{fmt(grpTot(gr))}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div className="panel">
         <h3>Marketing — {showSbu ? `TOTAL ${sbu}` : marca} <span className="unit">(USD · {empresa})</span></h3>
         <div className="sub">
           {showSbu ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : <>Captura por rubro y mes. Se guarda en <b>{role.tab}</b>. Los rubros son iguales para todas las marcas.</>}
@@ -410,34 +395,30 @@ function MarketingForm({ role, usuario, empresa, sbus }) {
         </div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th className="l">Rubro</th><th className="cod">Cód.</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
+            <thead><tr><th className="cod">Cód.</th><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
             <tbody>
-              {grupos.map((gr) => {
-                const subMes = MESES.map((_, mi) => gr.items.reduce((s, it) => s + (showSbu ? valSbu(idDe(gr.g, it), mi) : val(marca, idDe(gr.g, it), mi)), 0))
-                const subTot = subMes.reduce((a, b) => a + b, 0)
-                return (
-                  <Fragment2 key={gr.g}>
-                    <tr className="sburow"><td className="l">{gr.g}</td><td></td>{subMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(subTot)}</td></tr>
-                    {gr.items.map((it) => {
-                      const id = idDe(gr.g, it)
-                      let tot = 0
-                      const celdas = MESES.map((_, mi) => {
-                        if (showSbu) { const v = valSbu(id, mi); tot += v; return <td key={mi} className="tot">{fmt(v)}</td> }
-                        const k = key(marca, id, mi); const v = data[k] ?? ''; tot += num(v)
-                        return <td key={mi} className="cell"><input value={v} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
-                      })
-                      return <tr key={id}><td className="l sub2">{it.n}</td><td className="cod">{it.c}</td>{celdas}<td className="tot">{fmt(tot)}</td></tr>
-                    })}
-                  </Fragment2>
-                )
-              })}
-              <tr className="grandrow"><td className="l">PRESUPUESTO TOTAL</td><td></td>
-                {MESES.map((_, mi) => {
-                  const v = grupos.reduce((s, gr) => s + gr.items.reduce((ss, it) => ss + (showSbu ? valSbu(idDe(gr.g, it), mi) : val(marca, idDe(gr.g, it), mi)), 0), 0)
-                  return <td key={mi} className="tot">{fmt(v)}</td>
-                })}
-                <td className="tot">{fmt(totalGeneral)}</td>
-              </tr>
+              <tr className="secrow"><td colSpan={15}>RESUMEN POR CATEGORÍA</td></tr>
+              <tr className="grandrow"><td className="cod"></td><td className="l">PRESUPUESTO TOTAL</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totalGeneral)}</td></tr>
+              {grupos.map((gr) => (
+                <tr key={'r' + gr.g} className="catrow"><td className="cod"></td><td className="l">{gr.g}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(grpMes(gr, mi))}</td>)}<td className="tot">{fmt(grpTot(gr))}</td></tr>
+              ))}
+              <tr className="sep"><td colSpan={15}></td></tr>
+              <tr className="secrow"><td colSpan={15}>DETALLE</td></tr>
+              {grupos.map((gr) => (
+                <Fragment2 key={gr.g}>
+                  <tr className="sburow"><td className="cod"></td><td className="l">{gr.g}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(grpMes(gr, mi))}</td>)}<td className="tot">{fmt(grpTot(gr))}</td></tr>
+                  {gr.items.map((it) => {
+                    const id = idDe(gr.g, it)
+                    let tot = 0
+                    const celdas = MESES.map((_, mi) => {
+                      if (showSbu) { const v = valSbu(id, mi); tot += v; return <td key={mi} className="tot">{fmt(v)}</td> }
+                      const k = key(marca, id, mi); const v = data[k] ?? ''; tot += num(v)
+                      return <td key={mi} className="cell"><input value={v} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
+                    })
+                    return <tr key={id}><td className="cod">{it.c}</td><td className="l sub2">{it.n}</td>{celdas}<td className="tot">{fmt(tot)}</td></tr>
+                  })}
+                </Fragment2>
+              ))}
             </tbody>
           </table>
         </div>
