@@ -438,6 +438,9 @@ function HistoricoScreen() {
   const [vista, setVista] = useState('ambos')
   const [cmpSbu, setCmpSbu] = useState('')
   const [cmpMarca, setCmpMarca] = useState('')
+  const [pVista, setPVista] = useState('ambos')
+  const [pSbu, setPSbu] = useState('')
+  const [pMarca, setPMarca] = useState('')
 
   useEffect(() => { cargar() }, [])
   async function cargar() {
@@ -551,18 +554,30 @@ function HistoricoScreen() {
   const cmpBase = values.slice(1).filter((r) => (!cmpSbu || String(r[4]) === cmpSbu) && (!cmpMarca || String(r[5]) === cmpMarca))
   const cmYears = [...new Set(cmpBase.map((r) => String(r[1])).filter(Boolean))].sort()
   const yA = cmYears[0], yB = cmYears[cmYears.length - 1]
-  const cm = {}
+  const cm = {}, cmpTotVNY = {}
   cmpBase.forEach((r) => {
     const rb = up(r[3]), mo = num(r[7]), cli = r[8] || '(sin cliente)', mar = r[5], an = String(r[1])
     if (!an) return
     const o = cm[cli + '|' + mar] || (cm[cli + '|' + mar] = { cli, mar, y: {} })
     const yo = o.y[an] || (o.y[an] = { vn: 0, un: 0, co: 0 })
-    if (rb.indexOf('VENTA') >= 0) yo.vn += mo; else if (rb.indexOf('UNIDAD') >= 0) yo.un += mo; else if (rb.indexOf('COSTO') >= 0) yo.co += mo
+    if (rb.indexOf('VENTA') >= 0) { yo.vn += mo; cmpTotVNY[an] = (cmpTotVNY[an] || 0) + mo } else if (rb.indexOf('UNIDAD') >= 0) yo.un += mo; else if (rb.indexOf('COSTO') >= 0) yo.co += mo
   })
+  const vnCM = (o, y) => (o.y[y] ? o.y[y].vn : 0)
+  const pesoCM = (o, y) => (cmpTotVNY[y] ? vnCM(o, y) / cmpTotVNY[y] * 100 : 0)
   const aupY = (o, y) => { const d = o.y[y]; return d && d.un ? d.vn / d.un : 0 }
   const aucY = (o, y) => { const d = o.y[y]; return d && d.un ? d.co / d.un : 0 }
   const crec = (a, b) => (a ? (b - a) / a * 100 : 0)
   const cmList = Object.values(cm).sort((a, b) => ((b.y[yB] ? b.y[yB].vn : 0) - (a.y[yB] ? a.y[yB].vn : 0)))
+
+  // ---- Peso por cliente y año ----
+  const pBase = values.slice(1).filter((r) => (!pSbu || String(r[4]) === pSbu) && (!pMarca || String(r[5]) === pMarca))
+  const pYears = [...new Set(pBase.map((r) => String(r[1])).filter(Boolean))].sort()
+  const pYA = pYears[0], pYB = pYears[pYears.length - 1]
+  const pcli = {}, totY = {}
+  pBase.forEach((r) => { if (up(r[3]).indexOf('VENTA') < 0) return; const an = String(r[1]); if (!an) return; const cli = r[8] || '(sin cliente)', mo = num(r[7]); const o = pcli[cli] || (pcli[cli] = { cli, y: {} }); o.y[an] = (o.y[an] || 0) + mo; totY[an] = (totY[an] || 0) + mo })
+  const vnY = (o, y) => o.y[y] || 0
+  const pesoY = (o, y) => (totY[y] ? (vnY(o, y) / totY[y]) * 100 : 0)
+  const pList = Object.values(pcli).sort((a, b) => (vnY(b, pYB) + vnY(b, pYA)) - (vnY(a, pYB) + vnY(a, pYA)))
 
   return (
     <>
@@ -625,18 +640,37 @@ function HistoricoScreen() {
 
       <div className="panel">
         <h3>Peso por cliente <span className="unit">(por Ventas Netas)</span></h3>
-        <div className="sub">Participación de cada cliente sobre el total de ventas netas{fMarca ? ` · ${fMarca}` : ''}{fAnio ? ` · ${fAnio}` : ''}.</div>
+        <div className="sub">Ventas netas y participación (% peso) de cada cliente, por año.</div>
+        <div className="toolbar" style={{ marginTop: 4 }}>
+          <label>Vista</label>
+          {[pYA, pYB].filter((y, i, a) => y && a.indexOf(y) === i).map((y) => <button key={y} className={'seg' + (pVista === y ? ' active' : '')} onClick={() => setPVista(y)}>{y}</button>)}
+          {pYA !== pYB && <button className={'seg' + (pVista === 'ambos' ? ' active' : '')} onClick={() => setPVista('ambos')}>Ambos</button>}
+          <label style={{ marginLeft: 8 }}>SBU</label>
+          <select value={pSbu} onChange={(e) => setPSbu(e.target.value)}><option value="">Todas</option>{sbuList.map((s) => <option key={s}>{s}</option>)}</select>
+          <label>Marca</label>
+          <select value={pMarca} onChange={(e) => setPMarca(e.target.value)}><option value="">Todas</option>{marcasList.map((m) => <option key={m}>{m}</option>)}</select>
+        </div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th className="l">Cliente</th><th>Ventas Netas</th><th>% Peso</th></tr></thead>
+            <thead>
+              {pVista === 'ambos'
+                ? <tr><th className="l">Cliente</th><th>VN {pYA}</th><th>% Peso {pYA}</th><th>VN {pYB}</th><th>% Peso {pYB}</th><th>Crec. VN</th></tr>
+                : <tr><th className="l">Cliente</th><th>Ventas Netas {pVista}</th><th>% Peso {pVista}</th></tr>}
+            </thead>
             <tbody>
-              {clientes.length === 0 && <tr><td className="l" colSpan={3}>Sin ventas netas para los filtros seleccionados.</td></tr>}
-              {clientes.slice(0, 100).map((o, i) => <tr key={i}><td className="l">{o.c}</td><td>{money(o.v)}</td><td>{pct1(o.pct)}</td></tr>)}
-              {clientes.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td>{money(totVN)}</td><td>100.0%</td></tr>}
+              {pList.length === 0 && <tr><td className="l" colSpan={pVista === 'ambos' ? 6 : 3}>Sin ventas netas para los filtros.</td></tr>}
+              {pList.slice(0, 100).map((o, i) => {
+                if (pVista !== 'ambos') return <tr key={i}><td className="l">{o.cli}</td><td>{money(vnY(o, pVista))}</td><td>{pct1(pesoY(o, pVista))}</td></tr>
+                const vA = vnY(o, pYA), vB = vnY(o, pYB), g = crec(vA, vB)
+                return <tr key={i}><td className="l">{o.cli}</td><td>{money(vA)}</td><td>{pct1(pesoY(o, pYA))}</td><td>{money(vB)}</td><td>{pct1(pesoY(o, pYB))}</td><td className={g >= 0 ? 'pos' : 'neg'}>{(g >= 0 ? '+' : '') + g.toFixed(1)}%</td></tr>
+              })}
+              {pList.length > 0 && (pVista === 'ambos'
+                ? <tr className="grandrow"><td className="l">TOTAL</td><td>{money(totY[pYA] || 0)}</td><td>100.0%</td><td>{money(totY[pYB] || 0)}</td><td>100.0%</td><td></td></tr>
+                : <tr className="grandrow"><td className="l">TOTAL</td><td>{money(totY[pVista] || 0)}</td><td>100.0%</td></tr>)}
             </tbody>
           </table>
         </div>
-        {clientes.length > 100 && <div className="sub" style={{ marginTop: 8 }}>Mostrando los 100 clientes con mayor venta (de {clientes.length}).</div>}
+        {pList.length > 100 && <div className="sub" style={{ marginTop: 8 }}>Mostrando 100 de {pList.length} clientes.</div>}
       </div>
 
       <div className="panel">
@@ -657,19 +691,19 @@ function HistoricoScreen() {
           <table>
             <thead>
               {vista === 'ambos'
-                ? <tr><th className="l">Cliente</th><th>Marca</th><th>AUP {yA}</th><th>AUP {yB}</th><th>Crec. AUP</th><th>AUC {yA}</th><th>AUC {yB}</th><th>Crec. AUC</th></tr>
-                : <tr><th className="l">Cliente</th><th>Marca</th><th>AUP {vista}</th><th>AUC {vista}</th></tr>}
+                ? <tr><th className="l">Cliente</th><th>Marca</th><th>AUP {yA}</th><th>AUP {yB}</th><th>AUC {yA}</th><th>AUC {yB}</th><th>VN {yA}</th><th>VN {yB}</th><th>Peso {yA}</th><th>Peso {yB}</th></tr>
+                : <tr><th className="l">Cliente</th><th>Marca</th><th>AUP {vista}</th><th>AUC {vista}</th><th>VN {vista}</th><th>Peso {vista}</th></tr>}
             </thead>
             <tbody>
-              {cmList.length === 0 && <tr><td className="l" colSpan={vista === 'ambos' ? 8 : 4}>Importa el histórico para ver el comparativo.</td></tr>}
+              {cmList.length === 0 && <tr><td className="l" colSpan={vista === 'ambos' ? 10 : 6}>Importa el histórico para ver el comparativo.</td></tr>}
               {cmList.slice(0, 100).map((o, i) => {
-                if (vista !== 'ambos') return <tr key={i}><td className="l">{o.cli}</td><td>{o.mar}</td><td>{money2(aupY(o, vista))}</td><td>{money2(aucY(o, vista))}</td></tr>
-                const apA = aupY(o, yA), apB = aupY(o, yB), acA = aucY(o, yA), acB = aucY(o, yB)
-                const gA = crec(apA, apB), gC = crec(acA, acB)
+                if (vista !== 'ambos') return <tr key={i}><td className="l">{o.cli}</td><td>{o.mar}</td><td>{money2(aupY(o, vista))}</td><td>{money2(aucY(o, vista))}</td><td>{money(vnCM(o, vista))}</td><td>{pct1(pesoCM(o, vista))}</td></tr>
                 return <tr key={i}>
                   <td className="l">{o.cli}</td><td>{o.mar}</td>
-                  <td>{money2(apA)}</td><td>{money2(apB)}</td><td className={gA >= 0 ? 'pos' : 'neg'}>{(gA >= 0 ? '+' : '') + gA.toFixed(1)}%</td>
-                  <td>{money2(acA)}</td><td>{money2(acB)}</td><td className={gC >= 0 ? 'pos' : 'neg'}>{(gC >= 0 ? '+' : '') + gC.toFixed(1)}%</td>
+                  <td>{money2(aupY(o, yA))}</td><td>{money2(aupY(o, yB))}</td>
+                  <td>{money2(aucY(o, yA))}</td><td>{money2(aucY(o, yB))}</td>
+                  <td>{money(vnCM(o, yA))}</td><td>{money(vnCM(o, yB))}</td>
+                  <td>{pct1(pesoCM(o, yA))}</td><td>{pct1(pesoCM(o, yB))}</td>
                 </tr>
               })}
             </tbody>
