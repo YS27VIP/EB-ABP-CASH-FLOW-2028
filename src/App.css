@@ -77,6 +77,10 @@ td.yb{border-right:1px solid #ecd9f0}
 tr.secrow td{background:var(--odoo-d);color:#fff;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.5px;text-align:left}
 tr.sep td{height:12px;background:transparent;border:none}
 
+/* Tablas de Ventas con columnas fijas para que los meses coincidan entre bloques */
+table.vfix{table-layout:fixed;width:1168px}
+table.vfix td.l,table.vfix th.l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 /* Proyección de Ventas 2026 vs 2028 */
 td.ref{color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
 td.yl{font-weight:800;color:var(--muted);font-size:11px;text-align:center}

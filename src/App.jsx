@@ -816,7 +816,8 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
         <h3>Ventas · Unidades 2028 — {marca}</h3>
         <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: se aplica a todos los meses de 2026 para proyectar 2028. La fila gris es el histórico 2026 (referencia). Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
         <div className="tablewrap">
-          <table>
+          <table className="vfix">
+            <colgroup><col style={{ width: '220px' }} /><col style={{ width: '55px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
             <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
             <tbody>
               {clientes.length === 0 && <tr><td className="l" colSpan={16}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico primero (unidades 2026).</td></tr>}
@@ -849,7 +850,8 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
         <h3>Resumen por SBU y marca <span className="unit">(unidades 2028 por mes)</span></h3>
         <div className="sub">Unidades 2028 (= 2026 × (1 + % crecimiento)) por marca y mes. Las SBU muestran el subtotal de sus marcas.</div>
         <div className="tablewrap">
-          <table>
+          <table className="vfix">
+            <colgroup><col style={{ width: '330px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
             <thead><tr><th className="l">SBU / Marca</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
             <tbody>
               {Object.entries(sbus).map(([s, ms]) => {
@@ -869,7 +871,8 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
         <h3>Unidades 2028 por categoría y mes — {marca}</h3>
         <div className="sub">Cada mes de {marca} se reparte según el peso de categorías que define el Director.</div>
         <div className="tablewrap">
-          <table>
+          <table className="vfix">
+            <colgroup><col style={{ width: '270px' }} /><col style={{ width: '60px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
             <thead><tr><th className="l">Categoría</th><th>Peso %</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
             <tbody>
               <tr className="grandrow"><td className="l">TOTAL {marca}</td><td></td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
