@@ -788,8 +788,11 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
   const t28 = (cli) => MESES.reduce((a, _, mi) => a + u28(cli, mi), 0)
   const totMarcaSel = clientes.reduce((s, cli) => s + t28(cli), 0)
   const totMarca = {}
-  Object.keys(u2026).forEach((k) => { const p = k.split('|'), cli = p[0], mar = p[1], gg = num(growth[cli + '|' + mar]); let t = 0; for (let mi = 0; mi < 12; mi++) t += Math.round((u2026[k][mi] || 0) * (1 + gg / 100)); totMarca[mar] = (totMarca[mar] || 0) + t })
+  const mesMarca = {}
+  Object.keys(u2026).forEach((k) => { const p = k.split('|'), cli = p[0], mar = p[1], gg = num(growth[cli + '|' + mar]); const arr = mesMarca[mar] || (mesMarca[mar] = Array(12).fill(0)); let t = 0; for (let mi = 0; mi < 12; mi++) { const v = Math.round((u2026[k][mi] || 0) * (1 + gg / 100)); arr[mi] += v; t += v } totMarca[mar] = (totMarca[mar] || 0) + t })
   const mes28 = MESES.map((_, mi) => clientes.reduce((a, cli) => a + u28(cli, mi), 0))
+  const mes26 = MESES.map((_, mi) => clientes.reduce((a, cli) => a + u26(cli, mi), 0))
+  const tot26Marca = mes26.reduce((a, b) => a + b, 0)
 
   async function guardar() {
     setSaving(true); setMsg(null)
@@ -833,18 +836,30 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
                   </tr>
                 </Fragment2>
               ))}
+              {clientes.length > 0 && <>
+                <tr className="grandrow"><td className="l" rowSpan={2}>TOTAL {marca}</td><td rowSpan={2}></td><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td></tr>
+                <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
+              </>}
             </tbody>
           </table>
         </div>
       </div>
 
       <div className="panel">
-        <h3>Resumen por SBU y marca <span className="unit">(unidades 2028)</span></h3>
+        <h3>Resumen por SBU y marca <span className="unit">(unidades 2028 por mes)</span></h3>
+        <div className="sub">Unidades 2028 (= 2026 × (1 + % crecimiento)) por marca y mes. Las SBU muestran el subtotal de sus marcas.</div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th className="l">SBU / Marca</th><th>Unidades 2028</th></tr></thead>
+            <thead><tr><th className="l">SBU / Marca</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
             <tbody>
-              {Object.entries(sbus).map(([s, ms]) => { const stot = ms.reduce((a, m) => a + (totMarca[m] || 0), 0); return <Fragment2 key={s}><tr className="sburow"><td className="l">{s}</td><td className="tot">{fmt(stot)}</td></tr>{ms.map((m) => <tr key={m}><td className="l sub2">{m}</td><td className="tot">{fmt(totMarca[m] || 0)}</td></tr>)}</Fragment2> })}
+              {Object.entries(sbus).map(([s, ms]) => {
+                const smes = MESES.map((_, mi) => ms.reduce((a, m) => a + ((mesMarca[m] || [])[mi] || 0), 0))
+                const stot = smes.reduce((a, b) => a + b, 0)
+                return <Fragment2 key={s}>
+                  <tr className="sburow"><td className="l">{s}</td>{smes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(stot)}</td></tr>
+                  {ms.map((m) => <tr key={m}><td className="l sub2">{m}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt((mesMarca[m] || [])[mi] || 0)}</td>)}<td className="tot">{fmt(totMarca[m] || 0)}</td></tr>)}
+                </Fragment2>
+              })}
             </tbody>
           </table>
         </div>
