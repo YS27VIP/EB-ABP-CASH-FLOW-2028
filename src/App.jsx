@@ -35,17 +35,19 @@ const VIAJES_GROUPS = [{ g: 'VIAJES', items: [
 const VJ = { k: 'VIAJES', u: '$', detalle: VIAJES_GROUPS, extrasKey: 'viajes_extras' }
 
 const ROLES = [
-  { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#714B67', tab: 'Cap_Ventas',    rubros: [{ k: 'UNIDADES', u: 'ud' }, VJ] },
+  { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#714B67', tab: 'Cap_Ventas',    rubros: [{ k: 'UNIDADES', u: 'ud', proyeccion: true }, VJ] },
   { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP', u: '$' }, { k: 'AUC', u: '$' }, VJ, { k: 'INVENTARIO COMPRAS', u: '$' }] },
   { id: 'marketing', label: 'Marketing', icon: '🎯', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
   { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [VJ, { k: 'CASH FLOW', u: '$' }] },
-  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#8f4b7e', tab: 'Cap_Director',  rubros: [VJ, { k: 'CASH FLOW', u: '$' }] },
+  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#8f4b7e', tab: 'Cap_Director',  rubros: [VJ, { k: 'CASH FLOW', u: '$' }, { k: 'CATEGORIAS', cat: true }] },
 ]
 
 /* ===== helpers ===== */
 const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n }
 const fmt = (v) => (v ? Math.round(v).toLocaleString('en-US') : '')
+const upper = (s) => String(s == null ? '' : s).trim().toUpperCase()
+const mesIdx = (v) => { const d = new Date(v); return isNaN(d.getTime()) ? -1 : d.getUTCMonth() }
 
 function effSBUS(empresa, combos) {
   const c = combos[empresa]
@@ -185,7 +187,10 @@ function RoleForm({ role, usuario, empresa, sbus }) {
         {role.rubros.map((r, i) => (<button key={r.k} className={'seg' + (i === tab ? ' active' : '')} onClick={() => { setTab(i); setMsg(null) }}>{r.k}</button>))}
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      {rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} /> : <SimpleForm key={rb.k} {...common} />}
+      {rb.proyeccion ? <ProjectionForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} />
+        : rb.cat ? <CategoriasForm key={rb.k} role={role} usuario={usuario} empresa={empresa} sbus={sbus} />
+        : rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} />
+        : <SimpleForm key={rb.k} {...common} />}
     </>
   )
 }
@@ -568,6 +573,18 @@ function HistoricoScreen() {
   const aucY = (o, y) => { const d = o.y[y]; return d && d.un ? d.co / d.un : 0 }
   const crec = (a, b) => (a ? (b - a) / a * 100 : 0)
   const cmList = Object.values(cm).sort((a, b) => ((b.y[yB] ? b.y[yB].vn : 0) - (a.y[yB] ? a.y[yB].vn : 0)))
+  function exportarCmp() {
+    const r2 = (v) => Math.round(v * 100) / 100, r1 = (v) => Math.round(v * 10) / 10
+    let aoa
+    if (vista === 'ambos') {
+      aoa = [['CLIENTE', 'MARCA', `AUP ${yA}`, `AUP ${yB}`, `AUC ${yA}`, `AUC ${yB}`, `VN ${yA}`, `VN ${yB}`, 'CREC. VN %', `PESO ${yA} %`, `PESO ${yB} %`]]
+      cmList.forEach((o) => { const vA = vnCM(o, yA), vB = vnCM(o, yB); aoa.push([o.cli, o.mar, r2(aupY(o, yA)), r2(aupY(o, yB)), r2(aucY(o, yA)), r2(aucY(o, yB)), Math.round(vA), Math.round(vB), r1(crec(vA, vB)), r1(pesoCM(o, yA)), r1(pesoCM(o, yB))]) })
+    } else {
+      aoa = [['CLIENTE', 'MARCA', `AUP ${vista}`, `AUC ${vista}`, `VN ${vista}`, `PESO ${vista} %`]]
+      cmList.forEach((o) => aoa.push([o.cli, o.mar, r2(aupY(o, vista)), r2(aucY(o, vista)), Math.round(vnCM(o, vista)), r1(pesoCM(o, vista))]))
+    }
+    exportXlsx(aoa, `Comparativo_AUP_AUC${cmpSbu ? '_' + cmpSbu : ''}${cmpMarca ? '_' + cmpMarca : ''}.xlsx`)
+  }
 
   // ---- Peso por cliente y año ----
   const pBase = values.slice(1).filter((r) => (!pSbu || String(r[4]) === pSbu) && (!pMarca || String(r[5]) === pMarca))
@@ -651,6 +668,8 @@ function HistoricoScreen() {
           <select value={cmpSbu} onChange={(e) => setCmpSbu(e.target.value)}><option value="">Todas</option>{sbuList.map((s) => <option key={s}>{s}</option>)}</select>
           <label>Marca</label>
           <select value={cmpMarca} onChange={(e) => setCmpMarca(e.target.value)}><option value="">Todas</option>{marcasList.map((m) => <option key={m}>{m}</option>)}</select>
+          <div className="spacer"></div>
+          <button className="btn" onClick={exportarCmp}>⬇ Exportar Excel</button>
         </div>
         <div className="tablewrap">
           <table>
@@ -682,8 +701,175 @@ function HistoricoScreen() {
   )
 }
 
+/* ===== DIRECTOR · Categorías por marca (peso %) ===== */
+function CategoriasForm({ role, usuario, empresa, sbus }) {
+  const marcas = marcasDe(sbus)
+  const [marca, setMarca] = useState(marcas[0].marca)
+  const [cats, setCats] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Categorias'); const j = await r.json()
+        if (j && j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) }
+      } catch { }
+    })()
+  }, [empresa])
+  const lista = cats[marca] || []
+  const setLista = (arr) => setCats({ ...cats, [marca]: arr })
+  const suma = lista.reduce((s, o) => s + num(o.peso), 0)
+  async function guardar() {
+    setSaving(true); setMsg(null)
+    const sbu = sbuDe(sbus, marca)
+    const rows = lista.filter((o) => String(o.cat).trim()).map((o) => ({ rubro: o.cat, sbu, marca, meses: [num(o.peso), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }))
+    await postToTab('Cap_Categorias', empresa, usuario, role.label, rows, setMsg)
+    setSaving(false)
+  }
+  return (
+    <>
+      <div className="toolbar">
+        <label>Marca</label>
+        <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select>
+        <div className="spacer"></div>
+        <button className="btn" onClick={() => setLista([...lista, { cat: '', peso: 0 }])}>➕ Agregar categoría</button>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+      </div>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="panel">
+        <h3>Categorías de {marca} <span className="unit">(peso %)</span></h3>
+        <div className="sub">Define las categorías de la marca y cuánto pesa cada una (debería sumar 100%). Suma actual: <b className={Math.round(suma) === 100 ? 'pos' : 'neg'}>{suma.toFixed(1)}%</b>. Las usa Ventas para repartir las unidades.</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Categoría</th><th>Peso %</th><th></th></tr></thead>
+            <tbody>
+              {lista.length === 0 && <tr><td className="l" colSpan={3}>Agrega categorías con el botón de arriba.</td></tr>}
+              {lista.map((o, i) => (
+                <tr key={i}>
+                  <td className="l"><input style={{ width: '90%', padding: '6px' }} value={o.cat} onChange={(e) => setLista(lista.map((x, j) => j === i ? { ...x, cat: e.target.value } : x))} placeholder="Ej. ROAD, TRAIL, HIKE…" /></td>
+                  <td className="cell"><input value={o.peso} onChange={(e) => setLista(lista.map((x, j) => j === i ? { ...x, peso: e.target.value } : x))} inputMode="decimal" /></td>
+                  <td><button className="btn" onClick={() => setLista(lista.filter((_, j) => j !== i))}>✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ===== VENTAS · Proyección de unidades 2028 (histórico 2026 + % crecimiento) ===== */
+function ProjectionForm({ role, usuario, empresa, sbus }) {
+  const marcas = marcasDe(sbus)
+  const [marca, setMarca] = useState(marcas[0].marca)
+  const [hist, setHist] = useState([])
+  const [cats, setCats] = useState({})
+  const [modo, setModo] = useState('crec')
+  const [growth, setGrowth] = useState(() => { try { return JSON.parse(localStorage.getItem('ventas_growth_' + empresa) || '{}') } catch { return {} } })
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  useEffect(() => {
+    (async () => {
+      try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
+      try { const r2 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Categorias'); const j2 = await r2.json(); if (j2 && j2.ok && j2.values) { const out = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
+    })()
+  }, [empresa])
+  useEffect(() => { try { localStorage.setItem('ventas_growth_' + empresa, JSON.stringify(growth)) } catch { } }, [growth, empresa])
+
+  const u2026 = {}, cliByMarca = {}
+  hist.forEach((r) => { if (upper(r[3]).indexOf('UNIDAD') < 0) return; if (String(r[1]) !== '2026') return; const mi = mesIdx(r[6]); if (mi < 0) return; const mar = r[5], cli = r[8] || '(sin cliente)', k = cli + '|' + mar; (u2026[k] = u2026[k] || Array(12).fill(0))[mi] += num(r[7]); (cliByMarca[mar] = cliByMarca[mar] || new Set()).add(cli) })
+  const clientes = [...(cliByMarca[marca] || [])].sort()
+  const gval = (cli, mi) => num(growth[cli + '|' + marca + '|' + mi])
+  const u26 = (cli, mi) => (u2026[cli + '|' + marca] || [])[mi] || 0
+  const u28 = (cli, mi) => Math.round(u26(cli, mi) * (1 + gval(cli, mi) / 100))
+  const setG = (cli, mi, val) => setGrowth({ ...growth, [cli + '|' + marca + '|' + mi]: val })
+  const totMarcaSel = clientes.reduce((s, cli) => s + MESES.reduce((a, _, mi) => a + u28(cli, mi), 0), 0)
+  const totMarca = {}
+  Object.keys(u2026).forEach((k) => { const p = k.split('|'), cli = p[0], mar = p[1]; let t = 0; for (let mi = 0; mi < 12; mi++) t += Math.round((u2026[k][mi] || 0) * (1 + num(growth[cli + '|' + mar + '|' + mi]) / 100)); totMarca[mar] = (totMarca[mar] || 0) + t })
+
+  async function guardar() {
+    setSaving(true); setMsg(null)
+    const sbu = sbuDe(sbus, marca)
+    const rows = clientes.map((cli) => ({ rubro: cli, sbu, marca, meses: MESES.map((_, mi) => u28(cli, mi)) })).filter((r) => r.meses.some((v) => v !== 0))
+    await postToTab('Cap_Ventas', empresa, usuario, role.label, rows, setMsg)
+    setSaving(false)
+  }
+  const cell = (cli, mi) => {
+    if (modo === '2026') return <td key={mi} className="tot">{fmt(u26(cli, mi))}</td>
+    if (modo === '2028') return <td key={mi} className="tot">{fmt(u28(cli, mi))}</td>
+    const k = cli + '|' + marca + '|' + mi
+    return <td key={mi} className="cell"><input value={growth[k] ?? ''} onChange={(e) => setG(cli, mi, e.target.value)} inputMode="decimal" placeholder="%" /></td>
+  }
+  const catList = cats[marca] || []
+
+  return (
+    <>
+      <div className="toolbar">
+        <label>Marca</label>
+        <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select>
+        <button className={'seg' + (modo === '2026' ? ' active' : '')} onClick={() => setModo('2026')}>2026 histórico</button>
+        <button className={'seg' + (modo === 'crec' ? ' active' : '')} onClick={() => setModo('crec')}>% Crecimiento</button>
+        <button className={'seg' + (modo === '2028' ? ' active' : '')} onClick={() => setModo('2028')}>2028 proyección</button>
+        <div className="spacer"></div>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar marca'}</button>
+      </div>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="panel">
+        <h3>Ventas · Unidades 2028 — {marca} <span className="unit">({modo === '2026' ? 'unidades 2026' : modo === '2028' ? 'unidades 2028 = 2026 × (1+%)' : '% crecimiento mensual sobre 2026'})</span></h3>
+        <div className="sub">Empresa <b>{empresa}</b>. Clientes con histórico de unidades 2026. Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Cliente</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+            <tbody>
+              {clientes.length === 0 && <tr><td className="l" colSpan={14}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico primero (unidades).</td></tr>}
+              {clientes.map((cli) => <tr key={cli}><td className="l">{cli}</td>{MESES.map((_, mi) => cell(cli, mi))}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + (modo === '2026' ? u26(cli, mi) : u28(cli, mi)), 0))}</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="panel">
+        <h3>Resumen por SBU y marca <span className="unit">(unidades 2028)</span></h3>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">SBU / Marca</th><th>Unidades 2028</th></tr></thead>
+            <tbody>
+              {Object.entries(sbus).map(([s, ms]) => { const stot = ms.reduce((a, m) => a + (totMarca[m] || 0), 0); return <Fragment2 key={s}><tr className="sburow"><td className="l">{s}</td><td className="tot">{fmt(stot)}</td></tr>{ms.map((m) => <tr key={m}><td className="l sub2">{m}</td><td className="tot">{fmt(totMarca[m] || 0)}</td></tr>)}</Fragment2> })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="panel">
+        <h3>Unidades 2028 por categoría — {marca}</h3>
+        <div className="sub">Reparto del total de {marca} según el peso de categorías que define el Director.</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Categoría</th><th>Peso %</th><th>Unidades 2028</th></tr></thead>
+            <tbody>
+              {catList.length === 0 && <tr><td className="l" colSpan={3}>El Director aún no definió categorías para {marca}.</td></tr>}
+              {catList.map((c, i) => <tr key={i}><td className="l">{c.cat}</td><td>{num(c.peso).toFixed(1)}%</td><td className="tot">{fmt(totMarcaSel * num(c.peso) / 100)}</td></tr>)}
+              {catList.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td>{catList.reduce((s, c) => s + num(c.peso), 0).toFixed(1)}%</td><td className="tot">{fmt(totMarcaSel * catList.reduce((s, c) => s + num(c.peso), 0) / 100)}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+}
+
 /* ===== utilidades ===== */
 function Fragment2({ children }) { return <>{children}</> }
+async function postToTab(tab, empresa, usuario, rolLabel, rows, setMsg) {
+  if (!rows.length) { setMsg({ t: 'warn', x: 'No hay datos para guardar.' }); return }
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ empresa, usuario: usuario || 'anónimo', rol: rolLabel, tab, rows }) })
+    const j = await res.json()
+    setMsg(j.ok ? { t: 'ok', x: `Guardado: ${j.filas} fila(s) en ${tab}.` } : { t: 'bad', x: 'Error: ' + j.error })
+  } catch (e) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + e.message }) }
+}
 
 async function postRows(role, usuario, empresa, rows, setMsg) {
   if (!rows.length) { setMsg({ t: 'warn', x: 'No hay datos para guardar (todo en 0).' }); return }
