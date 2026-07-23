@@ -436,6 +436,8 @@ function HistoricoScreen() {
   const [fAnio, setFAnio] = useState('')
   const [fMarca, setFMarca] = useState('')
   const [vista, setVista] = useState('ambos')
+  const [cmpSbu, setCmpSbu] = useState('')
+  const [cmpMarca, setCmpMarca] = useState('')
 
   useEffect(() => { cargar() }, [])
   async function cargar() {
@@ -545,7 +547,8 @@ function HistoricoScreen() {
   const clientes = Object.entries(cliMap).map(([c, v]) => ({ c, v, pct: totVN ? (v / totVN) * 100 : 0 })).sort((a, b) => b.v - a.v)
 
   // ---- Comparativo AUP/AUC por cliente y marca (por año) ----
-  const cmpBase = values.slice(1).filter((r) => (!fMarca || String(r[5]) === fMarca))
+  const sbuList = [...new Set(values.slice(1).map((r) => String(r[4])).filter(Boolean))].sort()
+  const cmpBase = values.slice(1).filter((r) => (!cmpSbu || String(r[4]) === cmpSbu) && (!cmpMarca || String(r[5]) === cmpMarca))
   const cmYears = [...new Set(cmpBase.map((r) => String(r[1])).filter(Boolean))].sort()
   const yA = cmYears[0], yB = cmYears[cmYears.length - 1]
   const cm = {}
@@ -645,6 +648,10 @@ function HistoricoScreen() {
             <button key={y} className={'seg' + (vista === y ? ' active' : '')} onClick={() => setVista(y)}>{y}</button>
           ))}
           {yA !== yB && <button className={'seg' + (vista === 'ambos' ? ' active' : '')} onClick={() => setVista('ambos')}>Ambos</button>}
+          <label style={{ marginLeft: 8 }}>SBU</label>
+          <select value={cmpSbu} onChange={(e) => setCmpSbu(e.target.value)}><option value="">Todas</option>{sbuList.map((s) => <option key={s}>{s}</option>)}</select>
+          <label>Marca</label>
+          <select value={cmpMarca} onChange={(e) => setCmpMarca(e.target.value)}><option value="">Todas</option>{marcasList.map((m) => <option key={m}>{m}</option>)}</select>
         </div>
         <div className="tablewrap">
           <table>
