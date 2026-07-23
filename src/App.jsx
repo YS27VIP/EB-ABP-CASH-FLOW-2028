@@ -789,6 +789,7 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
   const totMarcaSel = clientes.reduce((s, cli) => s + t28(cli), 0)
   const totMarca = {}
   Object.keys(u2026).forEach((k) => { const p = k.split('|'), cli = p[0], mar = p[1], gg = num(growth[cli + '|' + mar]); let t = 0; for (let mi = 0; mi < 12; mi++) t += Math.round((u2026[k][mi] || 0) * (1 + gg / 100)); totMarca[mar] = (totMarca[mar] || 0) + t })
+  const mes28 = MESES.map((_, mi) => clientes.reduce((a, cli) => a + u28(cli, mi), 0))
 
   async function guardar() {
     setSaving(true); setMsg(null)
@@ -850,15 +851,15 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
       </div>
 
       <div className="panel">
-        <h3>Unidades 2028 por categoría — {marca}</h3>
-        <div className="sub">Reparto del total de {marca} según el peso de categorías que define el Director.</div>
+        <h3>Unidades 2028 por categoría y mes — {marca}</h3>
+        <div className="sub">Cada mes de {marca} se reparte según el peso de categorías que define el Director.</div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th className="l">Categoría</th><th>Peso %</th><th>Unidades 2028</th></tr></thead>
+            <thead><tr><th className="l">Categoría</th><th>Peso %</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
             <tbody>
-              {catList.length === 0 && <tr><td className="l" colSpan={3}>El Director aún no definió categorías para {marca}.</td></tr>}
-              {catList.map((c, i) => <tr key={i}><td className="l">{c.cat}</td><td>{num(c.peso).toFixed(1)}%</td><td className="tot">{fmt(totMarcaSel * num(c.peso) / 100)}</td></tr>)}
-              {catList.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td>{catList.reduce((s, c) => s + num(c.peso), 0).toFixed(1)}%</td><td className="tot">{fmt(totMarcaSel * catList.reduce((s, c) => s + num(c.peso), 0) / 100)}</td></tr>}
+              <tr className="grandrow"><td className="l">TOTAL {marca}</td><td></td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
+              {catList.length === 0 && <tr><td className="l" colSpan={15}>El Director aún no definió categorías para {marca}.</td></tr>}
+              {catList.map((c, i) => { const p = num(c.peso) / 100; return <tr key={i}><td className="l">{c.cat}</td><td>{num(c.peso).toFixed(1)}%</td>{mes28.map((v, mi) => <td key={mi} className="tot">{fmt(v * p)}</td>)}<td className="tot">{fmt(totMarcaSel * p)}</td></tr> })}
             </tbody>
           </table>
         </div>
