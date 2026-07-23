@@ -439,23 +439,77 @@ function HistoricoScreen() {
   }
   function importar(ev) {
     const file = ev.target.files[0]; if (!file) return
-    importXlsx(file, async (aoa) => {
+    const XLSX = window.XLSX
+    if (!XLSX) { alert('Excel aún se está cargando, intenta de nuevo.'); return }
+    const norm = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase()
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      let wb
+      try { wb = XLSX.read(e.target.result, { type: 'array', cellDates: true }) } catch (err) { alert('No se pudo leer el Excel: ' + err.message); return }
+      const want = HIST_HEAD.map(norm)
+      let bestAoa = null, bestScore = -1
+      wb.SheetNames.forEach((name) => {
+        const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' })
+        if (!aoa.length) return
+        const hdr = (aoa[0] || []).map(norm)
+        const score = want.filter((w) => hdr.includes(w)).length
+        if (score > bestScore) { bestScore = score; bestAoa = aoa }
+      })
+      if (!bestAoa || bestScore < 3) { alert('No encontré una hoja con la estructura esperada (EMPRESA, AÑO, TIPO, RUBRO, SBU, MARCA, MES, MONTO, CLIENTE, PAIS).'); return }
+      const hdr = bestAoa[0].map(norm)
+      const idx = HIST_HEAD.map((f) => { const F = norm(f); let i = hdr.indexOf(F); if (i < 0) i = hdr.findIndex((h) => h.indexOf(F) >= 0); return i })
+      const canon = [HIST_HEAD.slice()]
+      bestAoa.slice(1).forEach((r) => {
+        if (!r || r.every((c) => c === '' || c == null)) return
+        canon.push(HIST_HEAD.map((_, ci) => { const i = idx[ci]; let v = i >= 0 ? r[i] : ''; if (v instanceof Date) v = v.toISOString().slice(0, 10); return v == null ? '' : v }))
+      })
       setBusy(true); setMsg(null)
       try {
-        const r = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'historico', values: aoa }) })
-        const j = await r.json()
-        setMsg(j.ok ? { t: 'ok', x: `Histórico importado: ${j.filas} registro(s) guardados en la hoja "Historico".` } : { t: 'bad', x: 'Error: ' + j.error })
+        const rr = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'historico', values: canon }) })
+        const j = await rr.json()
+        setMsg(j.ok ? { t: 'ok', x: `Histórico importado: ${j.filas} registro(s) en la hoja "Historico".` } : { t: 'bad', x: 'Error: ' + j.error })
         cargar()
-      } catch (e) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + e.message }) }
+      } catch (err) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + err.message }) }
       setBusy(false)
-    })
+    }
+    reader.readAsArrayBuffer(file)
     ev.target.value = ''
   }
   async function exportar() {
     try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json(); if (j.ok && j.values && j.values.length) exportXlsx(j.values, 'Historico.xlsx'); else alert('Aún no hay histórico guardado.') }
     catch (e) { alert('No se pudo: ' + e.message) }
   }
-  function plantilla() { exportXlsx([HIST_HEAD], 'Plantilla_Historico.xlsx') }
+  function plantilla() {
+    const XLSX = window.XLSX
+    if (!XLSX) { alert('Excel aún se está cargando, intenta de nuevo.'); return }
+    const ejemplos = [
+      HIST_HEAD.slice(),
+      ['ENERGY BRANDS', 2025, 'SIN TAHO', 'UNIDADES', 'SBU 1', 'ALTRA', '2025-06-01', 96, 'AC CORP SA DE CV', 'EL SALVADOR'],
+      ['ENERGY BRANDS', 2025, 'SIN TAHO', 'COSTO', 'SBU 1', 'NORDA', '2025-05-01', 3150, 'AC CORP SA DE CV', 'EL SALVADOR'],
+    ]
+    const instr = [
+      ['COLUMNA', 'DESCRIPCIÓN / FORMATO'],
+      ['EMPRESA', 'Nombre de la empresa (texto). Ej: ENERGY BRANDS'],
+      ['AÑO', 'Año del registro (número). Ej: 2025'],
+      ['TIPO', 'Escenario. Ej: SIN TAHO / CON TAHO'],
+      ['RUBRO', 'Rubro. Ej: UNIDADES, COSTO, VENTAS NETAS, MK, LOGISTICA...'],
+      ['SBU', 'SBU. Ej: SBU 1 / SBU 2 / SBU 3'],
+      ['MARCA', 'Marca. Ej: ALTRA, HOKA, UGG...'],
+      ['MES', 'Fecha del mes en formato AAAA-MM-DD. Ej: 2025-06-01'],
+      ['MONTO', 'Valor numérico, sin símbolos ni comas. Ej: 96 o 4244.82'],
+      ['CLIENTE', 'Nombre del cliente (texto)'],
+      ['PAIS', 'País (texto). Ej: EL SALVADOR'],
+      ['', 'Usa la hoja "Plantilla" con exactamente este orden de columnas. Una fila por registro. Borra las filas de ejemplo antes de subir.'],
+    ]
+    const wb = XLSX.utils.book_new()
+    const ws1 = XLSX.utils.aoa_to_sheet(ejemplos)
+    ws1['!cols'] = HIST_HEAD.map(() => ({ wch: 16 }))
+    XLSX.utils.book_append_sheet(wb, ws1, 'Plantilla')
+    const ws2 = XLSX.utils.aoa_to_sheet(instr)
+    ws2['!cols'] = [{ wch: 12 }, { wch: 72 }]
+    XLSX.utils.book_append_sheet(wb, ws2, 'Instrucciones')
+    XLSX.writeFile(wb, 'Plantilla_Historico.xlsx')
+  }
 
   const filas = Math.max(0, values.length - 1)
   const head = values[0] || HIST_HEAD
