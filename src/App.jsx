@@ -432,6 +432,9 @@ function HistoricoScreen() {
   const [values, setValues] = useState([])
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [limite, setLimite] = useState(20)
+  const [fAnio, setFAnio] = useState('')
+  const [fMarca, setFMarca] = useState('')
 
   useEffect(() => { cargar() }, [])
   async function cargar() {
@@ -523,7 +526,22 @@ function HistoricoScreen() {
 
   const filas = Math.max(0, values.length - 1)
   const head = values[0] || HIST_HEAD
-  const preview = values.slice(1, 21)
+  const preview = values.slice(1, 1 + limite)
+
+  // ---- Análisis ----
+  const up = (s) => String(s == null ? '' : s).trim().toUpperCase()
+  const money = (v) => '$' + Math.round(v).toLocaleString('en-US')
+  const money2 = (v) => '$' + (v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const pct1 = (v) => (v || 0).toFixed(1) + '%'
+  const anios = [...new Set(values.slice(1).map((r) => String(r[1])).filter(Boolean))].sort()
+  const marcasList = [...new Set(values.slice(1).map((r) => String(r[5])).filter(Boolean))].sort()
+  const filt = values.slice(1).filter((r) => (!fAnio || String(r[1]) === fAnio) && (!fMarca || String(r[5]) === fMarca))
+  const aggM = {}
+  filt.forEach((r) => { const rb = up(r[3]), mo = num(r[7]); const k = r[5] + '||' + r[1]; const o = aggM[k] || (aggM[k] = { marca: r[5], anio: r[1], vn: 0, un: 0, co: 0 }); if (rb.indexOf('VENTA') >= 0) o.vn += mo; else if (rb.indexOf('UNIDAD') >= 0) o.un += mo; else if (rb.indexOf('COSTO') >= 0) o.co += mo })
+  const resumen = Object.values(aggM).sort((a, b) => b.vn - a.vn)
+  const cliMap = {}; let totVN = 0
+  filt.forEach((r) => { if (up(r[3]).indexOf('VENTA') >= 0) { const c = r[8] || '(sin cliente)'; const mo = num(r[7]); cliMap[c] = (cliMap[c] || 0) + mo; totVN += mo } })
+  const clientes = Object.entries(cliMap).map(([c, v]) => ({ c, v, pct: totVN ? (v / totVN) * 100 : 0 })).sort((a, b) => b.v - a.v)
 
   return (
     <>
@@ -551,7 +569,53 @@ function HistoricoScreen() {
             </tbody>
           </table>
         </div>
-        {filas > 20 && <div className="sub" style={{ marginTop: 8 }}>Mostrando 20 de {filas} registros.</div>}
+        <div className="sub" style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span>Mostrando {Math.min(limite, filas)} de {filas} registros.</span>
+          {limite < filas && <button className="btn" onClick={() => setLimite((l) => l + 100)}>Ver 100 más</button>}
+          {limite < filas && <button className="btn" onClick={() => setLimite(filas)}>Ver todos</button>}
+          {limite > 20 && <button className="btn" onClick={() => setLimite(20)}>Ver menos</button>}
+        </div>
+      </div>
+
+      <div className="toolbar">
+        <label>Año</label>
+        <select value={fAnio} onChange={(e) => setFAnio(e.target.value)}><option value="">Todos</option>{anios.map((a) => <option key={a}>{a}</option>)}</select>
+        <label>Marca</label>
+        <select value={fMarca} onChange={(e) => setFMarca(e.target.value)}><option value="">Todas</option>{marcasList.map((m) => <option key={m}>{m}</option>)}</select>
+        <span className="sub">Análisis del histórico según los filtros.</span>
+      </div>
+
+      <div className="panel">
+        <h3>Resumen por marca y año</h3>
+        <div className="sub"><b>AUP</b> = Ventas Netas / Unidades · <b>AUC</b> = Costo / Unidades. Suma de todos los TIPO/cliente.</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Marca</th><th>Año</th><th>Ventas Netas</th><th>Unidades</th><th>Costo</th><th>AUP</th><th>AUC</th><th>% Margen</th></tr></thead>
+            <tbody>
+              {resumen.length === 0 && <tr><td className="l" colSpan={8}>Importa el histórico para ver el resumen.</td></tr>}
+              {resumen.map((o, i) => {
+                const aup = o.un ? o.vn / o.un : 0, auc = o.un ? o.co / o.un : 0, mg = o.vn ? (o.vn - o.co) / o.vn * 100 : 0
+                return <tr key={i}><td className="l">{o.marca}</td><td>{o.anio}</td><td>{money(o.vn)}</td><td>{fmt(o.un)}</td><td>{money(o.co)}</td><td>{money2(aup)}</td><td>{money2(auc)}</td><td>{pct1(mg)}</td></tr>
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="panel">
+        <h3>Peso por cliente <span className="unit">(por Ventas Netas)</span></h3>
+        <div className="sub">Participación de cada cliente sobre el total de ventas netas{fMarca ? ` · ${fMarca}` : ''}{fAnio ? ` · ${fAnio}` : ''}.</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Cliente</th><th>Ventas Netas</th><th>% Peso</th></tr></thead>
+            <tbody>
+              {clientes.length === 0 && <tr><td className="l" colSpan={3}>Sin ventas netas para los filtros seleccionados.</td></tr>}
+              {clientes.slice(0, 100).map((o, i) => <tr key={i}><td className="l">{o.c}</td><td>{money(o.v)}</td><td>{pct1(o.pct)}</td></tr>)}
+              {clientes.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td>{money(totVN)}</td><td>100.0%</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        {clientes.length > 100 && <div className="sub" style={{ marginTop: 8 }}>Mostrando los 100 clientes con mayor venta (de {clientes.length}).</div>}
       </div>
     </>
   )
