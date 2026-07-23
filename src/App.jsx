@@ -86,7 +86,12 @@ export default function App() {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
-        <main>
+        <main className="menu">
+          <div className="hero">
+            <div className="hero-tag">ABP · Annual Business Plan + Cash Flow</div>
+            <h1>Construyamos juntos el plan 2028</h1>
+            <p>Cada área aporta su parte —ventas, producto, marketing, logística y dirección— para proyectar el negocio y el <b>flujo de caja</b> del año. Lo que capturas aquí se convierte en el plan de todos. 🚀</p>
+          </div>
           <div className="hello">
             <h2>¿Quién eres?</h2>
             <p className="sub">Elige tu área para capturar tu información. Cada rol llena su propia hoja.</p>
@@ -246,11 +251,20 @@ function GenericForm({ role, usuario, empresa, sbus }) {
     setSaving(false)
   }
   function exportar() {
-    const lines = [['EMPRESA', 'RUBRO', 'SBU', 'MARCA', ...MESES].join(',')]
+    const aoa = [['EMPRESA', 'RUBRO', 'SBU', 'MARCA', ...MESES]]
     role.rubros.forEach((r) => marcas.forEach(({ sbu, marca }) => {
-      lines.push([empresa, r.k, sbu, marca, ...MESES.map((_, mi) => num(data[key(r.k, sbu, marca, mi)]))].join(','))
+      aoa.push([empresa, r.k, sbu, marca, ...MESES.map((_, mi) => num(data[key(r.k, sbu, marca, mi)]))])
     }))
-    descargar(lines.join('\n'), role.tab + '.csv')
+    exportXlsx(aoa, role.tab + '.xlsx')
+  }
+  function importar(ev) {
+    const file = ev.target.files[0]; if (!file) return
+    importXlsx(file, (aoa) => {
+      const next = { ...data }
+      aoa.slice(1).forEach((r) => { const rubro = r[1], sbu = r[2], marca = r[3]; for (let mi = 0; mi < 12; mi++) { const v = num(r[4 + mi]); if (v) next[key(rubro, sbu, marca, mi)] = v } })
+      setData(next); setMsg({ t: 'ok', x: 'Datos importados del Excel. Revisa y pulsa Guardar.' })
+    })
+    ev.target.value = ''
   }
 
   return (
@@ -258,7 +272,8 @@ function GenericForm({ role, usuario, empresa, sbus }) {
       <div className="toolbar">
         {role.rubros.map((r, i) => (<button key={r.k} className={'seg' + (i === tab ? ' active' : '')} onClick={() => setTab(i)}>{r.k}</button>))}
         <div className="spacer"></div>
-        <button className="btn" onClick={exportar}>⬇ Exportar CSV</button>
+        <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
+        <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
@@ -330,12 +345,26 @@ function MarketingForm({ role, usuario, empresa, sbus }) {
     setSaving(false)
   }
   function exportar() {
-    const lines = [['EMPRESA', 'GRUPO', 'RUBRO', 'SBU', 'MARCA', ...MESES].join(',')]
+    const aoa = [['EMPRESA', 'GRUPO', 'RUBRO', 'SBU', 'MARCA', ...MESES]]
     marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => {
-      const id = idDe(gr.g, it)
-      lines.push([empresa, gr.g, it.n, sb, mca, ...MESES.map((_, mi) => val(mca, id, mi))].join(','))
+      aoa.push([empresa, gr.g, it.n, sb, mca, ...MESES.map((_, mi) => val(mca, idDe(gr.g, it), mi))])
     })))
-    descargar(lines.join('\n'), 'Cap_Marketing.csv')
+    exportXlsx(aoa, 'Cap_Marketing.xlsx')
+  }
+  function importar(ev) {
+    const file = ev.target.files[0]; if (!file) return
+    const lookup = {}
+    grupos.forEach((gr) => gr.items.forEach((it) => { lookup[`${gr.g}|${it.n}`.toUpperCase()] = idDe(gr.g, it) }))
+    importXlsx(file, (aoa) => {
+      const next = { ...data }
+      aoa.slice(1).forEach((r) => {
+        const id = lookup[`${r[1]}|${r[2]}`.toUpperCase()]; const mca = r[4]
+        if (!id || !mca) return
+        for (let mi = 0; mi < 12; mi++) { const v = num(r[5 + mi]); if (v) next[key(mca, id, mi)] = v }
+      })
+      setData(next); setMsg({ t: 'ok', x: 'Datos importados del Excel. Revisa y pulsa Guardar.' })
+    })
+    ev.target.value = ''
   }
 
   const totalGeneral = grupos.reduce((s, gr) => s + gr.items.reduce((ss, it) => {
@@ -353,7 +382,8 @@ function MarketingForm({ role, usuario, empresa, sbus }) {
         <button className={'seg' + (showSbu ? ' active' : '')} onClick={() => setShowSbu((v) => !v)}>{showSbu ? `Viendo total ${sbu}` : `Ver total ${sbu}`}</button>
         <div className="spacer"></div>
         <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>
-        <button className="btn" onClick={exportar}>⬇ Exportar CSV</button>
+        <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
+        <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar todo'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
@@ -413,8 +443,21 @@ async function postRows(role, usuario, empresa, rows, setMsg) {
   } catch (e) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + e.message }) }
 }
 
-function descargar(texto, nombre) {
-  const blob = new Blob([texto], { type: 'text/csv;charset=utf-8;' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob); a.download = nombre; a.click()
+function exportXlsx(aoa, nombre) {
+  const XLSX = window.XLSX
+  if (!XLSX) { alert('Excel aún se está cargando, intenta de nuevo en un segundo.'); return }
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Datos')
+  XLSX.writeFile(wb, nombre)
+}
+function importXlsx(file, cb) {
+  const XLSX = window.XLSX
+  if (!XLSX) { alert('Excel aún se está cargando, intenta de nuevo.'); return }
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try { const wb = XLSX.read(e.target.result, { type: 'array' }); const ws = wb.Sheets[wb.SheetNames[0]]; cb(XLSX.utils.sheet_to_json(ws, { header: 1 })) }
+    catch (err) { alert('No se pudo leer el Excel: ' + err.message) }
+  }
+  reader.readAsArrayBuffer(file)
 }
