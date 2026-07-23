@@ -3,7 +3,7 @@ import './App.css'
 
 /* ===== CONFIG ===== */
 // Cuando publiques el Apps Script, pega aquí su URL /exec:
-const APPS_SCRIPT_URL = ''
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1SWtgyQRVlkjnUUXfqCZ9hrStbZ6ffJovh8nYaVXyGuu3Opal55Kg3GmELLpZ6GpJ3A/exec'
 
 const MESES = ['ene-28','feb-28','mar-28','abr-28','may-28','jun-28','jul-28','ago-28','sep-28','oct-28','nov-28','dic-28']
 
@@ -144,7 +144,7 @@ export default function App() {
         <span className="yr">2028</span>
         <div className="spacer"></div>
         <span className="rolechip" style={{ background: role.color }}>{role.icon} {role.label}</span>
-        <button className="icon" title="Volver al menú" onClick={() => { setRoleId(null); setMsg(null) }}>⌂</button>
+        <button className="back" onClick={() => { setRoleId(null); setMsg(null) }}>← Volver al menú</button>
       </header>
 
       <main>
