@@ -10,12 +10,15 @@ const CFG_COMBOS = 'Config_Combinaciones'; // EMPRESA | SBU | MARCA
 const CFG_EMPRESAS = 'Config_Empresas';    // EMPRESA
 const MESES = ['ene-28','feb-28','mar-28','abr-28','may-28','jun-28','jul-28','ago-28','sep-28','oct-28','nov-28','dic-28'];
 const HEAD = ['EMPRESA', 'RUBRO', 'SBU', 'MARCA'].concat(MESES);
+const HIST_TAB = 'Historico';
+const HIST_HEAD = ['EMPRESA', 'AÑO', 'TIPO', 'RUBRO', 'SBU', 'MARCA', 'MES', 'MONTO', 'CLIENTE', 'PAIS'];
 
 function doPost(e) {
   try {
     var b = JSON.parse(e.postData.contents || '{}');
     var ss = SpreadsheetApp.openById(SHEET_ID);
     if (String(b.action || '') === 'config') return guardarConfig(ss, b);
+    if (String(b.action || '') === 'historico') return guardarHistorico(ss, b);
 
     var empresa = String(b.empresa || '');
     var rol = String(b.rol || ''), tab = String(b.tab || ''), rows = Array.isArray(b.rows) ? b.rows : [];
@@ -75,6 +78,25 @@ function guardarConfig(ss, b) {
 }
 
 /* Crea la pestaña si no existe, o corrige el encabezado si cambió (limpia datos viejos incompatibles). */
+/* Reemplaza la hoja "Historico" con el Excel importado (estructura plana para análisis). */
+function guardarHistorico(ss, b) {
+  var values = Array.isArray(b.values) ? b.values : [];
+  var sh = ss.getSheetByName(HIST_TAB);
+  if (!sh) sh = ss.insertSheet(HIST_TAB);
+  sh.clear();
+  var W = HIST_HEAD.length;
+  var out = [];
+  var hasHeader = values.length && String(values[0][0] || '').toUpperCase().indexOf('EMPRESA') >= 0;
+  if (!hasHeader) out.push(HIST_HEAD);
+  values.forEach(function (r) {
+    var vacia = true, o = [];
+    for (var i = 0; i < W; i++) { var v = (r && r[i] !== undefined && r[i] !== null) ? r[i] : ''; if (v !== '') vacia = false; o.push(v); }
+    if (!vacia) out.push(o);
+  });
+  if (out.length) { sh.getRange(1, 1, out.length, W).setValues(out); sh.getRange(1, 1, 1, W).setFontWeight('bold'); sh.setFrozenRows(1); }
+  return json({ ok: true, filas: Math.max(0, out.length - 1) });
+}
+
 function tabConHeader(ss, name, head) {
   var sh = ss.getSheetByName(name);
   if (!sh) { sh = ss.insertSheet(name); sh.appendRow(head); sh.getRange(1, 1, 1, head.length).setFontWeight('bold'); sh.setFrozenRows(1); return sh; }

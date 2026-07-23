@@ -123,6 +123,10 @@ export default function App() {
               <span className="appicon" style={{ background: '#5b6470' }}>⚙️</span>
               <span className="applabel">Combinaciones</span>
             </button>
+            <button className="app" onClick={() => setRoleId('historico')}>
+              <span className="appicon" style={{ background: '#b0473b' }}>📊</span>
+              <span className="applabel">Histórico</span>
+            </button>
           </div>
         </main>
       </>
@@ -136,6 +140,17 @@ export default function App() {
           <span className="rolechip" style={{ background: '#5b6470' }}>⚙️ Combinaciones</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
         <main><ConfigScreen empresas={empresas} setEmpresas={setEmpresas} combos={combos} setCombos={setCombos} nuevaEmpresa={nuevaEmpresa} /></main>
+      </>
+    )
+  }
+
+  if (roleId === 'historico') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#b0473b' }}>📊 Histórico</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        <main><HistoricoScreen /></main>
       </>
     )
   }
@@ -406,6 +421,69 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
             </tbody>
           </table>
         </div>
+      </div>
+    </>
+  )
+}
+
+/* ===== HISTÓRICO ===== */
+const HIST_HEAD = ['EMPRESA', 'AÑO', 'TIPO', 'RUBRO', 'SBU', 'MARCA', 'MES', 'MONTO', 'CLIENTE', 'PAIS']
+function HistoricoScreen() {
+  const [values, setValues] = useState([])
+  const [msg, setMsg] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => { cargar() }, [])
+  async function cargar() {
+    try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json(); if (j.ok && j.values) setValues(j.values) } catch { }
+  }
+  function importar(ev) {
+    const file = ev.target.files[0]; if (!file) return
+    importXlsx(file, async (aoa) => {
+      setBusy(true); setMsg(null)
+      try {
+        const r = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'historico', values: aoa }) })
+        const j = await r.json()
+        setMsg(j.ok ? { t: 'ok', x: `Histórico importado: ${j.filas} registro(s) guardados en la hoja "Historico".` } : { t: 'bad', x: 'Error: ' + j.error })
+        cargar()
+      } catch (e) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + e.message }) }
+      setBusy(false)
+    })
+    ev.target.value = ''
+  }
+  async function exportar() {
+    try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json(); if (j.ok && j.values && j.values.length) exportXlsx(j.values, 'Historico.xlsx'); else alert('Aún no hay histórico guardado.') }
+    catch (e) { alert('No se pudo: ' + e.message) }
+  }
+  function plantilla() { exportXlsx([HIST_HEAD], 'Plantilla_Historico.xlsx') }
+
+  const filas = Math.max(0, values.length - 1)
+  const head = values[0] || HIST_HEAD
+  const preview = values.slice(1, 21)
+
+  return (
+    <>
+      <div className="toolbar">
+        <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
+        <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
+        <button className="btn" onClick={plantilla}>📄 Descargar plantilla</button>
+        <div className="spacer"></div>
+        {busy && <span className="sub">Guardando…</span>}
+      </div>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="panel">
+        <h3>Histórico <span className="unit">({filas} registro(s))</span></h3>
+        <div className="sub">Base histórica plana para análisis (una fila por registro). Al importar un Excel con esta estructura, se guarda en la hoja <b>Historico</b> de la Google Sheet. Estructura: {HIST_HEAD.join(' · ')}.</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr>{head.map((h, i) => <th key={i} className={i === 0 ? 'l' : ''}>{String(h)}</th>)}</tr></thead>
+            <tbody>
+              {preview.length === 0 && <tr><td className="l" colSpan={HIST_HEAD.length}>Aún no hay datos. Importa un Excel con la estructura de la plantilla.</td></tr>}
+              {preview.map((r, ri) => (<tr key={ri}>{head.map((_, ci) => <td key={ci} className={ci === 0 ? 'l' : ''}>{r[ci] != null ? String(r[ci]) : ''}</td>)}</tr>))}
+            </tbody>
+          </table>
+        </div>
+        {filas > 20 && <div className="sub" style={{ marginTop: 8 }}>Mostrando 20 de {filas} registros.</div>}
       </div>
     </>
   )
