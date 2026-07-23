@@ -2,7 +2,8 @@
 
 /* --- Menú centrado estilo Odoo --- */
 main.menu{text-align:center}
-main.menu .apps{justify-content:center}
+main.menu .apps{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;max-width:900px;margin:0 auto}
+main.menu .app{width:158px}
 main.menu .hello .row2{justify-content:center}
 
 /* --- Banner / hero --- */
