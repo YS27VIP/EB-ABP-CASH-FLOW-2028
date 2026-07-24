@@ -37,7 +37,7 @@ const VJ = { k: 'VIAJES', u: '$', detalle: VIAJES_GROUPS, extrasKey: 'viajes_ext
 const ROLES = [
   { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#714B67', tab: 'Cap_Ventas',    rubros: [{ k: 'UNIDADES', u: 'ud', proyeccion: true }, VJ] },
   { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP', u: '$' }, { k: 'AUC', u: '$' }, VJ, { k: 'INVENTARIO COMPRAS', u: '$' }] },
-  { id: 'marketing', label: 'Marketing', icon: '🎯', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
+  { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
   { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [VJ, { k: 'CASH FLOW', u: '$' }] },
   { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#8f4b7e', tab: 'Cap_Director',  rubros: [VJ, { k: 'CASH FLOW', u: '$' }, { k: 'CATEGORIAS', cat: true }] },
@@ -95,7 +95,7 @@ export default function App() {
     setEmpresa(nm)
   }
 
-  if (!role && roleId !== 'config' && roleId !== 'historico') {
+  if (!role && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
@@ -135,6 +135,10 @@ export default function App() {
               <span className="appicon" style={{ background: '#5b6470' }}>⚙️</span>
               <span className="applabel">Combinaciones</span>
             </button>
+            <button className="app" onClick={() => setRoleId('bitacora')}>
+              <span className="appicon" style={{ background: '#455a64' }}>📝</span>
+              <span className="applabel">Bitácora</span>
+            </button>
           </div>
         </main>
       </>
@@ -159,6 +163,17 @@ export default function App() {
           <span className="rolechip" style={{ background: '#b0473b' }}>📊 Histórico</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
         <main><HistoricoScreen /></main>
+      </>
+    )
+  }
+
+  if (roleId === 'bitacora') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#455a64' }}>📝 Bitácora</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        <main><BitacoraScreen empresas={empresas} empresaSel={empresa} /></main>
       </>
     )
   }
@@ -825,7 +840,7 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
 
   const u2026 = {}, cliByMarca = {}
   hist.forEach((r) => { if (upper(r[3]).indexOf('UNIDAD') < 0) return; if (String(r[1]) !== '2026') return; const mi = mesIdx(r[6]); if (mi < 0) return; const mar = r[5], cli = r[8] || '(sin cliente)', k = cli + '|' + mar; (u2026[k] = u2026[k] || Array(12).fill(0))[mi] += num(r[7]); (cliByMarca[mar] = cliByMarca[mar] || new Set()).add(cli) })
-  const clientes = [...(cliByMarca[marca] || [])].sort()
+  const clientes = [...(cliByMarca[marca] || [])].sort((a, b) => (u2026[b + '|' + marca] || []).reduce((s, v) => s + v, 0) - (u2026[a + '|' + marca] || []).reduce((s, v) => s + v, 0))
   const g = (cli) => num(growth[cli + '|' + marca])
   const u26 = (cli, mi) => (u2026[cli + '|' + marca] || [])[mi] || 0
   const u28 = (cli, mi) => Math.round(u26(cli, mi) * (1 + g(cli) / 100))
@@ -900,11 +915,11 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
         <h3>Ventas · Unidades 2028 — {marca}</h3>
         <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: se aplica a todos los meses de 2026 para proyectar 2028. La fila gris es el histórico 2026 (referencia). Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
         <div className="tablewrap">
-          <table className="vfix">
-            <colgroup><col style={{ width: '220px' }} /><col style={{ width: '55px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
-            <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+          <table className="vfix" style={{ width: 1228 }}>
+            <colgroup><col style={{ width: '220px' }} /><col style={{ width: '55px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /><col style={{ width: '60px' }} /></colgroup>
+            <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th><th>% Peso</th></tr></thead>
             <tbody>
-              {clientes.length === 0 && <tr><td className="l" colSpan={16}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico primero (unidades 2026).</td></tr>}
+              {clientes.length === 0 && <tr><td className="l" colSpan={17}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico primero (unidades 2026).</td></tr>}
               {clientes.map((cli) => (
                 <Fragment2 key={cli}>
                   <tr>
@@ -913,18 +928,78 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
                     <td className="yl">2026</td>
                     {MESES.map((_, mi) => <td key={mi} className="ref">{fmt(u26(cli, mi))}</td>)}
                     <td className="ref"><b>{fmt(t26(cli))}</b></td>
+                    <td className="ref">{tot26Marca ? (t26(cli) / tot26Marca * 100).toFixed(1) + '%' : '—'}</td>
                   </tr>
                   <tr className="proy2028">
                     <td className="yl proyl">2028</td>
                     {MESES.map((_, mi) => <td key={mi} className="tot">{fmt(u28(cli, mi))}</td>)}
                     <td className="tot">{fmt(t28(cli))}</td>
+                    <td className="tot">{totMarcaSel ? (t28(cli) / totMarcaSel * 100).toFixed(1) + '%' : '—'}</td>
                   </tr>
                 </Fragment2>
               ))}
               {clientes.length > 0 && <>
-                <tr className="grandrow"><td className="l" rowSpan={2}>TOTAL {marca}</td><td rowSpan={2}>{tot26Marca ? (crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1) + '%' : '—'}</td><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td></tr>
-                <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
+                <tr className="grandrow"><td className="l" rowSpan={2}>TOTAL {marca}</td><td rowSpan={2}>{tot26Marca ? (crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1) + '%' : '—'}</td><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>
+                <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td><td className="tot">100%</td></tr>
               </>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ===== BITÁCORA DE CAMBIOS ===== */
+function BitacoraScreen({ empresas, empresaSel }) {
+  const [rows, setRows] = useState([])
+  const [emp, setEmp] = useState(empresaSel || (empresas[0] || 'GENERAL'))
+  const [desc, setDesc] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+  useEffect(() => { cargar() }, [])
+  async function cargar() { try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Bitacora'); const j = await r.json(); if (j && j.ok && j.values) setRows(j.values.slice(1)) } catch { } }
+  async function registrar() {
+    if (!desc.trim()) { setMsg({ t: 'warn', x: 'Escribe la descripción del cambio.' }); return }
+    setSaving(true); setMsg(null)
+    // Fecha en RUBRO (columna 2), descripción en MARCA (columna 4). Cada entrada es única (timestamp) → se agrega sin sobrescribir.
+    const rows2 = [{ rubro: new Date().toISOString(), sbu: '', marca: desc.trim(), meses: [] }]
+    try {
+      const r = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ empresa: emp, usuario: '', rol: 'Bitácora', tab: 'Bitacora', rows: rows2 }) })
+      const j = await r.json()
+      if (j.ok) { setDesc(''); setMsg({ t: 'ok', x: 'Cambio registrado en la bitácora.' }); cargar() }
+      else setMsg({ t: 'bad', x: 'Error: ' + j.error })
+    } catch (e) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + e.message }) }
+    setSaving(false)
+  }
+  const dfmt = (v) => { const d = new Date(v); return isNaN(d.getTime()) ? String(v) : d.toLocaleString('es') }
+  const inp = { display: 'block', marginTop: 5, width: '100%', background: '#fff', border: '1px solid var(--line)', borderRadius: 7, padding: '9px 11px', font: 'inherit', color: 'inherit' }
+  // Columnas del tab genérico: [EMPRESA, RUBRO=fecha, SBU, MARCA=descripción, ...]
+  const lista = rows.map((r) => ({ fecha: r[1], empresa: r[0], desc: r[3] })).reverse()
+  return (
+    <>
+      <div className="panel">
+        <h3>Registrar cambio</h3>
+        <div className="sub">Deja constancia de cada modificación a la herramienta para su trazabilidad (útil una vez esté en vivo).</div>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <label style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Empresa
+            <select value={emp} onChange={(e) => setEmp(e.target.value)} style={{ ...inp, minWidth: 180 }}><option>GENERAL</option>{empresas.map((x) => <option key={x}>{x}</option>)}</select>
+          </label>
+          <label style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, flex: 1, minWidth: 320 }}>Descripción del cambio
+            <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Ej. Se agregó columna % Peso en Ventas" style={inp} />
+          </label>
+          <button className="btn primary" disabled={saving} onClick={registrar}>{saving ? 'Guardando…' : '💾 Registrar'}</button>
+        </div>
+        {msg && <div className={'note ' + msg.t} style={{ marginTop: 10 }}>{msg.x}</div>}
+      </div>
+      <div className="panel">
+        <h3>Bitácora de cambios <span className="unit">({lista.length})</span></h3>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Fecha del cambio</th><th className="l">Empresa</th><th className="l">Descripción del cambio</th></tr></thead>
+            <tbody>
+              {lista.length === 0 && <tr><td className="l" colSpan={3}>Aún no hay cambios registrados.</td></tr>}
+              {lista.map((r, i) => <tr key={i}><td className="l">{dfmt(r.fecha)}</td><td className="l">{r.empresa}</td><td className="l">{r.desc}</td></tr>)}
             </tbody>
           </table>
         </div>

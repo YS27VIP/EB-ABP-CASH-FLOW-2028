@@ -19,6 +19,7 @@ function doPost(e) {
     var ss = SpreadsheetApp.openById(SHEET_ID);
     if (String(b.action || '') === 'config') return guardarConfig(ss, b);
     if (String(b.action || '') === 'historico') return guardarHistorico(ss, b);
+    if (String(b.action || '') === 'bitacora') return guardarBitacora(ss, b);
 
     var empresa = String(b.empresa || '');
     var rol = String(b.rol || ''), tab = String(b.tab || ''), rows = Array.isArray(b.rows) ? b.rows : [];
@@ -109,6 +110,14 @@ function guardarHistorico(ss, b) {
   sh.getRange(1, 1, out.length, W).setValues(out);
   sh.getRange(1, 1, 1, W).setFontWeight('bold'); sh.setFrozenRows(1);
   return json({ ok: true, filas: incoming.length, total: out.length - 1 });
+}
+
+/* Bitácora de cambios: una fila por modificación (Fecha, Empresa, Descripción). */
+function guardarBitacora(ss, b) {
+  var sh = ss.getSheetByName('Bitacora');
+  if (!sh) { sh = ss.insertSheet('Bitacora'); sh.appendRow(['Fecha del cambio', 'Empresa', 'Descripción del cambio']); sh.getRange('A1:C1').setFontWeight('bold'); sh.setFrozenRows(1); }
+  sh.appendRow([new Date(), String(b.empresa || ''), String(b.descripcion || '')]);
+  return json({ ok: true });
 }
 
 function tabConHeader(ss, name, head) {
