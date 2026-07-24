@@ -51,10 +51,16 @@ const mesIdx = (v) => { const d = new Date(v); return isNaN(d.getTime()) ? -1 : 
 
 function effSBUS(empresa, combos) {
   const c = combos[empresa]
-  if (!c || !SBU_NAMES.some((s) => (c[s] || []).length)) return DEFAULT_SBUS
+  const excl = new Set((c && c['NO VENDE']) || [])
+  if (!c || !SBU_NAMES.some((s) => (c[s] || []).length)) {
+    if (!excl.size) return DEFAULT_SBUS
+    const out = {}
+    Object.entries(DEFAULT_SBUS).forEach(([s, ms]) => { const f = ms.filter((m) => !excl.has(m)); if (f.length) out[s] = f })
+    return out
+  }
   const out = {}, asignadas = new Set()
-  SBU_NAMES.forEach((s) => { out[s] = (c[s] || []).slice(); out[s].forEach((m) => asignadas.add(m)) })
-  const rest = ALL_MARCAS.filter((m) => !asignadas.has(m))
+  SBU_NAMES.forEach((s) => { out[s] = (c[s] || []).filter((m) => !excl.has(m)); out[s].forEach((m) => asignadas.add(m)) })
+  const rest = ALL_MARCAS.filter((m) => !asignadas.has(m) && !excl.has(m))
   if (rest.length) out['Sin asignar'] = rest
   return out
 }
@@ -380,14 +386,26 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
   const [asign, setAsign] = useState(() => seed(combos[empresa]))
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [colabs, setColabs] = useState([])
+  const [savingC, setSavingC] = useState(false)
+  const [msgC, setMsgC] = useState(null)
+  useEffect(() => {
+    (async () => { try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Colaboradores'); const j = await r.json(); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '' }) }); setColabs(out) } else setColabs([]) } catch { } })()
+  }, [empresa])
+  async function guardarColabs() {
+    setSavingC(true); setMsgC(null)
+    const rows = colabs.filter((c) => String(c.email).trim() || String(c.nombre).trim()).map((c) => ({ rubro: c.nombre, sbu: c.rol, marca: c.email, meses: [] }))
+    await postToTab('Cap_Colaboradores', empresa, '', 'Config', rows, setMsgC)
+    setSavingC(false)
+  }
 
-  function seed(c) { const m = {}; ALL_MARCAS.forEach((mk) => { m[mk] = '' }); if (c) SBU_NAMES.forEach((s) => (c[s] || []).forEach((mk) => { m[mk] = s })); return m }
+  function seed(c) { const m = {}; ALL_MARCAS.forEach((mk) => { m[mk] = '' }); if (c) { SBU_NAMES.forEach((s) => (c[s] || []).forEach((mk) => { m[mk] = s })); (c['NO VENDE'] || []).forEach((mk) => { m[mk] = 'NO' }) } return m }
   function cambiarEmpresa(e) { setEmpresa(e); setAsign(seed(combos[e])); setMsg(null) }
 
   async function guardar() {
     setSaving(true); setMsg(null)
-    const cc = { 'SBU 1': [], 'SBU 2': [], 'SBU 3': [] }
-    Object.entries(asign).forEach(([mk, s]) => { if (s) cc[s].push(mk) })
+    const cc = { 'SBU 1': [], 'SBU 2': [], 'SBU 3': [], 'NO VENDE': [] }
+    Object.entries(asign).forEach(([mk, s]) => { if (s === 'NO') cc['NO VENDE'].push(mk); else if (s) cc[s].push(mk) })
     try {
       const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'config', empresa, combos: cc }) })
       const j = await res.json()
@@ -410,7 +428,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="panel">
         <h3>Combinaciones de SBU — {empresa}</h3>
-        <div className="sub">Asigna cada marca a una SBU. Puede ser distinto por empresa. ({cuenta('SBU 1')} en SBU 1 · {cuenta('SBU 2')} en SBU 2 · {cuenta('SBU 3')} en SBU 3)</div>
+        <div className="sub">Asigna cada marca a una SBU (o "No la vende" para excluirla de esta empresa). ({cuenta('SBU 1')} en SBU 1 · {cuenta('SBU 2')} en SBU 2 · {cuenta('SBU 3')} en SBU 3 · {cuenta('NO')} no la vende)</div>
         <div className="tablewrap">
           <table>
             <thead><tr><th className="l">Marca</th><th>SBU asignada</th></tr></thead>
@@ -420,8 +438,36 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
                   <select value={asign[mk] || ''} onChange={(e) => setAsign({ ...asign, [mk]: e.target.value })}>
                     <option value="">— sin asignar —</option>
                     {SBU_NAMES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    <option value="NO">🚫 No la vende</option>
                   </select>
                 </td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="toolbar">
+        <button className="btn" onClick={() => setColabs([...colabs, { nombre: '', email: '', rol: ROLES[0].label }])}>➕ Agregar colaborador</button>
+        <div className="spacer"></div>
+        <button className="btn primary" disabled={savingC} onClick={guardarColabs}>{savingC ? 'Guardando…' : '💾 Guardar colaboradores'}</button>
+      </div>
+      {msgC && <div className={'note ' + msgC.t}>{msgC.x}</div>}
+      <div className="panel">
+        <h3>Colaboradores — {empresa}</h3>
+        <div className="sub">Quién llena cada parte del ABP en esta empresa.</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Nombre del colaborador</th><th className="l">Email</th><th>Rol</th><th></th></tr></thead>
+            <tbody>
+              {colabs.length === 0 && <tr><td className="l" colSpan={4}>Agrega colaboradores con el botón de arriba.</td></tr>}
+              {colabs.map((c, i) => (
+                <tr key={i}>
+                  <td className="l"><input style={{ width: '95%', padding: '6px' }} value={c.nombre} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x))} placeholder="Nombre" /></td>
+                  <td className="l"><input style={{ width: '95%', padding: '6px' }} value={c.email} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="correo@empresa.com" /></td>
+                  <td><select value={c.rol} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, rol: e.target.value } : x))}>{ROLES.map((r) => <option key={r.id}>{r.label}</option>)}</select></td>
+                  <td><button className="btn" onClick={() => setColabs(colabs.filter((_, j) => j !== i))}>✕</button></td>
+                </tr>
               ))}
             </tbody>
           </table>
@@ -793,6 +839,7 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
   const mes28 = MESES.map((_, mi) => clientes.reduce((a, cli) => a + u28(cli, mi), 0))
   const mes26 = MESES.map((_, mi) => clientes.reduce((a, cli) => a + u26(cli, mi), 0))
   const tot26Marca = mes26.reduce((a, b) => a + b, 0)
+  const crecMarca = tot26Marca ? (totMarcaSel - tot26Marca) / tot26Marca * 100 : 0
 
   async function guardar() {
     setSaving(true); setMsg(null)
@@ -838,7 +885,7 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
                 </Fragment2>
               ))}
               {clientes.length > 0 && <>
-                <tr className="grandrow"><td className="l" rowSpan={2}>TOTAL {marca}</td><td rowSpan={2}></td><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td></tr>
+                <tr className="grandrow"><td className="l" rowSpan={2}>TOTAL {marca}</td><td rowSpan={2}>{tot26Marca ? (crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1) + '%' : '—'}</td><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td></tr>
                 <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
               </>}
             </tbody>
