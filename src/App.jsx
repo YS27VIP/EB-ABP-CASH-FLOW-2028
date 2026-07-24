@@ -55,6 +55,8 @@ const CF_GROUPS = [
   { g: 'CASH FLOW', items: ['Cash Inicial', 'Cash In (Cobros)', 'Cash Out (Pagos)', 'Costos Operativos', 'Cash Final'] },
 ]
 const CF_TERMINOS = ['Cash', '30 días', '60 días', '90 días', '120 días', '150 días', '180 días', 'Intercompañía']
+/* Meses de desfase para la escalera de cobros según el término de pago */
+const CF_PLAZO_MESES = { 'Cash': 0, '30 días': 1, '60 días': 2, '90 días': 3, '120 días': 4, '150 días': 5, '180 días': 6, 'Intercompañía': 0 }
 /* Costos Operativos = suma de estos 4 sub-rubros (el usuario los llena; el total es calculado) */
 const CF_COSTOS_PARENT = 'Costos Operativos'
 const CF_COSTOS = ['Gastos administrativos', 'Viajes', 'Marketing', 'Comisiones']
@@ -444,6 +446,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [hist, setHist] = useState([])
   const [ventas, setVentas] = useState([])
+  const [producto, setProducto] = useState([])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   const sbuMarcas = sbus[sbu] || []
@@ -452,6 +455,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
     (async () => {
       try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
       try { const r2 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Ventas'); const j2 = await r2.json(); if (j2 && j2.ok && j2.values) setVentas(j2.values.slice(1)) } catch { }
+      try { const r3 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Producto'); const j3 = await r3.json(); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
     })()
   }, [empresa])
 
@@ -470,8 +474,29 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
   const CASHIN = 'Cash In (Cobros)', DIC27 = 2
   const saldoTotal = (mca) => clientesDe(mca).reduce((s, cli) => s + num(data[`SALDO|${mca}|${cli}`]), 0)
   const cellRaw = (concepto, mi) => isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
+
+  // Escalera de cobros: Ventas Netas 2028 = Unidades 2028 (Cap_Ventas) × AUP (Cap_Producto), cobradas según el plazo del cliente.
+  const unidades2028 = (mca) => { const out = {}; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli) return; const arr = out[cli] || (out[cli] = Array(12).fill(0)); for (let j = 0; j < 12; j++) arr[j] += num(r[4 + j]) }); return out }
+  const aupMarca = (mca) => { const arr = Array(12).fill(0); producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[1]) !== 'AUP' || upper(r[3]) !== upper(mca)) return; for (let j = 0; j < 12; j++) arr[j] = num(r[4 + j]) }); return arr }
+  const cobros2028 = (mca) => {
+    const uni = unidades2028(mca), aup = aupMarca(mca), byCli = {}, total = Array(12).fill(0)
+    Object.keys(uni).forEach((cli) => {
+      const p = CF_PLAZO_MESES[data[`TERM|${mca}|${cli}`]] ?? 0
+      const row = Array(12).fill(0)
+      for (let j = 0; j < 12; j++) { const src = j - p; if (src >= 0) row[j] = (uni[cli][src] || 0) * (aup[src] || 0) }
+      byCli[cli] = row; for (let j = 0; j < 12; j++) total[j] += row[j]
+    })
+    return { total, byCli }
+  }
+  const _cobCache = {}
+  const getCobros = (mca) => _cobCache[mca] || (_cobCache[mca] = cobros2028(mca))
+
   const cell = (concepto, mi) => {
-    if (concepto === CASHIN && mi === DIC27) return isTotal ? sbuMarcas.reduce((s, m) => s + saldoTotal(m), 0) : saldoTotal(marca)
+    if (concepto === CASHIN) {
+      if (mi === DIC27) return isTotal ? sbuMarcas.reduce((s, m) => s + saldoTotal(m), 0) : saldoTotal(marca)   // Dic-27 = saldo cierre 2027
+      if (mi >= 3) { const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[j], 0) : getCobros(marca).total[j] } // 2028 = escalera
+      return cellRaw(concepto, mi)
+    }
     if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + cellRaw(sub, mi), 0)
     return cellRaw(concepto, mi)
   }
@@ -533,8 +558,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
                     const esCostos = it === CF_COSTOS_PARENT
                     const celdas = CF_MESES.map((_, mi) => {
                       const cls = mi < 3 ? 'ya' : 'yb'
-                      if (isTotal || esCostos) return <td key={mi} className={'tot ' + cls}>{fmt(cell(it, mi))}</td>
-                      if (it === CASHIN && mi === DIC27) return <td key={mi} className={'tot ' + cls} title="Suma del saldo (deuda) cierre 2027 por cliente">{fmt(cell(it, mi))}</td>
+                      const cashinCalc = it === CASHIN && mi >= 2
+                      if (isTotal || esCostos || cashinCalc) {
+                        const tit = it === CASHIN ? (mi === DIC27 ? 'Saldo (deuda) cierre 2027' : 'Cobros según escalera (ventas × plazo)') : undefined
+                        return <td key={mi} className={'tot ' + cls} title={tit}>{fmt(cell(it, mi))}</td>
+                      }
                       const k = key(marca, it, mi)
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
@@ -591,6 +619,28 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
           )
         })()}
       </div>
+
+      {!isTotal && (() => {
+        const cob = cobros2028(marca)
+        const clientesCob = Object.keys(cob.byCli).sort((a, b) => a.localeCompare(b))
+        const totAnual = cob.total.reduce((a, b) => a + b, 0)
+        return (
+          <div className="panel">
+            <h3>{role.label} — Cobros 2028 · escalera <span className="unit">({marca})</span></h3>
+            <div className="sub">Calculado: cada venta (<b>Unidades 2028 × AUP</b>) se cobra según el término del cliente. Cash = mismo mes · 30 días = +1 · 60 = +2 · 90 = +3 · 120 = +4 · 150 = +5 · 180 = +6. El <b>TOTAL por mes</b> alimenta <b>Cash In (Cobros)</b> de 2028 arriba.</div>
+            <div className="tablewrap">
+              <table>
+                <thead><tr><th className="l">Cliente</th><th>Plazo</th>{CF_M2028.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
+                <tbody>
+                  {clientesCob.length === 0 && <tr><td className="l" colSpan={15}>Sin cobros aún. Revisa que Ventas haya guardado unidades 2028 y Producto el AUP de {marca}.</td></tr>}
+                  {clientesCob.map((cli) => { const row = cob.byCli[cli]; const t = row.reduce((a, b) => a + b, 0); if (t === 0) return null; return <tr key={cli}><td className="l">{cli}</td><td>{data[`TERM|${marca}|${cli}`] || '—'}</td>{row.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
+                  <tr className="grandrow"><td className="l">TOTAL COBROS → Cash In</td><td></td>{cob.total.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totAnual)}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
     </>
   )
 }
