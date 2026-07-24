@@ -262,6 +262,13 @@ function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving
   const key = (sbu, marca, mi) => `${rubro.k}|${sbu}|${marca}|${mi}`
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   const marcas = marcasDe(sbus)
+  const [bulkMarca, setBulkMarca] = useState(marcas[0] ? marcas[0].marca : '')
+  const [bulkVal, setBulkVal] = useState('')
+  function aplicarTodos() {
+    if (!bulkMarca) return
+    const sbu = sbuDe(sbus, bulkMarca)
+    setData((d) => { const n = { ...d }; for (let mi = 0; mi < 12; mi++) n[key(sbu, bulkMarca, mi)] = bulkVal; return n })
+  }
 
   async function guardar() {
     setSaving(true); setMsg(null)
@@ -299,6 +306,14 @@ function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving
       <div className="panel">
         <h3>{role.label} — {rubro.k} <span className="unit">({rubro.u})</span><span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Empresa <b>{empresa}</b>. Captura por marca y mes.</div>
+        <div className="toolbar" style={{ marginBottom: 12 }}>
+          <label>Aplicar a todos los meses</label>
+          <select value={bulkMarca} onChange={(e) => setBulkMarca(e.target.value)}>
+            {Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}
+          </select>
+          <input value={bulkVal} onChange={(e) => setBulkVal(e.target.value)} inputMode="decimal" placeholder="Valor" style={{ width: 120, background: '#fff', border: '1px solid var(--line)', borderRadius: 6, padding: '7px 10px', font: 'inherit', textAlign: 'center' }} />
+          <button className="btn" onClick={aplicarTodos}>Aplicar a los 12 meses</button>
+        </div>
         <div className="tablewrap">
           <table>
             <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
