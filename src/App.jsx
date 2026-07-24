@@ -38,7 +38,7 @@ const VJ = { k: 'VIAJES', u: '$', detalle: VIAJES_GROUPS, extrasKey: 'viajes_ext
 
 const ROLES = [
   { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#714B67', tab: 'Cap_Ventas',    rubros: [{ k: 'UNIDADES', u: 'ud', proyeccion: true }, VJ] },
-  { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP', u: '$' }, { k: 'AUC', u: '$' }, VJ, { k: 'INVENTARIO COMPRAS', u: '$' }] },
+  { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP', u: '$', porCat: true }, { k: 'AUC', u: '$' }, VJ, { k: 'INVENTARIO COMPRAS', u: '$' }] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
   { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [VJ, { k: 'CASH FLOW', u: '$', cash: true }] },
@@ -250,6 +250,7 @@ function RoleForm({ role, usuario, empresa, sbus }) {
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       {rb.proyeccion ? <ProjectionForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} />
         : rb.cash ? <CashFlowForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} />
+        : rb.porCat ? <CatCaptureForm key={rb.k} {...common} />
         : rb.cat ? <CategoriasForm key={rb.k} role={role} usuario={usuario} empresa={empresa} sbus={sbus} />
         : rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} />
         : <SimpleForm key={rb.k} {...common} />}
@@ -331,6 +332,77 @@ function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving
             </tbody>
           </table>
         </div>
+      </div>
+    </>
+  )
+}
+
+/* ===== CatCaptureForm: captura por CATEGORÍA (las que definió el Director) × mes. Ej. AUP ===== */
+function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, saving, setSaving, setMsg }) {
+  const marcas = marcasDe(sbus)
+  const [marca, setMarca] = useState(marcas[0] ? marcas[0].marca : '')
+  const [cats, setCats] = useState({})
+  const [bulkCat, setBulkCat] = useState('')
+  const [bulkVal, setBulkVal] = useState('')
+  const key = (mar, cat, mi) => `${rubro.k}|${mar}|${cat}|${mi}`
+  const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  const PFX = `${rubro.k} · `
+
+  useEffect(() => {
+    (async () => {
+      try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Categorias'); const j = await r.json(); if (j && j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
+      try { const r2 = await fetch(APPS_SCRIPT_URL + '?tab=' + role.tab); const j2 = await r2.json(); if (j2 && j2.ok && j2.values) { const next = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const rub = String(row[1] || ''); if (rub.indexOf(PFX) !== 0) return; const cat = rub.slice(PFX.length), mar = row[3]; for (let mi = 0; mi < 12; mi++) { const v = num(row[5 + mi]); if (v) next[key(mar, cat, mi)] = v } }); if (Object.keys(next).length) setData((d) => ({ ...d, ...next })) } } catch { }
+    })()
+  }, [empresa])
+
+  const catList = cats[marca] || []
+  function aplicarTodos() { if (!bulkCat) return; setData((d) => { const n = { ...d }; for (let mi = 0; mi < 12; mi++) n[key(marca, bulkCat, mi)] = bulkVal; return n }) }
+  async function guardar() {
+    setSaving(true); setMsg(null)
+    const rows = []
+    marcas.forEach(({ sbu: sb, marca: mar }) => (cats[mar] || []).forEach(({ cat }) => { const meses = MESES.map((_, mi) => num(data[key(mar, cat, mi)])); if (meses.some((v) => v !== 0)) rows.push({ rubro: `${rubro.k} · ${cat}`, sbu: sb, marca: mar, meses }) }))
+    await postToTab(role.tab, empresa, usuario, role.label, rows, setMsg)
+    setSaving(false)
+  }
+  function exportar() {
+    const aoa = [['EMPRESA', 'RUBRO', 'SBU', 'MARCA', ...MESES]]
+    marcas.forEach(({ sbu: sb, marca: mar }) => (cats[mar] || []).forEach(({ cat }) => aoa.push([empresa, `${rubro.k} · ${cat}`, sb, mar, ...MESES.map((_, mi) => num(data[key(mar, cat, mi)]))])))
+    exportXlsx(aoa, `${role.tab}_${rubro.k}.xlsx`)
+  }
+
+  return (
+    <>
+      <div className="toolbar">
+        <label>Marca</label>
+        <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select>
+        <div className="spacer"></div>
+        <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+      </div>
+      <div className="panel">
+        <h3>{role.label} — {rubro.k} por categoría <span className="unit">({rubro.u} · {marca})</span><span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">Las categorías y su peso las define el Director. Captura el {rubro.k} por categoría y mes.</div>
+        {catList.length === 0 ? <div className="note warn">El Director aún no definió categorías para {marca}. Pídele que las cargue en su pestaña de Categorías.</div> : (<>
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <label>Aplicar a todos los meses</label>
+            <select value={bulkCat} onChange={(e) => setBulkCat(e.target.value)}><option value="">— categoría —</option>{catList.map(({ cat }) => <option key={cat}>{cat}</option>)}</select>
+            <input value={bulkVal} onChange={(e) => setBulkVal(e.target.value)} inputMode="decimal" placeholder="Valor" style={{ width: 120, background: '#fff', border: '1px solid var(--line)', borderRadius: 6, padding: '7px 10px', font: 'inherit', textAlign: 'center' }} />
+            <button className="btn" onClick={aplicarTodos}>Aplicar a los 12 meses</button>
+          </div>
+          <div className="tablewrap">
+            <table>
+              <thead><tr><th className="l">Categoría</th><th>Peso %</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Prom.</th></tr></thead>
+              <tbody>
+                {catList.map(({ cat, peso }) => {
+                  const vals = MESES.map((_, mi) => num(data[key(marca, cat, mi)]))
+                  const nz = vals.filter((v) => v !== 0)
+                  const prom = nz.length ? nz.reduce((a, b) => a + b, 0) / nz.length : 0
+                  return <tr key={cat}><td className="l">{cat}</td><td>{num(peso).toFixed(1)}%</td>{MESES.map((_, mi) => { const k = key(marca, cat, mi); return <td key={mi} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(prom)}</td></tr>
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>)}
       </div>
     </>
   )
@@ -462,6 +534,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
   const [hist, setHist] = useState([])
   const [ventas, setVentas] = useState([])
   const [producto, setProducto] = useState([])
+  const [cats, setCats] = useState({})
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   const sbuMarcas = sbus[sbu] || []
@@ -471,6 +544,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
       try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
       try { const r2 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Ventas'); const j2 = await r2.json(); if (j2 && j2.ok && j2.values) setVentas(j2.values.slice(1)) } catch { }
       try { const r3 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Producto'); const j3 = await r3.json(); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
+      try { const r4 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Categorias'); const j4 = await r4.json(); if (j4 && j4.ok && j4.values) { const out = {}; j4.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
     })()
   }, [empresa])
 
@@ -492,7 +566,14 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
 
   // Escalera de cobros: Ventas Netas 2028 = Unidades 2028 (Cap_Ventas) × AUP (Cap_Producto), cobradas según el plazo del cliente.
   const unidades2028 = (mca) => { const out = {}; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli) return; const arr = out[cli] || (out[cli] = Array(12).fill(0)); for (let j = 0; j < 12; j++) arr[j] += num(r[4 + j]) }); return out }
-  const aupMarca = (mca) => { const arr = Array(12).fill(0); producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[1]) !== 'AUP' || upper(r[3]) !== upper(mca)) return; for (let j = 0; j < 12; j++) arr[j] = num(r[4 + j]) }); return arr }
+  // AUP ponderado por marca = Σ (peso_categoría × AUP_categoría). El AUP se captura por categoría (Producto).
+  const aupMarca = (mca) => {
+    const aupCat = {}
+    producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') !== 0) return; const cat = rub.slice(6); aupCat[cat] = MESES.map((_, j) => num(r[4 + j])) })
+    const arr = Array(12).fill(0)
+    ;(cats[mca] || []).forEach(({ cat, peso }) => { const a = aupCat[cat]; if (!a) return; const w = num(peso) / 100; for (let j = 0; j < 12; j++) arr[j] += w * a[j] })
+    return arr
+  }
   const cobros2028 = (mca) => {
     const uni = unidades2028(mca), aup = aupMarca(mca), byCli = {}, total = Array(12).fill(0)
     Object.keys(uni).forEach((cli) => {
