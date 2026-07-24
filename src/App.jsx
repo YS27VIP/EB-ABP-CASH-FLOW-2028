@@ -52,6 +52,7 @@ const CF_GROUPS = [
   { g: 'PSI · Purchases-Sales-Inventory', items: ['Inventario Inicial', 'Inventario Final', 'Compras (Fecha disponible)', 'Ventas Netas'] },
   { g: 'CASH FLOW', items: ['Cash Inicial', 'Cash In (Cobros)', 'Cash Out (Pagos)', 'Costos Operativos', 'Cash Final'] },
 ]
+const CF_TERMINOS = ['Cash', '30 días', '60 días', '90 días', '120 días', '150 días', '180 días', 'Intercompañía']
 
 /* ===== helpers ===== */
 const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n }
@@ -434,9 +435,26 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
   const [msg, setMsg] = useState(null)
   const stKey = `cf_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
+  const [hist, setHist] = useState([])
+  const [ventas, setVentas] = useState([])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   const sbuMarcas = sbus[sbu] || []
+
+  useEffect(() => {
+    (async () => {
+      try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
+      try { const r2 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Ventas'); const j2 = await r2.json(); if (j2 && j2.ok && j2.values) setVentas(j2.values.slice(1)) } catch { }
+    })()
+  }, [empresa])
+
+  // Clientes de una marca: histórico 2025/2026 + nuevos capturados en Ventas (2028)
+  const clientesDe = (mca) => {
+    const set = new Set()
+    hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) set.add(cli) })
+    ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (cli) set.add(cli) })
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }
 
   const key = (mca, concepto, mi) => `${mca}|${concepto}|${mi}`
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
@@ -509,6 +527,34 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="panel">
+        <h3>{role.label} — Términos de pago y saldo por cliente <span className="unit">({isTotal ? `TOTAL ${sbu}` : marca})</span>{!isTotal && <span className="fill-badge">✏️ para llenar</span>}</h3>
+        <div className="sub">Clientes con histórico 2025/2026 y nuevos clientes 2028 (capturados en Ventas). Elige el <b>término de pago</b> y el <b>saldo (deuda) estimado</b> con que cierra 2027 cada cliente.</div>
+        {isTotal ? <div className="note warn">Selecciona una marca específica (arriba) para editar los términos de pago por cliente.</div> : (() => {
+          const cls = clientesDe(marca)
+          return (
+            <div className="tablewrap">
+              <table>
+                <thead><tr><th className="l">Cliente</th><th>Término de pagos</th><th>Saldo (deuda) estimado cierre 2027</th></tr></thead>
+                <tbody>
+                  {cls.length === 0 && <tr><td className="l" colSpan={3}>No hay clientes para {marca}. Carga el Histórico (2025/2026) o captura clientes en Ventas.</td></tr>}
+                  {cls.map((cli) => {
+                    const tk = `TERM|${marca}|${cli}`, sk = `SALDO|${marca}|${cli}`
+                    return (
+                      <tr key={cli}>
+                        <td className="l">{cli}</td>
+                        <td><select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select></td>
+                        <td className="cell"><input value={data[sk] ?? ''} onChange={(e) => set(sk, e.target.value)} inputMode="decimal" style={{ width: 130 }} /></td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        })()}
       </div>
     </>
   )
