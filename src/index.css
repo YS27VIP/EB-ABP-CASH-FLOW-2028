@@ -39,7 +39,7 @@ select:focus{border-color:var(--odoo);outline:none}
 
 table{border-collapse:collapse;width:100%;font-size:12.5px}
 th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
-th.l,td.l,th:first-child,td:first-child{text-align:left}
+th.l,td.l{text-align:left}
 thead th{position:sticky;top:0;background:#faf7f9;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;z-index:2}
 tbody tr:hover{background:#f7f4f6}
 tfoot td{font-weight:800;border-top:2px solid var(--odoo);background:#faf7f9}
