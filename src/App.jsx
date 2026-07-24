@@ -13,6 +13,8 @@ const DEFAULT_SBUS = {
 }
 const ALL_MARCAS = Object.values(DEFAULT_SBUS).flat()
 const SBU_NAMES = ['SBU 1', 'SBU 2', 'SBU 3']
+/* Empresas del grupo (el nombre debe coincidir con la columna EMPRESA del Histórico). */
+const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO']
 
 /* Desglose de Marketing */
 const MK_GROUPS = [
@@ -81,8 +83,8 @@ const sbuDe = (sbus, marca) => marcasDe(sbus).find((x) => x.marca === marca)?.sb
 /* ===== APP ===== */
 export default function App() {
   const [usuario, setUsuario] = useState('')
-  const [empresas, setEmpresas] = useState(['EMPRESA 1'])
-  const [empresa, setEmpresa] = useState('EMPRESA 1')
+  const [empresas, setEmpresas] = useState(SEED_EMPRESAS)
+  const [empresa, setEmpresa] = useState('ENERGY BRANDS')
   const [combos, setCombos] = useState({})
   const [roleId, setRoleId] = useState(null)
   const [connError, setConnError] = useState(false)
@@ -90,7 +92,9 @@ export default function App() {
   useEffect(() => {
     let cancel = false
     const aplicar = (j) => {
-      if (j.empresas && j.empresas.length) { setEmpresas(j.empresas); setEmpresa((e) => j.empresas.includes(e) ? e : j.empresas[0]) }
+      const merged = [...SEED_EMPRESAS, ...((j.empresas) || [])].filter((v, i, a) => v && a.indexOf(v) === i)
+      setEmpresas(merged)
+      setEmpresa((e) => merged.includes(e) ? e : (merged.includes('ENERGY BRANDS') ? 'ENERGY BRANDS' : merged[0]))
       if (j.combos) setCombos(j.combos)
     }
     async function load(attempt) {
