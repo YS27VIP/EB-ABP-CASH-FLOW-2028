@@ -860,40 +860,6 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="panel">
-        <h3>Ventas · Unidades 2028 — {marca}</h3>
-        <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: se aplica a todos los meses de 2026 para proyectar 2028. La fila gris es el histórico 2026 (referencia). Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
-        <div className="tablewrap">
-          <table className="vfix">
-            <colgroup><col style={{ width: '220px' }} /><col style={{ width: '55px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
-            <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
-            <tbody>
-              {clientes.length === 0 && <tr><td className="l" colSpan={16}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico primero (unidades 2026).</td></tr>}
-              {clientes.map((cli) => (
-                <Fragment2 key={cli}>
-                  <tr>
-                    <td className="l" rowSpan={2}>{cli}</td>
-                    <td className="cell" rowSpan={2}><input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" /></td>
-                    <td className="yl">2026</td>
-                    {MESES.map((_, mi) => <td key={mi} className="ref">{fmt(u26(cli, mi))}</td>)}
-                    <td className="ref"><b>{fmt(t26(cli))}</b></td>
-                  </tr>
-                  <tr className="proy2028">
-                    <td className="yl proyl">2028</td>
-                    {MESES.map((_, mi) => <td key={mi} className="tot">{fmt(u28(cli, mi))}</td>)}
-                    <td className="tot">{fmt(t28(cli))}</td>
-                  </tr>
-                </Fragment2>
-              ))}
-              {clientes.length > 0 && <>
-                <tr className="grandrow"><td className="l" rowSpan={2}>TOTAL {marca}</td><td rowSpan={2}>{tot26Marca ? (crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1) + '%' : '—'}</td><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td></tr>
-                <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
-              </>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="panel">
         <h3>Resumen por SBU y marca <span className="unit">(unidades 2028 por mes)</span></h3>
         <div className="sub">Unidades 2028 (= 2026 × (1 + % crecimiento)) por marca y mes. Las SBU muestran el subtotal de sus marcas.</div>
         <div className="tablewrap">
@@ -925,6 +891,40 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
               <tr className="grandrow"><td className="l">TOTAL {marca}</td><td></td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
               {catList.length === 0 && <tr><td className="l" colSpan={15}>El Director aún no definió categorías para {marca}.</td></tr>}
               {catList.map((c, i) => { const p = num(c.peso) / 100; return <tr key={i}><td className="l">{c.cat}</td><td>{num(c.peso).toFixed(1)}%</td>{mes28.map((v, mi) => <td key={mi} className="tot">{fmt(v * p)}</td>)}<td className="tot">{fmt(totMarcaSel * p)}</td></tr> })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="panel">
+        <h3>Ventas · Unidades 2028 — {marca}</h3>
+        <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: se aplica a todos los meses de 2026 para proyectar 2028. La fila gris es el histórico 2026 (referencia). Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
+        <div className="tablewrap">
+          <table className="vfix">
+            <colgroup><col style={{ width: '220px' }} /><col style={{ width: '55px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+            <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+            <tbody>
+              {clientes.length === 0 && <tr><td className="l" colSpan={16}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico primero (unidades 2026).</td></tr>}
+              {clientes.map((cli) => (
+                <Fragment2 key={cli}>
+                  <tr>
+                    <td className="l" rowSpan={2}>{cli}</td>
+                    <td className="cell" rowSpan={2}><input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" /></td>
+                    <td className="yl">2026</td>
+                    {MESES.map((_, mi) => <td key={mi} className="ref">{fmt(u26(cli, mi))}</td>)}
+                    <td className="ref"><b>{fmt(t26(cli))}</b></td>
+                  </tr>
+                  <tr className="proy2028">
+                    <td className="yl proyl">2028</td>
+                    {MESES.map((_, mi) => <td key={mi} className="tot">{fmt(u28(cli, mi))}</td>)}
+                    <td className="tot">{fmt(t28(cli))}</td>
+                  </tr>
+                </Fragment2>
+              ))}
+              {clientes.length > 0 && <>
+                <tr className="grandrow"><td className="l" rowSpan={2}>TOTAL {marca}</td><td rowSpan={2}>{tot26Marca ? (crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1) + '%' : '—'}</td><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td></tr>
+                <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
+              </>}
             </tbody>
           </table>
         </div>
