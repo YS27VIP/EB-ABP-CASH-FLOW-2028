@@ -59,7 +59,7 @@ function effSBUS(empresa, combos) {
     return out
   }
   const out = {}, asignadas = new Set()
-  SBU_NAMES.forEach((s) => { out[s] = (c[s] || []).filter((m) => !excl.has(m)); out[s].forEach((m) => asignadas.add(m)) })
+  SBU_NAMES.forEach((s) => { const f = (c[s] || []).filter((m) => !excl.has(m)); if (f.length) { out[s] = f; f.forEach((m) => asignadas.add(m)) } })
   const rest = ALL_MARCAS.filter((m) => !asignadas.has(m) && !excl.has(m))
   if (rest.length) out['Sin asignar'] = rest
   return out
