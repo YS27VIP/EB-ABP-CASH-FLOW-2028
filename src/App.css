@@ -53,9 +53,12 @@ main.menu .hello .row2{justify-content:center}
 .unit{color:var(--muted);font-weight:500;font-size:13px}
 .sburow td{background:#faf7f9;font-weight:800;color:var(--odoo);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;text-align:left}
 td.cell{padding:2px}
-td.cell input{width:64px;border:1px solid transparent;background:transparent;border-radius:5px;padding:6px 6px;font:inherit;text-align:center;font-variant-numeric:tabular-nums}
+td.cell input{width:64px;border:1px solid #f0e6c9;background:#fdf7e3;border-radius:5px;padding:6px 6px;font:inherit;text-align:center;font-variant-numeric:tabular-nums}
 td.cell input:focus{border-color:var(--odoo);background:#fff;outline:none}
-td.cell input:hover{border-color:var(--line)}
+td.cell input:hover{border-color:var(--warn)}
+
+/* Insignia "para llenar" en títulos de bloques editables */
+.fill-badge{display:inline-block;margin-left:8px;font-size:11px;font-weight:700;color:#8a6d00;background:#fdf3cf;border:1px solid #efdd97;border-radius:12px;padding:1px 9px;vertical-align:middle}
 td.tot{font-weight:800;font-variant-numeric:tabular-nums;text-align:center}
 
 /* --- Marketing detalle --- */

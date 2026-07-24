@@ -42,6 +42,7 @@ const ROLES = [
   { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [VJ, { k: 'CASH FLOW', u: '$' }] },
   { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#8f4b7e', tab: 'Cap_Director',  rubros: [VJ, { k: 'CASH FLOW', u: '$' }, { k: 'CATEGORIAS', cat: true }] },
 ]
+const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
 
 /* ===== helpers ===== */
 const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n }
@@ -256,7 +257,7 @@ function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       <div className="panel">
-        <h3>{role.label} — {rubro.k} <span className="unit">({rubro.u})</span></h3>
+        <h3>{role.label} — {rubro.k} <span className="unit">({rubro.u})</span><span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Empresa <b>{empresa}</b>. Captura por marca y mes.</div>
         <div className="tablewrap">
           <table>
@@ -358,7 +359,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar todo'}</button>
       </div>
       <div className="panel">
-        <h3>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca} <span className="unit">(USD · {empresa})</span></h3>
+        <h3>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>👁️ solo lectura</span> : <span className="fill-badge">✏️ para llenar</span>}</h3>
         <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : 'Captura por rubro y mes. Los rubros son iguales para todas las marcas.'} Total: <b>${fmt(totalGeneral)}</b></div>
         <div className="tablewrap">
           <table>
@@ -405,11 +406,12 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
   const [savingC, setSavingC] = useState(false)
   const [msgC, setMsgC] = useState(null)
   useEffect(() => {
-    (async () => { try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Colaboradores'); const j = await r.json(); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '' }) }); setColabs(out) } else setColabs([]) } catch { } })()
+    (async () => { try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Colaboradores'); const j = await r.json(); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '', acceso: String(row[4] || '').split(';').filter(Boolean) }) }); setColabs(out) } else setColabs([]) } catch { } })()
   }, [empresa])
+  function toggleAcceso(i, op) { setColabs(colabs.map((x, j) => j === i ? { ...x, acceso: (x.acceso || []).includes(op) ? x.acceso.filter((a) => a !== op) : [...(x.acceso || []), op] } : x)) }
   async function guardarColabs() {
     setSavingC(true); setMsgC(null)
-    const rows = colabs.filter((c) => String(c.email).trim() || String(c.nombre).trim()).map((c) => ({ rubro: c.nombre, sbu: c.rol, marca: c.email, meses: [] }))
+    const rows = colabs.filter((c) => String(c.email).trim() || String(c.nombre).trim()).map((c) => ({ rubro: c.nombre, sbu: c.rol, marca: c.email, meses: [(c.acceso || []).join(';')] }))
     await postToTab('Cap_Colaboradores', empresa, '', 'Config', rows, setMsgC)
     setSavingC(false)
   }
@@ -442,7 +444,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="panel">
-        <h3>Combinaciones de SBU — {empresa}</h3>
+        <h3>Combinaciones de SBU — {empresa}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Asigna cada marca a una SBU (o "No la vende" para excluirla de esta empresa). ({cuenta('SBU 1')} en SBU 1 · {cuenta('SBU 2')} en SBU 2 · {cuenta('SBU 3')} en SBU 3 · {cuenta('NO')} no la vende)</div>
         <div className="tablewrap">
           <table>
@@ -463,24 +465,25 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
       </div>
 
       <div className="toolbar">
-        <button className="btn" onClick={() => setColabs([...colabs, { nombre: '', email: '', rol: ROLES[0].label }])}>➕ Agregar colaborador</button>
+        <button className="btn" onClick={() => setColabs([...colabs, { nombre: '', email: '', rol: ROLES[0].label, acceso: [] }])}>➕ Agregar colaborador</button>
         <div className="spacer"></div>
         <button className="btn primary" disabled={savingC} onClick={guardarColabs}>{savingC ? 'Guardando…' : '💾 Guardar colaboradores'}</button>
       </div>
       {msgC && <div className={'note ' + msgC.t}>{msgC.x}</div>}
       <div className="panel">
-        <h3>Colaboradores — {empresa}</h3>
+        <h3>Colaboradores — {empresa}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Quién llena cada parte del ABP en esta empresa.</div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th className="l">Nombre del colaborador</th><th className="l">Email</th><th>Rol</th><th></th></tr></thead>
+            <thead><tr><th className="l">Nombre del colaborador</th><th className="l">Email</th><th>Rol</th><th className="l">Acceso a pestañas</th><th></th></tr></thead>
             <tbody>
-              {colabs.length === 0 && <tr><td className="l" colSpan={4}>Agrega colaboradores con el botón de arriba.</td></tr>}
+              {colabs.length === 0 && <tr><td className="l" colSpan={5}>Agrega colaboradores con el botón de arriba.</td></tr>}
               {colabs.map((c, i) => (
                 <tr key={i}>
                   <td className="l"><input style={{ width: '95%', padding: '6px' }} value={c.nombre} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x))} placeholder="Nombre" /></td>
                   <td className="l"><input style={{ width: '95%', padding: '6px' }} value={c.email} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="correo@empresa.com" /></td>
                   <td><select value={c.rol} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, rol: e.target.value } : x))}>{ROLES.map((r) => <option key={r.id}>{r.label}</option>)}</select></td>
+                  <td className="l"><div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>{ACCESO_OPCIONES.map((op) => { const on = (c.acceso || []).includes(op); return <span key={op} onClick={() => toggleAcceso(i, op)} style={{ cursor: 'pointer', fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 12, background: on ? 'var(--odoo)' : '#eceef1', color: on ? '#fff' : '#5a6068' }}>{op}</span> })}</div></td>
                   <td><button className="btn" onClick={() => setColabs(colabs.filter((_, j) => j !== i))}>✕</button></td>
                 </tr>
               ))}
@@ -691,31 +694,6 @@ function HistoricoScreen() {
         </div>
       </div>
 
-      <div className="toolbar">
-        <label>Año</label>
-        <select value={fAnio} onChange={(e) => setFAnio(e.target.value)}><option value="">Todos</option>{anios.map((a) => <option key={a}>{a}</option>)}</select>
-        <label>Marca</label>
-        <select value={fMarca} onChange={(e) => setFMarca(e.target.value)}><option value="">Todas</option>{marcasList.map((m) => <option key={m}>{m}</option>)}</select>
-        <span className="sub">Análisis del histórico según los filtros.</span>
-      </div>
-
-      <div className="panel">
-        <h3>Resumen por marca y año</h3>
-        <div className="sub"><b>AUP</b> = Ventas Netas / Unidades · <b>AUC</b> = Costo / Unidades. Suma de todos los TIPO/cliente.</div>
-        <div className="tablewrap">
-          <table>
-            <thead><tr><th className="l">Marca</th><th>Año</th><th>Ventas Netas</th><th>Unidades</th><th>Costo</th><th>AUP</th><th>AUC</th><th>% Margen</th></tr></thead>
-            <tbody>
-              {resumen.length === 0 && <tr><td className="l" colSpan={8}>Importa el histórico para ver el resumen.</td></tr>}
-              {resumen.map((o, i) => {
-                const aup = o.un ? o.vn / o.un : 0, auc = o.un ? o.co / o.un : 0, mg = o.vn ? (o.vn - o.co) / o.vn * 100 : 0
-                return <tr key={i}><td className="l">{o.marca}</td><td>{o.anio}</td><td>{money(o.vn)}</td><td>{fmt(o.un)}</td><td>{money(o.co)}</td><td>{money2(aup)}</td><td>{money2(auc)}</td><td>{pct1(mg)}</td></tr>
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
       <div className="panel">
         <h3>AUP / AUC por cliente y marca — comparativo por año</h3>
         <div className="sub"><b>VN</b> = Ventas Netas · <b>AUP</b> = Average Unit Price (Ventas Netas / Unidades) · <b>AUC</b> = Average Unit Cost (Costo / Unidades). Elige el año o ambos para comparar el crecimiento.</div>
@@ -798,7 +776,7 @@ function CategoriasForm({ role, usuario, empresa, sbus }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="panel">
-        <h3>Categorías de {marca} <span className="unit">(peso %)</span></h3>
+        <h3>Categorías de {marca} <span className="unit">(peso %)</span><span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Define las categorías de la marca y cuánto pesa cada una (debería sumar 100%). Suma actual: <b className={Math.round(suma) === 100 ? 'pos' : 'neg'}>{suma.toFixed(1)}%</b>. Las usa Ventas para repartir las unidades.</div>
         <div className="tablewrap">
           <table>
@@ -867,13 +845,6 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
 
   return (
     <>
-      <div className="toolbar">
-        <label>Marca</label>
-        <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select>
-        <div className="spacer"></div>
-        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar marca'}</button>
-      </div>
-      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="panel">
         <h3>Resumen por SBU y marca <span className="unit">(unidades 2028 por mes)</span></h3>
         <div className="sub">Unidades 2028 (= 2026 × (1 + % crecimiento)) por marca y mes. Las SBU muestran el subtotal de sus marcas.</div>
@@ -895,6 +866,13 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
         </div>
       </div>
 
+      <div className="toolbar">
+        <label>Marca</label>
+        <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select>
+        <div className="spacer"></div>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar marca'}</button>
+      </div>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="panel">
         <h3>Unidades 2028 por categoría y mes — {marca}</h3>
         <div className="sub">Cada mes de {marca} se reparte según el peso de categorías que define el Director.</div>
@@ -912,7 +890,7 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
       </div>
 
       <div className="panel">
-        <h3>Ventas · Unidades 2028 — {marca}</h3>
+        <h3>Ventas · Unidades 2028 — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: se aplica a todos los meses de 2026 para proyectar 2028. La fila gris es el histórico 2026 (referencia). Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
         <div className="tablewrap">
           <table className="vfix" style={{ width: 1228 }}>
@@ -979,7 +957,7 @@ function BitacoraScreen({ empresas, empresaSel }) {
   return (
     <>
       <div className="panel">
-        <h3>Registrar cambio</h3>
+        <h3>Registrar cambio<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Deja constancia de cada modificación a la herramienta para su trazabilidad (útil una vez esté en vivo).</div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <label style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Empresa
