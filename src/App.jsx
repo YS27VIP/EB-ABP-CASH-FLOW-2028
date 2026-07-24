@@ -39,10 +39,19 @@ const ROLES = [
   { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP', u: '$' }, { k: 'AUC', u: '$' }, VJ, { k: 'INVENTARIO COMPRAS', u: '$' }] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
-  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [VJ, { k: 'CASH FLOW', u: '$' }] },
-  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#8f4b7e', tab: 'Cap_Director',  rubros: [VJ, { k: 'CASH FLOW', u: '$' }, { k: 'CATEGORIAS', cat: true }] },
+  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [VJ, { k: 'CASH FLOW', u: '$', cash: true }] },
+  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#8f4b7e', tab: 'Cap_Director',  rubros: [VJ, { k: 'CASH FLOW', u: '$', cash: true }, { k: 'CATEGORIAS', cat: true }] },
 ]
 const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
+
+/* Cash Flow: últimos 3 meses de 2026 + proyección completa 2027 */
+const CF_M2026 = ['oct-26', 'nov-26', 'dic-26']
+const CF_M2027 = ['ene-27', 'feb-27', 'mar-27', 'abr-27', 'may-27', 'jun-27', 'jul-27', 'ago-27', 'sep-27', 'oct-27', 'nov-27', 'dic-27']
+const CF_MESES = [...CF_M2026, ...CF_M2027]
+const CF_GROUPS = [
+  { g: 'PSI · Purchases-Sales-Inventory', items: ['Inventario Inicial', 'Inventario Final', 'Compras (Fecha disponible)', 'Ventas Netas'] },
+  { g: 'CASH FLOW', items: ['Cash Inicial', 'Cash In (Cobros)', 'Cash Out (Pagos)', 'Costos Operativos', 'Cash Final'] },
+]
 
 /* ===== helpers ===== */
 const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n }
@@ -210,6 +219,7 @@ function RoleForm({ role, usuario, empresa, sbus }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       {rb.proyeccion ? <ProjectionForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} />
+        : rb.cash ? <CashFlowForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} />
         : rb.cat ? <CategoriasForm key={rb.k} role={role} usuario={usuario} empresa={empresa} sbus={sbus} />
         : rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} />
         : <SimpleForm key={rb.k} {...common} />}
@@ -388,6 +398,94 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
                 </Fragment2>
               ))}
               {!multi && <tr className="grandrow"><td className="cod"></td><td className="l">TOTAL</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totalGeneral)}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ===== CASH FLOW: PSI + Cash Flow, 3 meses 2026 + proyección 2027 ===== */
+function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
+  const marcas = marcasDe(sbus)
+  const [marca, setMarca] = useState(marcas[0].marca)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const stKey = `cf_${empresa}`
+  const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
+  const isTotal = String(marca).startsWith('TOTAL::')
+  const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
+  const sbuMarcas = sbus[sbu] || []
+
+  const key = (mca, concepto, mi) => `${mca}|${concepto}|${mi}`
+  const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  const val = (mca, concepto, mi) => num(data[key(mca, concepto, mi)])
+  const cell = (concepto, mi) => isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
+  const rowTot = (concepto) => CF_MESES.reduce((a, _, mi) => a + cell(concepto, mi), 0)
+
+  function guardar() {
+    setSaving(true)
+    try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado en este equipo. La escritura al Google Sheet y las fórmulas se conectan cuando definas la construcción.' }) }
+    catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) }
+    setSaving(false)
+  }
+  function exportar() {
+    const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]
+    marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map((_, mi) => val(mca, it, mi))]))))
+    exportXlsx(aoa, `${role.tab}_CASHFLOW.xlsx`)
+  }
+  function importar(ev) {
+    const file = ev.target.files[0]; if (!file) return
+    importXlsx(file, (aoa) => {
+      const next = { ...data }
+      aoa.slice(1).forEach((r) => { const concepto = r[1], mca = r[3]; if (!concepto || !mca) return; for (let mi = 0; mi < CF_MESES.length; mi++) { const v = num(r[4 + mi]); if (v) next[key(mca, concepto, mi)] = v } })
+      setData(next); setMsg({ t: 'ok', x: 'Datos importados. Revisa y pulsa Guardar.' })
+    })
+    ev.target.value = ''
+  }
+
+  return (
+    <>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="toolbar">
+        <label>Marca</label>
+        <select value={marca} onChange={(e) => setMarca(e.target.value)}>
+          {Object.entries(sbus).map(([s, ms]) => (<optgroup key={s} label={s}>
+            <option value={`TOTAL::${s}`}>▣ TOTAL {s}</option>
+            {ms.map((m) => <option key={m} value={m}>{m}</option>)}
+          </optgroup>))}
+        </select>
+        {isTotal && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
+        <div className="spacer"></div>
+        <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
+        <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+      </div>
+      <div className="panel">
+        <h3>{role.label} — CASH FLOW <span className="unit">(USD · {isTotal ? `TOTAL ${sbu}` : marca})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>👁️ solo lectura</span> : <span className="fill-badge">✏️ para llenar</span>}</h3>
+        <div className="sub">Últimos 3 meses de 2026 + proyección 2027. {isTotal ? 'Suma de las marcas de la SBU.' : 'Captura por concepto y mes.'}</div>
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr><th className="l" rowSpan={2}>Concepto</th><th className="ya" colSpan={3}>2026</th><th className="yb" colSpan={12}>2027</th><th rowSpan={2}>Total</th></tr>
+              <tr>{CF_M2026.map((m) => <th key={m} className="ya">{m}</th>)}{CF_M2027.map((m) => <th key={m} className="yb">{m}</th>)}</tr>
+            </thead>
+            <tbody>
+              {CF_GROUPS.map((gr) => (
+                <Fragment2 key={gr.g}>
+                  <tr className="secrow"><td colSpan={17}>{gr.g}</td></tr>
+                  {gr.items.map((it) => {
+                    const celdas = CF_MESES.map((_, mi) => {
+                      const cls = mi < 3 ? 'ya' : 'yb'
+                      if (isTotal) return <td key={mi} className={'tot ' + cls}>{fmt(cell(it, mi))}</td>
+                      const k = key(marca, it, mi)
+                      return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
+                    })
+                    return <tr key={it}><td className="l">{it}</td>{celdas}<td className="tot">{fmt(rowTot(it))}</td></tr>
+                  })}
+                </Fragment2>
+              ))}
             </tbody>
           </table>
         </div>
