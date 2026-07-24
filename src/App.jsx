@@ -84,14 +84,33 @@ export default function App() {
   const [empresa, setEmpresa] = useState('EMPRESA 1')
   const [combos, setCombos] = useState({})
   const [roleId, setRoleId] = useState(null)
+  const [connError, setConnError] = useState(false)
 
   useEffect(() => {
-    fetch(APPS_SCRIPT_URL + '?config=1').then((r) => r.json()).then((j) => {
-      if (j && j.ok) {
-        if (j.empresas && j.empresas.length) { setEmpresas(j.empresas); setEmpresa(j.empresas[0]) }
-        if (j.combos) setCombos(j.combos)
+    let cancel = false
+    const aplicar = (j) => {
+      if (j.empresas && j.empresas.length) { setEmpresas(j.empresas); setEmpresa((e) => j.empresas.includes(e) ? e : j.empresas[0]) }
+      if (j.combos) setCombos(j.combos)
+    }
+    async function load(attempt) {
+      try {
+        const r = await fetch(APPS_SCRIPT_URL + '?config=1&cb=' + Date.now())
+        const j = await r.json()
+        if (cancel) return
+        if (!j || !j.ok) throw new Error('resp')
+        aplicar(j)
+        setConnError(false)
+        try { localStorage.setItem('abp_cfg', JSON.stringify({ empresas: j.empresas, combos: j.combos })) } catch {}
+      } catch {
+        if (cancel) return
+        if (attempt < 3) { setTimeout(() => load(attempt + 1), 1200 * (attempt + 1)); return }
+        // Sin conexión: usar la última configuración buena guardada en este equipo, y avisar.
+        try { const c = JSON.parse(localStorage.getItem('abp_cfg') || 'null'); if (c && c.combos) aplicar(c) } catch {}
+        setConnError(true)
       }
-    }).catch(() => {})
+    }
+    load(0)
+    return () => { cancel = true }
   }, [])
 
   const role = ROLES.find((r) => r.id === roleId)
@@ -110,6 +129,7 @@ export default function App() {
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
         <main className="menu">
+          {connError && <div className="banner" style={{ maxWidth: 860, margin: '0 auto 16px' }}>⚠️ <b>No se pudo conectar con el servidor</b> en este momento, así que puede que veas datos por defecto (todas las marcas) o vacíos. <b>Tus datos NO se perdieron</b> — están guardados en el Google Sheet. Recarga la página en unos segundos.</div>}
           <div className="hero">
             <div className="hero-tag">ABP · Annual Business Plan + Cash Flow</div>
             <h1>Construyamos juntos el plan 2028</h1>
