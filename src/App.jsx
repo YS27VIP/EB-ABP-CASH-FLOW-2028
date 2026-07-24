@@ -46,15 +46,18 @@ const ROLES = [
 ]
 const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
 
-/* Cash Flow: últimos 3 meses de 2026 + proyección completa 2027 */
-const CF_M2026 = ['oct-26', 'nov-26', 'dic-26']
-const CF_M2027 = ['ene-27', 'feb-27', 'mar-27', 'abr-27', 'may-27', 'jun-27', 'jul-27', 'ago-27', 'sep-27', 'oct-27', 'nov-27', 'dic-27']
-const CF_MESES = [...CF_M2026, ...CF_M2027]
+/* Cash Flow: últimos 3 meses de 2027 + proyección completa 2028 */
+const CF_M2027 = ['oct-27', 'nov-27', 'dic-27']
+const CF_M2028 = ['ene-28', 'feb-28', 'mar-28', 'abr-28', 'may-28', 'jun-28', 'jul-28', 'ago-28', 'sep-28', 'oct-28', 'nov-28', 'dic-28']
+const CF_MESES = [...CF_M2027, ...CF_M2028]
 const CF_GROUPS = [
   { g: 'PSI · Purchases-Sales-Inventory', items: ['Inventario Inicial', 'Inventario Final', 'Compras (Fecha disponible)', 'Ventas Netas'] },
   { g: 'CASH FLOW', items: ['Cash Inicial', 'Cash In (Cobros)', 'Cash Out (Pagos)', 'Costos Operativos', 'Cash Final'] },
 ]
 const CF_TERMINOS = ['Cash', '30 días', '60 días', '90 días', '120 días', '150 días', '180 días', 'Intercompañía']
+/* Costos Operativos = suma de estos 4 sub-rubros (el usuario los llena; el total es calculado) */
+const CF_COSTOS_PARENT = 'Costos Operativos'
+const CF_COSTOS = ['Gastos administrativos', 'Viajes', 'Marketing', 'Comisiones']
 
 /* ===== helpers ===== */
 const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n }
@@ -463,7 +466,16 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
   const key = (mca, concepto, mi) => `${mca}|${concepto}|${mi}`
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   const val = (mca, concepto, mi) => num(data[key(mca, concepto, mi)])
-  const cell = (concepto, mi) => isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
+  // Cash In (Cobros) de Dic-27 = suma del saldo (deuda) cierre 2027 por cliente (calculado, no editable)
+  const CASHIN = 'Cash In (Cobros)', DIC27 = 2
+  const saldoTotal = (mca) => clientesDe(mca).reduce((s, cli) => s + num(data[`SALDO|${mca}|${cli}`]), 0)
+  const cellRaw = (concepto, mi) => isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
+  const cell = (concepto, mi) => {
+    if (concepto === CASHIN && mi === DIC27) return isTotal ? sbuMarcas.reduce((s, m) => s + saldoTotal(m), 0) : saldoTotal(marca)
+    if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + cellRaw(sub, mi), 0)
+    return cellRaw(concepto, mi)
+  }
+  const subTot = (sub) => CF_MESES.reduce((a, _, mi) => a + cellRaw(sub, mi), 0)
   const rowTot = (concepto) => CF_MESES.reduce((a, _, mi) => a + cell(concepto, mi), 0)
 
   function guardar() {
@@ -506,25 +518,42 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
       </div>
       <div className="panel">
         <h3>{role.label} — CASH FLOW <span className="unit">(USD · {isTotal ? `TOTAL ${sbu}` : marca})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>👁️ solo lectura</span> : <span className="fill-badge">✏️ para llenar</span>}</h3>
-        <div className="sub">Últimos 3 meses de 2026 + proyección 2027. {isTotal ? 'Suma de las marcas de la SBU.' : 'Captura por concepto y mes.'}</div>
+        <div className="sub">Últimos 3 meses de 2027 + proyección 2028. {isTotal ? 'Suma de las marcas de la SBU.' : 'Captura por concepto y mes.'}</div>
         <div className="tablewrap">
           <table>
             <thead>
-              <tr><th className="l" rowSpan={2}>Concepto</th><th className="ya" colSpan={3}>2026</th><th className="yb" colSpan={12}>2027</th><th rowSpan={2}>Total</th></tr>
-              <tr>{CF_M2026.map((m) => <th key={m} className="ya">{m}</th>)}{CF_M2027.map((m) => <th key={m} className="yb">{m}</th>)}</tr>
+              <tr><th className="l" rowSpan={2}>Concepto</th><th className="ya" colSpan={3}>2027</th><th className="yb" colSpan={12}>2028</th><th rowSpan={2}>Total</th></tr>
+              <tr>{CF_M2027.map((m) => <th key={m} className="ya">{m}</th>)}{CF_M2028.map((m) => <th key={m} className="yb">{m}</th>)}</tr>
             </thead>
             <tbody>
               {CF_GROUPS.map((gr) => (
                 <Fragment2 key={gr.g}>
                   <tr className="secrow"><td colSpan={17}>{gr.g}</td></tr>
                   {gr.items.map((it) => {
+                    const esCostos = it === CF_COSTOS_PARENT
                     const celdas = CF_MESES.map((_, mi) => {
                       const cls = mi < 3 ? 'ya' : 'yb'
-                      if (isTotal) return <td key={mi} className={'tot ' + cls}>{fmt(cell(it, mi))}</td>
+                      if (isTotal || esCostos) return <td key={mi} className={'tot ' + cls}>{fmt(cell(it, mi))}</td>
+                      if (it === CASHIN && mi === DIC27) return <td key={mi} className={'tot ' + cls} title="Suma del saldo (deuda) cierre 2027 por cliente">{fmt(cell(it, mi))}</td>
                       const k = key(marca, it, mi)
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
-                    return <tr key={it}><td className="l">{it}</td>{celdas}<td className="tot">{fmt(rowTot(it))}</td></tr>
+                    const fila = <tr key={it} className={esCostos ? 'catrow' : undefined}><td className="l">{it}</td>{celdas}<td className="tot">{fmt(rowTot(it))}</td></tr>
+                    if (!esCostos) return fila
+                    return (
+                      <Fragment2 key={it}>
+                        {fila}
+                        {CF_COSTOS.map((sub) => {
+                          const sceldas = CF_MESES.map((_, mi) => {
+                            const cls = mi < 3 ? 'ya' : 'yb'
+                            if (isTotal) return <td key={mi} className={'tot ' + cls}>{fmt(cellRaw(sub, mi))}</td>
+                            const k = key(marca, sub, mi)
+                            return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
+                          })
+                          return <tr key={sub}><td className="l sub2">{sub}</td>{sceldas}<td className="tot">{fmt(subTot(sub))}</td></tr>
+                        })}
+                      </Fragment2>
+                    )
                   })}
                 </Fragment2>
               ))}
@@ -554,8 +583,10 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
                       </tr>
                     )
                   })}
+                  {cls.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td></td><td className="tot">{fmt(saldoTotal(marca))}</td></tr>}
                 </tbody>
               </table>
+              <div className="sub" style={{ marginTop: 8 }}>Este total alimenta automáticamente <b>Cash In (Cobros) · Dic-27</b> del bloque de arriba.</div>
             </div>
           )
         })()}
