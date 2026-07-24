@@ -1149,6 +1149,7 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
   const [marca, setMarca] = useState(marcas[0].marca)
   const [hist, setHist] = useState([])
   const [cats, setCats] = useState({})
+  const [producto, setProducto] = useState([])
   const [growth, setGrowth] = useState(() => { try { return JSON.parse(localStorage.getItem('ventas_growth_' + empresa) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -1157,8 +1158,11 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
     (async () => {
       try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
       try { const r2 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Categorias'); const j2 = await r2.json(); if (j2 && j2.ok && j2.values) { const out = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
+      try { const r3 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Producto'); const j3 = await r3.json(); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
     })()
   }, [empresa])
+  // AUP por categoría (Producto): { categoría: [12] }
+  const aupPorCat = (mca) => { const out = {}; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') !== 0) return; out[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])) }); return out }
   useEffect(() => { try { localStorage.setItem('ventas_growth_' + empresa, JSON.stringify(growth)) } catch { } }, [growth, empresa])
 
   const u2026 = {}, cliByMarca = {}
@@ -1233,6 +1237,30 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
           </table>
         </div>
       </div>
+
+      {(() => {
+        const aup = aupPorCat(marca)
+        const vnMes = MESES.map((_, mi) => catList.reduce((a, c) => a + mes28[mi] * (num(c.peso) / 100) * ((aup[c.cat] || [])[mi] || 0), 0))
+        const vnTot = vnMes.reduce((a, b) => a + b, 0)
+        return (
+          <div className="panel">
+            <h3>Venta Neta 2028 por categoría y mes — {marca} <span className="unit">($)</span></h3>
+            <div className="sub">Venta Neta = Unidades 2028 × AUP (por categoría). El AUP lo captura Producto.</div>
+            <div className="tablewrap">
+              <table className="vfix">
+                <colgroup><col style={{ width: '270px' }} /><col style={{ width: '60px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+                <thead><tr><th className="l">Categoría</th><th>AUP</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+                <tbody>
+                  <tr className="grandrow"><td className="l">TOTAL {marca}</td><td></td>{vnMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(vnTot)}</td></tr>
+                  {catList.length === 0 && <tr><td className="l" colSpan={15}>El Director aún no definió categorías para {marca}.</td></tr>}
+                  {catList.map((c, i) => { const p = num(c.peso) / 100; const a = aup[c.cat] || []; const row = mes28.map((v, mi) => v * p * (a[mi] || 0)); const rt = row.reduce((s, x) => s + x, 0); const aupProm = (() => { const nz = a.filter((x) => x !== 0); return nz.length ? nz.reduce((s, x) => s + x, 0) / nz.length : 0 })(); return <tr key={i}><td className="l">{c.cat}</td><td className="ref">{fmt(aupProm)}</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
+                </tbody>
+              </table>
+            </div>
+            {Object.keys(aup).length === 0 && <div className="sub" style={{ marginTop: 8 }}>Si sale en cero, Producto aún no ha capturado el AUP de las categorías de {marca}.</div>}
+          </div>
+        )
+      })()}
 
       <div className="panel">
         <h3>Ventas · Unidades 2028 — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
