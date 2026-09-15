@@ -134,7 +134,7 @@ export default function App() {
     setEmpresa(nm)
   }
 
-  if (!role && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora') {
+  if (!role && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
@@ -161,6 +161,10 @@ export default function App() {
             </div>
           </div>
           <div className="apps">
+            <button className="app" onClick={() => setRoleId('comercial')}>
+              <span className="appicon" style={{ background: '#714B67' }}>🧭</span>
+              <span className="applabel">Comercial</span>
+            </button>
             {ROLES.map((r) => (
               <button key={r.id} className="app" onClick={() => setRoleId(r.id)}>
                 <span className="appicon" style={{ background: r.color }}>{r.icon}</span>
@@ -181,6 +185,17 @@ export default function App() {
             </button>
           </div>
         </main>
+      </>
+    )
+  }
+
+  if (roleId === 'comercial') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#714B67' }}>🧭 Comercial</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        <main><ComercialScreen empresa={empresa} sbus={sbus} usuario={usuario} /></main>
       </>
     )
   }
@@ -259,16 +274,18 @@ function RoleForm({ role, usuario, empresa, sbus }) {
 }
 
 /* ===== SimpleForm: un rubro, grid marca × mes ===== */
-function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving, setSaving, setMsg }) {
+function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving, setSaving, setMsg, fixedMarca }) {
+  const useSbus = fixedMarca ? { [sbuDe(sbus, fixedMarca)]: [fixedMarca] } : sbus
   const key = (sbu, marca, mi) => `${rubro.k}|${sbu}|${marca}|${mi}`
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
-  const marcas = marcasDe(sbus)
+  const marcas = marcasDe(useSbus)
   const [bulkMarca, setBulkMarca] = useState(marcas[0] ? marcas[0].marca : '')
   const [bulkVal, setBulkVal] = useState('')
   function aplicarTodos() {
-    if (!bulkMarca) return
-    const sbu = sbuDe(sbus, bulkMarca)
-    setData((d) => { const n = { ...d }; for (let mi = 0; mi < 12; mi++) n[key(sbu, bulkMarca, mi)] = bulkVal; return n })
+    const bm = fixedMarca || bulkMarca
+    if (!bm) return
+    const sbu = sbuDe(sbus, bm)
+    setData((d) => { const n = { ...d }; for (let mi = 0; mi < 12; mi++) n[key(sbu, bm, mi)] = bulkVal; return n })
   }
 
   async function guardar() {
@@ -308,10 +325,10 @@ function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving
         <h3>{role.label} — {rubro.k} <span className="unit">({rubro.u})</span><span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Empresa <b>{empresa}</b>. Captura por marca y mes.</div>
         <div className="toolbar" style={{ marginBottom: 12 }}>
-          <label>Aplicar a todos los meses</label>
-          <select value={bulkMarca} onChange={(e) => setBulkMarca(e.target.value)}>
-            {Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}
-          </select>
+          <label>Aplicar a todos los meses{fixedMarca ? ` — ${fixedMarca}` : ''}</label>
+          {!fixedMarca && <select value={bulkMarca} onChange={(e) => setBulkMarca(e.target.value)}>
+            {Object.entries(useSbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}
+          </select>}
           <input value={bulkVal} onChange={(e) => setBulkVal(e.target.value)} inputMode="decimal" placeholder="Valor" style={{ width: 120, background: '#fff', border: '1px solid var(--line)', borderRadius: 6, padding: '7px 10px', font: 'inherit', textAlign: 'center' }} />
           <button className="btn" onClick={aplicarTodos}>Aplicar a los 12 meses</button>
         </div>
@@ -319,7 +336,7 @@ function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving
           <table>
             <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
             <tbody>
-              {Object.entries(sbus).map(([sbu, ms]) => (
+              {Object.entries(useSbus).map(([sbu, ms]) => (
                 <Fragment2 key={sbu}>
                   <tr className="sburow"><td className="l" colSpan={14}>{sbu}</td></tr>
                   {ms.map((marca) => {
@@ -338,15 +355,16 @@ function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving
 }
 
 /* ===== CatCaptureForm: captura por CATEGORÍA (las que definió el Director) × mes. Ej. AUP ===== */
-function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, saving, setSaving, setMsg }) {
+function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, saving, setSaving, setMsg, fixedMarca }) {
   const marcas = marcasDe(sbus)
-  const [marca, setMarca] = useState(marcas[0] ? marcas[0].marca : '')
+  const [marca, setMarca] = useState(fixedMarca || (marcas[0] ? marcas[0].marca : ''))
   const [cats, setCats] = useState({})
   const [bulkCat, setBulkCat] = useState('')
   const [bulkVal, setBulkVal] = useState('')
   const key = (mar, cat, mi) => `${rubro.k}|${mar}|${cat}|${mi}`
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   const PFX = `${rubro.k} · `
+  useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
 
   useEffect(() => {
     (async () => {
@@ -373,8 +391,8 @@ function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, sa
   return (
     <>
       <div className="toolbar">
-        <label>Marca</label>
-        <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select>
+        {!fixedMarca && <><label>Marca</label>
+        <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select></>}
         <div className="spacer"></div>
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
@@ -738,6 +756,44 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
         )
       })()}
     </>
+  )
+}
+
+/* ===== COMERCIAL: panel por marca (SBU→marca a la izquierda, secciones a la derecha) ===== */
+function ComercialScreen({ empresa, sbus, usuario }) {
+  const marcas = marcasDe(sbus)
+  const [marca, setMarca] = useState(marcas[0] ? marcas[0].marca : '')
+  const [sec, setSec] = useState('Ventas')
+  const [data, setData] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const rProd = ROLES.find((r) => r.id === 'producto')
+  const rLog = ROLES.find((r) => r.id === 'logistica')
+  const rVen = ROLES.find((r) => r.id === 'ventas')
+  const common = { empresa, sbus, usuario, data, setData, saving, setSaving, setMsg, fixedMarca: marca }
+  const SECS = ['Ventas', 'AUP', 'AUC', 'Inventario', 'Logística']
+  return (
+    <div className="comercial">
+      <aside className="cmz-side">
+        {Object.entries(sbus).map(([s, ms]) => (
+          <div key={s} className="cmz-sbu">
+            <div className="cmz-sbu-h">{s}</div>
+            {ms.map((m) => <button key={m} className={'cmz-marca' + (m === marca ? ' active' : '')} onClick={() => setMarca(m)}>{m}</button>)}
+          </div>
+        ))}
+      </aside>
+      <div className="cmz-main">
+        <div className="toolbar" style={{ marginBottom: 8 }}>
+          <span className="empchip" style={{ background: 'var(--odoo)', marginLeft: 0 }}>{marca}</span>
+          {SECS.map((k) => <button key={k} className={'seg' + (k === sec ? ' active' : '')} onClick={() => { setSec(k); setMsg(null) }}>{k}</button>)}
+        </div>
+        {sec === 'Ventas' && <ProjectionForm role={rVen} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={marca} />}
+        {sec === 'AUP' && <CatCaptureForm role={rProd} rubro={{ k: 'AUP', u: '$', porCat: true }} {...common} />}
+        {sec === 'AUC' && <SimpleForm role={rProd} rubro={{ k: 'AUC', u: '$' }} {...common} />}
+        {sec === 'Inventario' && <SimpleForm role={rProd} rubro={{ k: 'INVENTARIO COMPRAS', u: '$' }} {...common} />}
+        {sec === 'Logística' && <SimpleForm role={rLog} rubro={{ k: 'LOGISTICA', u: '$' }} {...common} />}
+      </div>
+    </div>
   )
 }
 
@@ -1144,9 +1200,10 @@ function CategoriasForm({ role, usuario, empresa, sbus }) {
 }
 
 /* ===== VENTAS · Proyección de unidades 2028 (histórico 2026 + % crecimiento) ===== */
-function ProjectionForm({ role, usuario, empresa, sbus }) {
+function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const marcas = marcasDe(sbus)
-  const [marca, setMarca] = useState(marcas[0].marca)
+  const [marca, setMarca] = useState(fixedMarca || marcas[0].marca)
+  useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
   const [hist, setHist] = useState([])
   const [cats, setCats] = useState({})
   const [producto, setProducto] = useState([])
@@ -1194,7 +1251,7 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
 
   return (
     <>
-      <div className="panel">
+      {!fixedMarca && <div className="panel">
         <h3>Resumen por SBU y marca <span className="unit">(unidades 2028 por mes)</span></h3>
         <div className="sub">Unidades 2028 (= 2026 × (1 + % crecimiento)) por marca y mes. Las SBU muestran el subtotal de sus marcas.</div>
         <div className="tablewrap">
@@ -1213,11 +1270,11 @@ function ProjectionForm({ role, usuario, empresa, sbus }) {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
       <div className="toolbar">
-        <label>Marca</label>
-        <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select>
+        {!fixedMarca && <><label>Marca</label>
+        <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select></>}
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar marca'}</button>
       </div>

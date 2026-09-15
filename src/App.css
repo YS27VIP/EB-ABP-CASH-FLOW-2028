@@ -57,6 +57,16 @@ td.cell input{width:64px;border:1px solid #f0e6c9;background:#fdf7e3;border-radi
 td.cell input:focus{border-color:var(--odoo);background:#fff;outline:none}
 td.cell input:hover{border-color:var(--warn)}
 
+/* --- Vista Comercial: barra lateral SBU→marca + contenido --- */
+.comercial{display:flex;gap:16px;align-items:flex-start}
+.cmz-side{width:200px;flex:0 0 200px;position:sticky;top:96px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;max-height:82vh;overflow:auto}
+.cmz-sbu{margin-bottom:10px}
+.cmz-sbu-h{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--odoo);padding:4px 6px}
+.cmz-marca{display:block;width:100%;text-align:left;background:transparent;border:none;border-radius:7px;padding:8px 10px;font:inherit;font-weight:600;color:var(--txt);cursor:pointer}
+.cmz-marca:hover{background:#f2eef1}
+.cmz-marca.active{background:var(--odoo);color:#fff}
+.cmz-main{flex:1;min-width:0}
+
 /* Insignia "para llenar" en títulos de bloques editables */
 .fill-badge{display:inline-block;margin-left:8px;font-size:11px;font-weight:700;color:#8a6d00;background:#fdf3cf;border:1px solid #efdd97;border-radius:12px;padding:1px 9px;vertical-align:middle}
 td.tot{font-weight:800;font-variant-numeric:tabular-nums;text-align:center}
