@@ -78,6 +78,43 @@ const colLetter = (n) => { let s = ''; n++; while (n > 0) { const m = (n - 1) % 
 
 export async function gReadTab(tab) { const values = await readValues(tab); return { ok: true, values } }
 
+/* ---- Histórico EN VIVO desde el libro EBP (se actualiza solo al avanzar el EBP) ---- */
+const EBP_SHEET_ID = '1OZNU8e2P8D8Dewa0rz9fGL7B-h8RJ6_7XGGuUpro8wc'
+const EBP_TABS = [{ name: 'UNIDADES VENTA COSTO', year: 2026 }, { name: 'VENTA REAL 2025', year: 2025 }]
+const MES_NUM = { ene: 0, feb: 1, mar: 2, abr: 3, may: 4, jun: 5, jul: 6, ago: 7, sep: 8, sept: 8, oct: 9, nov: 10, dic: 11 }
+async function readValuesFrom(sheetId, tab) {
+  try {
+    const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sheetId + '/values/' + encodeURIComponent(A1(tab)), { headers: { Authorization: 'Bearer ' + _token } })
+    if (!r.ok) return []
+    const j = await r.json(); return j.values || []
+  } catch { return [] }
+}
+let _histCache = null, _histAt = 0
+export async function gHistorico() {
+  if (_histCache && Date.now() - _histAt < 60000) return { ok: true, values: _histCache }
+  const out = [HIST_HEAD]
+  for (const t of EBP_TABS) {
+    const rows = await readValuesFrom(EBP_SHEET_ID, t.name)
+    let hr = -1
+    for (let i = 0; i < Math.min(rows.length, 15); i++) { if (rows[i].map((x) => String(x || '')).join('|').toUpperCase().indexOf('CLIENTE ARMONIZADO') >= 0) { hr = i; break } }
+    if (hr < 0) continue
+    const H = rows[hr].map((x) => String(x || '').trim().toUpperCase())
+    const idx = (cands, last) => { let f = -1; for (const c of cands) { for (let k = 0; k < H.length; k++) { if (H[k] === c) { if (last) f = k; else return k } } if (f >= 0 && !last) return f } return f }
+    const iT = idx(['TIPO']), iR = idx(['RUBRO']), iS = idx(['SBU']), iM = idx(['MARCA', 'ARCH']), iC = idx(['CLIENTE ARMONIZADO']), iV = idx(['VALOR EN DOLARES', 'DOLARES', 'VALOR']), iMes = idx(['FECHA ARREGLADA', 'MES']), iP = idx(['PAIS'], true), iA = idx(['AÑO', 'ANO'])
+    for (let r = hr + 1; r < rows.length; r++) {
+      const row = rows[r]
+      const cli = String(row[iC] || '').trim(); if (!cli) continue
+      const rub = String(row[iR] || '').trim().toUpperCase(); if (!(rub.indexOf('UNIDAD') >= 0 || rub.indexOf('COSTO') >= 0 || rub.indexOf('VENTA') >= 0)) continue
+      const mm = String(row[iMes] || '').trim().toLowerCase().replace(' ', '-').split('-'); const mo = MES_NUM[mm[0]]; if (mo == null) continue
+      const yr = (iA >= 0 && row[iA]) ? parseInt(row[iA], 10) : (mm[1] ? 2000 + parseInt(mm[1], 10) : t.year)
+      const monto = Number(String(row[iV] || '').replace(/[^0-9.\-]/g, '')) || 0
+      out.push(['ENERGY BRANDS', yr, String(row[iT] || ''), String(row[iR] || ''), String(row[iS] || ''), String(row[iM] || ''), yr + '-' + String(mo + 1).padStart(2, '0') + '-01', monto, cli, String(row[iP] || '')])
+    }
+  }
+  _histCache = out; _histAt = Date.now()
+  return { ok: true, values: out }
+}
+
 export async function gLoadConfig() {
   const [emps, comb] = await Promise.all([readValues('Config_Empresas'), readValues('Config_Combinaciones')])
   const empresas = emps.slice(1).map((r) => r[0]).filter(Boolean)

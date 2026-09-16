@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import './App.css'
-import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico } from './google'
+import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico } from './google'
 
 /* ===== CONFIG ===== */
 
@@ -200,9 +200,6 @@ export default function App() {
                   <select value={empresa} onChange={(e) => setEmpresa(e.target.value)}>{empresas.map((e) => <option key={e}>{e}</option>)}</select>
                   <button className="btn" onClick={nuevaEmpresa}>＋ Nueva</button>
                 </span>
-              </label>
-              <label className="who">Tu nombre (para el registro):
-                <input value={usuario} onChange={(e) => setUsuario(e.target.value)} placeholder="Ej. Ana Pérez" />
               </label>
             </div>
           </div>
@@ -606,7 +603,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
 
   useEffect(() => {
     (async () => {
-      try { const j = await gReadTab('Historico'); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
+      try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Ventas'); if (j2 && j2.ok && j2.values) setVentas(j2.values.slice(1)) } catch { }
       try { const j3 = await gReadTab('Cap_Producto'); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
       try { const j4 = await gReadTab('Cap_Categorias'); if (j4 && j4.ok && j4.values) { const out = {}; j4.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
@@ -960,7 +957,7 @@ function HistoricoScreen() {
 
   useEffect(() => { cargar() }, [])
   async function cargar() {
-    try { const j = await gReadTab('Historico'); if (j.ok && j.values) setValues(j.values) } catch { }
+    try { const j = await gHistorico(); if (j.ok && j.values) setValues(j.values) } catch { }
   }
   function importar(ev) {
     const file = ev.target.files[0]; if (!file) return
@@ -1007,7 +1004,7 @@ function HistoricoScreen() {
   const dcell = (v) => { const s = v == null ? '' : String(v); const m = s.match(/^(\d{4})-(\d{2})-\d{2}/); return m ? m[1] + '-' + m[2] : s }
   async function exportar() {
     try {
-      const j = await gReadTab('Historico')
+      const j = await gHistorico()
       if (j.ok && j.values && j.values.length) { const clean = j.values.map((row) => row.map((c) => dcell(c))); exportXlsx(clean, 'Historico.xlsx') }
       else alert('Aún no hay histórico guardado.')
     } catch (e) { alert('No se pudo: ' + e.message) }
@@ -1264,7 +1261,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
   useEffect(() => {
     (async () => {
-      try { const j = await gReadTab('Historico'); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
+      try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Categorias'); if (j2 && j2.ok && j2.values) { const out = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
       try { const j3 = await gReadTab('Cap_Producto'); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
     })()
