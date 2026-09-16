@@ -1,0 +1,146 @@
+/* ===== Google Sign-In + Google Sheets API (reemplaza al backend Apps Script) ===== */
+
+const CLIENT_ID = '1047108194529-98buam3t5p1gu1vv48v8d6s3q7o9qoaj.apps.googleusercontent.com'
+const SHEET_ID = '1TtrRjRqwvBbwMic-3Epgwl-KabBjY8nTtwD3iOZN5N0'
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets openid email profile'
+
+const MESES = ['ene-28', 'feb-28', 'mar-28', 'abr-28', 'may-28', 'jun-28', 'jul-28', 'ago-28', 'sep-28', 'oct-28', 'nov-28', 'dic-28']
+const HEAD = ['EMPRESA', 'RUBRO', 'SBU', 'MARCA'].concat(MESES)
+const HIST_HEAD = ['EMPRESA', 'AÑO', 'TIPO', 'RUBRO', 'SBU', 'MARCA', 'MES', 'MONTO', 'CLIENTE', 'PAIS']
+
+let _token = null, _email = null, _name = null, _tokenClient = null
+const _subs = []
+export function onAuth(cb) { _subs.push(cb); return () => { const i = _subs.indexOf(cb); if (i >= 0) _subs.splice(i, 1) } }
+function _emit() { _subs.forEach((cb) => { try { cb({ token: _token, email: _email, name: _name }) } catch { } }) }
+
+export function isSignedIn() { return !!_token }
+export function getEmail() { return _email }
+export function getName() { return _name }
+
+let _authReady = null
+export function initAuth() {
+  if (_authReady) return _authReady
+  _authReady = new Promise((resolve) => {
+    const t = setInterval(() => {
+      if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+        clearInterval(t)
+        _tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID, scope: SCOPES,
+          callback: async (resp) => {
+            if (resp && resp.access_token) { _token = resp.access_token; await _fetchUser(); _emit() }
+          },
+        })
+        resolve()
+      }
+    }, 120)
+  })
+  return _authReady
+}
+export function signIn() { if (_tokenClient) _tokenClient.requestAccessToken({ prompt: _token ? '' : 'consent' }) }
+export function signOut() { _token = null; _email = null; _name = null; _emit() }
+
+async function _fetchUser() {
+  try {
+    const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + _token } })
+    const j = await r.json(); _email = j.email || ''; _name = j.name || (j.email ? j.email.split('@')[0] : '')
+  } catch { }
+}
+
+/* ---- Low-level Sheets API v4 ---- */
+async function _api(path, opts = {}) {
+  const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + path, {
+    ...opts, headers: { Authorization: 'Bearer ' + _token, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+  })
+  if (r.status === 401) { signIn(); throw new Error('Sesión expirada, vuelve a intentar.') }
+  if (!r.ok) { let e = ''; try { e = (await r.json()).error?.message || '' } catch { } throw new Error('Sheets ' + r.status + ' ' + e) }
+  return r.json()
+}
+const A1 = (t) => "'" + String(t).replace(/'/g, "''") + "'"
+async function readValues(tab) { try { const j = await _api('/values/' + encodeURIComponent(A1(tab))); return j.values || [] } catch { return [] } }
+async function writeValues(tab, a1, values) { return _api('/values/' + encodeURIComponent(A1(tab) + '!' + a1) + '?valueInputOption=USER_ENTERED', { method: 'PUT', body: JSON.stringify({ values }) }) }
+async function appendValues(tab, values) { return _api('/values/' + encodeURIComponent(A1(tab) + '!A1') + ':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS', { method: 'POST', body: JSON.stringify({ values }) }) }
+async function clearValues(tab) { return _api('/values/' + encodeURIComponent(A1(tab)) + ':clear', { method: 'POST', body: '{}' }) }
+async function batchUpdateValues(data) { return _api('/values:batchUpdate', { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) }) }
+async function sheetTitles() { const j = await _api('?fields=sheets.properties.title'); return (j.sheets || []).map((s) => s.properties.title) }
+async function ensureTab(title, header) {
+  const titles = await sheetTitles()
+  if (!titles.includes(title)) {
+    await _api(':batchUpdate', { method: 'POST', body: JSON.stringify({ requests: [{ addSheet: { properties: { title } } }] }) })
+    if (header) await writeValues(title, 'A1', [header])
+  }
+}
+
+/* ---- Helpers de dominio (equivalentes al backend) ---- */
+const up = (s) => String(s == null ? '' : s).trim().toUpperCase()
+const k4 = (a, b, c, d) => [a, b, c, d].map(up).join('|')
+const pad12 = (a) => { const o = (a || []).slice(0, 12); while (o.length < 12) o.push(0); return o }
+const colLetter = (n) => { let s = ''; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26) } return s }
+
+export async function gReadTab(tab) { const values = await readValues(tab); return { ok: true, values } }
+
+export async function gLoadConfig() {
+  const [emps, comb] = await Promise.all([readValues('Config_Empresas'), readValues('Config_Combinaciones')])
+  const empresas = emps.slice(1).map((r) => r[0]).filter(Boolean)
+  const combos = {}
+  comb.slice(1).forEach((r) => { const em = r[0], sbu = r[1], m = r[2]; if (!em || !sbu || !m) return; (combos[em] = combos[em] || {}); (combos[em][sbu] = combos[em][sbu] || []).push(m) })
+  return { ok: true, empresas, combos }
+}
+
+export async function gSaveConfig(empresa, combos) {
+  await ensureTab('Config_Empresas', ['EMPRESA'])
+  await ensureTab('Config_Combinaciones', ['EMPRESA', 'SBU', 'MARCA'])
+  const emps = (await readValues('Config_Empresas')).slice(1).map((r) => r[0])
+  if (empresa && emps.indexOf(empresa) < 0) await appendValues('Config_Empresas', [[empresa]])
+  const all = await readValues('Config_Combinaciones')
+  const header = all[0] || ['EMPRESA', 'SBU', 'MARCA']
+  const kept = all.slice(1).filter((r) => String(r[0]) !== empresa)
+  const added = []
+  Object.keys(combos || {}).forEach((sbu) => (combos[sbu] || []).forEach((m) => added.push([empresa, sbu, m])))
+  const out = [header, ...kept, ...added]
+  await clearValues('Config_Combinaciones')
+  await writeValues('Config_Combinaciones', 'A1', out)
+  return { ok: true }
+}
+
+export async function gSaveRows(tab, empresa, usuario, rol, rows) {
+  await ensureTab(tab, HEAD)
+  const values = await readValues(tab)
+  const idx = {}
+  for (let r = 1; r < values.length; r++) idx[k4(values[r][0], values[r][1], values[r][2], values[r][3])] = r
+  const data = [], appends = []
+  rows.forEach((row) => {
+    const key = k4(empresa, row.rubro, row.sbu, row.marca), meses = pad12(row.meses || [])
+    if (idx[key] !== undefined) { const r = idx[key] + 1; data.push({ range: A1(tab) + '!E' + r + ':P' + r, values: [meses] }) }
+    else appends.push([empresa, row.rubro, row.sbu, row.marca, ...meses])
+  })
+  if (data.length) await batchUpdateValues(data)
+  if (appends.length) await appendValues(tab, appends)
+  await registrar(usuario, rol, tab, empresa, rows.length + ' fila(s)')
+  return { ok: true, filas: rows.length }
+}
+
+export async function gSaveHistorico(values) {
+  await ensureTab('Historico', HIST_HEAD)
+  const W = HIST_HEAD.length
+  const hasHeader = up((values[0] || [])[0]).indexOf('EMPRESA') >= 0
+  const incoming = (hasHeader ? values.slice(1) : values).map((r) => {
+    const o = []; let vacia = true
+    for (let i = 0; i < W; i++) { const v = (r && r[i] != null) ? r[i] : ''; if (v !== '') vacia = false; o.push(v) }
+    return vacia ? null : o
+  }).filter(Boolean)
+  const nuevas = {}; incoming.forEach((r) => { nuevas[up(r[0])] = true })
+  const cur = await readValues('Historico')
+  const kept = cur.slice(1).filter((r) => { const em = up(r[0]); return em && !nuevas[em] })
+  const out = [HIST_HEAD, ...kept, ...incoming]
+  await clearValues('Historico')
+  await writeValues('Historico', 'A1', out)
+  return { ok: true, filas: incoming.length, total: out.length - 1 }
+}
+
+/* Bitácora y Colaboradores usan gSaveRows con esquema genérico (ya definido en la app). */
+async function registrar(usuario, rol, tab, empresa, detalle) {
+  try {
+    await ensureTab('Registro', ['Fecha/Hora', 'Usuario', 'Empresa', 'Rol', 'Pestaña', 'Detalle'])
+    await appendValues('Registro', [[new Date().toISOString(), usuario || '', empresa || '', rol, tab, detalle]])
+  } catch { }
+}

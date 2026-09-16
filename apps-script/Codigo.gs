@@ -137,3 +137,52 @@ function registrar(ss, usuario, rol, tab, empresa, detalle) {
 function k4(a, b, c, d) { return [a, b, c, d].map(function (x) { return String(x || '').trim().toUpperCase(); }).join('|'); }
 function pad12(a) { var o = a.slice(0, 12); while (o.length < 12) o.push(0); return o; }
 function json(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+
+/**
+ * IMPORTADOR: trae el histórico de ventas por cliente del libro EBP a la hoja Historico del ABP.
+ * Ejecutar UNA VEZ desde el editor: seleccionar 'importarEBP' y pulsar ▶ Ejecutar (autorizar la primera vez).
+ * Es idempotente: reemplaza las filas de ENERGY BRANDS de los años importados y vuelve a cargarlas.
+ * Lee por NOMBRE de columna (no por letra), así que aguanta cambios de orden.
+ */
+var EBP_SHEET_ID = '1OZNU8e2P8D8Dewa0rz9fGL7B-h8RJ6_7XGGuUpro8wc';
+var EBP_TABS = [ { name: 'UNIDADES VENTA COSTO', year: 2026 }, { name: 'VENTA REAL 2025', year: 2025 } ];
+var MES_NUM = { ene: 0, feb: 1, mar: 2, abr: 3, may: 4, jun: 5, jul: 6, ago: 7, sep: 8, sept: 8, oct: 9, nov: 10, dic: 11 };
+
+function importarEBP() {
+  var src = SpreadsheetApp.openById(EBP_SHEET_ID);
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var out = [];
+  EBP_TABS.forEach(function (t) {
+    var sh = src.getSheetByName(t.name); if (!sh) return;
+    var vals = sh.getDataRange().getValues();
+    var hr = -1;
+    for (var i = 0; i < Math.min(vals.length, 15); i++) { if (vals[i].map(String).join('|').toUpperCase().indexOf('CLIENTE ARMONIZADO') >= 0) { hr = i; break; } }
+    if (hr < 0) return;
+    var H = vals[hr].map(function (x) { return String(x || '').trim().toUpperCase(); });
+    function idx(cands, last) { var f = -1; for (var c = 0; c < cands.length; c++) { for (var k = 0; k < H.length; k++) { if (H[k] === cands[c]) { if (last) { f = k; } else { return k; } } } if (f >= 0 && !last) return f; } return f; }
+    var iTipo = idx(['TIPO']), iRub = idx(['RUBRO']), iSbu = idx(['SBU']), iMar = idx(['MARCA', 'ARCH']),
+        iCli = idx(['CLIENTE ARMONIZADO']), iVal = idx(['VALOR EN DOLARES', 'DOLARES', 'VALOR']),
+        iMes = idx(['FECHA ARREGLADA', 'MES']), iPais = idx(['PAIS'], true), iAno = idx(['AÑO', 'ANO', 'AÑO']);
+    for (var r = hr + 1; r < vals.length; r++) {
+      var row = vals[r];
+      var cli = String(row[iCli] || '').trim(); if (!cli) continue;
+      var rub = String(row[iRub] || '').trim().toUpperCase();
+      if (!(rub.indexOf('UNIDAD') >= 0 || rub.indexOf('COSTO') >= 0 || rub.indexOf('VENTA') >= 0)) continue;
+      var mesRaw = String(row[iMes] || '').trim().toLowerCase(); var mm = mesRaw.replace(' ', '-').split('-');
+      var mo = MES_NUM[mm[0]]; if (mo == null) continue;
+      var yr = (iAno >= 0 && row[iAno]) ? parseInt(row[iAno], 10) : (mm[1] ? 2000 + parseInt(mm[1], 10) : t.year);
+      out.push(['ENERGY BRANDS', yr, String(row[iTipo] || ''), String(row[iRub] || ''), String(row[iSbu] || ''),
+                String(row[iMar] || ''), new Date(yr, mo, 1), Number(row[iVal]) || 0, cli, String(row[iPais] || '')]);
+    }
+  });
+  var years = {}; EBP_TABS.forEach(function (t) { years[t.year] = true; });
+  var hs = ss.getSheetByName(HIST_TAB); if (!hs) { hs = ss.insertSheet(HIST_TAB); hs.appendRow(HIST_HEAD); }
+  var data = hs.getDataRange().getValues(); var keep = [HIST_HEAD];
+  for (var i = 1; i < data.length; i++) { var em = String(data[i][0] || '').toUpperCase(); var yy = parseInt(data[i][1], 10); if (em === 'ENERGY BRANDS' && years[yy]) continue; keep.push(data[i]); }
+  var all = keep.concat(out);
+  hs.clear();
+  hs.getRange(1, 1, all.length, HIST_HEAD.length).setValues(all);
+  hs.getRange(1, 1, 1, HIST_HEAD.length).setFontWeight('bold'); hs.setFrozenRows(1);
+  Logger.log('Importadas ' + out.length + ' filas por cliente (2025 y 2026).');
+  return out.length;
+}

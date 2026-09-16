@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import './App.css'
+import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico } from './google'
 
 /* ===== CONFIG ===== */
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1SWtgyQRVlkjnUUXfqCZ9hrStbZ6ffJovh8nYaVXyGuu3Opal55Kg3GmELLpZ6GpJ3A/exec'
 
 const MESES = ['ene-28','feb-28','mar-28','abr-28','may-28','jun-28','jul-28','ago-28','sep-28','oct-28','nov-28','dic-28']
 
@@ -93,8 +93,16 @@ export default function App() {
   const [combos, setCombos] = useState({})
   const [roleId, setRoleId] = useState(null)
   const [connError, setConnError] = useState(false)
+  const [authed, setAuthed] = useState(isSignedIn())
 
   useEffect(() => {
+    initAuth()
+    const off = onAuth(({ name, email }) => { setAuthed(true); if (name || email) setUsuario((u) => u || name || email) })
+    return off
+  }, [])
+
+  useEffect(() => {
+    if (!authed) return
     let cancel = false
     const aplicar = (j) => {
       const merged = [...SEED_EMPRESAS, ...((j.empresas) || [])].filter((v, i, a) => v && a.indexOf(v) === i)
@@ -104,24 +112,46 @@ export default function App() {
     }
     async function load(attempt) {
       try {
-        const r = await fetch(APPS_SCRIPT_URL + '?config=1&cb=' + Date.now())
-        const j = await r.json()
+        const j = await gLoadConfig()
         if (cancel) return
-        if (!j || !j.ok) throw new Error('resp')
         aplicar(j)
         setConnError(false)
         try { localStorage.setItem('abp_cfg', JSON.stringify({ empresas: j.empresas, combos: j.combos })) } catch {}
       } catch {
         if (cancel) return
         if (attempt < 3) { setTimeout(() => load(attempt + 1), 1200 * (attempt + 1)); return }
-        // Sin conexión: usar la última configuración buena guardada en este equipo, y avisar.
         try { const c = JSON.parse(localStorage.getItem('abp_cfg') || 'null'); if (c && c.combos) aplicar(c) } catch {}
         setConnError(true)
       }
     }
     load(0)
     return () => { cancel = true }
-  }, [])
+  }, [authed])
+
+  const [acceso, setAcceso] = useState(null) // null = acceso total (no está en Colaboradores)
+  useEffect(() => {
+    if (!authed) return
+    let cancel = false
+    ;(async () => {
+      try {
+        const j = await gReadTab('Cap_Colaboradores')
+        const em = (getEmail() || '').trim().toLowerCase()
+        if (cancel) return
+        if (!em || !j.values) { setAcceso(null); return }
+        const set = new Set(); let found = false
+        j.values.slice(1).forEach((row) => {
+          if (String(row[3] || '').trim().toLowerCase() !== em) return
+          found = true
+          String(row[4] || '').split(';').filter(Boolean).forEach((a) => set.add(a))
+        })
+        setAcceso(found ? [...set] : null)
+      } catch { if (!cancel) setAcceso(null) }
+    })()
+    return () => { cancel = true }
+  }, [authed])
+  const puede = (etiqueta) => !acceso || acceso.includes(etiqueta)
+  const ADMINS = ['yalik@energybrandsgroup.com']
+  const esAdmin = ADMINS.includes((getEmail() || '').trim().toLowerCase())
 
   const role = ROLES.find((r) => r.id === roleId)
   const sbus = effSBUS(empresa, combos)
@@ -132,6 +162,22 @@ export default function App() {
     const nm = n.trim().toUpperCase()
     if (!empresas.includes(nm)) setEmpresas([...empresas, nm])
     setEmpresa(nm)
+  }
+
+  if (!authed) {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
+        <main className="menu">
+          <div className="hero">
+            <div className="hero-tag">ABP · Annual Business Plan + Cash Flow</div>
+            <h1>Bienvenido al plan 2028</h1>
+            <p>Inicia sesión con tu cuenta de <b>Energy Brands</b> para capturar tu información. Cada área ve solo lo que le corresponde. 🚀</p>
+          </div>
+          <button className="btn primary" style={{ fontSize: 15, padding: '12px 22px' }} onClick={() => signIn()}>Iniciar sesión con Google</button>
+        </main>
+      </>
+    )
   }
 
   if (!role && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial') {
@@ -146,8 +192,8 @@ export default function App() {
             <p>Cada área aporta su parte —ventas, producto, marketing, logística y dirección— para proyectar el negocio y el <b>flujo de caja</b> del año. Lo que capturas aquí se convierte en el plan de todos. 🚀</p>
           </div>
           <div className="hello">
-            <h2>¿Quién eres?</h2>
-            <p className="sub">Elige tu área para capturar tu información. Cada rol llena su propia hoja.</p>
+            <h2>Hola, {getName() || usuario || 'bienvenido'} 👋</h2>
+            <p className="sub">Elige tu área para capturar tu información. {getEmail() ? <span className="who" style={{ display: 'inline', marginLeft: 0 }}>Sesión: {getEmail()}</span> : null}</p>
             <div className="row2">
               <label className="who">Empresa:
                 <span className="inline">
@@ -161,29 +207,30 @@ export default function App() {
             </div>
           </div>
           <div className="apps">
-            <button className="app" onClick={() => setRoleId('comercial')}>
+            {(puede('Ventas') || puede('Producto') || puede('Logística')) && <button className="app" onClick={() => setRoleId('comercial')}>
               <span className="appicon" style={{ background: '#714B67' }}>🧭</span>
               <span className="applabel">Comercial</span>
-            </button>
-            {ROLES.map((r) => (
+            </button>}
+            {ROLES.filter((r) => puede(r.label)).map((r) => (
               <button key={r.id} className="app" onClick={() => setRoleId(r.id)}>
                 <span className="appicon" style={{ background: r.color }}>{r.icon}</span>
                 <span className="applabel">{r.label}</span>
               </button>
             ))}
-            <button className="app" onClick={() => setRoleId('historico')}>
+            {puede('Histórico') && <button className="app" onClick={() => setRoleId('historico')}>
               <span className="appicon" style={{ background: '#b0473b' }}>📊</span>
               <span className="applabel">Histórico</span>
-            </button>
-            <button className="app" onClick={() => setRoleId('config')}>
+            </button>}
+            {esAdmin && <button className="app" onClick={() => setRoleId('config')}>
               <span className="appicon" style={{ background: '#5b6470' }}>⚙️</span>
               <span className="applabel">Combinaciones</span>
-            </button>
-            <button className="app" onClick={() => setRoleId('bitacora')}>
+            </button>}
+            {puede('Bitácora') && <button className="app" onClick={() => setRoleId('bitacora')}>
               <span className="appicon" style={{ background: '#455a64' }}>📝</span>
               <span className="applabel">Bitácora</span>
-            </button>
+            </button>}
           </div>
+          {acceso && <p className="sub" style={{ marginTop: 14 }}>Ves solo las secciones asignadas a tu usuario. Si falta alguna, pídele a un administrador que ajuste tu acceso en Combinaciones → Colaboradores.</p>}
         </main>
       </>
     )
@@ -368,8 +415,8 @@ function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, sa
 
   useEffect(() => {
     (async () => {
-      try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Categorias'); const j = await r.json(); if (j && j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
-      try { const r2 = await fetch(APPS_SCRIPT_URL + '?tab=' + role.tab); const j2 = await r2.json(); if (j2 && j2.ok && j2.values) { const next = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const rub = String(row[1] || ''); if (rub.indexOf(PFX) !== 0) return; const cat = rub.slice(PFX.length), mar = row[3]; for (let mi = 0; mi < 12; mi++) { const v = num(row[5 + mi]); if (v) next[key(mar, cat, mi)] = v } }); if (Object.keys(next).length) setData((d) => ({ ...d, ...next })) } } catch { }
+      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
+      try { const j2 = await gReadTab(role.tab); if (j2 && j2.ok && j2.values) { const next = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const rub = String(row[1] || ''); if (rub.indexOf(PFX) !== 0) return; const cat = rub.slice(PFX.length), mar = row[3]; for (let mi = 0; mi < 12; mi++) { const v = num(row[5 + mi]); if (v) next[key(mar, cat, mi)] = v } }); if (Object.keys(next).length) setData((d) => ({ ...d, ...next })) } } catch { }
     })()
   }, [empresa])
 
@@ -559,10 +606,10 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
 
   useEffect(() => {
     (async () => {
-      try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
-      try { const r2 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Ventas'); const j2 = await r2.json(); if (j2 && j2.ok && j2.values) setVentas(j2.values.slice(1)) } catch { }
-      try { const r3 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Producto'); const j3 = await r3.json(); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
-      try { const r4 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Categorias'); const j4 = await r4.json(); if (j4 && j4.ok && j4.values) { const out = {}; j4.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
+      try { const j = await gReadTab('Historico'); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
+      try { const j2 = await gReadTab('Cap_Ventas'); if (j2 && j2.ok && j2.values) setVentas(j2.values.slice(1)) } catch { }
+      try { const j3 = await gReadTab('Cap_Producto'); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
+      try { const j4 = await gReadTab('Cap_Categorias'); if (j4 && j4.ok && j4.values) { const out = {}; j4.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
     })()
   }, [empresa])
 
@@ -807,7 +854,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
   const [savingC, setSavingC] = useState(false)
   const [msgC, setMsgC] = useState(null)
   useEffect(() => {
-    (async () => { try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Colaboradores'); const j = await r.json(); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '', acceso: String(row[4] || '').split(';').filter(Boolean) }) }); setColabs(out) } else setColabs([]) } catch { } })()
+    (async () => { try { const j = await gReadTab('Cap_Colaboradores'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '', acceso: String(row[4] || '').split(';').filter(Boolean) }) }); setColabs(out) } else setColabs([]) } catch { } })()
   }, [empresa])
   function toggleAcceso(i, op) { setColabs(colabs.map((x, j) => j === i ? { ...x, acceso: (x.acceso || []).includes(op) ? x.acceso.filter((a) => a !== op) : [...(x.acceso || []), op] } : x)) }
   async function guardarColabs() {
@@ -825,11 +872,10 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
     const cc = { 'SBU 1': [], 'SBU 2': [], 'SBU 3': [], 'NO VENDE': [] }
     Object.entries(asign).forEach(([mk, s]) => { if (s === 'NO') cc['NO VENDE'].push(mk); else if (s) cc[s].push(mk) })
     try {
-      const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'config', empresa, combos: cc }) })
-      const j = await res.json()
+      const j = await gSaveConfig(empresa, cc)
       if (j.ok) { setCombos({ ...combos, [empresa]: cc }); if (!empresas.includes(empresa)) setEmpresas([...empresas, empresa]); setMsg({ t: 'ok', x: 'Combinaciones guardadas para ' + empresa + '.' }) }
-      else setMsg({ t: 'bad', x: 'Error: ' + j.error })
-    } catch (e) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + e.message }) }
+      else setMsg({ t: 'bad', x: 'Error al guardar.' })
+    } catch (e) { setMsg({ t: 'bad', x: 'No se pudo guardar: ' + e.message }) }
     setSaving(false)
   }
   const cuenta = (s) => Object.values(asign).filter((v) => v === s).length
@@ -914,7 +960,7 @@ function HistoricoScreen() {
 
   useEffect(() => { cargar() }, [])
   async function cargar() {
-    try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json(); if (j.ok && j.values) setValues(j.values) } catch { }
+    try { const j = await gReadTab('Historico'); if (j.ok && j.values) setValues(j.values) } catch { }
   }
   function importar(ev) {
     const file = ev.target.files[0]; if (!file) return
@@ -949,11 +995,10 @@ function HistoricoScreen() {
       })
       setBusy(true); setMsg(null)
       try {
-        const rr = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'historico', values: canon }) })
-        const j = await rr.json()
-        setMsg(j.ok ? { t: 'ok', x: `Histórico importado: ${j.filas} registro(s) en la hoja "Historico".` } : { t: 'bad', x: 'Error: ' + j.error })
+        const j = await gSaveHistorico(canon)
+        setMsg(j.ok ? { t: 'ok', x: `Histórico importado: ${j.filas} registro(s) en la hoja "Historico".` } : { t: 'bad', x: 'Error al guardar.' })
         cargar()
-      } catch (err) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + err.message }) }
+      } catch (err) { setMsg({ t: 'bad', x: 'No se pudo guardar: ' + err.message }) }
       setBusy(false)
     }
     reader.readAsArrayBuffer(file)
@@ -962,7 +1007,7 @@ function HistoricoScreen() {
   const dcell = (v) => { const s = v == null ? '' : String(v); const m = s.match(/^(\d{4})-(\d{2})-\d{2}/); return m ? m[1] + '-' + m[2] : s }
   async function exportar() {
     try {
-      const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json()
+      const j = await gReadTab('Historico')
       if (j.ok && j.values && j.values.length) { const clean = j.values.map((row) => row.map((c) => dcell(c))); exportXlsx(clean, 'Historico.xlsx') }
       else alert('Aún no hay histórico guardado.')
     } catch (e) { alert('No se pudo: ' + e.message) }
@@ -1148,10 +1193,13 @@ function CategoriasForm({ role, usuario, empresa, sbus }) {
   const [cats, setCats] = useState({})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [, setTick] = useState(0)
+  const usarCat = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] !== false } catch { return true } })()
+  function setUsarCat(v) { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); u[marca] = v; localStorage.setItem('usarcat_' + empresa, JSON.stringify(u)) } catch { } setTick((t) => t + 1) }
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Categorias'); const j = await r.json()
+        const j = await gReadTab('Cap_Categorias')
         if (j && j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) }
       } catch { }
     })()
@@ -1178,6 +1226,7 @@ function CategoriasForm({ role, usuario, empresa, sbus }) {
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="panel">
         <h3>Categorías de {marca} <span className="unit">(peso %)</span><span className="fill-badge">✏️ para llenar</span></h3>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '2px 0 10px', fontWeight: 600 }}><input type="checkbox" checked={usarCat} onChange={(e) => setUsarCat(e.target.checked)} /> Usar categorías para {marca} <span className="unit">(si lo desactivas, Ventas solo usa el crecimiento por cliente)</span></label>
         <div className="sub">Define las categorías de la marca y cuánto pesa cada una (debería sumar 100%). Suma actual: <b className={Math.round(suma) === 100 ? 'pos' : 'neg'}>{suma.toFixed(1)}%</b>. Las usa Ventas para repartir las unidades.</div>
         <div className="tablewrap">
           <table>
@@ -1208,14 +1257,16 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [cats, setCats] = useState({})
   const [producto, setProducto] = useState([])
   const [growth, setGrowth] = useState(() => { try { return JSON.parse(localStorage.getItem('ventas_growth_' + empresa) || '{}') } catch { return {} } })
+  const [catPart, setCatPart] = useState(() => { try { return JSON.parse(localStorage.getItem('catpart_' + empresa) || '{}') } catch { return {} } })
+  useEffect(() => { try { localStorage.setItem('catpart_' + empresa, JSON.stringify(catPart)) } catch { } }, [catPart, empresa])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
 
   useEffect(() => {
     (async () => {
-      try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Historico'); const j = await r.json(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
-      try { const r2 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Categorias'); const j2 = await r2.json(); if (j2 && j2.ok && j2.values) { const out = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
-      try { const r3 = await fetch(APPS_SCRIPT_URL + '?tab=Cap_Producto'); const j3 = await r3.json(); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
+      try { const j = await gReadTab('Historico'); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
+      try { const j2 = await gReadTab('Cap_Categorias'); if (j2 && j2.ok && j2.values) { const out = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
+      try { const j3 = await gReadTab('Cap_Producto'); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
     })()
   }, [empresa])
   // AUP por categoría (Producto): { categoría: [12] }
@@ -1287,38 +1338,52 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar marca'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      {usarCat && <div className="panel">
+        <h3>Categorías por cliente — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">Marca en cuáles categorías participa cada cliente. Con una sola categoría toma el 100% (sin ponderar); con varias, se reparte con los pesos del Director.</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Cliente</th>{catList.map((c) => <th key={c.cat}>{c.cat} <span className="unit">{num(c.peso).toFixed(0)}%</span></th>)}</tr></thead>
+            <tbody>
+              {clientes.length === 0 && <tr><td className="l" colSpan={catList.length + 1}>No hay clientes con histórico para {marca}.</td></tr>}
+              {clientes.map((cli) => <tr key={cli}><td className="l">{cli}</td>{catList.map((c) => { const on = partOf(cli).includes(c.cat); return <td key={c.cat}><input type="checkbox" checked={on} onChange={() => toggleCat(cli, c.cat)} /></td> })}</tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>}
+
       <div className="panel">
         <h3>Unidades 2028 por categoría y mes — {marca}</h3>
-        <div className="sub">Cada mes de {marca} se reparte según el peso de categorías que define el Director.</div>
+        <div className="sub">{usarCat ? 'Las unidades de cada cliente se reparten por categoría según su participación y los pesos del Director.' : 'Categorías desactivadas por el Director: solo el total por mes.'}</div>
         <div className="tablewrap">
           <table className="vfix">
             <colgroup><col style={{ width: '270px' }} /><col style={{ width: '60px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
             <thead><tr><th className="l">Categoría</th><th>Peso %</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
             <tbody>
               <tr className="grandrow"><td className="l">TOTAL {marca}</td><td></td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
-              {catList.length === 0 && <tr><td className="l" colSpan={15}>El Director aún no definió categorías para {marca}.</td></tr>}
-              {catList.map((c, i) => { const p = num(c.peso) / 100; return <tr key={i}><td className="l">{c.cat}</td><td>{num(c.peso).toFixed(1)}%</td>{mes28.map((v, mi) => <td key={mi} className="tot">{fmt(v * p)}</td>)}<td className="tot">{fmt(totMarcaSel * p)}</td></tr> })}
+              {!usarCat && <tr><td className="l" colSpan={15}>Categorías desactivadas para {marca}.</td></tr>}
+              {usarCat && catList.map((c, i) => { const row = MESES.map((_, mi) => uCatMes(c.cat, mi)); const t = row.reduce((a, b) => a + b, 0); return <tr key={i}><td className="l">{c.cat}</td><td>{num(c.peso).toFixed(1)}%</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
             </tbody>
           </table>
         </div>
       </div>
 
-      {(() => {
+      {usarCat && (() => {
         const aup = aupPorCat(marca)
-        const vnMes = MESES.map((_, mi) => catList.reduce((a, c) => a + mes28[mi] * (num(c.peso) / 100) * ((aup[c.cat] || [])[mi] || 0), 0))
+        const vnCat = (cat, mi) => uCatMes(cat, mi) * ((aup[cat] || [])[mi] || 0)
+        const vnMes = MESES.map((_, mi) => catList.reduce((a, c) => a + vnCat(c.cat, mi), 0))
         const vnTot = vnMes.reduce((a, b) => a + b, 0)
         return (
           <div className="panel">
             <h3>Venta Neta 2028 por categoría y mes — {marca} <span className="unit">($)</span></h3>
-            <div className="sub">Venta Neta = Unidades 2028 × AUP (por categoría). El AUP lo captura Producto.</div>
+            <div className="sub">Venta Neta = Unidades 2028 (por categoría) × AUP. El AUP lo captura Producto.</div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '270px' }} /><col style={{ width: '60px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
                 <thead><tr><th className="l">Categoría</th><th>AUP</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
                 <tbody>
                   <tr className="grandrow"><td className="l">TOTAL {marca}</td><td></td>{vnMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(vnTot)}</td></tr>
-                  {catList.length === 0 && <tr><td className="l" colSpan={15}>El Director aún no definió categorías para {marca}.</td></tr>}
-                  {catList.map((c, i) => { const p = num(c.peso) / 100; const a = aup[c.cat] || []; const row = mes28.map((v, mi) => v * p * (a[mi] || 0)); const rt = row.reduce((s, x) => s + x, 0); const aupProm = (() => { const nz = a.filter((x) => x !== 0); return nz.length ? nz.reduce((s, x) => s + x, 0) / nz.length : 0 })(); return <tr key={i}><td className="l">{c.cat}</td><td className="ref">{fmt(aupProm)}</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
+                  {catList.map((c, i) => { const a = aup[c.cat] || []; const row = MESES.map((_, mi) => vnCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); const aupProm = (() => { const nz = a.filter((x) => x !== 0); return nz.length ? nz.reduce((s, x) => s + x, 0) / nz.length : 0 })(); return <tr key={i}><td className="l">{c.cat}</td><td className="ref">{fmt(aupProm)}</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
                 </tbody>
               </table>
             </div>
@@ -1374,18 +1439,17 @@ function BitacoraScreen({ empresas, empresaSel }) {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   useEffect(() => { cargar() }, [])
-  async function cargar() { try { const r = await fetch(APPS_SCRIPT_URL + '?tab=Bitacora'); const j = await r.json(); if (j && j.ok && j.values) setRows(j.values.slice(1)) } catch { } }
+  async function cargar() { try { const j = await gReadTab('Bitacora'); if (j && j.ok && j.values) setRows(j.values.slice(1)) } catch { } }
   async function registrar() {
     if (!desc.trim()) { setMsg({ t: 'warn', x: 'Escribe la descripción del cambio.' }); return }
     setSaving(true); setMsg(null)
     // Fecha en RUBRO (columna 2), descripción en MARCA (columna 4). Cada entrada es única (timestamp) → se agrega sin sobrescribir.
     const rows2 = [{ rubro: new Date().toISOString(), sbu: '', marca: desc.trim(), meses: [] }]
     try {
-      const r = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ empresa: emp, usuario: '', rol: 'Bitácora', tab: 'Bitacora', rows: rows2 }) })
-      const j = await r.json()
+      const j = await gSaveRows('Bitacora', emp, '', 'Bitácora', rows2)
       if (j.ok) { setDesc(''); setMsg({ t: 'ok', x: 'Cambio registrado en la bitácora.' }); cargar() }
-      else setMsg({ t: 'bad', x: 'Error: ' + j.error })
-    } catch (e) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + e.message }) }
+      else setMsg({ t: 'bad', x: 'Error al guardar.' })
+    } catch (e) { setMsg({ t: 'bad', x: 'No se pudo guardar: ' + e.message }) }
     setSaving(false)
   }
   const dfmt = (v) => { const d = new Date(v); return isNaN(d.getTime()) ? String(v) : d.toLocaleString('es') }
@@ -1429,19 +1493,17 @@ function Fragment2({ children }) { return <>{children}</> }
 async function postToTab(tab, empresa, usuario, rolLabel, rows, setMsg) {
   if (!rows.length) { setMsg({ t: 'warn', x: 'No hay datos para guardar.' }); return }
   try {
-    const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ empresa, usuario: usuario || 'anónimo', rol: rolLabel, tab, rows }) })
-    const j = await res.json()
-    setMsg(j.ok ? { t: 'ok', x: `Guardado: ${j.filas} fila(s) en ${tab}.` } : { t: 'bad', x: 'Error: ' + j.error })
-  } catch (e) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + e.message }) }
+    const j = await gSaveRows(tab, empresa, usuario || 'anónimo', rolLabel, rows)
+    setMsg(j.ok ? { t: 'ok', x: `Guardado: ${j.filas} fila(s) en ${tab}.` } : { t: 'bad', x: 'Error al guardar.' })
+  } catch (e) { setMsg({ t: 'bad', x: 'No se pudo guardar: ' + e.message }) }
 }
 
 async function postRows(role, usuario, empresa, rows, setMsg) {
   if (!rows.length) { setMsg({ t: 'warn', x: 'No hay datos para guardar (todo en 0).' }); return }
   try {
-    const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ empresa, usuario: usuario || 'anónimo', rol: role.label, tab: role.tab, rows }) })
-    const j = await res.json()
-    setMsg(j.ok ? { t: 'ok', x: `Guardado: ${j.filas} fila(s) (${empresa}).` } : { t: 'bad', x: 'Error: ' + j.error })
-  } catch (e) { setMsg({ t: 'bad', x: 'No se pudo conectar: ' + e.message }) }
+    const j = await gSaveRows(role.tab, empresa, usuario || 'anónimo', role.label, rows)
+    setMsg(j.ok ? { t: 'ok', x: `Guardado: ${j.filas} fila(s) (${empresa}).` } : { t: 'bad', x: 'Error al guardar.' })
+  } catch (e) { setMsg({ t: 'bad', x: 'No se pudo guardar: ' + e.message }) }
 }
 
 function exportXlsx(aoa, nombre) {
