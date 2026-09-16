@@ -37,7 +37,7 @@ const VIAJES_GROUPS = [{ g: 'VIAJES', items: [
 const VJ = { k: 'VIAJES', u: '$', detalle: VIAJES_GROUPS, extrasKey: 'viajes_extras' }
 
 const ROLES = [
-  { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#714B67', tab: 'Cap_Ventas',    rubros: [{ k: 'UNIDADES', u: 'ud', proyeccion: true }, VJ] },
+  { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#0891b2', tab: 'Cap_Ventas',    rubros: [{ k: 'UNIDADES', u: 'ud', proyeccion: true }, VJ] },
   { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP', u: '$', porCat: true }, { k: 'AUC', u: '$' }, VJ, { k: 'INVENTARIO COMPRAS', u: '$' }] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
