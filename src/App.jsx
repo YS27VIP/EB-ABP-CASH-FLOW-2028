@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import './App.css'
-import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico } from './google'
+import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins } from './google'
 
 /* ===== CONFIG ===== */
 
@@ -150,8 +150,10 @@ export default function App() {
     return () => { cancel = true }
   }, [authed])
   const puede = (etiqueta) => !acceso || acceso.includes(etiqueta)
-  const ADMINS = ['yalik@energybrandsgroup.com']
-  const esAdmin = ADMINS.includes((getEmail() || '').trim().toLowerCase())
+  const [admins, setAdmins] = useState([])
+  useEffect(() => { if (!authed) return; (async () => { try { setAdmins(await gLoadAdmins()) } catch { } })() }, [authed])
+  const emailLow = (getEmail() || '').trim().toLowerCase()
+  const esAdmin = emailLow === 'yalik@energybrandsgroup.com' || admins.includes(emailLow)
 
   const role = ROLES.find((r) => r.id === roleId)
   const sbus = effSBUS(empresa, combos)
@@ -180,7 +182,7 @@ export default function App() {
     )
   }
 
-  if (!role && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial') {
+  if (!role && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
@@ -218,6 +220,10 @@ export default function App() {
               <span className="appicon" style={{ background: '#b0473b' }}>📊</span>
               <span className="applabel">Histórico</span>
             </button>}
+            {esAdmin && <button className="app" onClick={() => setRoleId('gerencia')}>
+              <span className="appicon" style={{ background: '#1f2d3d' }}>📈</span>
+              <span className="applabel">Gerencia</span>
+            </button>}
             {esAdmin && <button className="app" onClick={() => setRoleId('config')}>
               <span className="appicon" style={{ background: '#5b6470' }}>⚙️</span>
               <span className="applabel">Combinaciones</span>
@@ -240,6 +246,17 @@ export default function App() {
           <span className="rolechip" style={{ background: '#714B67' }}>🧭 Comercial</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
         <main><ComercialScreen empresa={empresa} sbus={sbus} usuario={usuario} /></main>
+      </>
+    )
+  }
+
+  if (roleId === 'gerencia') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#1f2d3d' }}>📈 Gerencia</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        <main><GerenciaScreen empresa={empresa} sbus={sbus} /></main>
       </>
     )
   }
@@ -841,6 +858,66 @@ function ComercialScreen({ empresa, sbus, usuario }) {
   )
 }
 
+/* ===== GERENCIA: consolidado de solo lectura por SBU y marca ===== */
+function GerenciaScreen({ empresa, sbus }) {
+  const [ventas, setVentas] = useState([])
+  const [producto, setProducto] = useState([])
+  const [cats, setCats] = useState({})
+  const [cargando, setCargando] = useState(true)
+  useEffect(() => {
+    (async () => {
+      setCargando(true)
+      try { const j = await gReadTab('Cap_Ventas'); if (j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
+      try { const j = await gReadTab('Cap_Producto'); if (j.ok && j.values) setProducto(j.values.slice(1)) } catch { }
+      try { const j = await gReadTab('Cap_Categorias'); if (j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
+      setCargando(false)
+    })()
+  }, [empresa])
+
+  const uni = (mca) => { const arr = Array(12).fill(0); ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; for (let j = 0; j < 12; j++) arr[j] += num(r[4 + j]) }); return arr }
+  const prodRow = (mca, rub) => { const arr = Array(12).fill(0); producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca) || upper(r[1]) !== upper(rub)) return; for (let j = 0; j < 12; j++) arr[j] = num(r[4 + j]) }); return arr }
+  const aupW = (mca) => { const aupCat = {}; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') !== 0) return; aupCat[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])) }); const arr = Array(12).fill(0); (cats[mca] || []).forEach(({ cat, peso }) => { const a = aupCat[cat]; if (!a) return; const w = num(peso) / 100; for (let j = 0; j < 12; j++) arr[j] += w * a[j] }); return arr }
+  const metrics = (mca) => {
+    const u = uni(mca), ap = aupW(mca), ac = prodRow(mca, 'AUC'), inv = prodRow(mca, 'INVENTARIO COMPRAS')
+    let unidades = 0, venta = 0, costo = 0, invc = 0
+    for (let j = 0; j < 12; j++) { unidades += u[j]; venta += u[j] * ap[j]; costo += u[j] * ac[j]; invc += inv[j] }
+    return { unidades, aup: unidades ? venta / unidades : 0, auc: unidades ? costo / unidades : 0, venta, costo, margen: venta - costo, margenPct: venta ? (venta - costo) / venta * 100 : 0, inv: invc }
+  }
+  const zero = { unidades: 0, aup: 0, auc: 0, venta: 0, costo: 0, margen: 0, margenPct: 0, inv: 0 }
+  const acc = (a, m) => ({ unidades: a.unidades + m.unidades, venta: a.venta + m.venta, costo: a.costo + m.costo, margen: a.margen + m.margen, inv: a.inv + m.inv })
+  const fin = (a) => ({ ...a, aup: a.unidades ? a.venta / a.unidades : 0, auc: a.unidades ? a.costo / a.unidades : 0, margenPct: a.venta ? a.margen / a.venta * 100 : 0 })
+  const cols = (m) => <><td className="tot">{fmt(m.unidades)}</td><td className="ref">{fmt(m.aup)}</td><td className="ref">{fmt(m.auc)}</td><td className="tot">{fmt(m.venta)}</td><td className="tot">{fmt(m.costo)}</td><td className="tot">{fmt(m.margen)}</td><td className="ref">{(m.margenPct || 0).toFixed(1)}%</td><td className="tot">{fmt(m.inv)}</td></>
+
+  let grand = { ...zero }
+  return (
+    <>
+      <div className="panel">
+        <h3>Gerencia — consolidado {empresa} <span className="unit">(solo lectura · 2028)</span></h3>
+        <div className="sub">Venta Neta = Unidades × AUP · Costo = Unidades × AUC · Margen = Venta − Costo · Inventario = compras del año. AUP/AUC son promedios ponderados.</div>
+        {cargando ? <div className="sub">Cargando…</div> : (
+          <div className="tablewrap">
+            <table>
+              <thead><tr><th className="l">SBU / Marca</th><th>Unidades</th><th>AUP</th><th>AUC</th><th>Venta Neta</th><th>Costo</th><th>Margen</th><th>Margen %</th><th>Inventario</th></tr></thead>
+              <tbody>
+                {Object.entries(sbus).map(([s, ms]) => {
+                  let sub = { ...zero }
+                  const filas = ms.map((m) => { const mm = metrics(m); sub = acc(sub, mm); return <tr key={m}><td className="l">{m}</td>{cols(mm)}</tr> })
+                  const subf = fin(sub); grand = acc(grand, sub)
+                  return <Fragment2 key={s}>
+                    <tr className="sburow"><td className="l">{s}</td>{cols(subf)}</tr>
+                    {filas}
+                  </Fragment2>
+                })}
+                <tr className="grandrow"><td className="l">TOTAL {empresa}</td>{cols(fin(grand))}</tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
 /* ===== COMBINACIONES ===== */
 function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }) {
   const [empresa, setEmpresa] = useState(empresas[0])
@@ -854,6 +931,15 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
     (async () => { try { const j = await gReadTab('Cap_Colaboradores'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '', acceso: String(row[4] || '').split(';').filter(Boolean) }) }); setColabs(out) } else setColabs([]) } catch { } })()
   }, [empresa])
   function toggleAcceso(i, op) { setColabs(colabs.map((x, j) => j === i ? { ...x, acceso: (x.acceso || []).includes(op) ? x.acceso.filter((a) => a !== op) : [...(x.acceso || []), op] } : x)) }
+  const [adminsTxt, setAdminsTxt] = useState('')
+  const [savingA, setSavingA] = useState(false)
+  const [msgA, setMsgA] = useState(null)
+  useEffect(() => { (async () => { try { const a = await gLoadAdmins(); setAdminsTxt(a.join('\n')) } catch { } })() }, [])
+  async function guardarAdmins() {
+    setSavingA(true); setMsgA(null)
+    try { await gSaveAdmins(adminsTxt.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean)); setMsgA({ t: 'ok', x: 'Administradores guardados.' }) } catch (e) { setMsgA({ t: 'bad', x: 'No se pudo: ' + e.message }) }
+    setSavingA(false)
+  }
   async function guardarColabs() {
     setSavingC(true); setMsgC(null)
     const rows = colabs.filter((c) => String(c.email).trim() || String(c.nombre).trim()).map((c) => ({ rubro: c.nombre, sbu: c.rol, marca: c.email, meses: [(c.acceso || []).join(';')] }))
@@ -934,6 +1020,16 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="toolbar" style={{ marginTop: 8 }}>
+        <button className="btn primary" disabled={savingA} onClick={guardarAdmins}>{savingA ? 'Guardando…' : '💾 Guardar administradores'}</button>
+        {msgA && <span className={'note ' + msgA.t} style={{ margin: 0, padding: '6px 10px' }}>{msgA.x}</span>}
+      </div>
+      <div className="panel">
+        <h3>Administradores <span className="unit">(ven Gerencia y Combinaciones)</span><span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">Escribe un correo por línea. Estas personas verán el tablero de <b>Gerencia</b> y esta pantalla de configuración. (Tu correo siempre es administrador.)</div>
+        <textarea value={adminsTxt} onChange={(e) => setAdminsTxt(e.target.value)} placeholder={'ana@energybrandsgroup.com\njuan@energybrandsgroup.com'} style={{ width: '100%', minHeight: 100, padding: 10, border: '1px solid var(--line)', borderRadius: 8, font: 'inherit' }} />
       </div>
     </>
   )

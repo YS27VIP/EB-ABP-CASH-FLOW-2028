@@ -115,6 +115,19 @@ export async function gHistorico() {
   return { ok: true, values: out }
 }
 
+/* Administradores: quién ve Gerencia y Combinaciones. yalik siempre es admin. */
+export async function gLoadAdmins() {
+  const v = await readValues('Config_Admins')
+  return v.slice(1).map((r) => String(r[0] || '').trim().toLowerCase()).filter(Boolean)
+}
+export async function gSaveAdmins(emails) {
+  await ensureTab('Config_Admins', ['EMAIL'])
+  await clearValues('Config_Admins')
+  const out = [['EMAIL'], ...emails.filter(Boolean).map((e) => [String(e).trim().toLowerCase()])]
+  await writeValues('Config_Admins', 'A1', out)
+  return { ok: true }
+}
+
 export async function gLoadConfig() {
   const [emps, comb] = await Promise.all([readValues('Config_Empresas'), readValues('Config_Combinaciones')])
   const empresas = emps.slice(1).map((r) => r[0]).filter(Boolean)
