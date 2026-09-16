@@ -1248,6 +1248,14 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
     setSaving(false)
   }
   const catList = cats[marca] || []
+  // ¿El Director activó categorías para esta marca? (lo define en su pestaña; por defecto sí si hay categorías)
+  const usarCat = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] !== false } catch { return true } })() && catList.length > 0
+  // Participación de categorías por cliente (check). Sin marcar = participa en todas.
+  const partOf = (cli) => { const k = cli + '|' + marca; return catPart[k] === undefined ? catList.map((c) => c.cat) : catPart[k] }
+  const toggleCat = (cli, cat) => { const cur = partOf(cli); const nx = cur.includes(cat) ? cur.filter((x) => x !== cat) : [...cur, cat]; setCatPart({ ...catPart, [cli + '|' + marca]: nx }) }
+  const pesoCat = {}; catList.forEach((c) => { pesoCat[c.cat] = num(c.peso) })
+  const catW = (cli, cat) => { const part = partOf(cli); if (!part.includes(cat)) return 0; const den = part.reduce((a, c) => a + (pesoCat[c] || 0), 0); return den > 0 ? (pesoCat[cat] || 0) / den : (part.length ? 1 / part.length : 0) }
+  const uCatMes = (cat, mi) => clientes.reduce((a, cli) => a + u28(cli, mi) * catW(cli, cat), 0)
 
   return (
     <>
