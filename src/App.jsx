@@ -217,9 +217,10 @@ export default function App() {
   }, [authed])
 
   const role = ROLES.find((r) => r.id === roleId)
-  // EB: manda el EBP en vivo (3 SBU con sus marcas). Solo si NO hay datos del EBP se usa la config manual.
+  // EB: manda el EBP en vivo (3 SBU con sus marcas). Mientras carga, se usan las SBU por defecto
+  // (NO la config vieja guardada), para que no parpadee mostrando/ocultando SBU 2 y 3.
   const sbus = empresa === 'ENERGY BRANDS'
-    ? (ebSbus || effSBUS(empresa, combos))
+    ? (ebSbus || DEFAULT_SBUS)
     : effSBUS(empresa, combos)
 
   function nuevaEmpresa() {
@@ -738,6 +739,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [ventas, setVentas] = useState([])
   const [producto, setProducto] = useState([])
   const [cats, setCats] = useState({})
+  const [temp, setTemp] = useState({})
+  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } }, [empresa])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   const sbuMarcas = sbus[sbu] || []
@@ -767,6 +770,12 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const saldoTotal = (mca) => clientesDe(mca).reduce((s, cli) => s + num(data[`SALDO|${mca}|${cli}`]), 0)
   const cellRaw = (concepto, mi) => isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
 
+  // Compras 2028 (de Comercial) → pago según el término de pago de la marca (a proveedor). Parte del Cash Out.
+  const comprasUdMes = (mca) => MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(temp[`CP|${mca}|${s}|${m}`]), 0))
+  const aucMes = (mca) => { const a = Array(12).fill(0); producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca) || upper(r[1]) !== 'AUC') return; for (let j = 0; j < 12; j++) a[j] = num(r[4 + j]) }); return a }
+  const comprasUsdMes = (mca) => { const u = comprasUdMes(mca), c = aucMes(mca); return MESES.map((_, m) => u[m] * c[m]) }
+  const pagosMarca = (mca) => { const compras = comprasUsdMes(mca); const plazo = CF_PLAZO_MESES[data[`PTERM|${mca}`]] ?? 0; return { compras, pagos: MESES.map((_, m) => (m >= plazo ? compras[m - plazo] : 0)), plazo } }
+
   // Escalera de cobros: Ventas Netas 2028 = Unidades 2028 (Cap_Ventas) × AUP (Cap_Producto), cobradas según el plazo del cliente.
   const unidades2028 = (mca) => { const out = {}; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli) return; const arr = out[cli] || (out[cli] = Array(12).fill(0)); for (let j = 0; j < 12; j++) arr[j] += num(r[4 + j]) }); return out }
   // AUP ponderado por marca = Σ (peso_categoría × AUP_categoría). El AUP se captura por categoría (Producto).
@@ -790,12 +799,18 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const _cobCache = {}
   const getCobros = (mca) => _cobCache[mca] || (_cobCache[mca] = cobros2028(mca))
 
+  // Venta Neta 2028 = Σ unidades (Ventas) × AUP (Producto), por mes. Ambos salen de Comercial.
+  const ventaNetaMes = (mca) => { const uni = unidades2028(mca), aup = aupMarca(mca); return MESES.map((_, m) => Object.keys(uni).reduce((a, cli) => a + (uni[cli][m] || 0), 0) * (aup[m] || 0)) }
+  const VENTAS_NETAS = 'Ventas Netas', COMPRAS_FD = 'Compras (Fecha disponible)'
+  const esCalcComercial = (it) => it === VENTAS_NETAS || it === COMPRAS_FD
   const cell = (concepto, mi) => {
     if (concepto === CASHIN) {
       if (mi === DIC27) return isTotal ? sbuMarcas.reduce((s, m) => s + saldoTotal(m), 0) : saldoTotal(marca)   // Dic-27 = saldo cierre 2027
       if (mi >= 3) { const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[j], 0) : getCobros(marca).total[j] } // 2028 = escalera
       return cellRaw(concepto, mi)
     }
+    if (concepto === VENTAS_NETAS) { if (mi < 3) return 0; const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + ventaNetaMes(m)[j], 0) : ventaNetaMes(marca)[j] }
+    if (concepto === COMPRAS_FD) { if (mi < 3) return 0; const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + comprasUsdMes(m)[j], 0) : comprasUsdMes(marca)[j] }
     if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + cellRaw(sub, mi), 0)
     return cellRaw(concepto, mi)
   }
@@ -859,8 +874,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                     const celdas = CF_MESES.map((_, mi) => {
                       const cls = mi < 3 ? 'ya' : 'yb'
                       const cashinCalc = it === CASHIN && mi >= 2
-                      if (isTotal || esCostos || cashinCalc) {
-                        const tit = it === CASHIN ? (mi === DIC27 ? 'Saldo (deuda) cierre 2027' : 'Cobros según escalera (ventas × plazo)') : undefined
+                      const comercialCalc = esCalcComercial(it) && mi >= 3
+                      if (isTotal || esCostos || cashinCalc || comercialCalc) {
+                        const tit = it === CASHIN ? (mi === DIC27 ? 'Saldo (deuda) cierre 2027' : 'Cobros según escalera (ventas × plazo)') : (it === VENTAS_NETAS ? 'Unidades × AUP (Comercial)' : it === COMPRAS_FD ? 'Compras × AUC (Comercial)' : undefined)
                         return <td key={mi} className={'tot ' + cls} title={tit}>{fmt(cell(it, mi))}</td>
                       }
                       const k = key(marca, it, mi)
@@ -921,30 +937,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       </div>
 
       {!isTotal && (() => {
-        const cob = cobros2028(marca)
-        const clientesCob = Object.keys(cob.byCli).sort((a, b) => a.localeCompare(b))
-        const totAnual = cob.total.reduce((a, b) => a + b, 0)
-        return (
-          <div className="panel">
-            <h3>{role.label} — Cobros 2028 · escalera <span className="unit">({marca})</span></h3>
-            <div className="sub">Calculado: cada venta (<b>Unidades 2028 × AUP</b>) se cobra según el término del cliente. Cash = mismo mes · 30 días = +1 · 60 = +2 · 90 = +3 · 120 = +4 · 150 = +5 · 180 = +6. El <b>TOTAL por mes</b> alimenta <b>Cash In (Cobros)</b> de 2028 arriba.</div>
-            <div className="tablewrap">
-              <table>
-                <thead><tr><th className="l">Cliente</th><th>Plazo</th>{CF_M2028.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
-                <tbody>
-                  {clientesCob.length === 0 && <tr><td className="l" colSpan={15}>Sin cobros aún. Revisa que Ventas haya guardado unidades 2028 y Producto el AUP de {marca}.</td></tr>}
-                  {clientesCob.map((cli) => { const row = cob.byCli[cli]; const t = row.reduce((a, b) => a + b, 0); if (t === 0) return null; return <tr key={cli}><td className="l">{cli}</td><td>{data[`TERM|${marca}|${cli}`] || '—'}</td>{row.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
-                  <tr className="grandrow"><td className="l">TOTAL COBROS → Cash In</td><td></td>{cob.total.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totAnual)}</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )
-      })()}
-
-      {!isTotal && (() => {
         const cls = clientesDe(marca)
         const uni = unidades2028(marca), aup = aupMarca(marca)
+        const SI = '#dcebfb' // color "lo llena Finanzas"
         const filas = cls.map((cli) => {
           const term = data[`TERM|${marca}|${cli}`]
           const plazo = CF_PLAZO_MESES[term] ?? 0
@@ -952,24 +947,57 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           const ventas = MESES.map((_, m) => (uni[cli]?.[m] || 0) * (aup[m] || 0))
           const cobros = MESES.map((_, m) => (m >= plazo ? ventas[m - plazo] : 0) + (m === Math.min(plazo, 11) ? ini : 0))
           let saldo = ini; const run = MESES.map((_, m) => { saldo = saldo + ventas[m] - cobros[m]; return saldo })
-          return { cli, term, ini, run, ventas }
-        }).filter((f) => f.ini !== 0 || f.run.some((v) => Math.abs(v) > 0.5) || f.ventas.some((v) => v > 0.5))
-        const totRun = MESES.map((_, m) => filas.reduce((a, f) => a + f.run[m], 0))
-        const totIni = filas.reduce((a, f) => a + f.ini, 0)
+          return { cli, term, plazo, ini, ventas, cobros, run }
+        }).filter((f) => f.ini !== 0 || f.ventas.some((v) => v > 0.5))
+        const totCobro = MESES.map((_, m) => filas.reduce((a, f) => a + f.cobros[m], 0))
         return (
           <div className="panel">
-            <h3>{role.label} — Saldo por cliente 2028 <span className="unit">(cuentas por cobrar · {marca})</span></h3>
-            <div className="sub">Arranca con la <b>deuda cierre 2027</b>; cada mes <b>suma la venta</b> (Unidades×AUP) y <b>resta el cobro</b> según el término del cliente. El saldo es lo que el cliente te va quedando debiendo mes a mes.</div>
+            <h3>{role.label} — Venta, cobro y saldo por cliente 2028 <span className="unit">({marca})</span></h3>
+            <div className="sub">Por cada cliente: la <b>Venta</b> (Unidades×AUP) en el mes que ocurre, el <b>Cobro</b> cuando entra según su término (Cash=mismo mes · 30d=+1 · 60=+2 · 90=+3 …), y el <b>Saldo</b> que va quedando. La columna <b style={{ background: SI, padding: '1px 6px', borderRadius: 4 }}>Saldo inicial</b> (deuda cierre 2027) la <b>llena Finanzas</b>.</div>
             <div className="tablewrap">
-              <table className="vfix"><colgroup><col style={{ width: '210px' }} /><col style={{ width: '64px' }} /><col style={{ width: '80px' }} />{CF_M2028.map((_, i) => <col key={i} style={{ width: '64px' }} />)}</colgroup>
-                <thead><tr><th className="l">Cliente</th><th>Plazo</th><th>Deuda 2027</th>{CF_M2028.map((m) => <th key={m}>{m}</th>)}</tr></thead>
+              <table className="vfix"><colgroup><col style={{ width: '210px' }} /><col style={{ width: '96px' }} />{CF_M2028.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+                <thead><tr><th className="l">Cliente / concepto</th><th style={{ background: SI }}>Saldo inicial</th>{CF_M2028.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
                 <tbody>
-                  {filas.length === 0 && <tr><td className="l" colSpan={15}>Sin datos aún. Captura la deuda 2027 y/o unidades y AUP de {marca}.</td></tr>}
-                  {filas.map((f) => <tr key={f.cli}><td className="l">{f.cli}</td><td>{f.term || '—'}</td><td className="tot">{fmt(f.ini)}</td>{f.run.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}</tr>)}
-                  {filas.length > 0 && <tr className="grandrow"><td className="l">TOTAL saldo clientes</td><td></td><td className="tot">{fmt(totIni)}</td>{totRun.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}</tr>}
+                  {filas.length === 0 && <tr><td className="l" colSpan={15}>Sin datos aún. Captura unidades (Ventas) y AUP (Producto) de {marca}.</td></tr>}
+                  {filas.map((f) => (
+                    <Fragment2 key={f.cli}>
+                      <tr className="secrow"><td className="l">{f.cli} · {f.term || 'sin plazo'}</td><td style={{ background: SI, padding: 2 }}><input value={data[`SALDO|${marca}|${f.cli}`] ?? ''} onChange={(e) => set(`SALDO|${marca}|${f.cli}`, e.target.value)} inputMode="decimal" style={{ width: '90%', background: '#fff', border: '1px solid #b6d4f2', borderRadius: 5, padding: '5px', textAlign: 'center' }} /></td>{CF_M2028.map((_, m) => <td key={m}></td>)}<td></td></tr>
+                      <tr><td className="l sub2">Venta (Unid×AUP)</td><td></td>{f.ventas.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.ventas.reduce((a, b) => a + b, 0))}</td></tr>
+                      <tr><td className="l sub2">Cobro (según plazo)</td><td></td>{f.cobros.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.cobros.reduce((a, b) => a + b, 0))}</td></tr>
+                      <tr className="catrow"><td className="l">= Saldo cliente</td><td className="tot">{fmt(f.ini)}</td>{f.run.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td></td></tr>
+                    </Fragment2>
+                  ))}
+                  {filas.length > 0 && <tr className="grandrow"><td className="l">TOTAL COBROS del mes → Cash In</td><td></td>{totCobro.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totCobro.reduce((a, b) => a + b, 0))}</td></tr>}
                 </tbody>
               </table>
             </div>
+          </div>
+        )
+      })()}
+
+      {(() => {
+        const SP = '#fde8cf' // color "término de la marca (pago a proveedor)"
+        const listaM = isTotal ? sbuMarcas : [marca]
+        const compras = MESES.map((_, m) => listaM.reduce((a, mca) => a + comprasUsdMes(mca)[m], 0))
+        const pagos = MESES.map((_, m) => listaM.reduce((a, mca) => a + pagosMarca(mca).pagos[m], 0))
+        return (
+          <div className="panel">
+            <h3>{role.label} — Compras y pagos {isTotal ? `· TOTAL ${sbu}` : `· ${marca}`} <span className="unit">(Cash Out)</span></h3>
+            <div className="sub">La <b>compra 2028</b> (unidades de Comercial × AUC) genera un <b>pago</b> según el <b>término de pago de la marca</b> a su proveedor (Cash = mismo mes · 30d = +1 · 60 = +2 …). El total de pagos alimenta el <b>Cash Out</b>.</div>
+            {!isTotal && <div className="toolbar" style={{ marginBottom: 8 }}>
+              <label>Término de pago de {marca} <span className="unit">(a proveedor)</span></label>
+              <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>
+            </div>}
+            <div className="tablewrap">
+              <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+                <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+                <tbody>
+                  <tr><td className="l">Compra 2028 ($ · fecha disponible)</td>{compras.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(compras.reduce((a, b) => a + b, 0))}</td></tr>
+                  <tr className="grandrow"><td className="l">Pago (según término) → Cash Out</td>{pagos.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(pagos.reduce((a, b) => a + b, 0))}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            {compras.every((v) => !v) && <div className="sub" style={{ marginTop: 8 }}>Aún no hay compras. Captúralas en <b>Comercial → Producto → Inventario y compras</b> y el AUC en <b>Producto → AUC</b>.</div>}
           </div>
         )
       })()}
