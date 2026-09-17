@@ -1283,20 +1283,18 @@ function GastosAdminForm({ empresa }) {
       <div className="panel">
         <h3>Gastos administrativos <span className="unit">(detalle · compartido por todas las SBU)</span><span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Captura por centro de costo y mes. Con <b>Editar centros de costo</b> puedes cambiar códigos/nombres o agregar rubros; el cambio <b>aplica a todas las SBU</b>. El SUB-TOTAL alimenta la línea Gastos administrativos del Cash Flow.</div>
-        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '150px' }} /><col style={{ width: '60px' }} /><col style={{ width: '60px' }} /><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-          <thead><tr><th className="l">Rubro</th><th>Código</th><th>Cód sub</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '270px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+          <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
           <tbody>
             {lista.map((it, i) => (
               <tr key={i}>
-                <td className="l">Gastos Administrativos</td>
-                <td>100</td>
-                <td>{edit ? <input value={it.cod} onChange={(e) => editar(i, 'cod', e.target.value)} style={{ width: 48, padding: 4, border: '1px solid var(--line)', borderRadius: 5, textAlign: 'center' }} /> : it.cod}</td>
+                <td>{edit ? <input value={it.cod} onChange={(e) => editar(i, 'cod', e.target.value)} style={{ width: 52, padding: 4, border: '1px solid var(--line)', borderRadius: 5, textAlign: 'center' }} /> : it.cod}</td>
                 <td className="l">{edit ? <span style={{ display: 'flex', gap: 4 }}><input value={it.sub} onChange={(e) => editar(i, 'sub', e.target.value)} style={{ width: '90%', padding: 4, border: '1px solid var(--line)', borderRadius: 5 }} /><button className="btn" onClick={() => quitar(i)} style={{ padding: '2px 8px' }}>✕</button></span> : it.sub}</td>
                 {MESES.map((_, m) => { const k = key(it.cod, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}
                 <td className="tot">{fmt(filaTot(it.cod))}</td>
               </tr>
             ))}
-            <tr className="grandrow"><td className="l" colSpan={4}>SUB-TOTAL gastos administrativos</td>{subtot.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(subtot.reduce((a, b) => a + b, 0))}</td></tr>
+            <tr className="grandrow"><td className="l" colSpan={2}>SUB-TOTAL gastos administrativos</td>{subtot.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(subtot.reduce((a, b) => a + b, 0))}</td></tr>
           </tbody>
         </table></div>
       </div>
@@ -1649,6 +1647,8 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   // ABP 2027 (hoja PLAN del EBP): suma por marca de la SBU
   const abp = (campo) => (marcasSBU || []).reduce((s, m) => { const o = P.plan[upper(m)]; return s + (o ? o[campo] || 0 : 0) }, 0)
   const abpVenta = abp('venta'), abpCosto = abp('costo'), abpMargen = abpVenta - abpCosto
+  // Gastos administrativos (compartidos por toda la empresa) — total anual
+  const gadminAnual = (() => { try { const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } return cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { return 0 } })()
 
   const filas = [
     { k: 'Unidades', get: (v) => v.unidades },
@@ -1668,16 +1668,16 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
 
   return (
     <div className="panel">
-      <h3 style={{ color: sbuColor(sbuName) }}>Brand Contribution — {sbuName} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
-      <div className="sub">P&amp;L de cada marca lado a lado. Las columnas <b>FY2026</b>, <b>FY2025</b> y <b>ABP 2027</b> (hoja PLAN del EBP) traen el valor y la <b>variación %</b> del total 2028 vs cada uno (en Venta, Costo y Margen).</div>
+      <h3 style={{ color: sbuColor(sbuName) }}>Contribución de la BU — {sbuName} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
+      <div className="sub">P&amp;L de cada marca lado a lado. Las columnas <b>FY2026</b>, <b>FY2025</b> y <b>ABP 2027</b> (hoja PLAN del EBP) traen el valor y la <b>variación %</b> del total 2028 vs cada uno (en Venta, Costo y Margen). Los <b>Gastos administrativos</b> son de toda la empresa; al restarlos queda el <b>Resultado Operativo</b>.</div>
       <div className="tablewrap">
         <table className="vfix" style={{ width: 'auto', minWidth: 520 }}>
           <thead><tr><th className="l">Concepto</th>{cols.map(({ m }) => <th key={m} style={{ color: marcaColor(m) }}>{m}</th>)}<th>TOTAL 2028</th><th className="ya">FY2026</th><th className="ya">Δ vs 26</th><th className="ya">FY2025</th><th className="ya">Δ vs 25</th><th className="yb">ABP 2027</th><th className="yb">Δ vs ABP27</th></tr></thead>
           <tbody>
-            {filas.map((f) => { const cur = f.get(tot); return (
+            {filas.map((f) => { const cur = f.totVal != null ? f.totVal : f.get(tot); return (
               <tr key={f.k} className={f.strong ? 'grandrow' : undefined}>
                 <td className="l">{f.k}</td>
-                {cols.map(({ m, v }) => <td key={m} className="tot">{fmt(f.get(v))}</td>)}
+                {cols.map(({ m, v }) => <td key={m} className="tot">{f.totVal != null ? '' : fmt(f.get(v))}</td>)}
                 <td className="tot">{fmt(cur)}</td>
                 <td className="tot ya">{f.fy26 != null ? fmt(f.fy26) : '—'}</td>
                 {f.fy26 != null ? dCell(cur, f.fy26) : <td className="tot ya">—</td>}
