@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import './App.css'
-import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins } from './google'
+import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas } from './google'
 
 /* ===== CONFIG ===== */
 
@@ -192,7 +192,14 @@ export default function App() {
   }
 
   if (!avatar) {
-    const OPTS = ['👩🏻', '👩🏽', '👩🏾', '👩🏿', '👨🏻', '👨🏽', '👨🏾', '👨🏿', '🧑🏻', '🧑🏽', '🧑🏾', '🧑🏿', '👩🏻‍🦰', '👨🏽‍🦱', '👩🏾‍🦱', '🧑🏻‍🦳']
+    const OPTS = [
+      '👩🏻', '👩🏼', '👩🏽', '👩🏾', '👩🏿',
+      '👱🏻‍♀️', '👱🏼‍♀️', '👩🏻‍🦱', '👩🏼‍🦱', '👩🏾‍🦱', '👩🏻‍🦰', '👩🏼‍🦳',
+      '👨🏻', '👨🏼', '👨🏽', '👨🏾', '👨🏿',
+      '👱🏻‍♂️', '👱🏼‍♂️', '👨🏻‍🦱', '👨🏽‍🦱', '👨🏻‍🦲', '👨🏼‍🦲', '👨🏾‍🦲',
+      '🧑🏻', '🧑🏽', '🧑🏾', '🧑🏻‍🦲', '🧑🏼‍🦳',
+      '🤓', '😎', '🧐',
+    ]
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span></header>
@@ -350,13 +357,13 @@ export default function App() {
 }
 
 /* ===== RoleForm: pestañas de rubro (simple o detalle) ===== */
-function RoleForm({ role, usuario, empresa, sbus }) {
+function RoleForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [tab, setTab] = useState(0)
   const [data, setData] = useState({})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   const rb = role.rubros[tab]
-  const common = { role, rubro: rb, usuario, empresa, sbus, data, setData, saving, setSaving, msg, setMsg }
+  const common = { role, rubro: rb, usuario, empresa, sbus, data, setData, saving, setSaving, msg, setMsg, fixedMarca }
 
   return (
     <>
@@ -364,10 +371,10 @@ function RoleForm({ role, usuario, empresa, sbus }) {
         {role.rubros.map((r, i) => (<button key={r.k} className={'seg' + (i === tab ? ' active' : '')} onClick={() => { setTab(i); setMsg(null) }}>{r.k}</button>))}
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      {rb.proyeccion ? <ProjectionForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} />
-        : rb.cash ? <CashFlowForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} />
+      {rb.proyeccion ? <ProjectionForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
+        : rb.cash ? <CashFlowForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.porCat ? <CatCaptureForm key={rb.k} {...common} />
-        : rb.cat ? <CategoriasForm key={rb.k} role={role} usuario={usuario} empresa={empresa} sbus={sbus} />
+        : rb.cat ? <CategoriasForm key={rb.k} role={role} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} />
         : <SimpleForm key={rb.k} {...common} />}
     </>
@@ -529,9 +536,10 @@ function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, sa
 }
 
 /* ===== DetalleForm: sub-rubros por marca (Marketing y Viajes) ===== */
-function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, data, setData, saving, setSaving, setMsg }) {
+function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, data, setData, saving, setSaving, setMsg, fixedMarca }) {
   const marcas = marcasDe(sbus)
-  const [marca, setMarca] = useState(marcas[0].marca)
+  const [marca, setMarca] = useState(fixedMarca || marcas[0].marca)
+  useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
   const [extras, setExtras] = useState(() => { try { return JSON.parse(localStorage.getItem(extrasKey) || '[]') } catch { return [] } })
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
@@ -591,14 +599,14 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
   return (
     <>
       <div className="toolbar">
-        <label>Marca</label>
+        {!fixedMarca && <><label>Marca</label>
         <select value={marca} onChange={(e) => setMarca(e.target.value)}>
           {Object.entries(sbus).map(([s, ms]) => (<optgroup key={s} label={s}>
             <option value={`TOTAL::${s}`}>▣ TOTAL {s}</option>
             {ms.map((m) => <option key={m} value={m}>{m}</option>)}
           </optgroup>))}
-        </select>
-        {isTotal && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
+        </select></>}
+        {isTotal && !fixedMarca && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
         <div className="spacer"></div>
         <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'GRUPO', 'RUBRO', 'SBU', 'MARCA', ...MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, gr.g, it.n, sb, mca, ...MESES.map(() => 0)])))); exportXlsx(aoa, `Plantilla_${role.tab}_${rubro.k}.xlsx`) }}>📄 Plantilla</button>
@@ -645,9 +653,10 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
 }
 
 /* ===== CASH FLOW: PSI + Cash Flow, 3 meses 2026 + proyección 2027 ===== */
-function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
+function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const marcas = marcasDe(sbus)
-  const [marca, setMarca] = useState(marcas[0].marca)
+  const [marca, setMarca] = useState(fixedMarca || marcas[0].marca)
+  useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   const stKey = `cf_${empresa}`
@@ -745,14 +754,14 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
     <>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="toolbar">
-        <label>Marca</label>
+        {!fixedMarca && <><label>Marca</label>
         <select value={marca} onChange={(e) => setMarca(e.target.value)}>
           {Object.entries(sbus).map(([s, ms]) => (<optgroup key={s} label={s}>
             <option value={`TOTAL::${s}`}>▣ TOTAL {s}</option>
             {ms.map((m) => <option key={m} value={m}>{m}</option>)}
           </optgroup>))}
-        </select>
-        {isTotal && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
+        </select></>}
+        {isTotal && !fixedMarca && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
         <div className="spacer"></div>
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map(() => 0)])))); exportXlsx(aoa, `${role.tab}_CASHFLOW_Plantilla.xlsx`) }}>📄 Plantilla</button>
         <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
@@ -867,19 +876,41 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
 function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
   const SECS = ROLES.filter((r) => ['ventas', 'producto', 'marketing', 'logistica', 'director'].includes(r.id))
   const [secId, setSecId] = useState('ventas')
+  const [marca, setMarca] = useState('__TOTAL__')
   const isRetail = String(sbuName).toUpperCase() === 'RETAIL'
   const oneSbu = isRetail ? {} : { [sbuName]: sbus[sbuName] || [] }
+  const marcasSBU = isRetail ? [] : (sbus[sbuName] || [])
   const role = SECS.find((r) => r.id === secId)
   const col = sbuColor(sbuName)
+  const acc = marca === '__TOTAL__' ? col : marcaColor(marca)
+
+  if (isRetail) {
+    return <div className="panel"><h3 style={{ color: sbuColor('Retail') }}>Retail — tiendas propias</h3><div className="note warn">Retail le compra internamente a las SBU (venta intercompañía). Para activarlo necesito el <b>precio de transferencia</b> (margen fijo, % sobre costo o AUP interno). En cuanto lo definamos, aquí verás la captura y el consolidado de Retail. 🏬</div></div>
+  }
   return (
-    <>
-      <div className="toolbar" style={{ marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
-        {SECS.map((r) => { const on = r.id === secId; return <button key={r.id} className={'seg' + (on ? ' active' : '')} onClick={() => setSecId(r.id)} style={on ? { background: col, borderColor: col, color: '#fff' } : {}}>{r.icon} {r.label}</button> })}
+    <div className="comercial">
+      <aside className="cmz-side">
+        <div className="cmz-sbu">
+          <div className="cmz-sbu-h" style={{ color: col, borderLeft: '4px solid ' + col, paddingLeft: 8 }}>{sbuName}</div>
+          <button className={'cmz-marca' + (marca === '__TOTAL__' ? ' active' : '')} onClick={() => setMarca('__TOTAL__')} style={marca === '__TOTAL__' ? { background: col, color: '#fff' } : {}}>▣ TOTAL SBU</button>
+          {marcasSBU.map((m) => { const c = marcaColor(m); const on = m === marca; return <button key={m} className={'cmz-marca' + (on ? ' active' : '')} onClick={() => setMarca(m)} style={on ? { background: c, color: '#fff' } : {}}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: c, marginRight: 8, verticalAlign: 'middle' }}></span>{m}</button> })}
+        </div>
+      </aside>
+      <div className="cmz-main" style={{ '--accent': acc, borderTop: '4px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
+        {marca === '__TOTAL__'
+          ? <GerenciaScreen empresa={empresa} sbus={sbus} soloSBU={sbuName} />
+          : (<>
+            <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+              <span className="empchip" style={{ background: acc, marginLeft: 0 }}>{marca}</span>
+              {SECS.map((r) => { const on = r.id === secId; return <button key={r.id} className={'seg' + (on ? ' active' : '')} onClick={() => setSecId(r.id)} style={on ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{r.icon} {r.label}</button> })}
+              <button className={'seg' + (secId === 'brand' ? ' active' : '')} onClick={() => setSecId('brand')} style={secId === 'brand' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>📊 Brand Contribution</button>
+            </div>
+            {secId === 'brand'
+              ? <BrandContribution empresa={empresa} marca={marca} />
+              : <RoleForm key={sbuName + secId + marca} role={role} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
+          </>)}
       </div>
-      {isRetail
-        ? <div className="panel"><h3 style={{ color: sbuColor('Retail') }}>Retail — tiendas propias</h3><div className="note warn">Retail le compra internamente a las SBU (venta intercompañía). Para activarlo necesito el <b>precio de transferencia</b> (margen fijo, % sobre costo o AUP interno). En cuanto lo definamos, aquí verás la captura y el consolidado de Retail. 🏬</div></div>
-        : <RoleForm key={sbuName + secId} role={role} usuario={usuario} empresa={empresa} sbus={oneSbu} />}
-    </>
+    </div>
   )
 }
 
@@ -1004,6 +1035,77 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   )
 }
 
+/* ===== BRAND CONTRIBUTION: P&L por marca (estilo Excel HOKA) ===== */
+function BrandContribution({ empresa, marca }) {
+  const [P, setP] = useState({ ven: [], prod: [], cats: {}, mk: [], log: [], dir: [] })
+  const [load, setLoad] = useState(true)
+  useEffect(() => {
+    (async () => {
+      setLoad(true)
+      const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
+      const [ven, prod, cap, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
+      const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+      setP({ ven, prod, cats, mk, log, dir }); setLoad(false)
+    })()
+  }, [empresa])
+
+  const inMarca = (r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(marca)
+  const uniMes = () => { const a = Array(12).fill(0); P.ven.forEach((r) => { if (!inMarca(r)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; for (let j = 0; j < 12; j++) a[j] += num(r[4 + j]) }); return a }
+  const aupCat = () => { const o = {}; P.prod.forEach((r) => { if (!inMarca(r)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') !== 0) return; o[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])) }); return o }
+  const aucMes = () => { const a = Array(12).fill(0); P.prod.forEach((r) => { if (!inMarca(r) || upper(r[1]) !== 'AUC') return; for (let j = 0; j < 12; j++) a[j] = num(r[4 + j]) }); return a }
+  const sumTab = (rows, filt) => { let s = 0; rows.forEach((r) => { if (!inMarca(r)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
+
+  const u = uniMes(), ac = aucMes(), acat = aupCat()
+  const catList = P.cats[marca] || []
+  const aupMes = () => { const a = Array(12).fill(0); catList.forEach(({ cat, peso }) => { const x = acat[cat]; if (!x) return; const w = num(peso) / 100; for (let j = 0; j < 12; j++) a[j] += w * x[j] }); return a }
+  const ap = aupMes()
+  let unidades = 0, ventaNeta = 0, costo = 0
+  for (let j = 0; j < 12; j++) { unidades += u[j]; ventaNeta += u[j] * ap[j]; costo += u[j] * ac[j] }
+  const comisiones = 0
+  const logistica = sumTab(P.log)
+  const marketing = sumTab(P.mk)
+  const viajes = [P.ven, P.prod, P.mk, P.log, P.dir].reduce((t, rows) => t + sumTab(rows, (rub) => rub.toUpperCase().startsWith('VIAJES')), 0)
+  const margenBruto = ventaNeta - costo - comisiones - logistica
+  const brand = margenBruto - marketing - viajes
+  const pct = (x) => ventaNeta ? (x / ventaNeta * 100).toFixed(1) + '%' : '—'
+
+  const fila = (lbl, val, strong) => <tr className={strong ? 'grandrow' : undefined}><td className="l">{lbl}</td><td className="tot">{fmt(val)}</td><td className="ref">{pct(val)}</td></tr>
+
+  return (
+    <div className="panel">
+      <h3 style={{ color: marcaColor(marca) }}>Brand Contribution — {marca} <span className="unit">(2028 · solo lectura)</span></h3>
+      <div className="sub">Venta Neta = Unidades × AUP · Costo = Unidades × AUC · Margen Bruto = Venta Neta − Costo − Comisiones − Logística · Brand Contribution = Margen Bruto − Marketing − Viajes.</div>
+      {load ? <div className="sub">Cargando…</div> : (<>
+        <div className="tablewrap" style={{ maxWidth: 560 }}>
+          <table>
+            <thead><tr><th className="l">Concepto</th><th>Monto</th><th>% VN</th></tr></thead>
+            <tbody>
+              <tr><td className="l">Unidades</td><td className="tot">{fmt(unidades)}</td><td className="ref">—</td></tr>
+              {fila('Venta Neta', ventaNeta, true)}
+              {fila('(−) Costo', costo)}
+              {fila('(−) Comisiones', comisiones)}
+              {fila('(−) Logística', logistica)}
+              {fila('= Margen Bruto', margenBruto, true)}
+              {fila('(−) Marketing', marketing)}
+              {fila('(−) Viajes', viajes)}
+              {fila('= BRAND CONTRIBUTION', brand, true)}
+            </tbody>
+          </table>
+        </div>
+        {catList.length > 0 && <div className="tablewrap" style={{ marginTop: 14 }}>
+          <table>
+            <thead><tr><th className="l">Categoría</th><th>Peso %</th><th>Unidades</th><th>Venta Neta</th></tr></thead>
+            <tbody>
+              {catList.map(({ cat, peso }, i) => { const w = num(peso) / 100; const x = acat[cat] || []; let un = 0, vn = 0; for (let j = 0; j < 12; j++) { un += u[j] * w; vn += u[j] * w * (x[j] || 0) } return <tr key={i}><td className="l">{cat}</td><td>{num(peso).toFixed(1)}%</td><td className="tot">{fmt(un)}</td><td className="tot">{fmt(vn)}</td></tr> })}
+            </tbody>
+          </table>
+        </div>}
+        {(comisiones === 0) && <div className="sub" style={{ marginTop: 8 }}>Nota: Comisiones y Venta Bruta/Descuentos aún no se capturan por marca; se conectan cuando definamos esos campos.</div>}
+      </>)}
+    </div>
+  )
+}
+
 /* ===== COMBINACIONES ===== */
 function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, abrirHistorico }) {
   const [empresa, setEmpresa] = useState(empresas[0])
@@ -1033,7 +1135,18 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
     setSavingC(false)
   }
 
-  function seed(c) { const m = {}; ALL_MARCAS.forEach((mk) => { m[mk] = '' }); if (c) { SBU_NAMES.forEach((s) => (c[s] || []).forEach((mk) => { m[mk] = s })); (c['NO VENDE'] || []).forEach((mk) => { m[mk] = 'NO' }) } return m }
+  const [extraMarcas, setExtraMarcas] = useState([])
+  useEffect(() => { (async () => { try { const m = await gLoadMarcas(); setExtraMarcas(m); setAsign((prev) => seedWith(combos[empresa], [...ALL_MARCAS, ...m])) } catch { } })() }, [])
+  const allMarcas = [...new Set([...ALL_MARCAS, ...extraMarcas])]
+  function seedWith(c, lista) { const m = {}; lista.forEach((mk) => { m[mk] = '' }); if (c) { SBU_NAMES.forEach((s) => (c[s] || []).forEach((mk) => { m[mk] = s })); (c['NO VENDE'] || []).forEach((mk) => { m[mk] = 'NO' }) } return m }
+  function seed(c) { return seedWith(c, [...ALL_MARCAS, ...extraMarcas]) }
+  async function agregarMarca() {
+    const n = window.prompt('Nombre de la nueva marca:'); if (!n) return
+    const nm = n.trim().toUpperCase()
+    if (allMarcas.map((x) => x.toUpperCase()).includes(nm)) { setMsg({ t: 'warn', x: 'Esa marca ya existe.' }); return }
+    const next = [...extraMarcas, nm]; setExtraMarcas(next); setAsign({ ...asign, [nm]: '' })
+    try { await gSaveMarcas(next); setMsg({ t: 'ok', x: 'Marca agregada: ' + nm + '. Asígnala a una SBU y guarda.' }) } catch (e) { setMsg({ t: 'bad', x: 'No se pudo guardar la marca: ' + e.message }) }
+  }
   function cambiarEmpresa(e) { setEmpresa(e); setAsign(seed(combos[e])); setMsg(null) }
 
   async function guardar() {
@@ -1055,6 +1168,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
         <label>Empresa</label>
         <select value={empresa} onChange={(e) => cambiarEmpresa(e.target.value)}>{empresas.map((e) => <option key={e}>{e}</option>)}</select>
         <button className="btn" onClick={nuevaEmpresa}>＋ Nueva empresa</button>
+        <button className="btn" onClick={agregarMarca}>➕ Agregar marca</button>
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar combinaciones'}</button>
       </div>
@@ -1071,7 +1185,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
           <table>
             <thead><tr><th className="l">Marca</th><th>SBU asignada</th></tr></thead>
             <tbody>
-              {ALL_MARCAS.map((mk) => (
+              {allMarcas.map((mk) => (
                 <tr key={mk}><td className="l">{mk}</td><td>
                   <select value={asign[mk] || ''} onChange={(e) => setAsign({ ...asign, [mk]: e.target.value })}>
                     <option value="">— sin asignar —</option>
@@ -1371,9 +1485,10 @@ function HistoricoScreen() {
 }
 
 /* ===== DIRECTOR · Categorías por marca (peso %) ===== */
-function CategoriasForm({ role, usuario, empresa, sbus }) {
+function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const marcas = marcasDe(sbus)
-  const [marca, setMarca] = useState(marcas[0].marca)
+  const [marca, setMarca] = useState(fixedMarca || marcas[0].marca)
+  useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
   const [cats, setCats] = useState({})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -1401,8 +1516,8 @@ function CategoriasForm({ role, usuario, empresa, sbus }) {
   return (
     <>
       <div className="toolbar">
-        <label>Marca</label>
-        <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select>
+        {!fixedMarca && <><label>Marca</label>
+        <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select></>}
         <div className="spacer"></div>
         <button className="btn" onClick={() => setLista([...lista, { cat: '', peso: 0 }])}>➕ Agregar categoría</button>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>

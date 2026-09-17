@@ -130,6 +130,18 @@ export async function gSaveAdmins(emails) {
   return { ok: true }
 }
 
+/* Marcas personalizadas (además de las predefinidas) */
+export async function gLoadMarcas() {
+  const v = await readValues('Config_Marcas')
+  return v.slice(1).map((r) => String(r[0] || '').trim()).filter(Boolean)
+}
+export async function gSaveMarcas(list) {
+  await ensureTab('Config_Marcas', ['MARCA'])
+  await clearValues('Config_Marcas')
+  await writeValues('Config_Marcas', 'A1', [['MARCA'], ...list.filter(Boolean).map((m) => [String(m).trim()])])
+  return { ok: true }
+}
+
 export async function gLoadConfig() {
   const [emps, comb] = await Promise.all([readValues('Config_Empresas'), readValues('Config_Combinaciones')])
   const empresas = emps.slice(1).map((r) => r[0]).filter(Boolean)

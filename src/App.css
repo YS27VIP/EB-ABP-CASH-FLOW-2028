@@ -66,6 +66,14 @@ td.cell input:hover{border-color:var(--warn)}
 .cmz-marca:hover{background:#f2eef1}
 .cmz-marca.active{background:var(--odoo);color:#fff}
 .cmz-main{flex:1;min-width:0}
+/* En pantallas angostas o con zoom, el panel de marcas pasa arriba (nunca se pierde) */
+@media (max-width:900px){
+  .comercial{flex-direction:column}
+  .cmz-side{width:100%;flex:0 0 auto;position:static;max-height:none}
+  .cmz-sbu{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:0}
+  .cmz-sbu-h{width:100%}
+  .cmz-marca{display:inline-block;width:auto}
+}
 
 /* Insignia "para llenar" en títulos de bloques editables */
 .fill-badge{display:inline-block;margin-left:8px;font-size:11px;font-weight:700;color:#8a6d00;background:#fdf3cf;border:1px solid #efdd97;border-radius:12px;padding:1px 9px;vertical-align:middle}
