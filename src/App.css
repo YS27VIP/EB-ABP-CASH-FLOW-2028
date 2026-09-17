@@ -65,7 +65,7 @@ td.cell input:hover{border-color:var(--warn)}
 .cmz-marca{display:block;width:100%;text-align:left;background:transparent;border:none;border-radius:7px;padding:8px 10px;font:inherit;font-weight:600;color:var(--txt);cursor:pointer}
 .cmz-marca:hover{background:#f2eef1}
 .cmz-marca.active{background:var(--odoo);color:#fff}
-.cmz-main{flex:1;min-width:0}
+.cmz-main{flex:1;min-width:0;overflow-x:auto}
 /* En pantallas angostas o con zoom, el panel de marcas pasa arriba (nunca se pierde) */
 @media (max-width:900px){
   .comercial{flex-direction:column}
