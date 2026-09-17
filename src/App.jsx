@@ -948,6 +948,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       <div className="panel">
         <h3>{role.label} — Términos de pago y saldo por cliente <span className="unit">({isTotal ? `TOTAL ${sbu}` : marca})</span>{!isTotal && <span className="fill-badge">✏️ para llenar</span>}</h3>
         <div className="sub">Clientes con histórico 2025/2026 y nuevos clientes 2028 (capturados en Ventas). Elige el <b>término de pago</b> y el <b>saldo (deuda) estimado</b> con que cierra 2027 cada cliente.</div>
+        {!isTotal && buscador}
         {isTotal ? <div className="note warn">Selecciona una marca específica (arriba) para editar los términos de pago por cliente.</div> : (() => {
           const cls = clientesDe(marca).filter(matchCli)
           return (
@@ -993,6 +994,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           <div className="panel">
             <h3>{role.label} — Venta, cobro y saldo por cliente 2028 <span className="unit">({marca})</span></h3>
             <div className="sub">Por cada cliente: la <b>Venta</b> (Unidades×AUP) en el mes que ocurre, el <b>Cobro</b> cuando entra según su término (Cash=mismo mes · 30d=+1 · 60=+2 · 90=+3 …), y el <b>Saldo</b> que va quedando. La columna <b style={{ background: SI, padding: '1px 6px', borderRadius: 4 }}>Saldo inicial</b> (deuda cierre 2027) la <b>llena Finanzas</b>.</div>
+            {buscador}
             <div className="tablewrap">
               <table className="vfix"><colgroup><col style={{ width: '210px' }} /><col style={{ width: '96px' }} />{CF_M2028.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
                 <thead><tr><th className="l">Cliente / concepto</th><th style={{ background: SI }}>Saldo inicial</th>{CF_M2028.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
@@ -2104,6 +2106,14 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const lista = cats[marca] || []
   const setLista = (arr) => setCats({ ...cats, [marca]: arr })
   const suma = lista.reduce((s, o) => s + num(o.peso), 0)
+  // Clientes de la marca (para el % por cliente) + referencia FW26/SS26
+  const [hist, setHist] = useState([]); const [ventasR, setVentasR] = useState([])
+  useEffect(() => { (async () => { try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { } try { const j2 = await gReadTab('Cap_Ventas'); if (j2 && j2.ok && j2.values) setVentasR(j2.values.slice(1)) } catch { } })() }, [empresa])
+  const [catPct, setCatPct] = useState(() => { try { return JSON.parse(localStorage.getItem('catpct_' + empresa) || '{}') } catch { return {} } })
+  useEffect(() => { try { localStorage.setItem('catpct_' + empresa, JSON.stringify(catPct)) } catch { } }, [catPct, empresa])
+  const clientes = (() => { const set = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(marca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) set.add(cli) }); ventasR.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; const cli = String(r[1] || '').trim(); if (cli) set.add(cli) }); return [...set].sort((a, b) => a.localeCompare(b)) })()
+  const pctKey = (cli, cat) => cli + '|' + marca + '|' + cat
+  const setPct = (cli, cat, v) => setCatPct({ ...catPct, [pctKey(cli, cat)]: v })
   async function guardar() {
     setSaving(true); setMsg(null)
     const sbu = sbuDe(sbus, marca)
@@ -2141,6 +2151,24 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
           </table>
         </div>
       </div>
+      {usarCat && lista.length > 0 && <div className="panel">
+        <h3>Categorías por cliente — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">Completa el <b>% por cliente y categoría</b>. Debajo del campo ves el <b>peso de referencia real</b> (FW26 / SS26) para decidir con números. Si dejas los % en blanco, se reparte con los pesos de arriba.</div>
+        <div className="tablewrap">
+          <table style={{ tableLayout: 'fixed', width: 'auto' }}>
+            <colgroup><col style={{ width: '260px' }} />{lista.map((c) => <col key={c.cat} style={{ width: '132px' }} />)}</colgroup>
+            <thead><tr><th className="l">Cliente</th>{lista.map((c) => <th key={c.cat}>{c.cat}<div className="unit" style={{ fontWeight: 500 }}>peso {num(c.peso).toFixed(0)}%</div></th>)}</tr></thead>
+            <tbody>
+              {clientes.length === 0 && <tr><td className="l" colSpan={lista.length + 1}>No hay clientes con histórico para {marca}.</td></tr>}
+              {clientes.map((cli) => <tr key={cli}><td className="l">{cli}</td>{lista.map((c) => { const ref = refCat(marca, cli, c.cat); return (
+                <td key={c.cat} style={{ textAlign: 'center' }}>
+                  <div className="cell" style={{ display: 'inline-block' }}><input value={catPct[pctKey(cli, c.cat)] ?? ''} onChange={(e) => setPct(cli, c.cat, e.target.value)} inputMode="decimal" placeholder="%" style={{ width: 54 }} /></div>
+                  <div className="unit" style={{ fontSize: 10, marginTop: 3, whiteSpace: 'nowrap' }}>{ref ? <>ref FW26 {ref.fw != null ? ref.fw + '%' : '—'} · SS26 {ref.ss != null ? ref.ss + '%' : '—'}</> : 'ref —'}</div>
+                </td>) })}</tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>}
     </>
   )
 }
@@ -2245,24 +2273,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar marca'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      {usarCat && <div className="panel">
-        <h3>Categorías por cliente — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">Completa el <b>% por cliente y categoría</b>. Debajo del campo ves el <b>peso de referencia real</b> (FW26 / SS26) para decidir con números. Si dejas los % en blanco, se reparte con los pesos del Director.</div>
-        <div className="tablewrap">
-          <table style={{ tableLayout: 'fixed', width: 'auto' }}>
-            <colgroup><col style={{ width: '260px' }} />{catList.map((c) => <col key={c.cat} style={{ width: '132px' }} />)}</colgroup>
-            <thead><tr><th className="l">Cliente</th>{catList.map((c) => <th key={c.cat}>{c.cat}<div className="unit" style={{ fontWeight: 500 }}>peso Dir {num(c.peso).toFixed(0)}%</div></th>)}</tr></thead>
-            <tbody>
-              {clientes.length === 0 && <tr><td className="l" colSpan={catList.length + 1}>No hay clientes con histórico para {marca}.</td></tr>}
-              {clientes.map((cli) => <tr key={cli}><td className="l">{cli}</td>{catList.map((c) => { const ref = refCat(marca, cli, c.cat); return (
-                <td key={c.cat} style={{ textAlign: 'center' }}>
-                  <div className="cell" style={{ display: 'inline-block' }}><input value={catPct[pctKey(cli, c.cat)] ?? ''} onChange={(e) => setPct(cli, c.cat, e.target.value)} inputMode="decimal" placeholder="%" style={{ width: 54 }} /></div>
-                  <div className="unit" style={{ fontSize: 10, marginTop: 3, whiteSpace: 'nowrap' }}>{ref ? <>ref FW26 {ref.fw != null ? ref.fw + '%' : '—'} · SS26 {ref.ss != null ? ref.ss + '%' : '—'}</> : 'ref —'}</div>
-                </td>) })}</tr>)}
-            </tbody>
-          </table>
-        </div>
-      </div>}
+      {usarCat && <div className="note ok" style={{ marginBottom: 14 }}>Las <b>categorías por cliente</b> (y su % + referencia FW26/SS26) ahora las llena el <b>Director</b> en su pestaña <b>Categorías</b>. Aquí solo se usan para repartir las unidades.</div>}
 
       <div className="panel">
         <h3>Unidades 2028 por categoría y mes — {marca}</h3>
