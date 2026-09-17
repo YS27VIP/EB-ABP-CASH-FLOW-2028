@@ -918,6 +918,8 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
   const comercialRoles = ['ventas', 'producto', 'logistica'].map((id) => ROLES.find((r) => r.id === id))
   const SECS = [{ id: 'comercial', icon: '🧭', label: 'Comercial' }, ROLES.find((r) => r.id === 'marketing'), ROLES.find((r) => r.id === 'director')]
   const [secId, setSecId] = useState('comercial')
+  const [comMode, setComMode] = useState('ambas') // 'ud' | '$' | 'ambas'
+  const filtRubros = (r) => comMode === 'ambas' ? r.rubros : r.rubros.filter((rb) => comMode === 'ud' ? rb.u === 'ud' : rb.u !== 'ud')
   const [marca, setMarca] = useState('__TOTAL__')
   const [totTab, setTotTab] = useState('brand')
   const cashRole = { label: 'Cash Flow', tab: 'Cap_Finanzas' }
@@ -971,11 +973,17 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
               : secId === 'viajes'
               ? <ViajesEquipo empresa={empresa} marca={marca} sbuName={sbuName} marcasSBU={marcasSBU} />
               : secId === 'comercial'
-              ? comercialRoles.map((r) => (
-                <div key={r.id} style={{ marginBottom: 18 }}>
-                  <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
-                  <RoleForm key={sbuName + r.id + marca} role={r} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />
-                </div>))
+              ? (<>
+                <div className="toolbar" style={{ marginBottom: 12, gap: 6 }}>
+                  <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>Ver:</span>
+                  {[['ud', '🔢 Unidades'], ['$', '💲 Plata'], ['ambas', '🔢💲 Ambas']].map(([m, lbl]) => <button key={m} className={'seg' + (comMode === m ? ' active' : '')} onClick={() => setComMode(m)} style={comMode === m ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{lbl}</button>)}
+                </div>
+                {comercialRoles.map((r) => { const rbs = filtRubros(r); if (!rbs.length) return null; return (
+                  <div key={r.id} style={{ marginBottom: 18 }}>
+                    <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
+                    <RoleForm key={sbuName + r.id + marca + comMode} role={r} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} rubrosOverride={rbs} />
+                  </div>) })}
+              </>)
               : <RoleForm key={sbuName + secId + marca} role={role} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
           </>)}
       </div>
