@@ -27,7 +27,7 @@ export function initAuth() {
         _tokenClient = window.google.accounts.oauth2.initTokenClient({
           client_id: CLIENT_ID, scope: SCOPES,
           callback: async (resp) => {
-            if (resp && resp.access_token) { _token = resp.access_token; await _fetchUser(); _emit() }
+            if (resp && resp.access_token) { _token = resp.access_token; try { localStorage.setItem('abp_granted', '1') } catch { } await _fetchUser(); _emit() }
           },
         })
         resolve()
@@ -36,7 +36,7 @@ export function initAuth() {
   })
   return _authReady
 }
-export function signIn() { if (_tokenClient) _tokenClient.requestAccessToken({ prompt: _token ? '' : 'consent' }) }
+export function signIn() { if (!_tokenClient) return; let granted = false; try { granted = !!localStorage.getItem('abp_granted') } catch { } _tokenClient.requestAccessToken({ prompt: granted ? '' : 'consent' }) }
 export function signOut() { _token = null; _email = null; _name = null; _emit() }
 
 async function _fetchUser() {
@@ -93,6 +93,8 @@ let _histCache = null, _histAt = 0
 export async function gHistorico() {
   if (_histCache && Date.now() - _histAt < 60000) return { ok: true, values: _histCache }
   const out = [HIST_HEAD]
+  // Otras empresas (TUMAR, TAHO, …): histórico importado por Excel y guardado en la hoja Historico (todo lo que NO sea ENERGY BRANDS).
+  try { const tab = await readValues('Historico'); tab.slice(1).forEach((r) => { if (String(r[0] || '').trim().toUpperCase() !== 'ENERGY BRANDS') out.push(r) }) } catch { }
   for (const t of EBP_TABS) {
     const rows = await readValuesFrom(EBP_SHEET_ID, t.name)
     let hr = -1

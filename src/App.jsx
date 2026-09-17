@@ -16,6 +16,12 @@ const SBU_NAMES = ['SBU 1', 'SBU 2', 'SBU 3']
 /* Empresas del grupo (el nombre debe coincidir con la columna EMPRESA del Histórico). */
 const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO']
 
+/* Colores por SBU y por marca (identidad visual dinámica) */
+const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'RETAIL': '#be123c', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
+const sbuColor = (s) => SBU_COLORS[String(s || '').toUpperCase()] || '#0e7490'
+const MARCA_PALETTE = ['#0891b2', '#0d9488', '#2563eb', '#7c3aed', '#db2777', '#ea580c', '#ca8a04', '#16a34a', '#dc2626', '#4f46e5', '#0ea5e9', '#059669', '#9333ea', '#e11d48', '#f59e0b', '#14b8a6', '#6366f1', '#c026d3']
+const marcaColor = (marca) => { let h = 0; const s = String(marca || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return MARCA_PALETTE[h % MARCA_PALETTE.length] }
+
 /* Desglose de Marketing */
 const MK_GROUPS = [
   { g: 'ATL', items: [{ c: '301', n: 'OOH' }, { c: '302', n: 'DOOH' }] },
@@ -42,7 +48,7 @@ const ROLES = [
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
   { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [VJ, { k: 'CASH FLOW', u: '$', cash: true }] },
-  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#8f4b7e', tab: 'Cap_Director',  rubros: [VJ, { k: 'CASH FLOW', u: '$', cash: true }, { k: 'CATEGORIAS', cat: true }] },
+  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [VJ, { k: 'CASH FLOW', u: '$', cash: true }, { k: 'CATEGORIAS', cat: true }] },
 ]
 const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
 
@@ -207,7 +213,7 @@ export default function App() {
           </div>
           <div className="apps">
             {(puede('Ventas') || puede('Producto') || puede('Logística')) && <button className="app" onClick={() => setRoleId('comercial')}>
-              <span className="appicon" style={{ background: '#714B67' }}>🧭</span>
+              <span className="appicon" style={{ background: 'linear-gradient(135deg,#0891b2,#10b981)' }}>🧭</span>
               <span className="applabel">Comercial</span>
             </button>}
             {ROLES.filter((r) => puede(r.label)).map((r) => (
@@ -243,7 +249,7 @@ export default function App() {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
-          <span className="rolechip" style={{ background: '#714B67' }}>🧭 Comercial</span>
+          <span className="rolechip" style={{ background: '#0891b2' }}>🧭 Comercial</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
         <main><ComercialScreen empresa={empresa} sbus={sbus} usuario={usuario} /></main>
       </>
@@ -820,10 +826,12 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
   )
 }
 
-/* ===== COMERCIAL: panel por marca (SBU→marca a la izquierda, secciones a la derecha) ===== */
+/* ===== COMERCIAL: navegación por SBU (SBU arriba, marcas al lado, secciones a la derecha) ===== */
 function ComercialScreen({ empresa, sbus, usuario }) {
-  const marcas = marcasDe(sbus)
-  const [marca, setMarca] = useState(marcas[0] ? marcas[0].marca : '')
+  const sbuNames = Object.keys(sbus)
+  const TOPS = [...sbuNames, 'Retail', 'Gerencia']
+  const [top, setTop] = useState(sbuNames[0] || 'Gerencia')
+  const [marca, setMarca] = useState('__TOTAL__') // por defecto, resumen de la SBU
   const [sec, setSec] = useState('Ventas')
   const [data, setData] = useState({})
   const [saving, setSaving] = useState(false)
@@ -831,35 +839,56 @@ function ComercialScreen({ empresa, sbus, usuario }) {
   const rProd = ROLES.find((r) => r.id === 'producto')
   const rLog = ROLES.find((r) => r.id === 'logistica')
   const rVen = ROLES.find((r) => r.id === 'ventas')
-  const common = { empresa, sbus, usuario, data, setData, saving, setSaving, setMsg, fixedMarca: marca }
   const SECS = ['Ventas', 'AUP', 'AUC', 'Inventario', 'Logística']
+  const esSBU = sbuNames.includes(top)
+  const marcasSBU = esSBU ? (sbus[top] || []) : []
+  const acc = marca === '__TOTAL__' ? sbuColor(top) : marcaColor(marca)
+  const common = { empresa, sbus, usuario, data, setData, saving, setSaving, setMsg, fixedMarca: marca }
+
   return (
-    <div className="comercial">
-      <aside className="cmz-side">
-        {Object.entries(sbus).map(([s, ms]) => (
-          <div key={s} className="cmz-sbu">
-            <div className="cmz-sbu-h">{s}</div>
-            {ms.map((m) => <button key={m} className={'cmz-marca' + (m === marca ? ' active' : '')} onClick={() => setMarca(m)}>{m}</button>)}
-          </div>
-        ))}
-      </aside>
-      <div className="cmz-main">
-        <div className="toolbar" style={{ marginBottom: 8 }}>
-          <span className="empchip" style={{ background: 'var(--odoo)', marginLeft: 0 }}>{marca}</span>
-          {SECS.map((k) => <button key={k} className={'seg' + (k === sec ? ' active' : '')} onClick={() => { setSec(k); setMsg(null) }}>{k}</button>)}
-        </div>
-        {sec === 'Ventas' && <ProjectionForm role={rVen} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={marca} />}
-        {sec === 'AUP' && <CatCaptureForm role={rProd} rubro={{ k: 'AUP', u: '$', porCat: true }} {...common} />}
-        {sec === 'AUC' && <SimpleForm role={rProd} rubro={{ k: 'AUC', u: '$' }} {...common} />}
-        {sec === 'Inventario' && <SimpleForm role={rProd} rubro={{ k: 'INVENTARIO COMPRAS', u: '$' }} {...common} />}
-        {sec === 'Logística' && <SimpleForm role={rLog} rubro={{ k: 'LOGISTICA', u: '$' }} {...common} />}
+    <>
+      {/* Selector superior de SBU / Retail / Gerencia */}
+      <div className="toolbar" style={{ marginBottom: 12, gap: 8 }}>
+        {TOPS.map((s) => { const on = s === top; const c = sbuColor(s); return <button key={s} className={'seg' + (on ? ' active' : '')} onClick={() => { setTop(s); setMarca('__TOTAL__'); setMsg(null) }} style={on ? { background: c, borderColor: c, color: '#fff' } : { borderColor: c, color: c }}>{s}</button> })}
       </div>
-    </div>
+
+      {top === 'Gerencia' ? <GerenciaScreen empresa={empresa} sbus={sbus} />
+        : top === 'Retail' ? (
+          <div className="panel">
+            <h3 style={{ color: sbuColor('Retail') }}>Retail — tiendas propias</h3>
+            <div className="note warn">Retail le compra internamente a las SBU (venta intercompañía). Para activarlo necesito definir el <b>precio de transferencia</b> (margen fijo, % sobre costo o AUP interno). En cuanto lo definamos, aquí verás la captura y el consolidado de Retail. 🏬</div>
+          </div>
+        ) : (
+          <div className="comercial">
+            <aside className="cmz-side">
+              <div className="cmz-sbu">
+                <div className="cmz-sbu-h" style={{ color: sbuColor(top), borderLeft: '4px solid ' + sbuColor(top), paddingLeft: 8 }}>{top}</div>
+                <button className={'cmz-marca' + (marca === '__TOTAL__' ? ' active' : '')} onClick={() => setMarca('__TOTAL__')} style={marca === '__TOTAL__' ? { background: sbuColor(top), color: '#fff' } : {}}>▣ TOTAL SBU</button>
+                {marcasSBU.map((m) => { const c = marcaColor(m); const on = m === marca; return <button key={m} className={'cmz-marca' + (on ? ' active' : '')} onClick={() => setMarca(m)} style={on ? { background: c, color: '#fff' } : {}}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: c, marginRight: 8, verticalAlign: 'middle' }}></span>{m}</button> })}
+              </div>
+            </aside>
+            <div className="cmz-main" style={{ '--accent': acc, borderTop: '4px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
+              {marca === '__TOTAL__' ? <GerenciaScreen empresa={empresa} sbus={sbus} soloSBU={top} />
+                : (<>
+                  <div className="toolbar" style={{ marginBottom: 8 }}>
+                    <span className="empchip" style={{ background: acc, marginLeft: 0 }}>{marca}</span>
+                    {SECS.map((k) => <button key={k} className={'seg' + (k === sec ? ' active' : '')} onClick={() => { setSec(k); setMsg(null) }} style={k === sec ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{k}</button>)}
+                  </div>
+                  {sec === 'Ventas' && <ProjectionForm role={rVen} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={marca} />}
+                  {sec === 'AUP' && <CatCaptureForm role={rProd} rubro={{ k: 'AUP', u: '$', porCat: true }} {...common} />}
+                  {sec === 'AUC' && <SimpleForm role={rProd} rubro={{ k: 'AUC', u: '$' }} {...common} />}
+                  {sec === 'Inventario' && <SimpleForm role={rProd} rubro={{ k: 'INVENTARIO COMPRAS', u: '$' }} {...common} />}
+                  {sec === 'Logística' && <SimpleForm role={rLog} rubro={{ k: 'LOGISTICA', u: '$' }} {...common} />}
+                </>)}
+            </div>
+          </div>
+        )}
+    </>
   )
 }
 
 /* ===== GERENCIA: consolidado de solo lectura por SBU y marca ===== */
-function GerenciaScreen({ empresa, sbus }) {
+function GerenciaScreen({ empresa, sbus, soloSBU }) {
   const [ventas, setVentas] = useState([])
   const [producto, setProducto] = useState([])
   const [cats, setCats] = useState({})
@@ -892,14 +921,14 @@ function GerenciaScreen({ empresa, sbus }) {
   return (
     <>
       <div className="panel">
-        <h3>Gerencia — consolidado {empresa} <span className="unit">(solo lectura · 2028)</span></h3>
+        <h3>{soloSBU ? `Resumen ${soloSBU}` : 'Gerencia — consolidado ' + empresa} <span className="unit">(solo lectura · 2028)</span></h3>
         <div className="sub">Venta Neta = Unidades × AUP · Costo = Unidades × AUC · Margen = Venta − Costo · Inventario = compras del año. AUP/AUC son promedios ponderados.</div>
         {cargando ? <div className="sub">Cargando…</div> : (
           <div className="tablewrap">
             <table>
               <thead><tr><th className="l">SBU / Marca</th><th>Unidades</th><th>AUP</th><th>AUC</th><th>Venta Neta</th><th>Costo</th><th>Margen</th><th>Margen %</th><th>Inventario</th></tr></thead>
               <tbody>
-                {Object.entries(sbus).map(([s, ms]) => {
+                {Object.entries(sbus).filter(([s]) => !soloSBU || s === soloSBU).map(([s, ms]) => {
                   let sub = { ...zero }
                   const filas = ms.map((m) => { const mm = metrics(m); sub = acc(sub, mm); return <tr key={m}><td className="l">{m}</td>{cols(mm)}</tr> })
                   const subf = fin(sub); grand = acc(grand, sub)
@@ -908,7 +937,7 @@ function GerenciaScreen({ empresa, sbus }) {
                     {filas}
                   </Fragment2>
                 })}
-                <tr className="grandrow"><td className="l">TOTAL {empresa}</td>{cols(fin(grand))}</tr>
+                {!soloSBU && <tr className="grandrow"><td className="l">TOTAL {empresa}</td>{cols(fin(grand))}</tr>}
               </tbody>
             </table>
           </div>

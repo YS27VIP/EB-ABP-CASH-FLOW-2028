@@ -1,46 +1,77 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
-/* Asistente jovial de ayuda (sin servidor): responde dudas frecuentes de la herramienta. */
-const FAQ = [
-  { q: '¿Cómo lleno mi información?', a: 'Elige tu área en el menú (Ventas, Producto, Marketing…), selecciona la marca arriba y escribe en las celdas de color. Al terminar pulsa 💾 Guardar. ¡Listo!' },
-  { q: '¿Qué significa el lápiz ✏️?', a: 'Los bloques con ✏️ "para llenar" son los que TÚ debes capturar. Los que tienen 👁️ o no tienen ícono son solo de lectura (se calculan solos).' },
-  { q: '¿Cómo veo el total de una SBU?', a: 'En los bloques por marca, en el selector de marca elige "▣ TOTAL SBU". Verás la suma de todas las marcas de esa SBU (solo lectura).' },
-  { q: '¿Cómo funciona la escalera de cobros?', a: 'Cada venta (Unidades × AUP) se cobra según el término de pago del cliente: Cash = mismo mes, 30 días = el mes siguiente, 60 = +2 meses, etc. El total por mes llena solo la línea "Cash In" del cash flow.' },
-  { q: 'No veo una sección que necesito', a: 'Tu acceso lo define el administrador en Combinaciones → Colaboradores. Pídele que active la pestaña que necesitas para tu correo.' },
-  { q: '¿Se guarda automáticamente?', a: 'Se guarda cuando pulsas 💾 Guardar. Todo va directo al Google Sheet del ABP, así que tu equipo lo ve al instante desde cualquier PC.' },
-  { q: '¿Cómo cambio de empresa?', a: 'En el menú principal, usa el selector "Empresa" (TUMAR, ENERGY BRANDS, TAHO…). Cada empresa tiene su propia información.' },
-  { q: '¿De dónde sale el histórico?', a: 'El histórico se lee en vivo del libro EBP. Conforme avanzas mes a mes en el EBP, aquí se actualiza solo.' },
+/* Kai: asistente jovial tipo chat (sin servidor). Busca por palabras clave y explica de dónde sale / cómo se calcula cada dato. */
+const KB = [
+  { k: ['venta neta', 'ventas', 'como se calcula la venta', 'venta'], a: '💰 La Venta Neta = Unidades 2028 × AUP. Las unidades las captura Ventas; el AUP lo captura Producto (por categoría). Lo ves consolidado en Gerencia y en Ventas.' },
+  { k: ['costo', 'auc'], a: '📦 El Costo = Unidades × AUC. El AUC (costo promedio por unidad) lo captura Producto. En Gerencia lo ves por marca y SBU.' },
+  { k: ['margen', 'utilidad', 'ganancia'], a: '📊 El Margen = Venta Neta − Costo. El Margen % = Margen ÷ Venta. Todo se arma solo en el tablero de Gerencia.' },
+  { k: ['aup', 'precio'], a: '🏷️ El AUP es el precio promedio por unidad, y se captura por categoría en Producto. El AUP ponderado usa los pesos de categoría que define el Director.' },
+  { k: ['unidades', 'proyeccion', 'crecimiento', 'como proyecto'], a: '📈 Las Unidades 2028 salen del histórico por cliente × (1 + % de crecimiento) que pones en Ventas. Un solo % por cliente y se aplica a todos los meses.' },
+  { k: ['categoria', 'categorias', 'peso', 'director'], a: '🗂️ El Director define las categorías de cada marca y su peso %. En Ventas marcas en cuáles categorías participa cada cliente; con eso se reparten las unidades y la venta por categoría.' },
+  { k: ['escalera', 'cobro', 'cobros', 'cash in', 'termino de pago', 'terminos'], a: '🪜 La escalera de cobros: cada venta se cobra según el término del cliente (Cash = mismo mes, 30 días = +1 mes, 60 = +2, etc.). El total por mes llena solo la línea Cash In del cash flow.' },
+  { k: ['historico', 'ebp', 'septiembre', 'de donde sale el historico'], a: '🕒 El histórico se lee EN VIVO del libro EBP. Conforme avanzas mes a mes en el EBP, aquí se actualiza solo (hasta ~1 min de diferencia).' },
+  { k: ['inventario', 'compras', 'stock'], a: '📥 El Inventario/Compras lo captura Producto por marca y mes. En Gerencia se muestra como el inventario del año.' },
+  { k: ['cash flow', 'flujo', 'saldo', 'saldo 2027'], a: '💵 En Finanzas → Cash Flow capturas por concepto y mes. El saldo (deuda) cierre 2027 por cliente alimenta el Cash In de Dic-27, y las ventas 2028 alimentan los cobros por la escalera.' },
+  { k: ['lleno', 'como lleno', 'capturar', 'donde escribo'], a: '✏️ Elige tu área en el menú, selecciona la marca arriba, y escribe en las celdas de color (las que tienen ✏️ "para llenar"). Al terminar pulsa 💾 Guardar.' },
+  { k: ['no veo', 'acceso', 'permiso', 'seccion', 'falta'], a: '🔒 Lo que ves depende de tu acceso, que define el administrador en Combinaciones → Colaboradores. Si te falta una sección, pídesela.' },
+  { k: ['total sbu', 'todas las marcas', 'total'], a: '▣ En los bloques por marca, elige "TOTAL SBU" en el selector para ver la suma de todas las marcas de esa SBU (solo lectura).' },
+  { k: ['guardar', 'se guarda', 'guarda solo'], a: '💾 Se guarda cuando pulsas Guardar. Todo va directo al Google Sheet, así tu equipo lo ve al instante desde cualquier PC.' },
+  { k: ['empresa', 'cambiar empresa', 'tumar', 'taho'], a: '🏢 Cambia de empresa con el selector "Empresa" en el menú (TUMAR, ENERGY BRANDS, TAHO…). Cada una tiene su propia información.' },
+  { k: ['color', 'colores', 'marca color'], a: '🎨 Cada SBU y cada marca tienen su color. Al elegir una marca, la vista se pinta con ese color para que ubiques rápido en qué estás trabajando.' },
 ]
+const GREET = '¡Hola! 👋 Soy Kai, tu asistente del ABP. Pregúntame lo que quieras: cómo llenar algo, de dónde sale un dato o cómo se calcula. También puedes tocar una pregunta rápida 👇'
+const CHIPS = ['¿Cómo se calcula la venta neta?', '¿De dónde sale el histórico?', '¿Cómo funciona la escalera de cobros?', '¿Qué lleno yo?']
+
+function responder(txt) {
+  const t = (txt || '').toLowerCase()
+  let best = null, score = 0
+  KB.forEach((e) => { let s = 0; e.k.forEach((kw) => { if (t.includes(kw)) s += kw.length }); if (s > score) { score = s; best = e } })
+  return best ? best.a : 'Mmm, no estoy seguro de esa 🤔. Prueba con otras palabras (venta, costo, margen, AUP, unidades, categorías, cobros, histórico, inventario) o pregúntale al administrador del ABP.'
+}
 
 export default function HelpBot() {
   const [open, setOpen] = useState(false)
-  const [sel, setSel] = useState(null)
+  const [msgs, setMsgs] = useState([{ from: 'bot', text: GREET }])
+  const [inp, setInp] = useState('')
+  const endRef = useRef(null)
+  useEffect(() => { if (open && endRef.current) endRef.current.scrollIntoView({ behavior: 'smooth' }) }, [msgs, open])
+  const send = (text) => {
+    const q = (text != null ? text : inp).trim(); if (!q) return
+    setInp('')
+    setMsgs((m) => [...m, { from: 'user', text: q }])
+    setTimeout(() => setMsgs((m) => [...m, { from: 'bot', text: responder(q) }]), 350)
+  }
+  const G = 'linear-gradient(135deg,#0891b2,#10b981)'
   const S = {
-    fab: { position: 'fixed', right: 20, bottom: 20, zIndex: 9999, width: 60, height: 60, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg,#714B67,#017e84)', color: '#fff', fontSize: 28, boxShadow: '0 6px 20px rgba(0,0,0,.25)' },
-    panel: { position: 'fixed', right: 20, bottom: 92, zIndex: 9999, width: 340, maxWidth: 'calc(100vw - 40px)', maxHeight: '70vh', display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, boxShadow: '0 14px 40px rgba(0,0,0,.22)', overflow: 'hidden', fontSize: 14 },
-    head: { background: 'linear-gradient(135deg,#714B67,#017e84)', color: '#fff', padding: '14px 16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 },
-    body: { padding: 14, overflow: 'auto' },
-    q: { display: 'block', width: '100%', textAlign: 'left', background: '#f5f6f8', border: '1px solid #e5e7eb', borderRadius: 10, padding: '9px 11px', marginBottom: 8, cursor: 'pointer', font: 'inherit', color: '#2b2b33', fontWeight: 600 },
-    a: { background: '#eef7f7', border: '1px solid #bfe3e5', borderRadius: 10, padding: '11px 13px', margin: '2px 0 12px', lineHeight: 1.5, color: '#204b4d' },
-    back: { background: 'transparent', border: 'none', color: '#017e84', fontWeight: 700, cursor: 'pointer', padding: 0, marginBottom: 10, font: 'inherit' },
+    fab: { position: 'fixed', right: 20, bottom: 20, zIndex: 9999, width: 62, height: 62, borderRadius: '50%', border: 'none', cursor: 'pointer', background: G, color: '#fff', fontSize: 28, boxShadow: '0 6px 20px rgba(0,0,0,.25)' },
+    panel: { position: 'fixed', right: 20, bottom: 94, zIndex: 9999, width: 360, maxWidth: 'calc(100vw - 40px)', height: '70vh', maxHeight: 560, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 18, boxShadow: '0 16px 44px rgba(0,0,0,.24)', overflow: 'hidden', fontSize: 14 },
+    head: { background: G, color: '#fff', padding: '13px 16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 },
+    body: { flex: 1, overflow: 'auto', padding: 14, background: '#f7fafb' },
+    bot: { background: '#e6f6f6', color: '#134e4a', borderRadius: '12px 12px 12px 3px', padding: '10px 12px', margin: '6px 0', maxWidth: '85%', lineHeight: 1.5 },
+    user: { background: '#0891b2', color: '#fff', borderRadius: '12px 12px 3px 12px', padding: '10px 12px', margin: '6px 0 6px auto', maxWidth: '85%', lineHeight: 1.5 },
+    chips: { padding: '0 14px 8px', display: 'flex', flexWrap: 'wrap', gap: 6, background: '#f7fafb' },
+    chip: { background: '#fff', border: '1px solid #bfe3e5', color: '#0e7490', borderRadius: 14, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+    foot: { display: 'flex', gap: 6, padding: 10, borderTop: '1px solid #eee', background: '#fff' },
+    input: { flex: 1, border: '1px solid #d7dde3', borderRadius: 20, padding: '9px 13px', font: 'inherit', outline: 'none' },
+    snd: { background: G, color: '#fff', border: 'none', borderRadius: 20, padding: '0 16px', fontWeight: 700, cursor: 'pointer' },
   }
   return (
     <>
       {open && (
         <div style={S.panel}>
-          <div style={S.head}><span style={{ fontSize: 22 }}>🤖</span> <div><div>Kai · tu asistente ABP</div><div style={{ fontSize: 11, fontWeight: 500, opacity: .9 }}>¿En qué te ayudo?</div></div></div>
+          <div style={S.head}><span style={{ fontSize: 22 }}>🤖</span><div style={{ flex: 1 }}><div>Kai · asistente ABP</div><div style={{ fontSize: 11, fontWeight: 500, opacity: .9 }}>en línea · te ayuda al instante</div></div><span onClick={() => setOpen(false)} style={{ cursor: 'pointer', fontSize: 18 }}>✕</span></div>
           <div style={S.body}>
-            {sel == null ? FAQ.map((f, i) => <button key={i} style={S.q} onClick={() => setSel(i)}>{f.q}</button>)
-              : (<>
-                <button style={S.back} onClick={() => setSel(null)}>← Volver a las preguntas</button>
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>{FAQ[sel].q}</div>
-                <div style={S.a}>{FAQ[sel].a}</div>
-              </>)}
-            <div style={{ fontSize: 12, color: '#8a8f99', marginTop: 4 }}>¿Necesitas algo más? Escríbele al administrador del ABP. 😊</div>
+            {msgs.map((m, i) => <div key={i} style={m.from === 'bot' ? S.bot : S.user}>{m.text}</div>)}
+            <div ref={endRef} />
+          </div>
+          {msgs.length <= 1 && <div style={S.chips}>{CHIPS.map((c) => <span key={c} style={S.chip} onClick={() => send(c)}>{c}</span>)}</div>}
+          <div style={S.foot}>
+            <input style={S.input} value={inp} onChange={(e) => setInp(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send() }} placeholder="Escríbeme tu pregunta…" />
+            <button style={S.snd} onClick={() => send()}>➤</button>
           </div>
         </div>
       )}
-      <button style={S.fab} onClick={() => setOpen((o) => !o)} title="Ayuda">{open ? '✕' : '🤖'}</button>
+      <button style={S.fab} onClick={() => setOpen((o) => !o)} title="Ayuda de Kai">{open ? '✕' : '🤖'}</button>
     </>
   )
 }
