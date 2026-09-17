@@ -47,8 +47,8 @@ const ROLES = [
   { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP', u: '$', porCat: true }, { k: 'AUC', u: '$' }, VJ, { k: 'INVENTARIO COMPRAS', u: '$', temporada: true }] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
-  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [VJ, { k: 'CASH FLOW', u: '$', cash: true }] },
-  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [VJ, { k: 'CASH FLOW', u: '$', cash: true }, { k: 'CATEGORIAS', cat: true }] },
+  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ] },
+  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'CATEGORIAS', cat: true }] },
 ]
 const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
 
@@ -734,6 +734,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [msg, setMsg] = useState(null)
   const [openCostos, setOpenCostos] = useState(false)
   const [desglose, setDesglose] = useState(false)
+  const [buscar, setBuscar] = useState('')
+  const matchCli = (cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0
   const stKey = `cf_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [hist, setHist] = useState([])
@@ -802,24 +804,26 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
 
   // Venta Neta 2028 = Σ unidades (Ventas) × AUP (Producto), por mes. Ambos salen de Comercial.
   const ventaNetaMes = (mca) => { const uni = unidades2028(mca), aup = aupMarca(mca); return MESES.map((_, m) => Object.keys(uni).reduce((a, cli) => a + (uni[cli][m] || 0), 0) * (aup[m] || 0)) }
-  const VENTAS_NETAS = 'Ventas Netas', COMPRAS_FD = 'Compras (Fecha disponible)'
-  const esCalcComercial = (it) => it === VENTAS_NETAS || it === COMPRAS_FD
+  // Inventario (de Producto): saldo en unidades × AUC. Inicial del mes = saldo del mes anterior.
+  const invFinUsd = (mca) => { const { saldoUnits } = inventarioCalc(temp, mca); const auc = aucMes(mca); return MESES.map((_, m) => saldoUnits[m] * (auc[m] || 0)) }
+  const invIniUsd = (mca) => { const { saldoUnits } = inventarioCalc(temp, mca); const auc = aucMes(mca); const kk = invKeys(mca); const opening = SEASONS.reduce((a, s) => a + num(temp[kk.II(s)]), 0); return MESES.map((_, m) => (m === 0 ? opening : saldoUnits[m - 1]) * (auc[m] || 0)) }
+  const VENTAS_NETAS = 'Ventas Netas', COMPRAS_FD = 'Compras (Fecha disponible)', INV_INI = 'Inventario Inicial', INV_FIN = 'Inventario Final'
+  const CALC_PSI = { [VENTAS_NETAS]: ventaNetaMes, [COMPRAS_FD]: comprasUsdMes, [INV_INI]: invIniUsd, [INV_FIN]: invFinUsd }
+  const esCalcComercial = (it) => !!CALC_PSI[it]
   const cell = (concepto, mi) => {
     if (concepto === CASHIN) {
       if (mi === DIC27) return isTotal ? sbuMarcas.reduce((s, m) => s + saldoTotal(m), 0) : saldoTotal(marca)   // Dic-27 = saldo cierre 2027
       if (mi >= 3) { const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[j], 0) : getCobros(marca).total[j] } // 2028 = escalera
       return cellRaw(concepto, mi)
     }
-    if (concepto === VENTAS_NETAS) { if (mi < 3) return 0; const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + ventaNetaMes(m)[j], 0) : ventaNetaMes(marca)[j] }
-    if (concepto === COMPRAS_FD) { if (mi < 3) return 0; const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + comprasUsdMes(m)[j], 0) : comprasUsdMes(marca)[j] }
+    if (CALC_PSI[concepto]) { if (mi < 3) return 0; const j = mi - 3; const fn = CALC_PSI[concepto]; return isTotal ? sbuMarcas.reduce((s, m) => s + fn(m)[j], 0) : fn(marca)[j] }
     if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + cellRaw(sub, mi), 0)
     return cellRaw(concepto, mi)
   }
   // Valor de UNA marca (para el desglose del total): misma lógica que cell pero sin sumar SBU.
   const cellMarca = (mca, concepto, mi) => {
     if (concepto === CASHIN) { if (mi === DIC27) return saldoTotal(mca); if (mi >= 3) return getCobros(mca).total[mi - 3]; return val(mca, concepto, mi) }
-    if (concepto === VENTAS_NETAS) return mi < 3 ? 0 : ventaNetaMes(mca)[mi - 3]
-    if (concepto === COMPRAS_FD) return mi < 3 ? 0 : comprasUsdMes(mca)[mi - 3]
+    if (CALC_PSI[concepto]) return mi < 3 ? 0 : CALC_PSI[concepto](mca)[mi - 3]
     if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + val(mca, sub, mi), 0)
     return val(mca, concepto, mi)
   }
@@ -862,6 +866,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         </select></>}
         {isTotal && !fixedMarca && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
         {isTotal && <button className={'seg' + (desglose ? ' active' : '')} onClick={() => setDesglose((d) => !d)} title="Pásate sobre un total para ver cuánto pone cada marca">{desglose ? '✓ ' : ''}🔍 Desglose por marca</button>}
+        {!isTotal && <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 180 }} />}
         <div className="spacer"></div>
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map(() => 0)])))); exportXlsx(aoa, `${role.tab}_CASHFLOW_Plantilla.xlsx`) }}>📄 Plantilla</button>
         <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
@@ -888,7 +893,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       const cashinCalc = it === CASHIN && mi >= 2
                       const comercialCalc = esCalcComercial(it) && mi >= 3
                       if (isTotal || esCostos || cashinCalc || comercialCalc) {
-                        const tit = brk(it, mi) || (it === CASHIN ? (mi === DIC27 ? 'Saldo (deuda) cierre 2027' : 'Cobros según escalera (ventas × plazo)') : (it === VENTAS_NETAS ? 'Unidades × AUP (Comercial)' : it === COMPRAS_FD ? 'Compras × AUC (Comercial)' : undefined))
+                        const tit = brk(it, mi) || (it === CASHIN ? (mi === DIC27 ? 'Saldo (deuda) cierre 2027' : 'Cobros según escalera (ventas × plazo)') : (it === VENTAS_NETAS ? 'Unidades × AUP (Comercial)' : it === COMPRAS_FD ? 'Compras × AUC (Producto)' : (it === INV_INI || it === INV_FIN) ? 'Inventario (Producto) × AUC' : undefined))
                         return <td key={mi} className={'tot ' + cls} style={isTotal && desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={tit}>{fmt(cell(it, mi))}</td>
                       }
                       const k = key(marca, it, mi)
@@ -922,7 +927,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         <h3>{role.label} — Términos de pago y saldo por cliente <span className="unit">({isTotal ? `TOTAL ${sbu}` : marca})</span>{!isTotal && <span className="fill-badge">✏️ para llenar</span>}</h3>
         <div className="sub">Clientes con histórico 2025/2026 y nuevos clientes 2028 (capturados en Ventas). Elige el <b>término de pago</b> y el <b>saldo (deuda) estimado</b> con que cierra 2027 cada cliente.</div>
         {isTotal ? <div className="note warn">Selecciona una marca específica (arriba) para editar los términos de pago por cliente.</div> : (() => {
-          const cls = clientesDe(marca)
+          const cls = clientesDe(marca).filter(matchCli)
           return (
             <div className="tablewrap">
               <table>
@@ -949,7 +954,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       </div>
 
       {!isTotal && (() => {
-        const cls = clientesDe(marca)
+        const cls = clientesDe(marca).filter(matchCli)
         const uni = unidades2028(marca), aup = aupMarca(marca)
         const SI = '#dcebfb' // color "lo llena Finanzas"
         const filas = cls.map((cli) => {
@@ -1094,57 +1099,65 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
   )
 }
 
-/* ===== COSTOS LOGÍSTICOS: costo de venta, muestras y mantenimiento de stock (calc del saldo) ===== */
+/* ===== COSTOS LOGÍSTICOS: % sobre costo de venta, movimiento de muestras y saldo de inventario ===== */
 function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const marca = fixedMarca || marcasDe(sbus)[0]?.marca
   const [tData, setTData] = useState({})
+  const [ventas, setVentas] = useState([])
+  const [producto, setProducto] = useState([])
   const stKey = `logcost_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   useEffect(() => {
     try { setTData(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
+    ;(async () => {
+      try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
+      try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
+    })()
   }, [empresa, marca])
   const inv = inventarioCalc(tData, marca)
-
-  const key = (linea, m) => `${marca}|${linea}|${m}`
-  const g = (k) => num(data[k])
-  const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
-  const mantRateKey = `${marca}|MANT_RATE`
-  const mantRate = num(data[mantRateKey]) // $ por unidad al mes
-  const mant = MESES.map((_, m) => inv.saldoUnits[m] * mantRate) // costo mantenimiento = saldo (ud) × $/ud
-  const L1 = 'Costo logístico de la venta', L2 = 'Costo de las muestras'
+  const g = (k) => num(data[k]); const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  const auc = MESES.map((_, m) => { let v = 0; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca) || upper(r[1]) !== 'AUC') return; v = num(r[4 + m]) }); return v })
+  const ventaUnits = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
+  const costoVenta = MESES.map((_, m) => ventaUnits[m] * auc[m])
+  const comprasUsd = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(tData[`CP|${marca}|${s}|${m}`]), 0) * auc[m])
+  const saldoValue = MESES.map((_, m) => inv.saldoUnits[m] * auc[m])
+  const kLog = `${marca}|PCT_LOGVENTA`, kMue = `${marca}|PCT_MUESTRAS`, kMant = `${marca}|PCT_MANT`
+  const costoLog = MESES.map((_, m) => costoVenta[m] * g(kLog) / 100)
+  const costoMue = MESES.map((_, m) => comprasUsd[m] * g(kMue) / 100)
+  const mant = MESES.map((_, m) => saldoValue[m] * g(kMant) / 100)
+  const total = MESES.map((_, m) => costoLog[m] + costoMue[m] + mant[m])
   const rowTot = (arr) => arr.reduce((a, b) => a + b, 0)
-  const l1v = MESES.map((_, m) => g(key(L1, m))), l2v = MESES.map((_, m) => g(key(L2, m)))
-  const totalMes = MESES.map((_, m) => l1v[m] + l2v[m] + mant[m])
-
   function guardar() { setSaving(true); try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado en este equipo.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  const pctInput = (k) => <input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" style={{ width: 60, padding: 6, border: '1px solid var(--line)', borderRadius: 6, textAlign: 'center' }} />
 
   return (
-    <>
-      <div className="panel">
-        <div className="toolbar" style={{ marginBottom: 8 }}>
-          <span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span>
-          <label style={{ marginLeft: 10 }}>Mantenimiento $/unidad al mes</label>
-          <input value={data[mantRateKey] ?? ''} onChange={(e) => set(mantRateKey, e.target.value)} inputMode="decimal" placeholder="$/ud" style={{ width: 70, padding: 6, border: '1px solid var(--line)', borderRadius: 6 }} />
-          <div className="spacer"></div>
-          <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
-        </div>
-        {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-        <h3>Costos logísticos — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">Costo logístico de la venta y de las muestras se capturan; el <b>mantenimiento de stock</b> se calcula del saldo de inventario (ud) × ${fmt(mantRate)}/ud al mes.</div>
-        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '190px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-          <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
-          <tbody>
-            <tr><td className="l">{L1}</td>{MESES.map((_, m) => { const k = key(L1, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(rowTot(l1v))}</td></tr>
-            <tr><td className="l">{L2}</td>{MESES.map((_, m) => { const k = key(L2, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(rowTot(l2v))}</td></tr>
-            <tr><td className="l sub2">Saldo de inventario (ud) <span className="unit">(base)</span></td>{inv.saldoUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(inv.saldoUnits[11])}</td></tr>
-            <tr className="catrow"><td className="l">Costo mantenimiento de stock <span className="unit">(= saldo × $/ud)</span></td>{mant.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(mant))}</td></tr>
-            <tr className="grandrow"><td className="l">TOTAL costos logísticos</td>{totalMes.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(totalMes))}</td></tr>
-          </tbody>
-        </table></div>
+    <div className="panel">
+      <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+        <span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span>
+        <label>% logístico venta</label>{pctInput(kLog)}
+        <label>% muestras</label>{pctInput(kMue)}
+        <label>% mantenimiento</label>{pctInput(kMant)}
+        <div className="spacer"></div>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
-    </>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <h3>Costos logísticos — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+      <div className="sub">Se calculan por <b>%</b>: costo logístico de venta = % × <b>costo de venta</b> (unidades × AUC); muestras = % × <b>compras</b>; mantenimiento = % × <b>valor del saldo de inventario</b>. Los tres % se ponen arriba.</div>
+      <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+        <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+        <tbody>
+          <tr><td className="l sub2">Costo de venta ($) <span className="unit">(base)</span></td>{costoVenta.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(costoVenta))}</td></tr>
+          <tr className="catrow"><td className="l">Costo logístico de la venta <span className="unit">(× {fmt(g(kLog))}%)</span></td>{costoLog.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(costoLog))}</td></tr>
+          <tr><td className="l sub2">Compras / movimiento ($) <span className="unit">(base)</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(comprasUsd))}</td></tr>
+          <tr className="catrow"><td className="l">Costo de muestras <span className="unit">(× {fmt(g(kMue))}%)</span></td>{costoMue.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(costoMue))}</td></tr>
+          <tr><td className="l sub2">Valor saldo inventario ($) <span className="unit">(base)</span></td>{saldoValue.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(saldoValue))}</td></tr>
+          <tr className="catrow"><td className="l">Costo mantenimiento de stock <span className="unit">(× {fmt(g(kMant))}%)</span></td>{mant.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(mant))}</td></tr>
+          <tr className="grandrow"><td className="l">TOTAL costos logísticos</td>{total.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(total))}</td></tr>
+        </tbody>
+      </table></div>
+    </div>
   )
 }
 
@@ -1167,7 +1180,8 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
           </div>
         ))}
       </aside>
-      <div className="cmz-main" style={{ borderTop: '4px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
+      <div className="cmz-main" style={{ '--accent': acc, borderTop: '5px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
+        {marca && <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: acc, marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>{isTot ? `▣ TOTAL ${String(marca).slice(7)}` : `💰 ${marca}`}</span></div>}
         {marca ? <RoleForm key={'fin' + marca} role={finRole} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={marca} />
           : <div className="note warn">Selecciona una marca en el panel de la izquierda.</div>}
       </div>
@@ -1186,7 +1200,6 @@ function LogisticaBlock({ r, empresa, usuario, oneSbu, marca }) {
         <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>Ver:</span>
         {[['ud', '🔢 Unidades (inventario)'], ['$', '💲 Plata (costos)'], ['ambas', '🔢💲 Ambas']].map(([m, lbl]) => <button key={m} className={'seg' + (vista === m ? ' active' : '')} onClick={() => setVista(m)} style={vista === m ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{lbl}</button>)}
       </div>
-      {vista !== 'ud' && <RoleForm key={'lf' + marca} role={r} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
       {vista !== '$' && <TemporadaForm key={'flow' + marca} empresa={empresa} sbus={oneSbu} fixedMarca={marca} mode="flow" />}
       {vista !== 'ud' && <CostosLogisticos key={'cl' + marca} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
     </div>
@@ -2161,8 +2174,9 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         <h3>Categorías por cliente — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Completa el <b>% por cliente y categoría</b>. Debajo del campo ves el <b>peso de referencia real</b> (FW26 / SS26) para decidir con números. Si dejas los % en blanco, se reparte con los pesos del Director.</div>
         <div className="tablewrap">
-          <table>
-            <thead><tr><th className="l">Cliente</th>{catList.map((c) => <th key={c.cat}>{c.cat} <span className="unit">Dir {num(c.peso).toFixed(0)}%</span></th>)}</tr></thead>
+          <table style={{ tableLayout: 'fixed', width: 'auto' }}>
+            <colgroup><col style={{ width: '260px' }} />{catList.map((c) => <col key={c.cat} style={{ width: '132px' }} />)}</colgroup>
+            <thead><tr><th className="l">Cliente</th>{catList.map((c) => <th key={c.cat}>{c.cat}<div className="unit" style={{ fontWeight: 500 }}>peso Dir {num(c.peso).toFixed(0)}%</div></th>)}</tr></thead>
             <tbody>
               {clientes.length === 0 && <tr><td className="l" colSpan={catList.length + 1}>No hay clientes con histórico para {marca}.</td></tr>}
               {clientes.map((cli) => <tr key={cli}><td className="l">{cli}</td>{catList.map((c) => { const ref = refCat(marca, cli, c.cat); return (
