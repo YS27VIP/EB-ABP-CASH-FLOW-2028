@@ -918,14 +918,16 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   )
 }
 
-/* Cálculo compartido del inventario por temporada: inicial + compras − salidas(rotación) = saldo */
-function inventarioCalc(data, marca, catList) {
+/* Cálculo compartido del inventario por temporada, MENSUAL:
+   saldo(mes) = saldo(mes-1) + compras(mes) − salidas(mes); salidas = (saldo previo + compras) × rotación%(mes). */
+function invKeys(marca) {
+  return { II: (s) => `II|${marca}|${s}`, CP: (s, m) => `CP|${marca}|${s}|${m}`, RT: (s, m) => `RT|${marca}|${s}|${m}` }
+}
+function inventarioCalc(data, marca) {
   const g = (k) => num(data[k])
-  const II = (c, s) => `II|${marca}|${c}|${s}`, CP = (s, m) => `CP|${marca}|${s}|${m}`, RT = (s) => `RT|${marca}|${s}`
-  const cl = catList && catList.length ? catList : ['General']
-  const invIni = (s) => cl.reduce((a, c) => a + g(II(c, s)), 0)
+  const { II, CP, RT } = invKeys(marca)
   const flujos = {}
-  SEASONS.forEach((s) => { const rot = g(RT(s)) / 100; const arr = []; let saldo = invIni(s); for (let m = 0; m < 12; m++) { const ini = saldo; const comp = g(CP(s, m)); const disp = ini + comp; const sal = disp * rot; const fin = disp - sal; arr.push({ ini, comp, sal, fin }); saldo = fin } flujos[s] = arr })
+  SEASONS.forEach((s) => { const arr = []; let saldo = g(II(s)); for (let m = 0; m < 12; m++) { const ini = saldo; const comp = g(CP(s, m)); const disp = ini + comp; const rot = g(RT(s, m)) / 100; const sal = disp * rot; const fin = disp - sal; arr.push({ ini, comp, sal, fin }); saldo = fin } flujos[s] = arr })
   const saldoUnits = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].fin, 0))
   const salidasUnits = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].sal, 0))
   return { flujos, saldoUnits, salidasUnits }
@@ -937,42 +939,27 @@ function inventarioCalc(data, marca, catList) {
    El AUP/AUC de la marca se mezcla según lo que se va vendiendo (categoría×temporada). */
 function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
   const marca = fixedMarca || marcasDe(sbus)[0]?.marca
-  const [cats, setCats] = useState([])
   const stKey = `temp_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
-  useEffect(() => {
-    (async () => {
-      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa) || upper(row[3]) !== upper(marca)) return; if (row[1]) out.push(row[1]) }); setCats([...new Set(out)]) } } catch { }
-    })()
-  }, [empresa, marca])
-  const catList = cats.length ? cats : ['General']
-
-  const K = { ii: (c, s) => `II|${marca}|${c}|${s}`, cp: (s, m) => `CP|${marca}|${s}|${m}`, rt: (s) => `RT|${marca}|${s}` }
-  const g = (k) => num(data[k])
+  const K = invKeys(marca)
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   function guardar() { setSaving(true); try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado en este equipo. Persistencia al Sheet se conecta en el siguiente paso.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
-
-  const { flujos } = inventarioCalc(data, marca, catList)
+  const { flujos, saldoUnits } = inventarioCalc(data, marca)
+  const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
 
   if (mode === 'flow') {
-    const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
     return (
       <div className="panel">
-        <h3>Flujo de inventario por temporada — {marca} <span className="unit">(cálculo · 👁️ solo lectura)</span></h3>
-        <div className="sub">Saldo = Inventario inicial + Compras 2028 − Salidas. Las <b>Salidas</b> = saldo × <b>ritmo de rotación %</b> mensual. Así ves cuánto va quedando sin rotar de cada temporada.</div>
+        <h3>Saldo de inventario por temporada — {marca} <span className="unit">(👁️ del tracking de Producto)</span></h3>
+        <div className="sub">Lo que va quedando sin rotar de cada temporada, mes a mes. Alimenta el costo de mantenimiento.</div>
         <div className="tablewrap">
-          <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-            <thead><tr><th className="l">Temporada / concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+          <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+            <thead><tr><th className="l">Temporada</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Fin año</th></tr></thead>
             <tbody>
-              {SEASONS.map((s) => { const f = flujos[s]; return (
-                <Fragment2 key={s}>
-                  <tr className="sburow"><td className="l">Saldo {s} · rot {fmt(g(K.rt(s)))}%/mes</td>{f.map((x, i) => <td key={i} className="tot">{fmt(x.fin)}</td>)}<td className="tot">{fmt(f[11].fin)}</td></tr>
-                  <tr><td className="l sub2">+ Compras</td>{f.map((x, i) => <td key={i} className="tot">{fmt(x.comp)}</td>)}<td className="tot">{fmt(rowTot(f, 'comp'))}</td></tr>
-                  <tr><td className="l sub2">− Salidas (rotación)</td>{f.map((x, i) => <td key={i} className="tot">{fmt(x.sal)}</td>)}<td className="tot">{fmt(rowTot(f, 'sal'))}</td></tr>
-                </Fragment2>) })}
-              <tr className="grandrow"><td className="l">Saldo total inventario</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(SEASONS.reduce((a, s) => a + flujos[s][m].fin, 0))}</td>)}<td className="tot">{fmt(SEASONS.reduce((a, s) => a + flujos[s][11].fin, 0))}</td></tr>
+              {SEASONS.map((s) => <tr key={s}><td className="l">{s}</td>{flujos[s].map((x, i) => <td key={i} className="tot">{fmt(x.fin)}</td>)}<td className="tot">{fmt(flujos[s][11].fin)}</td></tr>)}
+              <tr className="grandrow"><td className="l">Saldo total</td>{saldoUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(saldoUnits[11])}</td></tr>
             </tbody>
           </table>
         </div>
@@ -980,37 +967,30 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
     )
   }
 
-  // mode = 'capture' (Producto → INVENTARIO COMPRAS): ritmo + inventario inicial + compras 2028, integrado
+  // mode = 'capture' (Producto → INVENTARIO COMPRAS): tracking mensual integrado por temporada
   return (
     <>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
       <div className="panel">
-        <h3>Ritmo de rotación por temporada — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">% del saldo que se vende cada mes (sell-through). Más alto = se agota más rápido. El inventario más viejo suele rotar distinto al nuevo.</div>
-        <div className="tablewrap"><table>
-          <thead><tr>{SEASONS.map((s) => <th key={s}>{s}</th>)}</tr></thead>
-          <tbody><tr>{SEASONS.map((s) => { const k = K.rt(s); return <td key={s} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" /></td> })}</tr></tbody>
+        <h3>Inventario y compras por temporada — {marca} <span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">Pon el <b>inventario inicial</b> (columna "Inicial"), las <b>compras 2028</b> y el <b>% de rotación de cada mes</b>. El <b>saldo</b> se calcula solo: saldo = anterior + compras − salidas, y salidas = (saldo+compras) × rotación%. Así llevas el tracking de lo que te queda de cada temporada mes a mes.</div>
+        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '200px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+          <thead><tr><th className="l">Temporada / concepto</th><th>Inicial</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+          <tbody>
+            {SEASONS.map((s) => { const f = flujos[s]; const buy = BUY_SEASONS.includes(s); return (
+              <Fragment2 key={s}>
+                <tr className="secrow"><td colSpan={15}>{s}{buy ? ' · compra 2028' : ' · inventario inicial'}</td></tr>
+                {buy && <tr><td className="l sub2">+ Compras</td><td></td>{MESES.map((_, m) => { const k = K.CP(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(rowTot(f, 'comp'))}</td></tr>}
+                <tr><td className="l sub2">Rotación % (del saldo)</td><td></td>{MESES.map((_, m) => { const k = K.RT(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" /></td> })}<td></td></tr>
+                <tr><td className="l sub2">− Salidas (venta)</td><td></td>{f.map((x, m) => <td key={m} className="tot">{fmt(x.sal)}</td>)}<td className="tot">{fmt(rowTot(f, 'sal'))}</td></tr>
+                <tr className="catrow"><td className="l">= Saldo (ud)</td><td className="cell"><input value={data[K.II(s)] ?? ''} onChange={(e) => set(K.II(s), e.target.value)} inputMode="decimal" placeholder={buy ? '0' : 'inicial'} /></td>{f.map((x, m) => <td key={m} className="tot">{fmt(x.fin)}</td>)}<td className="tot">{fmt(f[11].fin)}</td></tr>
+              </Fragment2>) })}
+            <tr className="grandrow"><td className="l">Saldo total inventario</td><td></td>{saldoUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(saldoUnits[11])}</td></tr>
+          </tbody>
         </table></div>
+        <div className="sub" style={{ marginTop: 6 }}>El costo de mantenimiento del saldo se ve en <b>Logística</b>. (Pendiente: AUP/AUC por temporada, lo conectamos luego.)</div>
       </div>
-      <div className="panel">
-        <h3>Inventario inicial (unidades) — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">Stock con que arranca 2028, por categoría y temporada (inventario viejo: {INV_SEASONS.join(', ')}). Define la mezcla que rota y se vende.</div>
-        <div className="tablewrap"><table>
-          <thead><tr><th className="l">Categoría</th>{INV_SEASONS.map((s) => <th key={s}>{s}</th>)}</tr></thead>
-          <tbody>{catList.map((c) => <tr key={c}><td className="l">{c}</td>{INV_SEASONS.map((s) => { const k = K.ii(c, s); return <td key={s} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}</tr>)}</tbody>
-        </table></div>
-      </div>
-      <div className="panel">
-        <h3>Compras 2028 (unidades) — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">Unidades nuevas que entran cada mes. Como el presupuesto es 2028, las compras son solo de <b>{BUY_SEASONS.join(', ')}</b>.</div>
-        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '110px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}</colgroup>
-          <thead><tr><th className="l">Temporada</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}</tr></thead>
-          <tbody>{BUY_SEASONS.map((s) => <tr key={s}><td className="l">{s}</td>{MESES.map((_, m) => { const k = K.cp(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}</tr>)}</tbody>
-        </table></div>
-      </div>
-      <TemporadaForm empresa={empresa} fixedMarca={marca} sbus={sbus} mode="flow" />
-      <div className="sub" style={{ marginTop: 6 }}>El costo de mantenimiento del saldo se calcula en <b>Logística</b>. (Pendiente: AUP/AUC por temporada, lo conectamos luego.)</div>
     </>
   )
 }
@@ -1018,7 +998,6 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
 /* ===== COSTOS LOGÍSTICOS: costo de venta, muestras y mantenimiento de stock (calc del saldo) ===== */
 function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const marca = fixedMarca || marcasDe(sbus)[0]?.marca
-  const [cats, setCats] = useState([])
   const [tData, setTData] = useState({})
   const stKey = `logcost_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
@@ -1026,10 +1005,8 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const [msg, setMsg] = useState(null)
   useEffect(() => {
     try { setTData(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
-    ;(async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa) || upper(row[3]) !== upper(marca)) return; if (row[1]) out.push(row[1]) }); setCats([...new Set(out)]) } } catch { } })()
   }, [empresa, marca])
-  const catList = cats.length ? cats : ['General']
-  const inv = inventarioCalc(tData, marca, catList)
+  const inv = inventarioCalc(tData, marca)
 
   const key = (linea, m) => `${marca}|${linea}|${m}`
   const g = (k) => num(data[k])
