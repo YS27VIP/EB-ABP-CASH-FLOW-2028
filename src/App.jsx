@@ -48,7 +48,7 @@ const ROLES = [
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
   { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ] },
-  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'CATEGORIAS', cat: true }] },
+  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'COMISIONES', comis: true }, { k: 'CATEGORIAS', cat: true }] },
 ]
 const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
 
@@ -81,6 +81,20 @@ function refCat(marca, cli, cat) {
   const tbl = REF_CAT[upper(marca)]; if (!tbl) return null
   const key = Object.keys(tbl).find((k) => upper(cli).indexOf(k) >= 0); if (!key) return null
   return tbl[key][upper(cat)] || null
+}
+
+/* Comisiones: marcas con comisión corporativa por compra (XFD) */
+const CORP_MARCAS = ['HOKA', 'UGG']
+const esCorpMarca = (m) => CORP_MARCAS.includes(upper(m))
+/* Cálculo de comisiones por marca (lo llena el Director; venta externa viene de Comercial, interna de Retail). */
+function comisionCalc(marca, comisData, ventaExtMes, comprasUdMes) {
+  const g = (k) => num(comisData[k])
+  const pagoExt = MESES.map((_, m) => ventaExtMes[m] * g(`PCTEXT|${marca}|${m}`) / 100)
+  const ventaInt = MESES.map(() => 0) // intercompañía (Retail): pendiente
+  const pagoInt = MESES.map((_, m) => ventaInt[m] * g(`PCTINT|${marca}|${m}`) / 100)
+  const pagoCorp = MESES.map((_, m) => esCorpMarca(marca) ? comprasUdMes[m] * g(`CORP|${marca}`) : 0)
+  const total = MESES.map((_, m) => pagoExt[m] + pagoInt[m] + pagoCorp[m])
+  return { pagoExt, ventaInt, pagoInt, pagoCorp, total }
 }
 
 /* Temporadas: inventario inicial (stock viejo) vs compras 2028 (nuevo, porque el presupuesto es 2028) */
@@ -446,6 +460,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) 
         : rb.cash ? <CashFlowForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.temporada ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" />
         : rb.invflow ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="flow" />
+        : rb.comis ? <ComisionesForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.porCat ? <CatCaptureForm key={rb.k} {...common} />
         : rb.cat ? <CategoriasForm key={rb.k} role={role} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} />
@@ -743,7 +758,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [producto, setProducto] = useState([])
   const [cats, setCats] = useState({})
   const [temp, setTemp] = useState({})
-  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } }, [empresa])
+  const [comisData, setComisData] = useState({})
+  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } }, [empresa])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   const sbuMarcas = sbus[sbu] || []
@@ -771,7 +787,12 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   // Cash In (Cobros) de Dic-27 = suma del saldo (deuda) cierre 2027 por cliente (calculado, no editable)
   const CASHIN = 'Cash In (Cobros)', DIC27 = 2
   const saldoTotal = (mca) => clientesDe(mca).reduce((s, cli) => s + num(data[`SALDO|${mca}|${cli}`]), 0)
-  const cellRaw = (concepto, mi) => isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
+  const cellRaw = (concepto, mi) => {
+    if (concepto === 'Comisiones') { if (mi < 3) return 0; const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[j], 0) : comisTotalMes(marca)[j] }
+    return isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
+  }
+  // Comisiones (del Director): venta externa (Unid×AUP) × % + corporativa (compras × $/ud en HOKA/UGG).
+  const comisTotalMes = (mca) => comisionCalc(mca, comisData, ventaNetaMes(mca), comprasUdMes(mca)).total
 
   // Compras 2028 (de Comercial) → pago según el término de pago de la marca (a proveedor). Parte del Cash Out.
   const comprasUdMes = (mca) => MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(temp[`CP|${mca}|${s}|${m}`]), 0))
@@ -905,13 +926,14 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       <Fragment2 key={it}>
                         {fila}
                         {openCostos && CF_COSTOS.map((sub) => {
+                          const calcSub = sub === 'Comisiones' // Comisiones lo calcula el Director
                           const sceldas = CF_MESES.map((_, mi) => {
                             const cls = mi < 3 ? 'ya' : 'yb'
-                            if (isTotal) return <td key={mi} className={'tot ' + cls} style={desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={brk(sub, mi)}>{fmt(cellRaw(sub, mi))}</td>
+                            if (isTotal || calcSub) return <td key={mi} className={'tot ' + cls} style={desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={calcSub ? 'Comisiones del Director (venta externa × %)' : brk(sub, mi)}>{fmt(cellRaw(sub, mi))}</td>
                             const k = key(marca, sub, mi)
                             return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                           })
-                          return <tr key={sub}><td className="l sub2">{sub}</td>{sceldas}<td className="tot">{fmt(subTot(sub))}</td></tr>
+                          return <tr key={sub}><td className="l sub2">{sub}{calcSub ? <span className="unit"> (calc Director)</span> : null}</td>{sceldas}<td className="tot">{fmt(subTot(sub))}</td></tr>
                         })}
                       </Fragment2>
                     )
@@ -1161,6 +1183,65 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   )
 }
 
+/* ===== COMISIONES (Director): % por marca; venta externa de Comercial, interna de Retail (pendiente) ===== */
+function ComisionesForm({ empresa, fixedMarca, sbus }) {
+  const marca = fixedMarca || marcasDe(sbus)[0]?.marca
+  const stKey = `comis_${empresa}`
+  const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
+  const [ventas, setVentas] = useState([]); const [producto, setProducto] = useState([]); const [catList, setCatList] = useState([]); const [temp, setTemp] = useState({})
+  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  useEffect(() => {
+    try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
+    ;(async () => {
+      try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
+      try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
+      try { const j3 = await gReadTab('Cap_Categorias'); if (j3 && j3.ok && j3.values) { const o = []; j3.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) o.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(o) } } catch { }
+    })()
+  }, [empresa, marca])
+  const g = (k) => num(data[k]); const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  const aupCat = {}; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') !== 0) return; aupCat[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])) })
+  const aupW = MESES.map((_, m) => catList.reduce((a, { cat, peso }) => { const x = aupCat[cat]; return a + (x ? num(peso) / 100 * x[m] : 0) }, 0))
+  const unitsMes = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
+  const ventaExt = MESES.map((_, m) => unitsMes[m] * aupW[m])
+  const comprasUd = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(temp[`CP|${marca}|${s}|${m}`]), 0))
+  const c = comisionCalc(marca, data, ventaExt, comprasUd)
+  const corp = esCorpMarca(marca)
+  const rowTot = (arr) => arr.reduce((a, b) => a + b, 0)
+  function guardar() { setSaving(true); try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado. Las comisiones de venta externa alimentan Comisiones del Cash Flow.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  const pctRow = (kf, ph) => MESES.map((_, m) => { const k = kf(m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder={ph} /></td> })
+
+  return (
+    <>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+      <div className="panel">
+        <h3>Cálculo de comisiones — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">El Director pone los <b>% mensuales</b>. La <b>venta externa</b> viene de Comercial (Unid×AUP); la <b>intercompañía</b> viene de Retail (pendiente). El <b>pago de comisión de venta externa</b> alimenta directamente la línea <b>Comisiones</b> del Cash Flow (parte de Costos Operativos).</div>
+        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+          <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+          <tbody>
+            <tr className="secrow"><td colSpan={14}>VENTA EXTERNA</td></tr>
+            <tr><td className="l sub2">Venta externa ($) <span className="unit">(Comercial)</span></td>{ventaExt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(ventaExt))}</td></tr>
+            <tr><td className="l sub2">% comisión venta externa</td>{pctRow((m) => `PCTEXT|${marca}|${m}`, '%')}<td></td></tr>
+            <tr className="catrow"><td className="l">Pago comisión venta externa → Cash Flow</td>{c.pagoExt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.pagoExt))}</td></tr>
+            <tr className="secrow"><td colSpan={14}>VENTA INTERCOMPAÑÍA (RETAIL)</td></tr>
+            <tr><td className="l sub2">Venta intercompañía ($) <span className="unit">(Retail · pendiente)</span></td>{c.ventaInt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">0</td></tr>
+            <tr><td className="l sub2">% comisión venta interna</td>{pctRow((m) => `PCTINT|${marca}|${m}`, '%')}<td></td></tr>
+            <tr className="catrow"><td className="l">Pago comisión venta interna</td>{c.pagoInt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.pagoInt))}</td></tr>
+            {corp && <>
+              <tr className="secrow"><td colSpan={14}>COMPRAS (solo {CORP_MARCAS.join(' / ')})</td></tr>
+              <tr><td className="l sub2">Compras unidades (XFD)</td>{comprasUd.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(comprasUd))}</td></tr>
+              <tr><td className="l sub2">Comisión corporativa $/ud <input value={data[`CORP|${marca}`] ?? ''} onChange={(e) => set(`CORP|${marca}`, e.target.value)} inputMode="decimal" placeholder="$/ud" style={{ width: 60, marginLeft: 6, padding: 4, border: '1px solid var(--line)', borderRadius: 5 }} /></td>{MESES.map((_, m) => <td key={m}></td>)}<td></td></tr>
+              <tr className="catrow"><td className="l">Pago comisión corporativa</td>{c.pagoCorp.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.pagoCorp))}</td></tr>
+            </>}
+            <tr className="grandrow"><td className="l">TOTAL comisiones</td>{c.total.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.total))}</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </>
+  )
+}
+
 /* ===== FINANZAS WORKSPACE: panel de marcas (todas las SBU) + Cash Flow por marca ===== */
 function FinanzasWorkspace({ empresa, usuario, sbus }) {
   const finRole = ROLES.find((r) => r.id === 'finanzas')
@@ -1253,14 +1334,11 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
             <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
               <span className="empchip" style={{ background: acc, marginLeft: 0 }}>{marca}</span>
               {SECS.map((r) => { const on = r.id === secId; return <button key={r.id} className={'seg' + (on ? ' active' : '')} onClick={() => setSecId(r.id)} style={on ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{r.icon} {r.label}</button> })}
-              <button className={'seg' + (secId === 'cash' ? ' active' : '')} onClick={() => setSecId('cash')} style={secId === 'cash' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>💵 Cash Flow</button>
               <button className={'seg' + (secId === 'viajes' ? ' active' : '')} onClick={() => setSecId('viajes')} style={secId === 'viajes' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>🧳 Viajes equipo</button>
               <button className={'seg' + (secId === 'brand' ? ' active' : '')} onClick={() => setSecId('brand')} style={secId === 'brand' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>📊 Brand Contribution</button>
             </div>
             {secId === 'brand'
               ? <BrandContribution empresa={empresa} marca={marca} />
-              : secId === 'cash'
-              ? <CashFlowForm key={'cf' + sbuName + marca} role={cashRole} rubro={cashRubro} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />
               : secId === 'viajes'
               ? <ViajesEquipo empresa={empresa} marca={marca} sbuName={sbuName} marcasSBU={marcasSBU} />
               : secId === 'comercial'
