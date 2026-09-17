@@ -1110,6 +1110,28 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
     <>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+      {(() => {
+        const res = SEASONS.map((s) => { const f = flujos[s]; const ini = num(data[K.II(s)]); const comp = rowTot(f, 'comp'); const vend = rowTot(f, 'sal'); return { s, ini, comp, disp: ini + comp, vend, queda: f[11].fin } })
+        const T = res.reduce((a, r) => ({ ini: a.ini + r.ini, comp: a.comp + r.comp, disp: a.disp + r.disp, vend: a.vend + r.vend, queda: a.queda + r.queda }), { ini: 0, comp: 0, disp: 0, vend: 0, queda: 0 })
+        return (
+          <div className="panel">
+            <h3>Resumen de inventario — {marca} <span className="unit">(👁️ cálculo)</span></h3>
+            <div className="sub">De un vistazo: lo que <b>tienes disponible</b> (inicial + compras), lo que <b>vas a vender</b> (salidas) y lo que <b>te queda</b> a fin de año, por temporada y en total.</div>
+            <div className="kpis" style={{ marginBottom: 12 }}>
+              <div className="kpi"><div className="k">Inventario disponible</div><div className="v">{fmt(T.disp)}</div><div className="s">inicial {fmt(T.ini)} + compras {fmt(T.comp)}</div></div>
+              <div className="kpi"><div className="k">Total a vender (salidas)</div><div className="v">{fmt(T.vend)}</div><div className="s">unidades del año</div></div>
+              <div className="kpi"><div className="k">Saldo que queda (fin año)</div><div className="v">{fmt(T.queda)}</div><div className="s">sin rotar</div></div>
+            </div>
+            <div className="tablewrap"><table>
+              <thead><tr><th className="l">Temporada</th><th>Inicial</th><th>Compras</th><th>Disponible</th><th>A vender</th><th>Queda (fin año)</th></tr></thead>
+              <tbody>
+                {res.map((r) => <tr key={r.s}><td className="l">{r.s}</td><td className="tot">{fmt(r.ini)}</td><td className="tot">{fmt(r.comp)}</td><td className="tot">{fmt(r.disp)}</td><td className="tot">{fmt(r.vend)}</td><td className="tot">{fmt(r.queda)}</td></tr>)}
+                <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(T.ini)}</td><td className="tot">{fmt(T.comp)}</td><td className="tot">{fmt(T.disp)}</td><td className="tot">{fmt(T.vend)}</td><td className="tot">{fmt(T.queda)}</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        )
+      })()}
       <div className="panel">
         <h3>Inventario y compras por temporada — {marca} <span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Pon el <b>inventario inicial</b> (columna "Inicial"), las <b>compras 2028</b> y el <b>% de rotación de cada mes</b>. El <b>saldo</b> se calcula solo: saldo = anterior + compras − salidas, y salidas = (saldo+compras) × rotación%. Así llevas el tracking de lo que te queda de cada temporada mes a mes.</div>
