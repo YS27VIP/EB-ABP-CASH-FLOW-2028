@@ -692,6 +692,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [openCostos, setOpenCostos] = useState(false)
   const stKey = `cf_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [hist, setHist] = useState([])
@@ -826,12 +827,12 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       const k = key(marca, it, mi)
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
-                    const fila = <tr key={it} className={esCostos ? 'catrow' : undefined}><td className="l">{it}</td>{celdas}<td className="tot">{fmt(rowTot(it))}</td></tr>
+                    const fila = <tr key={it} className={esCostos ? 'catrow rowline ' + (openCostos ? 'open' : '') : undefined} onClick={esCostos ? () => setOpenCostos((o) => !o) : undefined} style={esCostos ? { cursor: 'pointer' } : undefined}><td className="l">{esCostos ? <span className="caret">▶</span> : null} {it}{esCostos ? <span className="unit" style={{ marginLeft: 6 }}>({openCostos ? 'ocultar' : 'ver'} detalle: {CF_COSTOS.join(' + ')})</span> : null}</td>{celdas}<td className="tot">{fmt(rowTot(it))}</td></tr>
                     if (!esCostos) return fila
                     return (
                       <Fragment2 key={it}>
                         {fila}
-                        {CF_COSTOS.map((sub) => {
+                        {openCostos && CF_COSTOS.map((sub) => {
                           const sceldas = CF_MESES.map((_, mi) => {
                             const cls = mi < 3 ? 'ya' : 'yb'
                             if (isTotal) return <td key={mi} className={'tot ' + cls}>{fmt(cellRaw(sub, mi))}</td>
@@ -910,6 +911,9 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
   const SECS = ROLES.filter((r) => ['ventas', 'producto', 'marketing', 'logistica', 'director'].includes(r.id))
   const [secId, setSecId] = useState('ventas')
   const [marca, setMarca] = useState('__TOTAL__')
+  const [totTab, setTotTab] = useState('brand')
+  const cashRole = { label: 'Cash Flow', tab: 'Cap_Finanzas' }
+  const cashRubro = { k: 'CASH FLOW', cash: true }
   const isRetail = String(sbuName).toUpperCase() === 'RETAIL'
   const oneSbu = isRetail ? {} : { [sbuName]: sbus[sbuName] || [] }
   const marcasSBU = isRetail ? [] : (sbus[sbuName] || [])
@@ -931,16 +935,31 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
       </aside>
       <div className="cmz-main" style={{ '--accent': acc, borderTop: '4px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
         {marca === '__TOTAL__'
-          ? <GerenciaScreen empresa={empresa} sbus={sbus} soloSBU={sbuName} />
+          ? (<>
+            <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+              <span className="empchip" style={{ background: col, marginLeft: 0 }}>▣ TOTAL {sbuName}</span>
+              <button className={'seg' + (totTab === 'brand' ? ' active' : '')} onClick={() => setTotTab('brand')} style={totTab === 'brand' ? { background: col, borderColor: col, color: '#fff' } : {}}>📊 Brand Contribution</button>
+              <button className={'seg' + (totTab === 'cash' ? ' active' : '')} onClick={() => setTotTab('cash')} style={totTab === 'cash' ? { background: col, borderColor: col, color: '#fff' } : {}}>💵 Cash Flow</button>
+              <button className={'seg' + (totTab === 'resumen' ? ' active' : '')} onClick={() => setTotTab('resumen')} style={totTab === 'resumen' ? { background: col, borderColor: col, color: '#fff' } : {}}>📋 Resumen</button>
+            </div>
+            {totTab === 'brand'
+              ? <BrandContribSBU empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />
+              : totTab === 'cash'
+              ? <CashFlowForm key={'cftot' + sbuName} role={cashRole} rubro={cashRubro} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={`TOTAL::${sbuName}`} />
+              : <GerenciaScreen empresa={empresa} sbus={sbus} soloSBU={sbuName} />}
+          </>)
           : (<>
             <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
               <span className="empchip" style={{ background: acc, marginLeft: 0 }}>{marca}</span>
               {SECS.map((r) => { const on = r.id === secId; return <button key={r.id} className={'seg' + (on ? ' active' : '')} onClick={() => setSecId(r.id)} style={on ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{r.icon} {r.label}</button> })}
+              <button className={'seg' + (secId === 'cash' ? ' active' : '')} onClick={() => setSecId('cash')} style={secId === 'cash' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>💵 Cash Flow</button>
               <button className={'seg' + (secId === 'viajes' ? ' active' : '')} onClick={() => setSecId('viajes')} style={secId === 'viajes' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>🧳 Viajes equipo</button>
               <button className={'seg' + (secId === 'brand' ? ' active' : '')} onClick={() => setSecId('brand')} style={secId === 'brand' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>📊 Brand Contribution</button>
             </div>
             {secId === 'brand'
               ? <BrandContribution empresa={empresa} marca={marca} />
+              : secId === 'cash'
+              ? <CashFlowForm key={'cf' + sbuName + marca} role={cashRole} rubro={cashRubro} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />
               : secId === 'viajes'
               ? <ViajesEquipo empresa={empresa} marca={marca} sbuName={sbuName} marcasSBU={marcasSBU} />
               : <RoleForm key={sbuName + secId + marca} role={role} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
