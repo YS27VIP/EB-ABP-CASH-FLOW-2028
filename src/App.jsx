@@ -1479,16 +1479,31 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   const [ventas, setVentas] = useState([])
   const [producto, setProducto] = useState([])
   const [cats, setCats] = useState({})
+  const [mk, setMk] = useState([]); const [log, setLog] = useState([]); const [dir, setDir] = useState([])
   const [cargando, setCargando] = useState(true)
   useEffect(() => {
     (async () => {
       setCargando(true)
+      const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
       try { const j = await gReadTab('Cap_Ventas'); if (j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j = await gReadTab('Cap_Producto'); if (j.ok && j.values) setProducto(j.values.slice(1)) } catch { }
       try { const j = await gReadTab('Cap_Categorias'); if (j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
+      setMk(await g('Cap_Marketing')); setLog(await g('Cap_Logistica')); setDir(await g('Cap_Director'))
       setCargando(false)
     })()
   }, [empresa])
+  const sumTabG = (rows, mca, filt) => { let s = 0; rows.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
+  const esVi = (rub) => rub.toUpperCase().startsWith('VIAJES')
+  const fullCalc = (mca) => {
+    const u = uni(mca), ap = aupW(mca), ac = prodRow(mca, 'AUC')
+    let unidades = 0, ventaNeta = 0, costo = 0; for (let j = 0; j < 12; j++) { unidades += u[j]; ventaNeta += u[j] * ap[j]; costo += u[j] * ac[j] }
+    const logistica = sumTabG(log, mca), marketing = sumTabG(mk, mca)
+    const viajes = [ventas, producto, mk, log, dir].reduce((t, rows) => t + sumTabG(rows, mca, esVi), 0)
+    const comisiones = 0, margenBruto = ventaNeta - costo - comisiones - logistica, brand = margenBruto - marketing - viajes
+    return { unidades, ventaNeta, costo, comisiones, logistica, marketing, viajes, margenBruto, brand }
+  }
+  const sbuAgg = (ms) => (ms || []).reduce((a, m) => { const c = fullCalc(m); Object.keys(c).forEach((k) => a[k] = (a[k] || 0) + c[k]); return a }, {})
+  const gadminAnual = (() => { try { const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } return cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { return 0 } })()
 
   const uni = (mca) => { const arr = Array(12).fill(0); ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; for (let j = 0; j < 12; j++) arr[j] += num(r[4 + j]) }); return arr }
   const prodRow = (mca, rub) => { const arr = Array(12).fill(0); producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca) || upper(r[1]) !== upper(rub)) return; for (let j = 0; j < 12; j++) arr[j] = num(r[4 + j]) }); return arr }
@@ -1505,10 +1520,38 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   const cols = (m) => <><td className="tot">{fmt(m.unidades)}</td><td className="ref">{fmt(m.aup)}</td><td className="ref">{fmt(m.auc)}</td><td className="tot">{fmt(m.venta)}</td><td className="tot">{fmt(m.costo)}</td><td className="tot">{fmt(m.margen)}</td><td className="ref">{(m.margenPct || 0).toFixed(1)}%</td><td className="tot">{fmt(m.inv)}</td></>
 
   let grand = { ...zero }
+  // Consolidado P&L con las SBU lado a lado (Contribución de la BU → Gastos Admin → Resultado Operativo)
+  const sbuList = Object.entries(sbus).filter(([s]) => !soloSBU || s === soloSBU).map(([s, ms]) => ({ s, a: sbuAgg(ms) }))
+  const totAgg = sbuList.reduce((acc, { a }) => { Object.keys(a).forEach((k) => acc[k] = (acc[k] || 0) + a[k]); return acc }, {})
+  const ventaTot = totAgg.ventaNeta || 0
+  const gastosDe = (a) => ventaTot > 0 ? gadminAnual * (a.ventaNeta || 0) / ventaTot : (a === totAgg ? gadminAnual : 0)
+  const filasG = [
+    { k: 'Unidades', g: (a) => a.unidades },
+    { k: 'Venta Neta', g: (a) => a.ventaNeta, strong: true },
+    { k: '(−) Costo', g: (a) => a.costo },
+    { k: '(−) Comisiones', g: (a) => a.comisiones },
+    { k: '(−) Logística', g: (a) => a.logistica },
+    { k: '= Margen Bruto', g: (a) => a.margenBruto, strong: true },
+    { k: '(−) Marketing', g: (a) => a.marketing },
+    { k: '(−) Viajes', g: (a) => a.viajes },
+    { k: '= Contribución de la BU', g: (a) => a.brand, strong: true },
+    { k: '(−) Gastos administrativos', g: (a) => gastosDe(a) },
+    { k: '🎯 = Resultado Operativo', g: (a) => (a.brand || 0) - gastosDe(a), strong: true },
+  ]
   return (
     <>
+      {!soloSBU && !cargando && <div className="panel">
+        <h3>Gerencia — Resultado Operativo consolidado · {empresa} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
+        <div className="sub">Contribución de la BU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Pásate sobre un total para ver el detalle por marca (abajo).</div>
+        <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
+          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s }) => <th key={s} style={{ color: sbuColor(s) }}>{s}</th>)}<th>TOTAL {empresa}</th></tr></thead>
+          <tbody>
+            {filasG.map((f) => <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}</td>{sbuList.map(({ s, a }) => <td key={s} className="tot">{fmt(f.g(a))}</td>)}<td className="tot">{fmt(f.g(totAgg))}</td></tr>)}
+          </tbody>
+        </table></div>
+      </div>}
       <div className="panel">
-        <h3>{soloSBU ? `Resumen ${soloSBU}` : 'Gerencia — consolidado ' + empresa} <span className="unit">(solo lectura · 2028)</span></h3>
+        <h3>{soloSBU ? `Resumen ${soloSBU}` : 'Detalle por marca — ' + empresa} <span className="unit">(solo lectura · 2028)</span></h3>
         <div className="sub">Venta Neta = Unidades × AUP · Costo = Unidades × AUC · Margen = Venta − Costo · Inventario = compras del año. AUP/AUC son promedios ponderados.</div>
         {cargando ? <div className="sub">Cargando…</div> : (
           <div className="tablewrap">
