@@ -751,6 +751,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [desglose, setDesglose] = useState(false)
   const [buscar, setBuscar] = useState('')
   const matchCli = (cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0
+  const buscador = <div className="toolbar" style={{ marginBottom: 10 }}><input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />{buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}</div>
   const stKey = `cf_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [hist, setHist] = useState([])
@@ -887,7 +888,6 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         </select></>}
         {isTotal && !fixedMarca && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
         {isTotal && <button className={'seg' + (desglose ? ' active' : '')} onClick={() => setDesglose((d) => !d)} title="Pásate sobre un total para ver cuánto pone cada marca">{desglose ? '✓ ' : ''}🔍 Desglose por marca</button>}
-        {!isTotal && <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 180 }} />}
         <div className="spacer"></div>
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map(() => 0)])))); exportXlsx(aoa, `${role.tab}_CASHFLOW_Plantilla.xlsx`) }}>📄 Plantilla</button>
         <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
