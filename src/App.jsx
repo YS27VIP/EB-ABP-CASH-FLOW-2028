@@ -138,6 +138,7 @@ export default function App() {
   }, [authed])
 
   const [acceso, setAcceso] = useState(null) // null = acceso total (no está en Colaboradores)
+  const [veTodas, setVeTodas] = useState(true) // ¿la persona puede cambiar de empresa? (por defecto sí)
   useEffect(() => {
     if (!authed) return
     let cancel = false
@@ -146,15 +147,19 @@ export default function App() {
         const j = await gReadTab('Cap_Colaboradores')
         const em = (getEmail() || '').trim().toLowerCase()
         if (cancel) return
-        if (!em || !j.values) { setAcceso(null); return }
-        const set = new Set(); let found = false
+        if (!em || !j.values) { setAcceso(null); setVeTodas(true); return }
+        const set = new Set(); let found = false, defEmp = '', todas = false
         j.values.slice(1).forEach((row) => {
           if (String(row[3] || '').trim().toLowerCase() !== em) return
           found = true
+          if (!defEmp) defEmp = String(row[0] || '').trim()
+          if (upper(row[5]) === 'TODAS') todas = true
           String(row[4] || '').split(';').filter(Boolean).forEach((a) => set.add(a))
         })
         setAcceso(found ? [...set] : null)
-      } catch { if (!cancel) setAcceso(null) }
+        setVeTodas(found ? todas : true)
+        if (found && defEmp) setEmpresa(defEmp)
+      } catch { if (!cancel) { setAcceso(null); setVeTodas(true) } }
     })()
     return () => { cancel = true }
   }, [authed])
@@ -163,9 +168,35 @@ export default function App() {
   useEffect(() => { if (!authed) return; (async () => { try { setAdmins(await gLoadAdmins()) } catch { } })() }, [authed])
   const emailLow = (getEmail() || '').trim().toLowerCase()
   const esAdmin = emailLow === 'yalik@energybrandsgroup.com' || admins.includes(emailLow)
+  const veTodasEff = veTodas || esAdmin // quién puede cambiar de empresa
+
+  // ENERGY BRANDS: el agrupamiento SBU → marcas se deriva EN VIVO del EBP (misma fuente que los clientes),
+  // no de la lista fija ni de Combinaciones. Las demás empresas (TUMAR, TAHO) usan lo importado/configurado.
+  const [ebSbus, setEbSbus] = useState(null)
+  useEffect(() => {
+    if (!authed) return
+    let cancel = false
+    ;(async () => {
+      try {
+        const j = await gHistorico()
+        if (cancel || !j || !j.values) return
+        const map = {}
+        j.values.slice(1).forEach((r) => {
+          if (upper(r[0]) !== 'ENERGY BRANDS') return
+          const sbu = String(r[4] || '').trim(), mar = String(r[5] || '').trim()
+          if (!sbu || !mar) return
+          ;(map[sbu] = map[sbu] || new Set()).add(mar)
+        })
+        const out = {}
+        Object.keys(map).sort().forEach((s) => { out[s] = [...map[s]].sort((a, b) => a.localeCompare(b)) })
+        if (!cancel && Object.keys(out).length) setEbSbus(out)
+      } catch { }
+    })()
+    return () => { cancel = true }
+  }, [authed])
 
   const role = ROLES.find((r) => r.id === roleId)
-  const sbus = effSBUS(empresa, combos)
+  const sbus = (empresa === 'ENERGY BRANDS' && ebSbus) ? ebSbus : effSBUS(empresa, combos)
 
   function nuevaEmpresa() {
     const n = window.prompt('Nombre de la nueva empresa:')
@@ -234,8 +265,10 @@ export default function App() {
             <div className="row2">
               <label className="who">Empresa:
                 <span className="inline">
-                  <select value={empresa} onChange={(e) => setEmpresa(e.target.value)}>{empresas.map((e) => <option key={e}>{e}</option>)}</select>
-                  <button className="btn" onClick={nuevaEmpresa}>＋ Nueva</button>
+                  {veTodasEff
+                    ? <><select value={empresa} onChange={(e) => setEmpresa(e.target.value)}>{empresas.map((e) => <option key={e}>{e}</option>)}</select>
+                        {esAdmin && <button className="btn" onClick={nuevaEmpresa}>＋ Nueva</button>}</>
+                    : <span className="empchip" style={{ marginLeft: 0, background: 'var(--odoo)' }}>{empresa}</span>}
                 </span>
               </label>
             </div>
@@ -1116,7 +1149,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
   const [savingC, setSavingC] = useState(false)
   const [msgC, setMsgC] = useState(null)
   useEffect(() => {
-    (async () => { try { const j = await gReadTab('Cap_Colaboradores'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '', acceso: String(row[4] || '').split(';').filter(Boolean) }) }); setColabs(out) } else setColabs([]) } catch { } })()
+    (async () => { try { const j = await gReadTab('Cap_Colaboradores'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '', acceso: String(row[4] || '').split(';').filter(Boolean), todas: upper(row[5]) === 'TODAS' }) }); setColabs(out) } else setColabs([]) } catch { } })()
   }, [empresa])
   function toggleAcceso(i, op) { setColabs(colabs.map((x, j) => j === i ? { ...x, acceso: (x.acceso || []).includes(op) ? x.acceso.filter((a) => a !== op) : [...(x.acceso || []), op] } : x)) }
   const [adminsTxt, setAdminsTxt] = useState('')
@@ -1130,7 +1163,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
   }
   async function guardarColabs() {
     setSavingC(true); setMsgC(null)
-    const rows = colabs.filter((c) => String(c.email).trim() || String(c.nombre).trim()).map((c) => ({ rubro: c.nombre, sbu: c.rol, marca: c.email, meses: [(c.acceso || []).join(';')] }))
+    const rows = colabs.filter((c) => String(c.email).trim() || String(c.nombre).trim()).map((c) => ({ rubro: c.nombre, sbu: c.rol, marca: c.email, meses: [(c.acceso || []).join(';'), c.todas ? 'TODAS' : ''] }))
     await postToTab('Cap_Colaboradores', empresa, '', 'Config', rows, setMsgC)
     setSavingC(false)
   }
@@ -1200,25 +1233,26 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
       </div>
 
       <div className="toolbar">
-        <button className="btn" onClick={() => setColabs([...colabs, { nombre: '', email: '', rol: ROLES[0].label, acceso: [] }])}>➕ Agregar colaborador</button>
+        <button className="btn" onClick={() => setColabs([...colabs, { nombre: '', email: '', rol: ROLES[0].label, acceso: [], todas: false }])}>➕ Agregar colaborador</button>
         <div className="spacer"></div>
         <button className="btn primary" disabled={savingC} onClick={guardarColabs}>{savingC ? 'Guardando…' : '💾 Guardar colaboradores'}</button>
       </div>
       {msgC && <div className={'note ' + msgC.t}>{msgC.x}</div>}
       <div className="panel">
         <h3>Colaboradores — {empresa}<span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">Quién llena cada parte del ABP en esta empresa.</div>
+        <div className="sub">Quién llena cada parte del ABP en esta empresa. Al entrar, a cada persona le sale <b>{empresa}</b> por defecto. Marca <b>"Ve todas las empresas"</b> para quien deba cambiar entre empresas (los administradores siempre las ven todas).</div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th className="l">Nombre del colaborador</th><th className="l">Email</th><th>Rol</th><th className="l">Acceso a pestañas</th><th></th></tr></thead>
+            <thead><tr><th className="l">Nombre del colaborador</th><th className="l">Email</th><th>Rol</th><th className="l">Acceso a pestañas</th><th>Ve todas las empresas</th><th></th></tr></thead>
             <tbody>
-              {colabs.length === 0 && <tr><td className="l" colSpan={5}>Agrega colaboradores con el botón de arriba.</td></tr>}
+              {colabs.length === 0 && <tr><td className="l" colSpan={6}>Agrega colaboradores con el botón de arriba.</td></tr>}
               {colabs.map((c, i) => (
                 <tr key={i}>
                   <td className="l"><input style={{ width: '95%', padding: '6px' }} value={c.nombre} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x))} placeholder="Nombre" /></td>
                   <td className="l"><input style={{ width: '95%', padding: '6px' }} value={c.email} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="correo@empresa.com" /></td>
                   <td><select value={c.rol} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, rol: e.target.value } : x))}>{ROLES.map((r) => <option key={r.id}>{r.label}</option>)}</select></td>
                   <td className="l"><div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>{ACCESO_OPCIONES.map((op) => { const on = (c.acceso || []).includes(op); return <span key={op} onClick={() => toggleAcceso(i, op)} style={{ cursor: 'pointer', fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 12, background: on ? 'var(--odoo)' : '#eceef1', color: on ? '#fff' : '#5a6068' }}>{op}</span> })}</div></td>
+                  <td><input type="checkbox" checked={!!c.todas} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, todas: e.target.checked } : x))} /></td>
                   <td><button className="btn" onClick={() => setColabs(colabs.filter((_, j) => j !== i))}>✕</button></td>
                 </tr>
               ))}
