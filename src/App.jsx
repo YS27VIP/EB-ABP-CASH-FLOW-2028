@@ -196,7 +196,11 @@ export default function App() {
   }, [authed])
 
   const role = ROLES.find((r) => r.id === roleId)
-  const sbus = (empresa === 'ENERGY BRANDS' && ebSbus) ? ebSbus : effSBUS(empresa, combos)
+  // EB: si hay una combinación guardada en Configuración, esa manda (editable); si no, se usa la del EBP en vivo.
+  const ebGuardada = combos['ENERGY BRANDS'] && SBU_NAMES.some((s) => (combos['ENERGY BRANDS'][s] || []).length)
+  const sbus = empresa === 'ENERGY BRANDS'
+    ? (ebGuardada ? effSBUS(empresa, combos) : (ebSbus || effSBUS(empresa, combos)))
+    : effSBUS(empresa, combos)
 
   function nuevaEmpresa() {
     const n = window.prompt('Nombre de la nueva empresa:')
@@ -347,7 +351,7 @@ export default function App() {
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><div className="spacer"></div>
           <span className="rolechip" style={{ background: '#5b6470' }}>⚙️ Configuración</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        <main><ConfigScreen empresas={empresas} setEmpresas={setEmpresas} combos={combos} setCombos={setCombos} nuevaEmpresa={nuevaEmpresa} abrirHistorico={() => setRoleId('historico')} /></main>
+        <main><ConfigScreen empresas={empresas} setEmpresas={setEmpresas} combos={combos} setCombos={setCombos} nuevaEmpresa={nuevaEmpresa} abrirHistorico={() => setRoleId('historico')} ebSbus={ebSbus} /></main>
       </>
     )
   }
@@ -1303,7 +1307,7 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU }) {
 }
 
 /* ===== COMBINACIONES ===== */
-function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, abrirHistorico }) {
+function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, abrirHistorico, ebSbus }) {
   const [empresa, setEmpresa] = useState(empresas[0])
   const [asign, setAsign] = useState(() => seed(combos[empresa]))
   const [saving, setSaving] = useState(false)
@@ -1333,7 +1337,13 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
 
   const [extraMarcas, setExtraMarcas] = useState([])
   useEffect(() => { (async () => { try { const m = await gLoadMarcas(); setExtraMarcas(m); setAsign((prev) => seedWith(combos[empresa], [...ALL_MARCAS, ...m])) } catch { } })() }, [])
-  const allMarcas = [...new Set([...ALL_MARCAS, ...extraMarcas])]
+  const allMarcas = [...new Set([...ALL_MARCAS, ...extraMarcas, ...(ebSbus ? Object.values(ebSbus).flat() : [])])]
+  function cargarDeEBP() {
+    if (!ebSbus || !Object.keys(ebSbus).length) { setMsg({ t: 'warn', x: 'Aún no hay datos del EBP para cargar. Entra a una SBU para que cargue el histórico y vuelve.' }); return }
+    const m = {}; allMarcas.forEach((mk) => { m[mk] = '' })
+    Object.entries(ebSbus).forEach(([s, ms]) => ms.forEach((mk) => { if (SBU_NAMES.includes(s)) m[mk] = s }))
+    setAsign(m); setMsg({ t: 'ok', x: 'Cargado desde el EBP. Revisa y pulsa 💾 Guardar combinaciones para dejarlo fijo.' })
+  }
   function seedWith(c, lista) { const m = {}; lista.forEach((mk) => { m[mk] = '' }); if (c) { SBU_NAMES.forEach((s) => (c[s] || []).forEach((mk) => { m[mk] = s })); (c['NO VENDE'] || []).forEach((mk) => { m[mk] = 'NO' }) } return m }
   function seed(c) { return seedWith(c, [...ALL_MARCAS, ...extraMarcas]) }
   async function agregarMarca() {
@@ -1365,6 +1375,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
         <select value={empresa} onChange={(e) => cambiarEmpresa(e.target.value)}>{empresas.map((e) => <option key={e}>{e}</option>)}</select>
         <button className="btn" onClick={nuevaEmpresa}>＋ Nueva empresa</button>
         <button className="btn" onClick={agregarMarca}>➕ Agregar marca</button>
+        {empresa === 'ENERGY BRANDS' && <button className="btn" onClick={cargarDeEBP}>⚡ Cargar de EBP</button>}
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar combinaciones'}</button>
       </div>

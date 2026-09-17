@@ -27,7 +27,7 @@ export function initAuth() {
         _tokenClient = window.google.accounts.oauth2.initTokenClient({
           client_id: CLIENT_ID, scope: SCOPES,
           callback: async (resp) => {
-            if (resp && resp.access_token) { _token = resp.access_token; try { localStorage.setItem('abp_granted', '1') } catch { } await _fetchUser(); _emit() }
+            if (resp && resp.access_token) { _token = resp.access_token; try { localStorage.setItem('abp_granted', '1') } catch { } await _fetchUser(); try { if (_email) localStorage.setItem('abp_email', _email) } catch { } _emit() }
           },
         })
         resolve()
@@ -36,7 +36,7 @@ export function initAuth() {
   })
   return _authReady
 }
-export function signIn() { if (!_tokenClient) return; let granted = false; try { granted = !!localStorage.getItem('abp_granted') } catch { } _tokenClient.requestAccessToken({ prompt: granted ? '' : 'consent' }) }
+export function signIn() { if (!_tokenClient) return; let granted = false, hint = ''; try { granted = !!localStorage.getItem('abp_granted'); hint = localStorage.getItem('abp_email') || '' } catch { } const cfg = { prompt: granted ? '' : 'consent' }; if (hint) cfg.hint = hint; _tokenClient.requestAccessToken(cfg) }
 export function signOut() { _token = null; _email = null; _name = null; _emit() }
 
 async function _fetchUser() {
@@ -98,15 +98,18 @@ export async function gHistorico() {
   for (const t of EBP_TABS) {
     const rows = await readValuesFrom(EBP_SHEET_ID, t.name)
     let hr = -1
-    for (let i = 0; i < Math.min(rows.length, 15); i++) { if (rows[i].map((x) => String(x || '')).join('|').toUpperCase().indexOf('CLIENTE ARMONIZADO') >= 0) { hr = i; break } }
+    for (let i = 0; i < Math.min(rows.length, 15); i++) { const cells = rows[i].map((x) => String(x || '').trim().toUpperCase()); if ((cells.includes('SBU') && cells.includes('MARCA')) || cells.join('|').indexOf('CLIENTE ARMONIZADO') >= 0) { hr = i; break } }
     if (hr < 0) continue
     const H = rows[hr].map((x) => String(x || '').trim().toUpperCase())
     const idx = (cands, last) => { let f = -1; for (const c of cands) { for (let k = 0; k < H.length; k++) { if (H[k] === c) { if (last) f = k; else return k } } if (f >= 0 && !last) return f } return f }
-    const iT = idx(['TIPO']), iR = idx(['RUBRO']), iS = idx(['SBU']), iM = idx(['MARCA', 'ARCH']), iC = idx(['CLIENTE ARMONIZADO']), iV = idx(['VALOR EN DOLARES', 'DOLARES', 'VALOR']), iMes = idx(['FECHA ARREGLADA', 'MES']), iP = idx(['PAIS'], true), iA = idx(['AÑO', 'ANO'])
+    const iT = idx(['TIPO']), iR = idx(['RUBRO']), iS = idx(['SBU']), iM = idx(['MARCA', 'ARCH']), iC = idx(['CLIENTE ARMONIZADO', 'BUYER', 'CLIENTE']), iV = idx(['VALOR EN DOLARES', 'DOLARES', 'VALOR']), iMes = idx(['FECHA ARREGLADA', 'MES', 'FECHA']), iP = idx(['PAIS'], true), iA = idx(['AÑO', 'ANO'])
     for (let r = hr + 1; r < rows.length; r++) {
       const row = rows[r]
-      const cli = String(row[iC] || '').trim(); if (!cli) continue
+      const cli = String(row[iC] || '').trim()
+      const mar = String(row[iM] || '').trim()
+      const tipo = up(row[iT]); if (tipo === 'TAHO') continue // EB = "SIN TAHO"; TAHO es empresa aparte
       const rub = String(row[iR] || '').trim().toUpperCase(); if (!(rub.indexOf('UNIDAD') >= 0 || rub.indexOf('COSTO') >= 0 || rub.indexOf('VENTA') >= 0)) continue
+      if (!mar && !cli) continue
       const mm = String(row[iMes] || '').trim().toLowerCase().replace(' ', '-').split('-'); const mo = MES_NUM[mm[0]]; if (mo == null) continue
       const yr = (iA >= 0 && row[iA]) ? parseInt(row[iA], 10) : (mm[1] ? 2000 + parseInt(mm[1], 10) : t.year)
       const monto = Number(String(row[iV] || '').replace(/[^0-9.\-]/g, '')) || 0
