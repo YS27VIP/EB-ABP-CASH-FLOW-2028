@@ -67,6 +67,22 @@ const CF_PLAZO_MESES = { 'Cash': 0, '30 días': 1, '60 días': 2, '90 días': 3,
 const CF_COSTOS_PARENT = 'Costos Operativos'
 const CF_COSTOS = ['Gastos administrativos', 'Viajes', 'Marketing', 'Comisiones']
 
+/* Referencia de peso por categoría (unidades históricas) para decidir el % 2028.
+   DEMO: solo ALTRA (leído de FW26 y SS26). Otras marcas se cargan luego por importación. */
+const REF_CAT = {
+  ALTRA: {
+    'NJ IMPACT': { ROAD: { fw: 64, ss: 45 }, TRAIL: { fw: 36, ss: 55 } },
+    'SERVIBERICA': { ROAD: { fw: 64, ss: 71 }, TRAIL: { fw: 36, ss: 29 } },
+    'SINERGY': { ROAD: { fw: 84 }, TRAIL: { fw: 16 } },
+    'TAHO': { ROAD: { fw: 49 }, TRAIL: { fw: 51 } },
+  },
+}
+function refCat(marca, cli, cat) {
+  const tbl = REF_CAT[upper(marca)]; if (!tbl) return null
+  const key = Object.keys(tbl).find((k) => upper(cli).indexOf(k) >= 0); if (!key) return null
+  return tbl[key][upper(cat)] || null
+}
+
 /* Temporadas: inventario inicial (stock viejo) vs compras 2028 (nuevo, porque el presupuesto es 2028) */
 const INV_SEASONS = ['Otros', 'FW26', 'SS26', 'FW27', 'SS27']
 const BUY_SEASONS = ['SS28', 'FW28', 'ATS 2028']
@@ -2002,6 +2018,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [growth, setGrowth] = useState(() => { try { return JSON.parse(localStorage.getItem('ventas_growth_' + empresa) || '{}') } catch { return {} } })
   const [catPart, setCatPart] = useState(() => { try { return JSON.parse(localStorage.getItem('catpart_' + empresa) || '{}') } catch { return {} } })
   useEffect(() => { try { localStorage.setItem('catpart_' + empresa, JSON.stringify(catPart)) } catch { } }, [catPart, empresa])
+  const [catPct, setCatPct] = useState(() => { try { return JSON.parse(localStorage.getItem('catpct_' + empresa) || '{}') } catch { return {} } })
+  useEffect(() => { try { localStorage.setItem('catpct_' + empresa, JSON.stringify(catPct)) } catch { } }, [catPct, empresa])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
 
@@ -2048,7 +2066,15 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const partOf = (cli) => { const k = cli + '|' + marca; return catPart[k] === undefined ? catList.map((c) => c.cat) : catPart[k] }
   const toggleCat = (cli, cat) => { const cur = partOf(cli); const nx = cur.includes(cat) ? cur.filter((x) => x !== cat) : [...cur, cat]; setCatPart({ ...catPart, [cli + '|' + marca]: nx }) }
   const pesoCat = {}; catList.forEach((c) => { pesoCat[c.cat] = num(c.peso) })
-  const catW = (cli, cat) => { const part = partOf(cli); if (!part.includes(cat)) return 0; const den = part.reduce((a, c) => a + (pesoCat[c] || 0), 0); return den > 0 ? (pesoCat[cat] || 0) / den : (part.length ? 1 / part.length : 0) }
+  const pctKey = (cli, cat) => cli + '|' + marca + '|' + cat
+  const pctOf = (cli, cat) => { const v = catPct[pctKey(cli, cat)]; return (v === undefined || v === '') ? null : num(v) }
+  const setPct = (cli, cat, v) => setCatPct({ ...catPct, [pctKey(cli, cat)]: v })
+  const catW = (cli, cat) => {
+    // Si el cliente tiene % explícitos, se usan (normalizados); si no, participación + pesos del Director.
+    const expl = catList.map((c) => pctOf(cli, c.cat))
+    if (expl.some((v) => v !== null)) { const den = expl.reduce((a, v) => a + (v || 0), 0); return den > 0 ? (pctOf(cli, cat) || 0) / den : 0 }
+    const part = partOf(cli); if (!part.includes(cat)) return 0; const den = part.reduce((a, c) => a + (pesoCat[c] || 0), 0); return den > 0 ? (pesoCat[cat] || 0) / den : (part.length ? 1 / part.length : 0)
+  }
   const uCatMes = (cat, mi) => clientes.reduce((a, cli) => a + u28(cli, mi) * catW(cli, cat), 0)
 
   return (
@@ -2083,13 +2109,17 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       {usarCat && <div className="panel">
         <h3>Categorías por cliente — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">Marca en cuáles categorías participa cada cliente. Con una sola categoría toma el 100% (sin ponderar); con varias, se reparte con los pesos del Director.</div>
+        <div className="sub">Completa el <b>% por cliente y categoría</b>. Debajo del campo ves el <b>peso de referencia real</b> (FW26 / SS26) para decidir con números. Si dejas los % en blanco, se reparte con los pesos del Director.</div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th className="l">Cliente</th>{catList.map((c) => <th key={c.cat}>{c.cat} <span className="unit">{num(c.peso).toFixed(0)}%</span></th>)}</tr></thead>
+            <thead><tr><th className="l">Cliente</th>{catList.map((c) => <th key={c.cat}>{c.cat} <span className="unit">Dir {num(c.peso).toFixed(0)}%</span></th>)}</tr></thead>
             <tbody>
               {clientes.length === 0 && <tr><td className="l" colSpan={catList.length + 1}>No hay clientes con histórico para {marca}.</td></tr>}
-              {clientes.map((cli) => <tr key={cli}><td className="l">{cli}</td>{catList.map((c) => { const on = partOf(cli).includes(c.cat); return <td key={c.cat}><input type="checkbox" checked={on} onChange={() => toggleCat(cli, c.cat)} /></td> })}</tr>)}
+              {clientes.map((cli) => <tr key={cli}><td className="l">{cli}</td>{catList.map((c) => { const ref = refCat(marca, cli, c.cat); return (
+                <td key={c.cat} style={{ textAlign: 'center' }}>
+                  <div className="cell" style={{ display: 'inline-block' }}><input value={catPct[pctKey(cli, c.cat)] ?? ''} onChange={(e) => setPct(cli, c.cat, e.target.value)} inputMode="decimal" placeholder="%" style={{ width: 54 }} /></div>
+                  <div className="unit" style={{ fontSize: 10, marginTop: 3, whiteSpace: 'nowrap' }}>{ref ? <>ref FW26 {ref.fw != null ? ref.fw + '%' : '—'} · SS26 {ref.ss != null ? ref.ss + '%' : '—'}</> : 'ref —'}</div>
+                </td>) })}</tr>)}
             </tbody>
           </table>
         </div>
