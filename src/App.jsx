@@ -1572,8 +1572,8 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
           </tbody>
         </table></div>
       </div>}
-      <div className="panel">
-        <h3>{soloSBU ? `Resumen ${soloSBU}` : 'Detalle por marca — ' + empresa} <span className="unit">(solo lectura · 2028)</span></h3>
+      {soloSBU && <div className="panel">
+        <h3>Resumen {soloSBU} <span className="unit">(solo lectura · 2028)</span></h3>
         <div className="sub">Venta Neta = Unidades × AUP · Costo = Unidades × AUC · Margen = Venta − Costo · Inventario = compras del año. AUP/AUC son promedios ponderados.</div>
         {cargando ? <div className="sub">Cargando…</div> : (
           <div className="tablewrap">
@@ -1594,7 +1594,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
             </table>
           </div>
         )}
-      </div>
+      </div>}
     </>
   )
 }
