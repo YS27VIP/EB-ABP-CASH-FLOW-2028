@@ -67,8 +67,10 @@ const CF_PLAZO_MESES = { 'Cash': 0, '30 días': 1, '60 días': 2, '90 días': 3,
 const CF_COSTOS_PARENT = 'Costos Operativos'
 const CF_COSTOS = ['Gastos administrativos', 'Viajes', 'Marketing', 'Comisiones']
 
-/* Temporadas de inventario (de más viejo a más nuevo) */
-const SEASONS = ['Otros', 'FW26', 'SS26', 'FW27', 'SS27']
+/* Temporadas: inventario inicial (stock viejo) vs compras 2028 (nuevo, porque el presupuesto es 2028) */
+const INV_SEASONS = ['Otros', 'FW26', 'SS26', 'FW27', 'SS27']
+const BUY_SEASONS = ['SS28', 'FW28', 'ATS 2028']
+const SEASONS = [...INV_SEASONS, ...BUY_SEASONS]
 
 /* ===== helpers ===== */
 const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n }
@@ -917,21 +919,17 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   )
 }
 
-/* Cálculo compartido del inventario por temporada (flujo, saldos y AUP/AUC mezclado) */
+/* Cálculo compartido del inventario por temporada: inicial + compras − salidas(rotación) = saldo */
 function inventarioCalc(data, marca, catList) {
   const g = (k) => num(data[k])
-  const II = (c, s) => `II|${marca}|${c}|${s}`, CP = (s, m) => `CP|${marca}|${s}|${m}`, RT = (s) => `RT|${marca}|${s}`, AUP = (c, s) => `AUP|${marca}|${c}|${s}`, AUC = (c, s) => `AUC|${marca}|${c}|${s}`
+  const II = (c, s) => `II|${marca}|${c}|${s}`, CP = (s, m) => `CP|${marca}|${s}|${m}`, RT = (s) => `RT|${marca}|${s}`
   const cl = catList && catList.length ? catList : ['General']
   const invIni = (s) => cl.reduce((a, c) => a + g(II(c, s)), 0)
-  const catShare = (c, s) => { const t = invIni(s); return t > 0 ? g(II(c, s)) / t : (cl.length ? 1 / cl.length : 0) }
   const flujos = {}
   SEASONS.forEach((s) => { const rot = g(RT(s)) / 100; const arr = []; let saldo = invIni(s); for (let m = 0; m < 12; m++) { const ini = saldo; const comp = g(CP(s, m)); const disp = ini + comp; const sal = disp * rot; const fin = disp - sal; arr.push({ ini, comp, sal, fin }); saldo = fin } flujos[s] = arr })
-  const aucSeason = (s) => cl.reduce((a, c) => a + catShare(c, s) * g(AUC(c, s)), 0)
-  const blend = (priceFn) => MESES.map((_, m) => { let un = 0, val = 0; SEASONS.forEach((s) => { const sal = flujos[s][m].sal; cl.forEach((c) => { const u = sal * catShare(c, s); un += u; val += u * g(priceFn(c, s)) }) }); return un > 0 ? val / un : 0 })
-  const aupBlend = blend(AUP), aucBlend = blend(AUC)
   const saldoUnits = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].fin, 0))
-  const saldoValue = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].fin * aucSeason(s), 0))
-  return { flujos, aupBlend, aucBlend, saldoUnits, saldoValue, aucSeason }
+  const salidasUnits = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].sal, 0))
+  return { flujos, saldoUnits, salidasUnits }
 }
 
 /* ===== INVENTARIO POR TEMPORADA: captura matriz (Producto) + flujo/rotación (Logística) =====
