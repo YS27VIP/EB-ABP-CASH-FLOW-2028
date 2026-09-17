@@ -46,7 +46,7 @@ const ROLES = [
   { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#0891b2', tab: 'Cap_Ventas',    rubros: [{ k: 'UNIDADES', u: 'ud', proyeccion: true }, VJ] },
   { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP', u: '$', porCat: true }, { k: 'AUC', u: '$' }, { k: 'TEMPORADAS', u: '$', temporada: true }, VJ, { k: 'INVENTARIO COMPRAS', u: '$' }] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
-  { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }, { k: 'INVENTARIO', u: '$', invflow: true }] },
+  { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
   { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [VJ, { k: 'CASH FLOW', u: '$', cash: true }] },
   { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [VJ, { k: 'CASH FLOW', u: '$', cash: true }, { k: 'CATEGORIAS', cat: true }] },
 ]
@@ -917,6 +917,23 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   )
 }
 
+/* Cálculo compartido del inventario por temporada (flujo, saldos y AUP/AUC mezclado) */
+function inventarioCalc(data, marca, catList) {
+  const g = (k) => num(data[k])
+  const II = (c, s) => `II|${marca}|${c}|${s}`, CP = (s, m) => `CP|${marca}|${s}|${m}`, RT = (s) => `RT|${marca}|${s}`, AUP = (c, s) => `AUP|${marca}|${c}|${s}`, AUC = (c, s) => `AUC|${marca}|${c}|${s}`
+  const cl = catList && catList.length ? catList : ['General']
+  const invIni = (s) => cl.reduce((a, c) => a + g(II(c, s)), 0)
+  const catShare = (c, s) => { const t = invIni(s); return t > 0 ? g(II(c, s)) / t : (cl.length ? 1 / cl.length : 0) }
+  const flujos = {}
+  SEASONS.forEach((s) => { const rot = g(RT(s)) / 100; const arr = []; let saldo = invIni(s); for (let m = 0; m < 12; m++) { const ini = saldo; const comp = g(CP(s, m)); const disp = ini + comp; const sal = disp * rot; const fin = disp - sal; arr.push({ ini, comp, sal, fin }); saldo = fin } flujos[s] = arr })
+  const aucSeason = (s) => cl.reduce((a, c) => a + catShare(c, s) * g(AUC(c, s)), 0)
+  const blend = (priceFn) => MESES.map((_, m) => { let un = 0, val = 0; SEASONS.forEach((s) => { const sal = flujos[s][m].sal; cl.forEach((c) => { const u = sal * catShare(c, s); un += u; val += u * g(priceFn(c, s)) }) }); return un > 0 ? val / un : 0 })
+  const aupBlend = blend(AUP), aucBlend = blend(AUC)
+  const saldoUnits = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].fin, 0))
+  const saldoValue = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].fin * aucSeason(s), 0))
+  return { flujos, aupBlend, aucBlend, saldoUnits, saldoValue, aucSeason }
+}
+
 /* ===== INVENTARIO POR TEMPORADA: captura matriz (Producto) + flujo/rotación (Logística) =====
    Modelo: categoría = nivel de precio/costo · temporada = antigüedad. AUP/AUC por categoría×temporada.
    Rotación = % mensual del saldo. Salidas = saldo × rotación. Saldo = inicial + compras − salidas.
@@ -940,23 +957,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   function guardar() { setSaving(true); try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado en este equipo. Persistencia al Sheet se conecta en el siguiente paso.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
 
-  // Flujo por temporada (mensual): inicial → +compras → −salidas(rotación) → saldo
-  const invIniSeason = (s) => catList.reduce((a, c) => a + g(K.ii(c, s)), 0)
-  const flujo = (s) => {
-    const rot = g(K.rt(s)) / 100
-    const out = []; let saldo = invIniSeason(s)
-    for (let m = 0; m < 12; m++) { const ini = saldo; const comp = g(K.cp(s, m)); const disp = ini + comp; const sal = disp * rot; const fin = disp - sal; out.push({ ini, comp, sal, fin }); saldo = fin }
-    return out
-  }
-  const flujos = {}; SEASONS.forEach((s) => flujos[s] = flujo(s))
-  // Mezcla de AUP/AUC: reparte la salida de cada temporada entre categorías según su mezcla de inventario inicial
-  const catShare = (c, s) => { const tot = invIniSeason(s); return tot > 0 ? g(K.ii(c, s)) / tot : (catList.length ? 1 / catList.length : 0) }
-  const blend = (precioK) => MESES.map((_, m) => {
-    let un = 0, val = 0
-    SEASONS.forEach((s) => { const sal = flujos[s][m].sal; catList.forEach((c) => { const u = sal * catShare(c, s); un += u; val += u * g(precioK(c, s)) }) })
-    return un > 0 ? val / un : 0
-  })
-  const aupBlend = blend(K.aup), aucBlend = blend(K.auc)
+  const { flujos, aupBlend, aucBlend } = inventarioCalc(data, marca, catList)
 
   if (mode === 'flow') {
     const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
@@ -1018,7 +1019,64 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
           <tbody>{SEASONS.map((s) => <tr key={s}><td className="l">{s}</td>{MESES.map((_, m) => { const k = K.cp(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}</tr>)}</tbody>
         </table></div>
       </div>
-      <TemporadaForm empresa={empresa} fixedMarca={marca} sbus={sbus} mode="flow" />
+      <div className="sub">El flujo de inventario (saldo por temporada) y su costo de mantenimiento se ven en <b>Logística</b>.</div>
+    </>
+  )
+}
+
+/* ===== COSTOS LOGÍSTICOS: costo de venta, muestras y mantenimiento de stock (calc del saldo) ===== */
+function CostosLogisticos({ empresa, fixedMarca, sbus }) {
+  const marca = fixedMarca || marcasDe(sbus)[0]?.marca
+  const [cats, setCats] = useState([])
+  const [tData, setTData] = useState({})
+  const stKey = `logcost_${empresa}`
+  const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+  useEffect(() => {
+    try { setTData(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
+    ;(async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa) || upper(row[3]) !== upper(marca)) return; if (row[1]) out.push(row[1]) }); setCats([...new Set(out)]) } } catch { } })()
+  }, [empresa, marca])
+  const catList = cats.length ? cats : ['General']
+  const inv = inventarioCalc(tData, marca, catList)
+
+  const key = (linea, m) => `${marca}|${linea}|${m}`
+  const g = (k) => num(data[k])
+  const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  const mantRateKey = `${marca}|MANT_RATE`
+  const mantRate = num(data[mantRateKey]) / 100
+  const mant = MESES.map((_, m) => inv.saldoValue[m] * mantRate) // costo mantenimiento = valor del saldo × % mensual
+  const L1 = 'Costo logístico de la venta', L2 = 'Costo de las muestras'
+  const rowTot = (arr) => arr.reduce((a, b) => a + b, 0)
+  const l1v = MESES.map((_, m) => g(key(L1, m))), l2v = MESES.map((_, m) => g(key(L2, m)))
+  const totalMes = MESES.map((_, m) => l1v[m] + l2v[m] + mant[m])
+
+  function guardar() { setSaving(true); try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado en este equipo.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+
+  return (
+    <>
+      <div className="panel">
+        <div className="toolbar" style={{ marginBottom: 8 }}>
+          <span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span>
+          <label style={{ marginLeft: 10 }}>Mantenimiento %/mes del valor del saldo</label>
+          <input value={data[mantRateKey] ?? ''} onChange={(e) => set(mantRateKey, e.target.value)} inputMode="decimal" placeholder="%" style={{ width: 70, padding: 6, border: '1px solid var(--line)', borderRadius: 6 }} />
+          <div className="spacer"></div>
+          <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+        </div>
+        {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+        <h3>Costos logísticos — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">Costo logístico de la venta y de las muestras se capturan; el <b>mantenimiento de stock</b> se calcula del valor del saldo × {fmt(num(data[mantRateKey]))}%/mes.</div>
+        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '190px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+          <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+          <tbody>
+            <tr><td className="l">{L1}</td>{MESES.map((_, m) => { const k = key(L1, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(rowTot(l1v))}</td></tr>
+            <tr><td className="l">{L2}</td>{MESES.map((_, m) => { const k = key(L2, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(rowTot(l2v))}</td></tr>
+            <tr><td className="l sub2">Valor del saldo de inventario ($) <span className="unit">(base)</span></td>{inv.saldoValue.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(inv.saldoValue[11])}</td></tr>
+            <tr className="catrow"><td className="l">Costo mantenimiento de stock <span className="unit">(= valor saldo × %)</span></td>{mant.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(mant))}</td></tr>
+            <tr className="grandrow"><td className="l">TOTAL costos logísticos</td>{totalMes.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(totalMes))}</td></tr>
+          </tbody>
+        </table></div>
+      </div>
     </>
   )
 }
@@ -1092,6 +1150,10 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
                   <div key={r.id} style={{ marginBottom: 18 }}>
                     <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
                     <RoleForm key={sbuName + r.id + marca + comMode} role={r} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} rubrosOverride={rbs} />
+                    {r.id === 'logistica' && <>
+                      <TemporadaForm key={'flow' + sbuName + marca} empresa={empresa} sbus={oneSbu} fixedMarca={marca} mode="flow" />
+                      <CostosLogisticos key={'cl' + sbuName + marca} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />
+                    </>}
                   </div>) })}
               </>)
               : <RoleForm key={sbuName + secId + marca} role={role} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
