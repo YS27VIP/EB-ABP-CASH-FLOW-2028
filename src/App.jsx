@@ -348,6 +348,17 @@ export default function App() {
     )
   }
 
+  if (roleId === 'finanzas') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#2e7d32' }}>💰 Finanzas</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        <main><FinanzasWorkspace empresa={empresa} usuario={usuario} sbus={sbus} /></main>
+      </>
+    )
+  }
+
   if (roleId === 'config') {
     return (
       <>
@@ -914,6 +925,38 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           </div>
         )
       })()}
+
+      {!isTotal && (() => {
+        const cls = clientesDe(marca)
+        const uni = unidades2028(marca), aup = aupMarca(marca)
+        const filas = cls.map((cli) => {
+          const term = data[`TERM|${marca}|${cli}`]
+          const plazo = CF_PLAZO_MESES[term] ?? 0
+          const ini = num(data[`SALDO|${marca}|${cli}`])
+          const ventas = MESES.map((_, m) => (uni[cli]?.[m] || 0) * (aup[m] || 0))
+          const cobros = MESES.map((_, m) => (m >= plazo ? ventas[m - plazo] : 0) + (m === Math.min(plazo, 11) ? ini : 0))
+          let saldo = ini; const run = MESES.map((_, m) => { saldo = saldo + ventas[m] - cobros[m]; return saldo })
+          return { cli, term, ini, run, ventas }
+        }).filter((f) => f.ini !== 0 || f.run.some((v) => Math.abs(v) > 0.5) || f.ventas.some((v) => v > 0.5))
+        const totRun = MESES.map((_, m) => filas.reduce((a, f) => a + f.run[m], 0))
+        const totIni = filas.reduce((a, f) => a + f.ini, 0)
+        return (
+          <div className="panel">
+            <h3>{role.label} — Saldo por cliente 2028 <span className="unit">(cuentas por cobrar · {marca})</span></h3>
+            <div className="sub">Arranca con la <b>deuda cierre 2027</b>; cada mes <b>suma la venta</b> (Unidades×AUP) y <b>resta el cobro</b> según el término del cliente. El saldo es lo que el cliente te va quedando debiendo mes a mes.</div>
+            <div className="tablewrap">
+              <table className="vfix"><colgroup><col style={{ width: '210px' }} /><col style={{ width: '64px' }} /><col style={{ width: '80px' }} />{CF_M2028.map((_, i) => <col key={i} style={{ width: '64px' }} />)}</colgroup>
+                <thead><tr><th className="l">Cliente</th><th>Plazo</th><th>Deuda 2027</th>{CF_M2028.map((m) => <th key={m}>{m}</th>)}</tr></thead>
+                <tbody>
+                  {filas.length === 0 && <tr><td className="l" colSpan={15}>Sin datos aún. Captura la deuda 2027 y/o unidades y AUP de {marca}.</td></tr>}
+                  {filas.map((f) => <tr key={f.cli}><td className="l">{f.cli}</td><td>{f.term || '—'}</td><td className="tot">{fmt(f.ini)}</td>{f.run.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}</tr>)}
+                  {filas.length > 0 && <tr className="grandrow"><td className="l">TOTAL saldo clientes</td><td></td><td className="tot">{fmt(totIni)}</td>{totRun.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}</tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
     </>
   )
 }
@@ -1046,6 +1089,33 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
         </table></div>
       </div>
     </>
+  )
+}
+
+/* ===== FINANZAS WORKSPACE: panel de marcas (todas las SBU) + Cash Flow por marca ===== */
+function FinanzasWorkspace({ empresa, usuario, sbus }) {
+  const finRole = ROLES.find((r) => r.id === 'finanzas')
+  const firstMarca = (Object.values(sbus)[0] || [])[0]
+  const [marca, setMarca] = useState(firstMarca)
+  useEffect(() => { if (!marca && firstMarca) setMarca(firstMarca) }, [firstMarca])
+  const isTot = String(marca || '').startsWith('TOTAL::')
+  const acc = isTot ? sbuColor(String(marca).slice(7)) : marcaColor(marca)
+  return (
+    <div className="comercial">
+      <aside className="cmz-side">
+        {Object.entries(sbus).map(([s, ms]) => (
+          <div className="cmz-sbu" key={s}>
+            <div className="cmz-sbu-h" style={{ color: sbuColor(s), borderLeft: '4px solid ' + sbuColor(s), paddingLeft: 8 }}>{s}</div>
+            <button className={'cmz-marca' + (marca === `TOTAL::${s}` ? ' active' : '')} onClick={() => setMarca(`TOTAL::${s}`)} style={marca === `TOTAL::${s}` ? { background: sbuColor(s), color: '#fff' } : {}}>▣ TOTAL {s}</button>
+            {ms.map((m) => { const c = marcaColor(m); const on = m === marca; return <button key={m} className={'cmz-marca' + (on ? ' active' : '')} onClick={() => setMarca(m)} style={on ? { background: c, color: '#fff' } : {}}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: c, marginRight: 8, verticalAlign: 'middle' }}></span>{m}</button> })}
+          </div>
+        ))}
+      </aside>
+      <div className="cmz-main" style={{ borderTop: '4px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
+        {marca ? <RoleForm key={'fin' + marca} role={finRole} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={marca} />
+          : <div className="note warn">Selecciona una marca en el panel de la izquierda.</div>}
+      </div>
+    </div>
   )
 }
 
