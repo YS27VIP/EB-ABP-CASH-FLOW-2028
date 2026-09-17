@@ -80,7 +80,7 @@ export async function gReadTab(tab) { const values = await readValues(tab); retu
 
 /* ---- Histórico EN VIVO desde el libro EBP (se actualiza solo al avanzar el EBP) ---- */
 const EBP_SHEET_ID = '1OZNU8e2P8D8Dewa0rz9fGL7B-h8RJ6_7XGGuUpro8wc'
-const EBP_TABS = [{ name: 'UNIDADES VENTA COSTO', year: 2026 }, { name: 'VENTA REAL 2025', year: 2025 }]
+const EBP_TABS = [{ names: ['UNIDADES COSTO VENTAS', 'UNIDADES VENTA COSTO'], year: 2026 }, { names: ['VENTA REAL 2025'], year: 2025 }]
 const MES_NUM = { ene: 0, feb: 1, mar: 2, abr: 3, may: 4, jun: 5, jul: 6, ago: 7, sep: 8, sept: 8, oct: 9, nov: 10, dic: 11 }
 async function readValuesFrom(sheetId, tab) {
   try {
@@ -96,7 +96,8 @@ export async function gHistorico() {
   // Otras empresas (TUMAR, TAHO, …): histórico importado por Excel y guardado en la hoja Historico (todo lo que NO sea ENERGY BRANDS).
   try { const tab = await readValues('Historico'); tab.slice(1).forEach((r) => { if (String(r[0] || '').trim().toUpperCase() !== 'ENERGY BRANDS') out.push(r) }) } catch { }
   for (const t of EBP_TABS) {
-    const rows = await readValuesFrom(EBP_SHEET_ID, t.name)
+    let rows = []
+    for (const nm of t.names) { rows = await readValuesFrom(EBP_SHEET_ID, nm); if (rows && rows.length) break }
     let hr = -1
     for (let i = 0; i < Math.min(rows.length, 15); i++) { const cells = rows[i].map((x) => String(x || '').trim().toUpperCase()); if ((cells.includes('SBU') && cells.includes('MARCA')) || cells.join('|').indexOf('CLIENTE ARMONIZADO') >= 0) { hr = i; break } }
     if (hr < 0) continue

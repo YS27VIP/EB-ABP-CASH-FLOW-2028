@@ -394,18 +394,21 @@ export default function App() {
 }
 
 /* ===== RoleForm: pestañas de rubro (simple o detalle) ===== */
-function RoleForm({ role, usuario, empresa, sbus, fixedMarca }) {
+function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) {
+  const rubros = rubrosOverride || role.rubros
   const [tab, setTab] = useState(0)
   const [data, setData] = useState({})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
-  const rb = role.rubros[tab]
+  if (!rubros.length) return null
+  const idx = Math.min(tab, rubros.length - 1)
+  const rb = rubros[idx]
   const common = { role, rubro: rb, usuario, empresa, sbus, data, setData, saving, setSaving, msg, setMsg, fixedMarca }
 
   return (
     <>
       <div className="toolbar">
-        {role.rubros.map((r, i) => (<button key={r.k} className={'seg' + (i === tab ? ' active' : '')} onClick={() => { setTab(i); setMsg(null) }}>{r.k}</button>))}
+        {rubros.map((r, i) => (<button key={r.k} className={'seg' + (i === idx ? ' active' : '')} onClick={() => { setTab(i); setMsg(null) }}>{r.k}</button>))}
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       {rb.proyeccion ? <ProjectionForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
@@ -912,8 +915,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
 
 /* ===== SBU WORKSPACE: dentro de una SBU salen las secciones (roles) con sus marcas ===== */
 function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
-  const SECS = ROLES.filter((r) => ['ventas', 'producto', 'marketing', 'logistica', 'director'].includes(r.id))
-  const [secId, setSecId] = useState('ventas')
+  const comercialRoles = ['ventas', 'producto', 'logistica'].map((id) => ROLES.find((r) => r.id === id))
+  const SECS = [{ id: 'comercial', icon: '🧭', label: 'Comercial' }, ROLES.find((r) => r.id === 'marketing'), ROLES.find((r) => r.id === 'director')]
+  const [secId, setSecId] = useState('comercial')
   const [marca, setMarca] = useState('__TOTAL__')
   const [totTab, setTotTab] = useState('brand')
   const cashRole = { label: 'Cash Flow', tab: 'Cap_Finanzas' }
@@ -966,6 +970,12 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
               ? <CashFlowForm key={'cf' + sbuName + marca} role={cashRole} rubro={cashRubro} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />
               : secId === 'viajes'
               ? <ViajesEquipo empresa={empresa} marca={marca} sbuName={sbuName} marcasSBU={marcasSBU} />
+              : secId === 'comercial'
+              ? comercialRoles.map((r) => (
+                <div key={r.id} style={{ marginBottom: 18 }}>
+                  <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
+                  <RoleForm key={sbuName + r.id + marca} role={r} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />
+                </div>))
               : <RoleForm key={sbuName + secId + marca} role={role} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
           </>)}
       </div>
