@@ -44,9 +44,9 @@ const VJ = { k: 'VIAJES', u: '$', detalle: VIAJES_GROUPS, extrasKey: 'viajes_ext
 
 const ROLES = [
   { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#0891b2', tab: 'Cap_Ventas',    rubros: [{ k: 'UNIDADES', u: 'ud', proyeccion: true }, VJ] },
-  { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP', u: '$', porCat: true }, { k: 'AUC', u: '$' }, VJ, { k: 'INVENTARIO COMPRAS', u: '$' }] },
+  { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP', u: '$', porCat: true }, { k: 'AUC', u: '$' }, { k: 'TEMPORADAS', u: '$', temporada: true }, VJ, { k: 'INVENTARIO COMPRAS', u: '$' }] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
-  { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
+  { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }, { k: 'INVENTARIO', u: '$', invflow: true }] },
   { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [VJ, { k: 'CASH FLOW', u: '$', cash: true }] },
   { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [VJ, { k: 'CASH FLOW', u: '$', cash: true }, { k: 'CATEGORIAS', cat: true }] },
 ]
@@ -66,6 +66,9 @@ const CF_PLAZO_MESES = { 'Cash': 0, '30 días': 1, '60 días': 2, '90 días': 3,
 /* Costos Operativos = suma de estos 4 sub-rubros (el usuario los llena; el total es calculado) */
 const CF_COSTOS_PARENT = 'Costos Operativos'
 const CF_COSTOS = ['Gastos administrativos', 'Viajes', 'Marketing', 'Comisiones']
+
+/* Temporadas de inventario (de más viejo a más nuevo) */
+const SEASONS = ['Otros', 'FW26', 'SS26', 'FW27', 'SS27']
 
 /* ===== helpers ===== */
 const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n }
@@ -196,10 +199,9 @@ export default function App() {
   }, [authed])
 
   const role = ROLES.find((r) => r.id === roleId)
-  // EB: si hay una combinación guardada en Configuración, esa manda (editable); si no, se usa la del EBP en vivo.
-  const ebGuardada = combos['ENERGY BRANDS'] && SBU_NAMES.some((s) => (combos['ENERGY BRANDS'][s] || []).length)
+  // EB: manda el EBP en vivo (3 SBU con sus marcas). Solo si NO hay datos del EBP se usa la config manual.
   const sbus = empresa === 'ENERGY BRANDS'
-    ? (ebGuardada ? effSBUS(empresa, combos) : (ebSbus || effSBUS(empresa, combos)))
+    ? (ebSbus || effSBUS(empresa, combos))
     : effSBUS(empresa, combos)
 
   function nuevaEmpresa() {
@@ -413,6 +415,8 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) 
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       {rb.proyeccion ? <ProjectionForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.cash ? <CashFlowForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
+        : rb.temporada ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" />
+        : rb.invflow ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="flow" />
         : rb.porCat ? <CatCaptureForm key={rb.k} {...common} />
         : rb.cat ? <CategoriasForm key={rb.k} role={role} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} />
@@ -909,6 +913,112 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           </div>
         )
       })()}
+    </>
+  )
+}
+
+/* ===== INVENTARIO POR TEMPORADA: captura matriz (Producto) + flujo/rotación (Logística) =====
+   Modelo: categoría = nivel de precio/costo · temporada = antigüedad. AUP/AUC por categoría×temporada.
+   Rotación = % mensual del saldo. Salidas = saldo × rotación. Saldo = inicial + compras − salidas.
+   El AUP/AUC de la marca se mezcla según lo que se va vendiendo (categoría×temporada). */
+function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
+  const marca = fixedMarca || marcasDe(sbus)[0]?.marca
+  const [cats, setCats] = useState([])
+  const stKey = `temp_${empresa}`
+  const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+  useEffect(() => {
+    (async () => {
+      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa) || upper(row[3]) !== upper(marca)) return; if (row[1]) out.push(row[1]) }); setCats([...new Set(out)]) } } catch { }
+    })()
+  }, [empresa, marca])
+  const catList = cats.length ? cats : ['General']
+
+  const K = { ii: (c, s) => `II|${marca}|${c}|${s}`, cp: (s, m) => `CP|${marca}|${s}|${m}`, rt: (s) => `RT|${marca}|${s}`, aup: (c, s) => `AUP|${marca}|${c}|${s}`, auc: (c, s) => `AUC|${marca}|${c}|${s}` }
+  const g = (k) => num(data[k])
+  const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  function guardar() { setSaving(true); try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado en este equipo. Persistencia al Sheet se conecta en el siguiente paso.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+
+  // Flujo por temporada (mensual): inicial → +compras → −salidas(rotación) → saldo
+  const invIniSeason = (s) => catList.reduce((a, c) => a + g(K.ii(c, s)), 0)
+  const flujo = (s) => {
+    const rot = g(K.rt(s)) / 100
+    const out = []; let saldo = invIniSeason(s)
+    for (let m = 0; m < 12; m++) { const ini = saldo; const comp = g(K.cp(s, m)); const disp = ini + comp; const sal = disp * rot; const fin = disp - sal; out.push({ ini, comp, sal, fin }); saldo = fin }
+    return out
+  }
+  const flujos = {}; SEASONS.forEach((s) => flujos[s] = flujo(s))
+  // Mezcla de AUP/AUC: reparte la salida de cada temporada entre categorías según su mezcla de inventario inicial
+  const catShare = (c, s) => { const tot = invIniSeason(s); return tot > 0 ? g(K.ii(c, s)) / tot : (catList.length ? 1 / catList.length : 0) }
+  const blend = (precioK) => MESES.map((_, m) => {
+    let un = 0, val = 0
+    SEASONS.forEach((s) => { const sal = flujos[s][m].sal; catList.forEach((c) => { const u = sal * catShare(c, s); un += u; val += u * g(precioK(c, s)) }) })
+    return un > 0 ? val / un : 0
+  })
+  const aupBlend = blend(K.aup), aucBlend = blend(K.auc)
+
+  if (mode === 'flow') {
+    const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
+    return (
+      <div className="panel">
+        <h3>Inventario por temporada — {marca} <span className="unit">(cálculo · 👁️ solo lectura)</span></h3>
+        <div className="sub">Saldo = Inventario inicial + Compras − Salidas. Las <b>Salidas</b> se calculan con el <b>ritmo de rotación %</b> mensual sobre el saldo (lo captura Producto). El AUP/AUC promedio de la marca se mezcla según lo que se va vendiendo por categoría×temporada.</div>
+        <div className="tablewrap">
+          <table className="vfix"><colgroup><col style={{ width: '190px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+            <thead><tr><th className="l">Temporada / concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+            <tbody>
+              {SEASONS.map((s) => { const f = flujos[s]; return (
+                <Fragment2 key={s}>
+                  <tr className="sburow"><td className="l">{s} · rotación {fmt(g(K.rt(s)))}%/mes</td>{f.map((x, i) => <td key={i} className="tot">{fmt(x.fin)}</td>)}<td className="tot">{fmt(f[11].fin)}</td></tr>
+                  <tr><td className="l sub2">+ Compras</td>{f.map((x, i) => <td key={i} className="tot">{fmt(x.comp)}</td>)}<td className="tot">{fmt(rowTot(f, 'comp'))}</td></tr>
+                  <tr><td className="l sub2">− Salidas (rotación)</td>{f.map((x, i) => <td key={i} className="tot">{fmt(x.sal)}</td>)}<td className="tot">{fmt(rowTot(f, 'sal'))}</td></tr>
+                </Fragment2>) })}
+              <tr className="grandrow"><td className="l">Saldo total inventario</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(SEASONS.reduce((a, s) => a + flujos[s][m].fin, 0))}</td>)}<td className="tot">{fmt(SEASONS.reduce((a, s) => a + flujos[s][11].fin, 0))}</td></tr>
+              <tr className="catrow"><td className="l">AUP promedio (mezcla)</td>{aupBlend.map((v, i) => <td key={i} className="tot">{v ? v.toFixed(2) : ''}</td>)}<td></td></tr>
+              <tr className="catrow"><td className="l">AUC promedio (mezcla)</td>{aucBlend.map((v, i) => <td key={i} className="tot">{v ? v.toFixed(2) : ''}</td>)}<td></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  // mode = 'capture' (Producto)
+  const matriz = (titulo, keyFn, ayuda) => (
+    <div className="panel">
+      <h3>{titulo} — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+      <div className="sub">{ayuda}</div>
+      <div className="tablewrap"><table>
+        <thead><tr><th className="l">Categoría</th>{SEASONS.map((s) => <th key={s}>{s}</th>)}</tr></thead>
+        <tbody>{catList.map((c) => <tr key={c}><td className="l">{c}</td>{SEASONS.map((s) => { const k = keyFn(c, s); return <td key={s} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}</tr>)}</tbody>
+      </table></div>
+    </div>
+  )
+  return (
+    <>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+      <div className="panel">
+        <h3>Ritmo de rotación por temporada — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">% del saldo que se vende cada mes (sell-through). Más alto = se agota más rápido. El inventario más viejo (Otros/FW26) suele rotar distinto al nuevo.</div>
+        <div className="tablewrap"><table>
+          <thead><tr>{SEASONS.map((s) => <th key={s}>{s}</th>)}</tr></thead>
+          <tbody><tr>{SEASONS.map((s) => { const k = K.rt(s); return <td key={s} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" /></td> })}</tr></tbody>
+        </table></div>
+      </div>
+      {matriz('Inventario inicial (unidades)', K.ii, 'Unidades con que arranca 2028 por categoría y temporada. Define la mezcla que luego rota y se vende.')}
+      {matriz('AUP por categoría × temporada ($)', K.aup, 'Precio promedio de venta. La categoría fija el nivel (media $6 vs zapatilla $150); la temporada permite descuentos al inventario más viejo.')}
+      {matriz('AUC por categoría × temporada ($)', K.auc, 'Costo promedio unitario por categoría y temporada.')}
+      <div className="panel">
+        <h3>Compras por temporada (unidades) — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">Unidades que entran al inventario cada mes, por temporada. Las llena Producto.</div>
+        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '110px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}</colgroup>
+          <thead><tr><th className="l">Temporada</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}</tr></thead>
+          <tbody>{SEASONS.map((s) => <tr key={s}><td className="l">{s}</td>{MESES.map((_, m) => { const k = K.cp(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}</tr>)}</tbody>
+        </table></div>
+      </div>
+      <TemporadaForm empresa={empresa} fixedMarca={marca} sbus={sbus} mode="flow" />
     </>
   )
 }
