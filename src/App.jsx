@@ -733,6 +733,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   const [openCostos, setOpenCostos] = useState(false)
+  const [desglose, setDesglose] = useState(false)
   const stKey = `cf_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [hist, setHist] = useState([])
@@ -814,6 +815,16 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + cellRaw(sub, mi), 0)
     return cellRaw(concepto, mi)
   }
+  // Valor de UNA marca (para el desglose del total): misma lógica que cell pero sin sumar SBU.
+  const cellMarca = (mca, concepto, mi) => {
+    if (concepto === CASHIN) { if (mi === DIC27) return saldoTotal(mca); if (mi >= 3) return getCobros(mca).total[mi - 3]; return val(mca, concepto, mi) }
+    if (concepto === VENTAS_NETAS) return mi < 3 ? 0 : ventaNetaMes(mca)[mi - 3]
+    if (concepto === COMPRAS_FD) return mi < 3 ? 0 : comprasUsdMes(mca)[mi - 3]
+    if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + val(mca, sub, mi), 0)
+    return val(mca, concepto, mi)
+  }
+  // Texto "ALTRA: 1,234 · HOKA: 567" para el tooltip del total (solo si el desglose está activo).
+  const brk = (concepto, mi) => (isTotal && desglose) ? sbuMarcas.map((m) => ({ m, v: cellMarca(m, concepto, mi) })).filter((x) => Math.abs(x.v) > 0.5).map((x) => `${x.m}: ${fmt(x.v)}`).join(' · ') || 'Sin datos por marca' : undefined
   const subTot = (sub) => CF_MESES.reduce((a, _, mi) => a + cellRaw(sub, mi), 0)
   const rowTot = (concepto) => CF_MESES.reduce((a, _, mi) => a + cell(concepto, mi), 0)
 
@@ -850,6 +861,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           </optgroup>))}
         </select></>}
         {isTotal && !fixedMarca && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
+        {isTotal && <button className={'seg' + (desglose ? ' active' : '')} onClick={() => setDesglose((d) => !d)} title="Pásate sobre un total para ver cuánto pone cada marca">{desglose ? '✓ ' : ''}🔍 Desglose por marca</button>}
         <div className="spacer"></div>
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map(() => 0)])))); exportXlsx(aoa, `${role.tab}_CASHFLOW_Plantilla.xlsx`) }}>📄 Plantilla</button>
         <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
@@ -876,8 +888,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       const cashinCalc = it === CASHIN && mi >= 2
                       const comercialCalc = esCalcComercial(it) && mi >= 3
                       if (isTotal || esCostos || cashinCalc || comercialCalc) {
-                        const tit = it === CASHIN ? (mi === DIC27 ? 'Saldo (deuda) cierre 2027' : 'Cobros según escalera (ventas × plazo)') : (it === VENTAS_NETAS ? 'Unidades × AUP (Comercial)' : it === COMPRAS_FD ? 'Compras × AUC (Comercial)' : undefined)
-                        return <td key={mi} className={'tot ' + cls} title={tit}>{fmt(cell(it, mi))}</td>
+                        const tit = brk(it, mi) || (it === CASHIN ? (mi === DIC27 ? 'Saldo (deuda) cierre 2027' : 'Cobros según escalera (ventas × plazo)') : (it === VENTAS_NETAS ? 'Unidades × AUP (Comercial)' : it === COMPRAS_FD ? 'Compras × AUC (Comercial)' : undefined))
+                        return <td key={mi} className={'tot ' + cls} style={isTotal && desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={tit}>{fmt(cell(it, mi))}</td>
                       }
                       const k = key(marca, it, mi)
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
@@ -890,7 +902,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                         {openCostos && CF_COSTOS.map((sub) => {
                           const sceldas = CF_MESES.map((_, mi) => {
                             const cls = mi < 3 ? 'ya' : 'yb'
-                            if (isTotal) return <td key={mi} className={'tot ' + cls}>{fmt(cellRaw(sub, mi))}</td>
+                            if (isTotal) return <td key={mi} className={'tot ' + cls} style={desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={brk(sub, mi)}>{fmt(cellRaw(sub, mi))}</td>
                             const k = key(marca, sub, mi)
                             return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                           })
