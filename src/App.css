@@ -69,6 +69,7 @@ td.cell input:hover{border-color:var(--warn)}
 
 /* Insignia "para llenar" en títulos de bloques editables */
 .fill-badge{display:inline-block;margin-left:8px;font-size:11px;font-weight:700;color:#8a6d00;background:#fdf3cf;border:1px solid #efdd97;border-radius:12px;padding:1px 9px;vertical-align:middle}
+.fill-badge::before{content:var(--avatar)}
 td.tot{font-weight:800;font-variant-numeric:tabular-nums;text-align:center}
 
 /* --- Marketing detalle --- */

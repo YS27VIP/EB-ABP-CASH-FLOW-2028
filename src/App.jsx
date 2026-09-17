@@ -100,6 +100,9 @@ export default function App() {
   const [roleId, setRoleId] = useState(null)
   const [connError, setConnError] = useState(false)
   const [authed, setAuthed] = useState(isSignedIn())
+  const [avatar, setAvatar] = useState(() => { try { return localStorage.getItem('abp_avatar') || '' } catch { return '' } })
+  useEffect(() => { try { document.documentElement.style.setProperty('--avatar', avatar ? '"' + avatar + ' "' : '') } catch { } }, [avatar])
+  const elegirAvatar = (a) => { setAvatar(a); try { localStorage.setItem('abp_avatar', a) } catch { } }
 
   useEffect(() => {
     initAuth()
@@ -188,7 +191,26 @@ export default function App() {
     )
   }
 
-  if (!role && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia') {
+  if (!avatar) {
+    const OPTS = ['👩🏻', '👩🏽', '👩🏾', '👩🏿', '👨🏻', '👨🏽', '👨🏾', '👨🏿', '🧑🏻', '🧑🏽', '🧑🏾', '🧑🏿', '👩🏻‍🦰', '👨🏽‍🦱', '👩🏾‍🦱', '🧑🏻‍🦳']
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span></header>
+        <main className="menu">
+          <div className="hero">
+            <div className="hero-tag">ABP · Annual Business Plan + Cash Flow</div>
+            <h1>¡Hola, {getName() || 'bienvenido'}! 👋</h1>
+            <p>Elige tu avatar. Aparecerá en cada bloque que te toca llenar, para que ubiques rápido lo tuyo. 😊</p>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', maxWidth: 560, margin: '0 auto' }}>
+            {OPTS.map((a) => <button key={a} onClick={() => elegirAvatar(a)} style={{ fontSize: 40, width: 72, height: 72, borderRadius: 16, border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }} title="Elegir">{a}</button>)}
+          </div>
+        </main>
+      </>
+    )
+  }
+
+  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
@@ -200,8 +222,8 @@ export default function App() {
             <p>Cada área aporta su parte —ventas, producto, marketing, logística y dirección— para proyectar el negocio y el <b>flujo de caja</b> del año. Lo que capturas aquí se convierte en el plan de todos. 🚀</p>
           </div>
           <div className="hello">
-            <h2>Hola, {getName() || usuario || 'bienvenido'} 👋</h2>
-            <p className="sub">Elige tu área para capturar tu información. {getEmail() ? <span className="who" style={{ display: 'inline', marginLeft: 0 }}>Sesión: {getEmail()}</span> : null}</p>
+            <h2><span style={{ fontSize: 26 }}>{avatar}</span> Hola, {getName() || usuario || 'bienvenido'} 👋</h2>
+            <p className="sub">Elige tu área para capturar tu información. {getEmail() ? <span className="who" style={{ display: 'inline', marginLeft: 0 }}>Sesión: {getEmail()}</span> : null} · <span style={{ cursor: 'pointer', color: 'var(--odoo)', fontWeight: 600 }} onClick={() => { setAvatar(''); try { localStorage.removeItem('abp_avatar') } catch { } }}>cambiar avatar</span></p>
             <div className="row2">
               <label className="who">Empresa:
                 <span className="inline">
@@ -212,31 +234,31 @@ export default function App() {
             </div>
           </div>
           <div className="apps">
-            {(puede('Ventas') || puede('Producto') || puede('Logística')) && <button className="app" onClick={() => setRoleId('comercial')}>
-              <span className="appicon" style={{ background: 'linear-gradient(135deg,#0891b2,#10b981)' }}>🧭</span>
-              <span className="applabel">Comercial</span>
-            </button>}
-            {ROLES.filter((r) => puede(r.label)).map((r) => (
-              <button key={r.id} className="app" onClick={() => setRoleId(r.id)}>
-                <span className="appicon" style={{ background: r.color }}>{r.icon}</span>
-                <span className="applabel">{r.label}</span>
+            {Object.keys(sbus).map((s) => (
+              <button key={s} className="app" onClick={() => setRoleId('sbu:' + s)}>
+                <span className="appicon" style={{ background: sbuColor(s) }}>🧩</span>
+                <span className="applabel">{s}</span>
               </button>
             ))}
-            {puede('Histórico') && <button className="app" onClick={() => setRoleId('historico')}>
-              <span className="appicon" style={{ background: '#b0473b' }}>📊</span>
-              <span className="applabel">Histórico</span>
+            <button className="app" onClick={() => setRoleId('sbu:Retail')}>
+              <span className="appicon" style={{ background: sbuColor('Retail') }}>🏬</span>
+              <span className="applabel">Retail</span>
+            </button>
+            {puede('Finanzas') && <button className="app" onClick={() => setRoleId('finanzas')}>
+              <span className="appicon" style={{ background: '#2e7d32' }}>💰</span>
+              <span className="applabel">Finanzas</span>
             </button>}
             {esAdmin && <button className="app" onClick={() => setRoleId('gerencia')}>
               <span className="appicon" style={{ background: '#1f2d3d' }}>📈</span>
               <span className="applabel">Gerencia</span>
             </button>}
-            {esAdmin && <button className="app" onClick={() => setRoleId('config')}>
-              <span className="appicon" style={{ background: '#5b6470' }}>⚙️</span>
-              <span className="applabel">Combinaciones</span>
-            </button>}
             {puede('Bitácora') && <button className="app" onClick={() => setRoleId('bitacora')}>
               <span className="appicon" style={{ background: '#455a64' }}>📝</span>
               <span className="applabel">Bitácora</span>
+            </button>}
+            {esAdmin && <button className="app" onClick={() => setRoleId('config')}>
+              <span className="appicon" style={{ background: '#5b6470' }}>⚙️</span>
+              <span className="applabel">Configuración</span>
             </button>}
           </div>
           {acceso && <p className="sub" style={{ marginTop: 14 }}>Ves solo las secciones asignadas a tu usuario. Si falta alguna, pídele a un administrador que ajuste tu acceso en Combinaciones → Colaboradores.</p>}
@@ -256,6 +278,18 @@ export default function App() {
     )
   }
 
+  if (String(roleId || '').startsWith('sbu:')) {
+    const sbuName = roleId.slice(4)
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: sbuColor(sbuName) }}>🧩 {sbuName}</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        <main><SBUWorkspace sbuName={sbuName} empresa={empresa} usuario={usuario} sbus={sbus} /></main>
+      </>
+    )
+  }
+
   if (roleId === 'gerencia') {
     return (
       <>
@@ -271,9 +305,9 @@ export default function App() {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><div className="spacer"></div>
-          <span className="rolechip" style={{ background: '#5b6470' }}>⚙️ Combinaciones</span>
+          <span className="rolechip" style={{ background: '#5b6470' }}>⚙️ Configuración</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        <main><ConfigScreen empresas={empresas} setEmpresas={setEmpresas} combos={combos} setCombos={setCombos} nuevaEmpresa={nuevaEmpresa} /></main>
+        <main><ConfigScreen empresas={empresas} setEmpresas={setEmpresas} combos={combos} setCombos={setCombos} nuevaEmpresa={nuevaEmpresa} abrirHistorico={() => setRoleId('historico')} /></main>
       </>
     )
   }
@@ -384,6 +418,7 @@ function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving
     <>
       <div className="toolbar">
         <div className="spacer"></div>
+        <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'RUBRO', 'SBU', 'MARCA', ...MESES]]; marcas.forEach(({ sbu, marca }) => aoa.push([empresa, rubro.k, sbu, marca, ...MESES.map(() => 0)])); exportXlsx(aoa, `Plantilla_${role.tab}_${rubro.k}.xlsx`) }}>📄 Plantilla</button>
         <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
@@ -566,6 +601,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         {isTotal && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
         <div className="spacer"></div>
         <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>
+        <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'GRUPO', 'RUBRO', 'SBU', 'MARCA', ...MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, gr.g, it.n, sb, mca, ...MESES.map(() => 0)])))); exportXlsx(aoa, `Plantilla_${role.tab}_${rubro.k}.xlsx`) }}>📄 Plantilla</button>
         <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar todo'}</button>
@@ -718,6 +754,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
         </select>
         {isTotal && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
         <div className="spacer"></div>
+        <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map(() => 0)])))); exportXlsx(aoa, `${role.tab}_CASHFLOW_Plantilla.xlsx`) }}>📄 Plantilla</button>
         <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
@@ -826,7 +863,27 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus }) {
   )
 }
 
-/* ===== COMERCIAL: navegación por SBU (SBU arriba, marcas al lado, secciones a la derecha) ===== */
+/* ===== SBU WORKSPACE: dentro de una SBU salen las secciones (roles) con sus marcas ===== */
+function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
+  const SECS = ROLES.filter((r) => ['ventas', 'producto', 'marketing', 'logistica', 'director'].includes(r.id))
+  const [secId, setSecId] = useState('ventas')
+  const isRetail = String(sbuName).toUpperCase() === 'RETAIL'
+  const oneSbu = isRetail ? {} : { [sbuName]: sbus[sbuName] || [] }
+  const role = SECS.find((r) => r.id === secId)
+  const col = sbuColor(sbuName)
+  return (
+    <>
+      <div className="toolbar" style={{ marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
+        {SECS.map((r) => { const on = r.id === secId; return <button key={r.id} className={'seg' + (on ? ' active' : '')} onClick={() => setSecId(r.id)} style={on ? { background: col, borderColor: col, color: '#fff' } : {}}>{r.icon} {r.label}</button> })}
+      </div>
+      {isRetail
+        ? <div className="panel"><h3 style={{ color: sbuColor('Retail') }}>Retail — tiendas propias</h3><div className="note warn">Retail le compra internamente a las SBU (venta intercompañía). Para activarlo necesito el <b>precio de transferencia</b> (margen fijo, % sobre costo o AUP interno). En cuanto lo definamos, aquí verás la captura y el consolidado de Retail. 🏬</div></div>
+        : <RoleForm key={sbuName + secId} role={role} usuario={usuario} empresa={empresa} sbus={oneSbu} />}
+    </>
+  )
+}
+
+/* ===== COMERCIAL (legacy, ya no se usa desde el menú) ===== */
 function ComercialScreen({ empresa, sbus, usuario }) {
   const sbuNames = Object.keys(sbus)
   const TOPS = [...sbuNames, 'Retail', 'Gerencia']
@@ -948,7 +1005,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
 }
 
 /* ===== COMBINACIONES ===== */
-function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }) {
+function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, abrirHistorico }) {
   const [empresa, setEmpresa] = useState(empresas[0])
   const [asign, setAsign] = useState(() => seed(combos[empresa]))
   const [saving, setSaving] = useState(false)
@@ -1002,6 +1059,11 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa }
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar combinaciones'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="panel">
+        <h3>Histórico por empresa</h3>
+        <div className="sub">ENERGY BRANDS se alimenta en vivo del EBP. Para <b>TUMAR / TAHO</b> importa su histórico desde un Excel (con la columna EMPRESA correspondiente).</div>
+        <button className="btn" onClick={() => abrirHistorico && abrirHistorico()}>📊 Abrir Histórico / Importar Excel</button>
+      </div>
       <div className="panel">
         <h3>Combinaciones de SBU — {empresa}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Asigna cada marca a una SBU (o "No la vende" para excluirla de esta empresa). ({cuenta('SBU 1')} en SBU 1 · {cuenta('SBU 2')} en SBU 2 · {cuenta('SBU 3')} en SBU 3 · {cuenta('NO')} no la vende)</div>
