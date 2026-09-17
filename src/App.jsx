@@ -47,7 +47,7 @@ const ROLES = [
   { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP', u: '$', porCat: true }, { k: 'AUC', u: '$' }, VJ, { k: 'INVENTARIO COMPRAS', u: '$', temporada: true }] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
-  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ] },
+  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'GASTOS ADMIN', gadmin: true }] },
   { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'COMISIONES', comis: true }, { k: 'CATEGORIAS', cat: true }] },
 ]
 const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
@@ -57,7 +57,7 @@ const CF_M2027 = ['oct-27', 'nov-27', 'dic-27']
 const CF_M2028 = ['ene-28', 'feb-28', 'mar-28', 'abr-28', 'may-28', 'jun-28', 'jul-28', 'ago-28', 'sep-28', 'oct-28', 'nov-28', 'dic-28']
 const CF_MESES = [...CF_M2027, ...CF_M2028]
 const CF_GROUPS = [
-  { g: 'PSI · Purchases-Sales-Inventory', items: ['Inventario Inicial', 'Inventario Final', 'Compras (Fecha disponible)', 'Ventas Netas'] },
+  { g: 'PSI · Purchases-Sales-Inventory', items: ['Inventario Inicial', 'Compras (Fecha disponible)', 'Ventas Netas', 'Inventario Final'] },
   { g: 'CASH FLOW', items: ['Cash Inicial', 'Cash In (Cobros)', 'Cash Out (Pagos)', 'Costos Operativos', 'Cash Final'] },
 ]
 const CF_TERMINOS = ['Cash', '30 días', '60 días', '90 días', '120 días', '150 días', '180 días', 'Intercompañía']
@@ -82,6 +82,11 @@ function refCat(marca, cli, cat) {
   const key = Object.keys(tbl).find((k) => upper(cli).indexOf(k) >= 0); if (!key) return null
   return tbl[key][upper(cat)] || null
 }
+
+/* Gastos administrativos: centros de costo por defecto (código sub-rubro · nombre). Compartidos por todas las SBU. */
+const DEFAULT_GADMIN = [
+  ['101', 'SALARIO'], ['103', 'PERFORMANCE BONO'], ['104', 'CARGA SOCIAL Y PASIVO LABORAL'], ['105', 'CAPACITACIONES'], ['106', 'SELECCIÓN DE PERSONAL'], ['107', 'ATENCIONES / CLIENTES / PROVEEDORES'], ['108', 'MEMBRESÍA TARJETA DE CRÉDITO'], ['109', 'PLAN CELULAR'], ['110', 'BENEFICIOS - SEGURO DE SALUD'], ['111', 'SEGURIDAD'], ['112', 'BENEFICIO - GIFT CARD ANNUAL'], ['114', 'GASTOS DE OFICINA'], ['115', 'ALQUILER OFICINA'], ['116', 'AGUA / LUZ'], ['117', 'INTERNET'], ['118', 'TELÉFONO OFICINA'], ['119', 'CARRIER / MENSAJERÍA'], ['120', 'LIMPIEZA'], ['121', 'REPARACIONES Y MANTENIMIENTOS'], ['122', 'CAFETERÍA - INSUMOS'], ['123', 'ACARREO / TRANSFERENCIA DE INVENTARIO'], ['124', 'SEGUROS'], ['125', 'CONTABLE - MICROSOFT 365 / LICENCIAS ADOBE'], ['126', 'SALESFORCE'], ['127', 'SISTEMA DE FACTURACIÓN ELECTRÓNICA'], ['128', 'ASESORÍA LEGAL'], ['129', 'ASESORÍA CONTABLE'], ['130', 'ASESORÍA FISCALES'], ['131', 'SERVICIOS DE RRHH'], ['132', 'SERVICIOS DE IT'], ['133', 'HONORARIOS PROFESIONALES'], ['134', 'OTROS'], ['135', 'CARGOS FINANCIEROS'],
+].map(([cod, sub]) => ({ cod, sub }))
 
 /* Comisiones: marcas con comisión corporativa por compra (XFD) */
 const CORP_MARCAS = ['HOKA', 'UGG']
@@ -300,7 +305,7 @@ export default function App() {
           </div>
           <div className="hello">
             <h2><span style={{ fontSize: 26 }}>{avatar}</span> Hola, {getName() || usuario || 'bienvenido'} 👋</h2>
-            <p className="sub">Elige tu área para capturar tu información. {getEmail() ? <span className="who" style={{ display: 'inline', marginLeft: 0 }}>Sesión: {getEmail()}</span> : null} · <span style={{ cursor: 'pointer', color: 'var(--odoo)', fontWeight: 600 }} onClick={() => { setAvatar(''); try { localStorage.removeItem('abp_avatar') } catch { } }}>cambiar avatar</span></p>
+            <p className="sub">Estas son las áreas a las que tienes acceso según tu rol. {getEmail() ? <span className="who" style={{ display: 'inline', marginLeft: 0 }}>Sesión: {getEmail()}</span> : null} · <span style={{ cursor: 'pointer', color: 'var(--odoo)', fontWeight: 600 }} onClick={() => { setAvatar(''); try { localStorage.removeItem('abp_avatar') } catch { } }}>cambiar avatar</span></p>
             <div className="row2">
               <label className="who">Empresa:
                 <span className="inline">
@@ -440,7 +445,8 @@ export default function App() {
 
 /* ===== RoleForm: pestañas de rubro (simple o detalle) ===== */
 function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) {
-  const rubros = rubrosOverride || role.rubros
+  const esTot = String(fixedMarca || '').startsWith('TOTAL::')
+  const rubros = (rubrosOverride || role.rubros).filter((rb) => !rb.gadmin || esTot) // Gastos admin solo en TOTAL SBU
   const [tab, setTab] = useState(0)
   const [data, setData] = useState({})
   const [saving, setSaving] = useState(false)
@@ -461,6 +467,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) 
         : rb.temporada ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" />
         : rb.invflow ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="flow" />
         : rb.comis ? <ComisionesForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
+        : rb.gadmin ? <GastosAdminForm key={rb.k} empresa={empresa} />
         : rb.porCat ? <CatCaptureForm key={rb.k} {...common} />
         : rb.cat ? <CategoriasForm key={rb.k} role={role} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} />
@@ -760,7 +767,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [cats, setCats] = useState({})
   const [temp, setTemp] = useState({})
   const [comisData, setComisData] = useState({})
-  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } }, [empresa])
+  const [gadminData, setGadminData] = useState({}); const [gadminCfg, setGadminCfg] = useState(DEFAULT_GADMIN)
+  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } try { setGadminData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) setGadminCfg(s) } catch { } }, [empresa])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   const sbuMarcas = sbus[sbu] || []
@@ -788,8 +796,10 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   // Cash In (Cobros) de Dic-27 = suma del saldo (deuda) cierre 2027 por cliente (calculado, no editable)
   const CASHIN = 'Cash In (Cobros)', DIC27 = 2
   const saldoTotal = (mca) => clientesDe(mca).reduce((s, cli) => s + num(data[`SALDO|${mca}|${cli}`]), 0)
+  const gadminSubtot = MESES.map((_, m) => gadminCfg.reduce((a, it) => a + num(gadminData[`${it.cod}|${m}`]), 0))
   const cellRaw = (concepto, mi) => {
     if (concepto === 'Comisiones') { if (mi < 3) return 0; const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[j], 0) : comisTotalMes(marca)[j] }
+    if (concepto === 'Gastos administrativos' && isTotal) { return mi < 3 ? 0 : gadminSubtot[mi - 3] }
     return isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
   }
   // Comisiones (del Director): venta externa (Unid×AUP) × % + corporativa (compras × $/ud en HOKA/UGG).
@@ -895,10 +905,10 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       <div className="panel">
-        <h3>{role.label} — CASH FLOW <span className="unit">(USD · {isTotal ? `TOTAL ${sbu}` : marca})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>👁️ solo lectura</span> : <span className="fill-badge">✏️ para llenar</span>}</h3>
-        <div className="sub">Últimos 3 meses de 2027 + proyección 2028. {isTotal ? 'Suma de las marcas de la SBU.' : 'Captura por concepto y mes.'}</div>
+        <h3>{role.label} — CASH FLOW <span className="unit">(USD · {isTotal ? `TOTAL ${sbu}` : marca})</span></h3>
+        <div className="sub">Últimos 3 meses de 2027 + proyección 2028. PSI (inventario, compras, ventas) se calcula solo desde Comercial/Producto; solo se llenan las líneas amarillas de Cash Flow.</div>
         <div className="tablewrap">
-          <table>
+          <table className="vfix"><colgroup><col style={{ width: '210px' }} />{CF_MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
             <thead>
               <tr><th className="l" rowSpan={2}>Concepto</th><th className="ya" colSpan={3}>2027</th><th className="yb" colSpan={12}>2028</th><th rowSpan={2}>Total</th></tr>
               <tr>{CF_M2027.map((m) => <th key={m} className="ya">{m}</th>)}{CF_M2028.map((m) => <th key={m} className="yb">{m}</th>)}</tr>
@@ -912,7 +922,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                     const celdas = CF_MESES.map((_, mi) => {
                       const cls = mi < 3 ? 'ya' : 'yb'
                       const cashinCalc = it === CASHIN && mi >= 2
-                      const comercialCalc = esCalcComercial(it) && mi >= 3
+                      const comercialCalc = esCalcComercial(it)
                       if (isTotal || esCostos || cashinCalc || comercialCalc) {
                         const tit = brk(it, mi) || (it === CASHIN ? (mi === DIC27 ? 'Saldo (deuda) cierre 2027' : 'Cobros según escalera (ventas × plazo)') : (it === VENTAS_NETAS ? 'Unidades × AUP (Comercial)' : it === COMPRAS_FD ? 'Compras × AUC (Producto)' : (it === INV_INI || it === INV_FIN) ? 'Inventario (Producto) × AUC' : undefined))
                         return <td key={mi} className={'tot ' + cls} style={isTotal && desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={tit}>{fmt(cell(it, mi))}</td>
@@ -1237,6 +1247,56 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
               <tr className="catrow"><td className="l">Pago comisión corporativa</td>{c.pagoCorp.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.pagoCorp))}</td></tr>
             </>}
             <tr className="grandrow"><td className="l">TOTAL comisiones</td>{c.total.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.total))}</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </>
+  )
+}
+
+/* ===== GASTOS ADMINISTRATIVOS: detalle por centro de costo, compartido por TODAS las SBU ===== */
+function GastosAdminForm({ empresa }) {
+  const cfgKey = `gadmin_cfg_${empresa}`, stKey = `gadmin_${empresa}`
+  const [lista, setLista] = useState(() => { try { const s = JSON.parse(localStorage.getItem(cfgKey) || 'null'); return Array.isArray(s) && s.length ? s : DEFAULT_GADMIN } catch { return DEFAULT_GADMIN } })
+  const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
+  const [edit, setEdit] = useState(false)
+  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  const g = (k) => num(data[k]); const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  const key = (cod, m) => `${cod}|${m}`
+  const subtot = MESES.map((_, m) => lista.reduce((a, it) => a + g(key(it.cod, m)), 0))
+  const filaTot = (cod) => MESES.reduce((a, _, m) => a + g(key(cod, m)), 0)
+  function guardar() { setSaving(true); try { localStorage.setItem(cfgKey, JSON.stringify(lista)); localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado. Los centros de costo aplican a todas las SBU.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function agregar() { setLista([...lista, { cod: '', sub: '' }]) }
+  function quitar(i) { setLista(lista.filter((_, j) => j !== i)) }
+  function editar(i, campo, v) { setLista(lista.map((x, j) => j === i ? { ...x, [campo]: v } : x)) }
+
+  return (
+    <>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="toolbar" style={{ marginBottom: 8 }}>
+        <span className="empchip" style={{ marginLeft: 0, background: 'var(--accent, #0e7490)' }}>Gastos administrativos</span>
+        <button className={'seg' + (edit ? ' active' : '')} onClick={() => setEdit((e) => !e)}>{edit ? '✓ Editando centros de costo' : '✏️ Editar centros de costo'}</button>
+        {edit && <button className="btn" onClick={agregar}>➕ Agregar rubro</button>}
+        <div className="spacer"></div>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+      </div>
+      <div className="panel">
+        <h3>Gastos administrativos <span className="unit">(detalle · compartido por todas las SBU)</span><span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">Captura por centro de costo y mes. Con <b>Editar centros de costo</b> puedes cambiar códigos/nombres o agregar rubros; el cambio <b>aplica a todas las SBU</b>. El SUB-TOTAL alimenta la línea Gastos administrativos del Cash Flow.</div>
+        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '150px' }} /><col style={{ width: '60px' }} /><col style={{ width: '60px' }} /><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+          <thead><tr><th className="l">Rubro</th><th>Código</th><th>Cód sub</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+          <tbody>
+            {lista.map((it, i) => (
+              <tr key={i}>
+                <td className="l">Gastos Administrativos</td>
+                <td>100</td>
+                <td>{edit ? <input value={it.cod} onChange={(e) => editar(i, 'cod', e.target.value)} style={{ width: 48, padding: 4, border: '1px solid var(--line)', borderRadius: 5, textAlign: 'center' }} /> : it.cod}</td>
+                <td className="l">{edit ? <span style={{ display: 'flex', gap: 4 }}><input value={it.sub} onChange={(e) => editar(i, 'sub', e.target.value)} style={{ width: '90%', padding: 4, border: '1px solid var(--line)', borderRadius: 5 }} /><button className="btn" onClick={() => quitar(i)} style={{ padding: '2px 8px' }}>✕</button></span> : it.sub}</td>
+                {MESES.map((_, m) => { const k = key(it.cod, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}
+                <td className="tot">{fmt(filaTot(it.cod))}</td>
+              </tr>
+            ))}
+            <tr className="grandrow"><td className="l" colSpan={4}>SUB-TOTAL gastos administrativos</td>{subtot.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(subtot.reduce((a, b) => a + b, 0))}</td></tr>
           </tbody>
         </table></div>
       </div>
