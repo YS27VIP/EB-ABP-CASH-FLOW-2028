@@ -772,7 +772,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } try { setGadminData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) setGadminCfg(s) } catch { } }, [empresa])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
-  const sbuMarcas = sbus[sbu] || []
+  const sbuLbl = sbu === '__ALL__' ? 'TODAS' : sbu
+  const sbuMarcas = sbu === '__ALL__' ? Object.values(sbus).flat() : (sbus[sbu] || [])
+  const soloVer = !!(role && role.id === 'director') // el Director solo ve (lo llena Finanzas)
 
   useEffect(() => {
     (async () => {
@@ -924,7 +926,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       const cls = mi < 3 ? 'ya' : 'yb'
                       const cashinCalc = it === CASHIN && mi >= 2
                       const comercialCalc = esCalcComercial(it)
-                      if (isTotal || esCostos || cashinCalc || comercialCalc) {
+                      if (isTotal || esCostos || cashinCalc || comercialCalc || soloVer) {
                         const tit = brk(it, mi) || (it === CASHIN ? (mi === DIC27 ? 'Saldo (deuda) cierre 2027' : 'Cobros según escalera (ventas × plazo)') : (it === VENTAS_NETAS ? 'Unidades × AUP (Comercial)' : it === COMPRAS_FD ? 'Compras × AUC (Producto)' : (it === INV_INI || it === INV_FIN) ? 'Inventario (Producto) × AUC' : undefined))
                         return <td key={mi} className={'tot ' + cls} style={isTotal && desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={tit}>{fmt(cell(it, mi))}</td>
                       }
@@ -940,7 +942,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                           const calcSub = sub === 'Comisiones' // Comisiones lo calcula el Director
                           const sceldas = CF_MESES.map((_, mi) => {
                             const cls = mi < 3 ? 'ya' : 'yb'
-                            if (isTotal || calcSub) return <td key={mi} className={'tot ' + cls} style={desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={calcSub ? 'Comisiones del Director (venta externa × %)' : brk(sub, mi)}>{fmt(cellRaw(sub, mi))}</td>
+                            if (isTotal || calcSub || soloVer) return <td key={mi} className={'tot ' + cls} style={desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={calcSub ? 'Comisiones del Director (venta externa × %)' : brk(sub, mi)}>{fmt(cellRaw(sub, mi))}</td>
                             const k = key(marca, sub, mi)
                             return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                           })
@@ -1013,7 +1015,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                   {filas.length === 0 && <tr><td className="l" colSpan={15}>Sin datos aún. Captura unidades (Ventas) y AUP (Producto) de {marca}.</td></tr>}
                   {filas.map((f) => (
                     <Fragment2 key={f.cli}>
-                      <tr className="secrow"><td className="l">{f.cli} · {f.term || 'sin plazo'}</td><td style={{ background: SI, padding: 2 }}><input value={data[`SALDO|${marca}|${f.cli}`] ?? ''} onChange={(e) => set(`SALDO|${marca}|${f.cli}`, e.target.value)} inputMode="decimal" style={{ width: '90%', background: '#fff', border: '1px solid #b6d4f2', borderRadius: 5, padding: '5px', textAlign: 'center' }} /></td>{CF_M2028.map((_, m) => <td key={m}></td>)}<td></td></tr>
+                      <tr className="secrow"><td className="l">{f.cli} · {f.term || 'sin plazo'}</td><td style={{ background: SI, padding: 2 }}>{soloVer ? <span className="tot">{fmt(f.ini)}</span> : <input value={data[`SALDO|${marca}|${f.cli}`] ?? ''} onChange={(e) => set(`SALDO|${marca}|${f.cli}`, e.target.value)} inputMode="decimal" style={{ width: '90%', background: '#fff', border: '1px solid #b6d4f2', borderRadius: 5, padding: '5px', textAlign: 'center' }} />}</td>{CF_M2028.map((_, m) => <td key={m}></td>)}<td></td></tr>
                       <tr><td className="l sub2">Venta (Unid×AUP)</td><td></td>{f.ventas.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.ventas.reduce((a, b) => a + b, 0))}</td></tr>
                       <tr><td className="l sub2">Cobro (según plazo)</td><td></td>{f.cobros.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.cobros.reduce((a, b) => a + b, 0))}</td></tr>
                       <tr className="catrow"><td className="l">= Saldo cliente</td><td className="tot">{fmt(f.ini)}</td>{f.run.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td></td></tr>
