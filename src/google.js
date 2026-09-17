@@ -121,6 +121,29 @@ export async function gHistorico() {
   return { ok: true, values: out }
 }
 
+/* ABP 2027 (plan) desde la hoja PLAN del EBP: suma Venta/Costo/Unidades por marca (solo EB = "SIN TAHO"). */
+let _planCache = null, _planAt = 0
+export async function gPlan2027() {
+  if (_planCache && Date.now() - _planAt < 300000) return _planCache
+  const rows = await readValuesFrom(EBP_SHEET_ID, 'PLAN')
+  const out = {}
+  let hr = -1
+  for (let i = 0; i < Math.min(rows.length, 15); i++) { const c = rows[i].map((x) => String(x || '').trim().toUpperCase()); if (c.includes('SBU') && c.includes('MARCA')) { hr = i; break } }
+  if (hr >= 0) {
+    const H = rows[hr].map((x) => String(x || '').trim().toUpperCase())
+    const idx = (cands) => { for (const c of cands) { const k = H.indexOf(c); if (k >= 0) return k } return -1 }
+    const iT = idx(['TIPO']), iR = idx(['RUBRO']), iM = idx(['MARCA', 'ARCH']), iV = idx(['VALOR EN DOLARES', 'VALOR'])
+    for (let r = hr + 1; r < rows.length; r++) {
+      const row = rows[r]; if (up(row[iT]) === 'TAHO') continue
+      const mar = String(row[iM] || '').trim(); if (!mar) continue
+      const rub = up(row[iR]); const monto = Number(String(row[iV] || '').replace(/[^0-9.\-]/g, '')) || 0
+      const o = out[up(mar)] || (out[up(mar)] = { venta: 0, costo: 0, unidades: 0 })
+      if (rub.indexOf('VENTA') >= 0) o.venta += monto; else if (rub.indexOf('COSTO') >= 0) o.costo += monto; else if (rub.indexOf('UNIDAD') >= 0) o.unidades += monto
+    }
+  }
+  _planCache = { ok: true, map: out }; _planAt = Date.now(); return _planCache
+}
+
 /* Administradores: quién ve Gerencia y Combinaciones. yalik siempre es admin. */
 export async function gLoadAdmins() {
   const v = await readValues('Config_Admins')
