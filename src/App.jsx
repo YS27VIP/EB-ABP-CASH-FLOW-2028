@@ -1465,8 +1465,9 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
       const [ven, prod, cap, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
       let hist = []; try { const j = await gHistorico(); if (j && j.ok && j.values) hist = j.values.slice(1) } catch { }
+      let plan = {}; try { const jp = await gPlan2027(); if (jp && jp.map) plan = jp.map } catch { }
       const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
-      setP({ ven, prod, cats, mk, log, dir, hist })
+      setP({ ven, prod, cats, mk, log, dir, hist, plan })
     })()
   }, [empresa])
 
@@ -1495,36 +1496,45 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   // FY histórico (solo Venta/Costo/Margen): suma de las marcas de la SBU por año
   const fy = (year, tipo) => { let s = 0; P.hist.forEach((r) => { if (String(r[1]) !== String(year)) return; if (!(marcasSBU || []).some((m) => upper(m) === upper(r[5]))) return; if (String(r[3] || '').toUpperCase().indexOf(tipo) < 0) return; s += num(r[7]) }); return s }
   const fyVenta = (y) => fy(y, 'VENTA'), fyCosto = (y) => fy(y, 'COSTO'), fyMargen = (y) => fyVenta(y) - fyCosto(y)
+  // ABP 2027 (hoja PLAN del EBP): suma por marca de la SBU
+  const abp = (campo) => (marcasSBU || []).reduce((s, m) => { const o = P.plan[upper(m)]; return s + (o ? o[campo] || 0 : 0) }, 0)
+  const abpVenta = abp('venta'), abpCosto = abp('costo'), abpMargen = abpVenta - abpCosto
 
   const filas = [
     { k: 'Unidades', get: (v) => v.unidades },
-    { k: 'Venta Neta', get: (v) => v.ventaNeta, strong: true, fy26: fyVenta(2026), fy25: fyVenta(2025) },
-    { k: '(−) Costo', get: (v) => v.costo, fy26: fyCosto(2026), fy25: fyCosto(2025) },
+    { k: 'Venta Neta', get: (v) => v.ventaNeta, strong: true, fy26: fyVenta(2026), fy25: fyVenta(2025), abp27: abpVenta },
+    { k: '(−) Costo', get: (v) => v.costo, fy26: fyCosto(2026), fy25: fyCosto(2025), abp27: abpCosto },
     { k: '(−) Comisiones', get: (v) => v.comisiones },
     { k: '(−) Logística', get: (v) => v.logistica },
-    { k: '= Margen Bruto', get: (v) => v.margenBruto, strong: true, fy26: fyMargen(2026), fy25: fyMargen(2025) },
+    { k: '= Margen Bruto', get: (v) => v.margenBruto, strong: true, fy26: fyMargen(2026), fy25: fyMargen(2025), abp27: abpMargen },
     { k: '(−) Marketing', get: (v) => v.marketing },
     { k: '(−) Viajes', get: (v) => v.viajes },
     { k: '= BRAND CONTRIBUTION', get: (v) => v.brand, strong: true },
   ]
+  const dpct = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
+  const dCell = (cur, ref, strong) => { const d = dpct(cur, ref); return <td className={'tot ' + (strong ? '' : '') + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700 }}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
 
   return (
     <div className="panel">
       <h3 style={{ color: sbuColor(sbuName) }}>Brand Contribution — {sbuName} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
-      <div className="sub">P&amp;L de cada marca lado a lado. Las columnas <b>FY2026</b> y <b>FY2025</b> comparan el total de la SBU en Venta Neta, Costo y Margen (lo que existe en el histórico del EBP).</div>
+      <div className="sub">P&amp;L de cada marca lado a lado. Las columnas <b>FY2026</b>, <b>FY2025</b> y <b>ABP 2027</b> (hoja PLAN del EBP) traen el valor y la <b>variación %</b> del total 2028 vs cada uno (en Venta, Costo y Margen).</div>
       <div className="tablewrap">
         <table className="vfix" style={{ width: 'auto', minWidth: 520 }}>
-          <thead><tr><th className="l">Concepto</th>{cols.map(({ m }) => <th key={m} style={{ color: marcaColor(m) }}>{m}</th>)}<th>TOTAL SBU</th><th className="ya">FY2026</th><th className="ya">FY2025</th></tr></thead>
+          <thead><tr><th className="l">Concepto</th>{cols.map(({ m }) => <th key={m} style={{ color: marcaColor(m) }}>{m}</th>)}<th>TOTAL 2028</th><th className="ya">FY2026</th><th className="ya">Δ vs 26</th><th className="ya">FY2025</th><th className="ya">Δ vs 25</th><th className="yb">ABP 2027</th><th className="yb">Δ vs ABP27</th></tr></thead>
           <tbody>
-            {filas.map((f) => (
+            {filas.map((f) => { const cur = f.get(tot); return (
               <tr key={f.k} className={f.strong ? 'grandrow' : undefined}>
                 <td className="l">{f.k}</td>
                 {cols.map(({ m, v }) => <td key={m} className="tot">{fmt(f.get(v))}</td>)}
-                <td className="tot">{fmt(f.get(tot))}</td>
+                <td className="tot">{fmt(cur)}</td>
                 <td className="tot ya">{f.fy26 != null ? fmt(f.fy26) : '—'}</td>
+                {f.fy26 != null ? dCell(cur, f.fy26) : <td className="tot ya">—</td>}
                 <td className="tot ya">{f.fy25 != null ? fmt(f.fy25) : '—'}</td>
+                {f.fy25 != null ? dCell(cur, f.fy25) : <td className="tot ya">—</td>}
+                <td className="tot yb">{f.abp27 != null ? fmt(f.abp27) : '—'}</td>
+                {f.abp27 != null ? dCell(cur, f.abp27) : <td className="tot yb">—</td>}
               </tr>
-            ))}
+            ) })}
           </tbody>
         </table>
       </div>
