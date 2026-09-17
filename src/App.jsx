@@ -936,10 +936,13 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
             <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
               <span className="empchip" style={{ background: acc, marginLeft: 0 }}>{marca}</span>
               {SECS.map((r) => { const on = r.id === secId; return <button key={r.id} className={'seg' + (on ? ' active' : '')} onClick={() => setSecId(r.id)} style={on ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{r.icon} {r.label}</button> })}
+              <button className={'seg' + (secId === 'viajes' ? ' active' : '')} onClick={() => setSecId('viajes')} style={secId === 'viajes' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>🧳 Viajes equipo</button>
               <button className={'seg' + (secId === 'brand' ? ' active' : '')} onClick={() => setSecId('brand')} style={secId === 'brand' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>📊 Brand Contribution</button>
             </div>
             {secId === 'brand'
               ? <BrandContribution empresa={empresa} marca={marca} />
+              : secId === 'viajes'
+              ? <ViajesEquipo empresa={empresa} marca={marca} sbuName={sbuName} marcasSBU={marcasSBU} />
               : <RoleForm key={sbuName + secId + marca} role={role} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
           </>)}
       </div>
@@ -1136,6 +1139,147 @@ function BrandContribution({ empresa, marca }) {
         {(comisiones === 0) && <div className="sub" style={{ marginTop: 8 }}>Nota: Comisiones y Venta Bruta/Descuentos aún no se capturan por marca; se conectan cuando definamos esos campos.</div>}
       </>)}
     </div>
+  )
+}
+
+/* ===== BRAND CONTRIBUTION por SBU: todas las marcas lado a lado + comparación FY2026/FY2025 ===== */
+function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
+  const [P, setP] = useState(null)
+  useEffect(() => {
+    (async () => {
+      const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
+      const [ven, prod, cap, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
+      let hist = []; try { const j = await gHistorico(); if (j && j.ok && j.values) hist = j.values.slice(1) } catch { }
+      const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+      setP({ ven, prod, cats, mk, log, dir, hist })
+    })()
+  }, [empresa])
+
+  if (!P) return <div className="panel"><h3>Brand Contribution — {sbuName}</h3><div className="sub">Cargando…</div></div>
+
+  const inM = (r, mca) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(mca)
+  const uniMes = (mca) => { const a = Array(12).fill(0); P.ven.forEach((r) => { if (!inM(r, mca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; for (let j = 0; j < 12; j++) a[j] += num(r[4 + j]) }); return a }
+  const aupCat = (mca) => { const o = {}; P.prod.forEach((r) => { if (!inM(r, mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') !== 0) return; o[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])) }); return o }
+  const aucMes = (mca) => { const a = Array(12).fill(0); P.prod.forEach((r) => { if (!inM(r, mca) || upper(r[1]) !== 'AUC') return; for (let j = 0; j < 12; j++) a[j] = num(r[4 + j]) }); return a }
+  const sumTab = (rows, mca, filt) => { let s = 0; rows.forEach((r) => { if (!inM(r, mca)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
+  const esViaje = (rub) => rub.toUpperCase().startsWith('VIAJES')
+
+  const calc = (mca) => {
+    const u = uniMes(mca), ac = aucMes(mca), acat = aupCat(mca), catL = P.cats[mca] || []
+    const ap = Array(12).fill(0); catL.forEach(({ cat, peso }) => { const x = acat[cat]; if (!x) return; const w = num(peso) / 100; for (let j = 0; j < 12; j++) ap[j] += w * x[j] })
+    let unidades = 0, ventaNeta = 0, costo = 0; for (let j = 0; j < 12; j++) { unidades += u[j]; ventaNeta += u[j] * ap[j]; costo += u[j] * ac[j] }
+    const comisiones = 0, logistica = sumTab(P.log, mca), marketing = sumTab(P.mk, mca)
+    const viajes = [P.ven, P.prod, P.mk, P.log, P.dir].reduce((t, rows) => t + sumTab(rows, mca, esViaje), 0)
+    const margenBruto = ventaNeta - costo - comisiones - logistica
+    const brand = margenBruto - marketing - viajes
+    return { unidades, ventaNeta, costo, comisiones, logistica, margenBruto, marketing, viajes, brand }
+  }
+  const cols = (marcasSBU || []).map((m) => ({ m, v: calc(m) }))
+  const tot = cols.reduce((acc, { v }) => { Object.keys(v).forEach((k) => acc[k] = (acc[k] || 0) + v[k]); return acc }, {})
+
+  // FY histórico (solo Venta/Costo/Margen): suma de las marcas de la SBU por año
+  const fy = (year, tipo) => { let s = 0; P.hist.forEach((r) => { if (String(r[1]) !== String(year)) return; if (!(marcasSBU || []).some((m) => upper(m) === upper(r[5]))) return; if (String(r[3] || '').toUpperCase().indexOf(tipo) < 0) return; s += num(r[7]) }); return s }
+  const fyVenta = (y) => fy(y, 'VENTA'), fyCosto = (y) => fy(y, 'COSTO'), fyMargen = (y) => fyVenta(y) - fyCosto(y)
+
+  const filas = [
+    { k: 'Unidades', get: (v) => v.unidades },
+    { k: 'Venta Neta', get: (v) => v.ventaNeta, strong: true, fy26: fyVenta(2026), fy25: fyVenta(2025) },
+    { k: '(−) Costo', get: (v) => v.costo, fy26: fyCosto(2026), fy25: fyCosto(2025) },
+    { k: '(−) Comisiones', get: (v) => v.comisiones },
+    { k: '(−) Logística', get: (v) => v.logistica },
+    { k: '= Margen Bruto', get: (v) => v.margenBruto, strong: true, fy26: fyMargen(2026), fy25: fyMargen(2025) },
+    { k: '(−) Marketing', get: (v) => v.marketing },
+    { k: '(−) Viajes', get: (v) => v.viajes },
+    { k: '= BRAND CONTRIBUTION', get: (v) => v.brand, strong: true },
+  ]
+
+  return (
+    <div className="panel">
+      <h3 style={{ color: sbuColor(sbuName) }}>Brand Contribution — {sbuName} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
+      <div className="sub">P&amp;L de cada marca lado a lado. Las columnas <b>FY2026</b> y <b>FY2025</b> comparan el total de la SBU en Venta Neta, Costo y Margen (lo que existe en el histórico del EBP).</div>
+      <div className="tablewrap">
+        <table className="vfix" style={{ width: 'auto', minWidth: 520 }}>
+          <thead><tr><th className="l">Concepto</th>{cols.map(({ m }) => <th key={m} style={{ color: marcaColor(m) }}>{m}</th>)}<th>TOTAL SBU</th><th className="ya">FY2026</th><th className="ya">FY2025</th></tr></thead>
+          <tbody>
+            {filas.map((f) => (
+              <tr key={f.k} className={f.strong ? 'grandrow' : undefined}>
+                <td className="l">{f.k}</td>
+                {cols.map(({ m, v }) => <td key={m} className="tot">{fmt(f.get(v))}</td>)}
+                <td className="tot">{fmt(f.get(tot))}</td>
+                <td className="tot ya">{f.fy26 != null ? fmt(f.fy26) : '—'}</td>
+                <td className="tot ya">{f.fy25 != null ? fmt(f.fy25) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="sub" style={{ marginTop: 8 }}>Nota: Comisiones y Venta Bruta/Descuentos aún no se capturan por marca; Marketing y Viajes no tienen histórico, por eso FY solo compara Venta, Costo y Margen.</div>
+    </div>
+  )
+}
+
+/* ===== VIAJES DEL EQUIPO: consolidado por rol/marca (vista Director) ===== */
+function ViajesEquipo({ empresa, marca, sbuName, marcasSBU }) {
+  const rolesV = ROLES.filter((r) => r.rubros.some((rb) => rb.k === 'VIAJES'))
+  const [tabs, setTabs] = useState(null)
+  useEffect(() => {
+    let cancel = false
+    ;(async () => {
+      const out = {}
+      await Promise.all(rolesV.map(async (r) => { try { const j = await gReadTab(r.tab); out[r.tab] = (j && j.ok && j.values) ? j.values.slice(1) : [] } catch { out[r.tab] = [] } }))
+      if (!cancel) setTabs(out)
+    })()
+    return () => { cancel = true }
+  }, [empresa])
+
+  const viajesMes = (tab, mca) => {
+    const a = Array(12).fill(0)
+    ;(tabs[tab] || []).forEach((r) => {
+      if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return
+      if (!String(r[1] || '').toUpperCase().startsWith('VIAJES')) return
+      for (let j = 0; j < 12; j++) a[j] += num(r[4 + j])
+    })
+    return a
+  }
+  const anual = (tab, mca) => viajesMes(tab, mca).reduce((s, v) => s + v, 0)
+
+  if (!tabs) return <div className="panel"><h3>Viajes del equipo</h3><div className="sub">Cargando…</div></div>
+
+  // Tabla principal: rol × mes para la marca seleccionada
+  const filas = rolesV.map((r) => ({ r, mes: viajesMes(r.tab, marca), tot: anual(r.tab, marca) }))
+  const totMarcaMes = MESES.map((_, mi) => filas.reduce((s, f) => s + f.mes[mi], 0))
+  const totMarca = totMarcaMes.reduce((s, v) => s + v, 0)
+
+  return (
+    <>
+      <div className="panel">
+        <h3 style={{ color: marcaColor(marca) }}>Viajes del equipo — {marca} <span className="unit">(solo lectura · 2028)</span></h3>
+        <div className="sub">Suma de los viajes que cada área captura para esta marca. El Director llena los suyos en la sección <b>Director</b>; aquí ve además los del resto del equipo, el total por marca y el total de la SBU.</div>
+        <div className="tablewrap">
+          <table className="vfix">
+            <colgroup><col style={{ width: '160px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+            <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+            <tbody>
+              {filas.map((f) => <tr key={f.r.id}><td className="l">{f.r.icon} {f.r.label}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td></tr>)}
+              <tr className="grandrow"><td className="l">Total {marca}</td>{totMarcaMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarca)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="panel">
+        <h3>Viajes por marca — {sbuName}</h3>
+        <div className="sub">Total de viajes del equipo por cada marca de la SBU, con el total de la SBU al final.</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Marca</th>{rolesV.map((r) => <th key={r.id}>{r.label}</th>)}<th>Total marca</th></tr></thead>
+            <tbody>
+              {(marcasSBU || []).map((m) => { const cols = rolesV.map((r) => anual(r.tab, m)); const t = cols.reduce((s, v) => s + v, 0); return <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{cols.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
+              <tr className="grandrow"><td className="l">Total {sbuName}</td>{rolesV.map((r) => <td key={r.id} className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + anual(r.tab, m), 0))}</td>)}<td className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + rolesV.reduce((a, r) => a + anual(r.tab, m), 0), 0))}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   )
 }
 
