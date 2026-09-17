@@ -1659,7 +1659,9 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
     { k: '= Margen Bruto', get: (v) => v.margenBruto, strong: true, fy26: fyMargen(2026), fy25: fyMargen(2025), abp27: abpMargen },
     { k: '(−) Marketing', get: (v) => v.marketing },
     { k: '(−) Viajes', get: (v) => v.viajes },
-    { k: '= BRAND CONTRIBUTION', get: (v) => v.brand, strong: true },
+    { k: '= CONTRIBUCIÓN DE LA BU', get: (v) => v.brand, strong: true },
+    { k: '(−) Gastos administrativos', get: () => 0, totVal: gadminAnual },
+    { k: '🎯 = RESULTADO OPERATIVO', get: () => 0, totVal: (tot.brand || 0) - gadminAnual, strong: true },
   ]
   const dpct = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
   const dCell = (cur, ref, strong) => { const d = dpct(cur, ref); return <td className={'tot ' + (strong ? '' : '') + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700 }}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
