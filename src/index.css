@@ -33,8 +33,8 @@ select:focus{border-color:var(--odoo);outline:none}
 .kpi .v{font-size:22px;font-weight:800;margin-top:5px;font-variant-numeric:tabular-nums}
 .kpi .s{font-size:12px;color:var(--muted);margin-top:2px}
 
-.panel{background:var(--card);border:1px solid #d7dde3;border-radius:12px;padding:16px 18px;margin-bottom:26px;box-shadow:0 3px 12px rgba(0,0,0,.06)}
-.panel h3{margin:0 0 6px;font-size:15px;padding:2px 0 8px 11px;border-left:4px solid var(--odoo);border-bottom:1px solid var(--line)}
+.panel{background:var(--card);border:1.5px solid #c4ccd4;border-left:6px solid var(--accent,var(--odoo));border-radius:12px;padding:16px 18px;margin-bottom:26px;box-shadow:0 3px 14px rgba(0,0,0,.09)}
+.panel h3{margin:0 0 6px;font-size:15px;padding:2px 0 8px 0;border-bottom:1px solid var(--line)}
 .panel .sub{color:var(--muted);font-size:12.5px;margin-bottom:14px}
 
 table{border-collapse:collapse;width:100%;font-size:12.5px}

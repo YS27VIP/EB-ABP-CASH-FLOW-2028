@@ -1322,13 +1322,10 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
               <span className="empchip" style={{ background: col, marginLeft: 0 }}>▣ TOTAL {sbuName}</span>
               <button className={'seg' + (totTab === 'brand' ? ' active' : '')} onClick={() => setTotTab('brand')} style={totTab === 'brand' ? { background: col, borderColor: col, color: '#fff' } : {}}>📊 Brand Contribution</button>
               <button className={'seg' + (totTab === 'cash' ? ' active' : '')} onClick={() => setTotTab('cash')} style={totTab === 'cash' ? { background: col, borderColor: col, color: '#fff' } : {}}>💵 Cash Flow</button>
-              <button className={'seg' + (totTab === 'resumen' ? ' active' : '')} onClick={() => setTotTab('resumen')} style={totTab === 'resumen' ? { background: col, borderColor: col, color: '#fff' } : {}}>📋 Resumen</button>
             </div>
-            {totTab === 'brand'
-              ? <BrandContribSBU empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />
-              : totTab === 'cash'
+            {totTab === 'cash'
               ? <CashFlowForm key={'cftot' + sbuName} role={cashRole} rubro={cashRubro} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={`TOTAL::${sbuName}`} />
-              : <GerenciaScreen empresa={empresa} sbus={sbus} soloSBU={sbuName} />}
+              : <BrandContribSBU empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />}
           </>)
           : (<>
             <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>

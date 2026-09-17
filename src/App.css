@@ -83,8 +83,8 @@ td.tot{font-weight:800;font-variant-numeric:tabular-nums;text-align:center}
 /* --- Marketing detalle --- */
 th.cod,td.cod{width:44px;color:var(--muted);font-size:11px;text-align:center}
 td.l.sub2{padding-left:22px;font-weight:500}
-tr.grandrow td{background:var(--odoo);color:#fff;font-weight:800;border-top:2px solid var(--odoo-d)}
-tr.grandrow td.tot{color:#fff}
+tr.grandrow td{background:#e4eef1;color:#0b5566;font-weight:800;border-top:2px solid #a9c9d2}
+tr.grandrow td.tot{color:#0b5566}
 .sburow td.tot{color:var(--odoo);font-weight:800}
 tr.catrow td{font-weight:700;background:#faf7f9}
 tr.catrow td.l{color:var(--odoo)}
@@ -96,7 +96,7 @@ thead th.yb{color:#8f4b7e}
 td.ya{border-left:1px solid #dbe6f5}
 td.yb{border-right:1px solid #ecd9f0}
 
-tr.secrow td{background:var(--odoo-d);color:#fff;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.5px;text-align:left}
+tr.secrow td{background:#eef4f6;color:#0b5566;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.5px;text-align:left;border-top:1px solid #cfe0e5}
 tr.sep td{height:12px;background:transparent;border:none}
 
 /* Tablas de Ventas con columnas fijas para que los meses coincidan entre bloques */
