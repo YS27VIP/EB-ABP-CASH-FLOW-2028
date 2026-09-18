@@ -228,6 +228,48 @@ export async function gSaveHistorico(values) {
   return { ok: true, filas: incoming.length, total: out.length - 1 }
 }
 
+/* ===== Base de clientes: copia en este proyecto (hoja Base_Clientes) de la hoja
+   "BASE CLIENTES SF" del libro EBP. Sirve como catálogo para el desplegable de
+   "agregar cliente" en Ventas. Los clientes que se agreguen a mano se guardan aquí. */
+async function _ebpBaseClientes() {
+  const rows = await readValuesFrom(EBP_SHEET_ID, 'BASE CLIENTES SF')
+  if (!rows || !rows.length) return []
+  let hr = 0, iC = 0, found = false
+  for (let i = 0; i < Math.min(rows.length, 12); i++) {
+    const cells = rows[i].map((x) => String(x || '').trim().toUpperCase())
+    let k = cells.findIndex((c) => c.indexOf('CLIENTE ARMONIZADO') >= 0)
+    if (k < 0) k = cells.findIndex((c) => c.indexOf('CLIENTE') >= 0)
+    if (k >= 0) { hr = i; iC = k; found = true; break }
+  }
+  const set = new Set()
+  for (let r = (found ? hr + 1 : 0); r < rows.length; r++) { const v = String((rows[r] || [])[iC] || '').trim(); if (v && v.toUpperCase() !== 'CLIENTE' && v.toUpperCase().indexOf('CLIENTE ARMONIZADO') < 0) set.add(v) }
+  return [...set].sort((a, b) => a.localeCompare(b))
+}
+export async function gSyncBaseClientes() {
+  await ensureTab('Base_Clientes', ['CLIENTE', 'ORIGEN'])
+  const ebp = await _ebpBaseClientes()
+  const cur = await readValues('Base_Clientes')
+  const have = {}; cur.slice(1).forEach((r) => { const n = String(r[0] || '').trim(); if (n) have[up(n)] = true })
+  const appends = ebp.filter((n) => !have[up(n)]).map((n) => [n, 'EBP'])
+  if (appends.length) await appendValues('Base_Clientes', appends)
+  return { ok: true, added: appends.length, total: (cur.length - 1) + appends.length }
+}
+export async function gLoadClientes() {
+  await ensureTab('Base_Clientes', ['CLIENTE', 'ORIGEN'])
+  let v = await readValues('Base_Clientes')
+  if (v.length <= 1) { try { await gSyncBaseClientes(); v = await readValues('Base_Clientes') } catch { } }
+  const clientes = v.slice(1).map((r) => String(r[0] || '').trim()).filter(Boolean)
+  return { ok: true, clientes: [...new Set(clientes)].sort((a, b) => a.localeCompare(b)) }
+}
+export async function gAddCliente(nombre) {
+  const n = String(nombre || '').trim(); if (!n) return { ok: false }
+  await ensureTab('Base_Clientes', ['CLIENTE', 'ORIGEN'])
+  const v = await readValues('Base_Clientes')
+  const exists = v.slice(1).some((r) => up(r[0]) === up(n))
+  if (!exists) await appendValues('Base_Clientes', [[n, 'ABP']])
+  return { ok: true, added: exists ? 0 : 1 }
+}
+
 /* ===== Estado del modelo (clave/valor JSON) por empresa =====
    Guarda en la hoja Cap_Estado todo lo que antes vivía solo en localStorage:
    % por cliente-categoría, inventario, precios por temporada, comisiones,
