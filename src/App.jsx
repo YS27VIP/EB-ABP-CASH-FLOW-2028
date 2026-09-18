@@ -3264,19 +3264,55 @@ function CalendarioScreen({ empresa, puedeEditar }) {
   while (celdas.length % 7 !== 0) celdas.push(null)
   const diaColor = (fecha) => { const its = byFecha[fecha]; if (!its) return null; const overdue = its.some((x) => x.estado !== 'Entregado' && diasRestan(x.fecha) < 0); const allDone = its.every((x) => x.estado === 'Entregado'); return overdue ? '#dc2626' : allDone ? '#16a34a' : '#16a34a' }
   const mover = (delta) => { let m = mesView.m + delta, y = mesView.y; if (m < 0) { m = 11; y-- } if (m > 11) { m = 0; y++ } setMesView({ y, m }); setSelDia(null) }
-  const hoyF = fechaDe.call ? `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}` : ''
+  const hoyF = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`
   return (
     <>
       <div className="toolbar">
         <span className="empchip" style={{ marginLeft: 0, background: '#0e7490' }}>📅 {empresa}</span>
         <div className="spacer"></div>
-        {puedeEditar && <button className="btn" onClick={add}>➕ Agregar entregable</button>}
         {puedeEditar && <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>}
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="kpis">
         <div className="kpi"><div className="k">Entregables pendientes</div><div className="v">{pend}</div><div className="s">de {items.length} en total</div></div>
         <div className="kpi"><div className="k">Próxima entrega</div><div className="v" style={{ fontSize: 16 }}>{prox ? prox.hito : '—'}</div><div className="s">{prox && prox.fecha ? `${prox.fecha} · ${diasRestan(prox.fecha) === 0 ? 'hoy' : 'en ' + diasRestan(prox.fecha) + ' días'}` : 'sin fecha próxima'}</div></div>
+      </div>
+      <div className="panel">
+        <h3>Calendario visual — {empresa} <span className="unit">(haz clic en un día para ver qué toca)</span></h3>
+        <div className="sub">Los días con entregables aparecen marcados: <b style={{ color: '#16a34a' }}>verde</b> = a tiempo o entregado, <b style={{ color: '#dc2626' }}>rojo</b> = atrasado (venció y sigue pendiente). Haz clic en un día para ver el detalle abajo.</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, margin: '6px 0 14px' }}>
+          <button className="btn" onClick={() => mover(-1)}>‹</button>
+          <div style={{ fontWeight: 800, fontSize: 16, minWidth: 190, textAlign: 'center', color: '#0e7490' }}>{MESNOM[mesView.m]} {mesView.y}</div>
+          <button className="btn" onClick={() => mover(1)}>›</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6, maxWidth: 700, margin: '0 auto' }}>
+          {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d) => <div key={d} style={{ textAlign: 'center', fontWeight: 700, fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', padding: '2px 0' }}>{d}</div>)}
+          {celdas.map((d, ci) => {
+            if (d == null) return <div key={ci} />
+            const f = fechaDe(d); const its = byFecha[f]; const col = diaColor(f); const esHoy = f === hoyF; const sel = f === selDia
+            return (
+              <div key={ci} onClick={() => its && setSelDia(sel ? null : f)}
+                style={{ position: 'relative', minHeight: 46, borderRadius: 9, border: sel ? '2px solid #0e7490' : esHoy ? '2px solid #94a3b8' : '1px solid #e5e7eb', background: col ? (col === '#dc2626' ? '#fdecec' : '#eafaef') : '#fff', cursor: its ? 'pointer' : 'default', padding: '4px 5px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 12, fontWeight: esHoy ? 800 : 600, color: esHoy ? '#0e7490' : '#334155' }}>{d}</span>
+                {its && <span style={{ position: 'absolute', bottom: 4, right: 5, width: 9, height: 9, borderRadius: '50%', background: col }} title={its.map((x) => x.hito).join(', ')} />}
+                {its && its.length > 1 && <span style={{ position: 'absolute', bottom: 3, left: 5, fontSize: 9, fontWeight: 800, color: col }}>{its.length}</span>}
+              </div>
+            )
+          })}
+        </div>
+        {selDia && (
+          <div style={{ maxWidth: 700, margin: '14px auto 0', background: '#f7fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontWeight: 800, marginBottom: 8, color: '#0e7490' }}>📌 {selDia}</div>
+            {(byFecha[selDia] || []).map((x, i) => { const dr = diasRestan(x.fecha); const done = x.estado === 'Entregado'; return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0', borderTop: i ? '1px solid #e8edf1' : 'none' }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: done ? '#16a34a' : dr < 0 ? '#dc2626' : '#16a34a', flex: '0 0 auto' }} />
+                <span style={{ flex: 1, fontWeight: 600 }}>{x.hito}</span>
+                <span className="empchip" style={{ marginLeft: 0, background: '#64748b', fontSize: 11 }}>{x.area}</span>
+                <span style={{ fontWeight: 700, fontSize: 12, color: estadoColor(x.estado) }}>{x.estado}</span>
+              </div>
+            ) })}
+          </div>
+        )}
       </div>
       <div className="panel">
         <h3>Calendario de trabajo — {empresa} <span className="unit">(fechas de entregables del ABP)</span></h3>
@@ -3299,6 +3335,7 @@ function CalendarioScreen({ empresa, puedeEditar }) {
             </tbody>
           </table>
         </div>
+        {puedeEditar && <div style={{ marginTop: 12 }}><button className="btn" onClick={add}>➕ Agregar entregable</button></div>}
       </div>
     </>
   )
