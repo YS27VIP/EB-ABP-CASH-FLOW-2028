@@ -3252,19 +3252,20 @@ function CalendarioScreen({ empresa, puedeEditar }) {
   const orden = items.map((x, i) => ({ ...x, _i: i })).sort((a, b) => (a.fecha || '9999-99-99').localeCompare(b.fecha || '9999-99-99'))
   const pend = items.filter((x) => x.estado !== 'Entregado').length
   const prox = orden.filter((x) => x.estado !== 'Entregado' && x.fecha).find((x) => diasRestan(x.fecha) >= 0)
-  // Calendario visual mensual
-  const [mesView, setMesView] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
+  // Calendario visual — horizonte completo de meses en una sola vista
   const [selDia, setSelDia] = useState(null)
   const byFecha = {}; items.forEach((x, i) => { if (x.fecha) (byFecha[x.fecha] = byFecha[x.fecha] || []).push({ ...x, _i: i }) })
   const MESNOM = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-  const startWd = (new Date(mesView.y, mesView.m, 1).getDay() + 6) % 7 // Lunes=0
-  const diasMes = new Date(mesView.y, mesView.m + 1, 0).getDate()
-  const fechaDe = (d) => `${mesView.y}-${String(mesView.m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-  const celdas = []; for (let i = 0; i < startWd; i++) celdas.push(null); for (let d = 1; d <= diasMes; d++) celdas.push(d)
-  while (celdas.length % 7 !== 0) celdas.push(null)
-  const diaColor = (fecha) => { const its = byFecha[fecha]; if (!its) return null; const overdue = its.some((x) => x.estado !== 'Entregado' && diasRestan(x.fecha) < 0); const allDone = its.every((x) => x.estado === 'Entregado'); return overdue ? '#dc2626' : allDone ? '#16a34a' : '#16a34a' }
-  const mover = (delta) => { let m = mesView.m + delta, y = mesView.y; if (m < 0) { m = 11; y-- } if (m > 11) { m = 0; y++ } setMesView({ y, m }); setSelDia(null) }
+  const diaColor = (fecha) => { const its = byFecha[fecha]; if (!its) return null; const overdue = its.some((x) => x.estado !== 'Entregado' && diasRestan(x.fecha) < 0); return overdue ? '#dc2626' : '#16a34a' }
   const hoyF = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`
+  // Rango de meses: desde este mes (o el entregable más temprano) hasta diciembre de este año (o el entregable más tardío)
+  const ymHoy = hoy.getFullYear() * 12 + hoy.getMonth()
+  const fechasVal = items.map((x) => x.fecha).filter(Boolean).map((f) => { const [Y, M] = f.split('-').map(Number); return Y * 12 + (M - 1) })
+  const ymMin = Math.min(ymHoy, ...(fechasVal.length ? fechasVal : [ymHoy]))
+  const ymMax = Math.max(hoy.getFullYear() * 12 + 11, ...(fechasVal.length ? fechasVal : [ymHoy]))
+  const meses = []; for (let ym = ymMin; ym <= ymMax; ym++) meses.push({ y: Math.floor(ym / 12), m: ym % 12 })
+  const gridDe = (y, m) => { const sw = (new Date(y, m, 1).getDay() + 6) % 7; const dm = new Date(y, m + 1, 0).getDate(); const c = []; for (let i = 0; i < sw; i++) c.push(null); for (let d = 1; d <= dm; d++) c.push(d); while (c.length % 7 !== 0) c.push(null); return c }
+  const fechaDe2 = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
   return (
     <>
       <div className="toolbar">
@@ -3278,27 +3279,29 @@ function CalendarioScreen({ empresa, puedeEditar }) {
         <div className="kpi"><div className="k">Próxima entrega</div><div className="v" style={{ fontSize: 16 }}>{prox ? prox.hito : '—'}</div><div className="s">{prox && prox.fecha ? `${prox.fecha} · ${diasRestan(prox.fecha) === 0 ? 'hoy' : 'en ' + diasRestan(prox.fecha) + ' días'}` : 'sin fecha próxima'}</div></div>
       </div>
       <div className="panel">
-        <h3>Calendario visual — {empresa} <span className="unit">(haz clic en un día para ver qué toca)</span></h3>
-        <div className="sub">Los días con entregables aparecen marcados: <b style={{ color: '#16a34a' }}>verde</b> = a tiempo o entregado, <b style={{ color: '#dc2626' }}>rojo</b> = atrasado (venció y sigue pendiente). Haz clic en un día para ver el detalle abajo.</div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, margin: '6px 0 14px' }}>
-          <button className="btn" onClick={() => mover(-1)}>‹</button>
-          <div style={{ fontWeight: 800, fontSize: 16, minWidth: 190, textAlign: 'center', color: '#0e7490' }}>{MESNOM[mesView.m]} {mesView.y}</div>
-          <button className="btn" onClick={() => mover(1)}>›</button>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6, maxWidth: 700, margin: '0 auto' }}>
-          {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d) => <div key={d} style={{ textAlign: 'center', fontWeight: 700, fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.4px', padding: '2px 0' }}>{d}</div>)}
-          {celdas.map((d, ci) => {
-            if (d == null) return <div key={ci} />
-            const f = fechaDe(d); const its = byFecha[f]; const col = diaColor(f); const esHoy = f === hoyF; const sel = f === selDia
-            return (
-              <div key={ci} onClick={() => its && setSelDia(sel ? null : f)}
-                style={{ position: 'relative', minHeight: 46, borderRadius: 9, border: sel ? '2px solid #0e7490' : esHoy ? '2px solid #94a3b8' : '1px solid #e5e7eb', background: col ? (col === '#dc2626' ? '#fdecec' : '#eafaef') : '#fff', cursor: its ? 'pointer' : 'default', padding: '4px 5px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: 12, fontWeight: esHoy ? 800 : 600, color: esHoy ? '#0e7490' : '#334155' }}>{d}</span>
-                {its && <span style={{ position: 'absolute', bottom: 4, right: 5, width: 9, height: 9, borderRadius: '50%', background: col }} title={its.map((x) => x.hito).join(', ')} />}
-                {its && its.length > 1 && <span style={{ position: 'absolute', bottom: 3, left: 5, fontSize: 9, fontWeight: 800, color: col }}>{its.length}</span>}
+        <h3>Calendario visual — {empresa} <span className="unit">(horizonte completo · haz clic en un día para ver qué toca)</span></h3>
+        <div className="sub">Todos los meses del plan en una sola vista. Los días con entregables aparecen marcados: <b style={{ color: '#16a34a' }}>verde</b> = a tiempo o entregado, <b style={{ color: '#dc2626' }}>rojo</b> = atrasado (venció y sigue pendiente). Haz clic en un día para ver el detalle abajo.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 16, marginTop: 12 }}>
+          {meses.map(({ y, m }) => (
+            <div key={y + '-' + m} style={{ border: '1px solid #e8edf1', borderRadius: 12, padding: '10px 10px 12px' }}>
+              <div style={{ fontWeight: 800, fontSize: 13.5, textAlign: 'center', color: '#0e7490', marginBottom: 8 }}>{MESNOM[m]} {y}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 }}>
+                {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => <div key={i} style={{ textAlign: 'center', fontWeight: 700, fontSize: 10, color: 'var(--muted)', paddingBottom: 2 }}>{d}</div>)}
+                {gridDe(y, m).map((d, ci) => {
+                  if (d == null) return <div key={ci} />
+                  const f = fechaDe2(y, m, d); const its = byFecha[f]; const col = diaColor(f); const esHoy = f === hoyF; const sel = f === selDia
+                  return (
+                    <div key={ci} onClick={() => its && setSelDia(sel ? null : f)}
+                      style={{ position: 'relative', minHeight: 30, borderRadius: 6, border: sel ? '2px solid #0e7490' : esHoy ? '2px solid #94a3b8' : '1px solid #eef1f4', background: col ? (col === '#dc2626' ? '#fdecec' : '#eafaef') : '#fff', cursor: its ? 'pointer' : 'default', padding: '2px 3px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}
+                      title={its ? its.map((x) => x.hito).join(', ') : ''}>
+                      <span style={{ fontSize: 10.5, fontWeight: esHoy ? 800 : 600, color: esHoy ? '#0e7490' : col ? (col === '#dc2626' ? '#b91c1c' : '#15803d') : '#475569' }}>{d}</span>
+                      {its && <span style={{ width: 7, height: 7, borderRadius: '50%', background: col, flex: '0 0 auto', marginTop: 2 }} />}
+                    </div>
+                  )
+                })}
               </div>
-            )
-          })}
+            </div>
+          ))}
         </div>
         {selDia && (
           <div style={{ maxWidth: 700, margin: '14px auto 0', background: '#f7fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 14px' }}>
