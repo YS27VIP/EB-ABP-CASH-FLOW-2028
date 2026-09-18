@@ -1434,16 +1434,25 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
   const unitsMes = (m) => SEASONS.reduce((a, s) => a + salM(s, m), 0)
   const aupEff = (m) => { const u = unitsMes(m); return u ? ventaMes(m) / u : 0 }
   const aucEff = (m) => { const u = unitsMes(m); return u ? costoMes(m) / u : 0 }
+  // Efectivo MENSUAL por categoría: qué temporadas rotan cada mes define el AUP/AUC de ese mes (evolución)
+  const splitSC = (s, c) => { const w = invSeason(s); return w ? invSC(s, c) / w : 0 }
+  const unitsCatMes = (c, m) => SEASONS.reduce((a, s) => a + salM(s, m) * splitSC(s, c), 0)
+  const ventaCatMes = (c, m) => SEASONS.reduce((a, s) => a + salM(s, m) * splitSC(s, c) * aupSC(s, c), 0)
+  const costoCatMes = (c, m) => SEASONS.reduce((a, s) => a + salM(s, m) * splitSC(s, c) * aucSC(s, c), 0)
+  const aupCatMes = (c, m) => { const u = unitsCatMes(c, m); return u ? ventaCatMes(c, m) / u : 0 }
+  const aucCatMes = (c, m) => { const u = unitsCatMes(c, m); return u ? costoCatMes(c, m) / u : 0 }
+  const unitsAttr = (m) => cats.reduce((a, c) => a + unitsCatMes(c, m), 0)
+  const aupMarcaMes = (m) => { const u = unitsAttr(m); return u ? cats.reduce((a, c) => a + ventaCatMes(c, m), 0) / u : 0 }
+  const aucMarcaMes = (m) => { const u = unitsAttr(m); return u ? cats.reduce((a, c) => a + costoCatMes(c, m), 0) / u : 0 }
   async function guardar() {
     setSaving(true); setMsg(null)
-    // El AUP/AUC ponderado por categoría (plano en los 12 meses de 2028) alimenta a todo el app vía Cap_Producto
+    // El AUP/AUC EFECTIVO MENSUAL por categoría (evolución según rotación) alimenta a todo el app vía Cap_Producto
     const rows = []
     cats.forEach((c) => {
-      const ap = aupPondCat(c), ac = aucPondCat(c)
-      if (ap) rows.push({ rubro: 'AUP · ' + c, sbu, marca, meses: MESES.map(() => ap) })
-      if (ac) rows.push({ rubro: 'AUC · ' + c, sbu, marca, meses: MESES.map(() => ac) })
+      const mAup = MESES.map((_, m) => aupCatMes(c, m)); if (mAup.some((v) => v)) rows.push({ rubro: 'AUP · ' + c, sbu, marca, meses: mAup })
+      const mAuc = MESES.map((_, m) => aucCatMes(c, m)); if (mAuc.some((v) => v)) rows.push({ rubro: 'AUC · ' + c, sbu, marca, meses: mAuc })
     })
-    if (aucPondMarca) rows.push({ rubro: 'AUC', sbu, marca, meses: MESES.map(() => aucPondMarca) })
+    const mAucMarca = MESES.map((_, m) => aucMarcaMes(m)); if (mAucMarca.some((v) => v)) rows.push({ rubro: 'AUC', sbu, marca, meses: mAucMarca })
     saveEstado(empresa, 'precios', snap)
     await postToTab('Cap_Producto', empresa, usuario, 'Producto', rows, setMsg)
     setSaving(false)
@@ -1457,7 +1466,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
       <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
       <div className="panel">
         <h3>AUP / AUC / Margen — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">El AUP/AUC de 2028 sale de <b>ponderar</b> el precio y costo de <b>cada categoría en cada temporada</b> según el <b>inventario disponible</b>. <b>1)</b> Producto llena inventario/AUC/AUP por temporada y categoría. <b>2)</b> el ponderado 2028 por categoría (consecuencia). <b>3)</b> el efectivo por mes según la rotación.</div>
+        <div className="sub">El AUP/AUC de 2028 sale del precio y costo de <b>cada categoría en cada temporada</b>, según la <b>rotación</b> del inventario. <b>1)</b> Producto llena inventario/AUC/AUP por temporada y categoría. <b>2)</b> el efectivo <b>mensual</b> por categoría (consecuencia de qué temporada rota cada mes) — eso es lo que usa el resto del app.</div>
 
         <div className="sub" style={{ fontWeight: 800, color: 'var(--odoo)', marginTop: 6, marginBottom: 6 }}>1 · Inventario, costo y precio por temporada y categoría</div>
         <div className="sub" style={{ marginBottom: 6 }}>Por cada <b>temporada</b> (añada) y <b>categoría</b>: cuántas <b>unidades</b> hay disponibles, su <b>AUC</b> (costo) y su <b>AUP</b> (precio). Para 2028 (SS28/FW28) es lo que se compra/proyecta; para las anteriores, el saldo que queda. Las categorías vienen de lo que definió el Director.</div>
@@ -1473,24 +1482,22 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
           </tbody>
         </table></div>
 
-        <div className="sub" style={{ fontWeight: 800, color: 'var(--odoo)', marginBottom: 6 }}>2 · AUP / AUC ponderado 2028 por categoría (consecuencia)</div>
-        <div className="sub" style={{ marginBottom: 6 }}>El AUP/AUC 2028 de cada categoría = promedio ponderado de todas las temporadas según el inventario disponible. <b>Este es el valor que usa el resto del app</b> (Ventas, Contribución, Cash Flow).</div>
-        <div className="tablewrap" style={{ marginBottom: 22 }}><table style={{ width: 'auto' }}>
-          <thead><tr><th className="l">Categoría</th><th>Inv. total (ud)</th><th>AUC pond.</th><th>AUP pond.</th><th>Margen pond.</th></tr></thead>
-          <tbody>
-            {cats.map((c) => <tr key={c}><td className="l">{c}</td><td className="tot">{fmt(invCat(c))}</td><td className="tot">{money(aucPondCat(c))}</td><td className="tot">{money(aupPondCat(c))}</td><td className="tot">{money(aupPondCat(c) - aucPondCat(c))}</td></tr>)}
-            <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="tot">{fmt(invTot)}</td><td className="tot">{money(aucPondMarca)}</td><td className="tot">{money(aupPondMarca)}</td><td className="tot">{money(aupPondMarca - aucPondMarca)}</td></tr>
-          </tbody>
-        </table></div>
-
-        <div className="sub" style={{ fontWeight: 800, color: 'var(--odoo)', marginBottom: 6 }}>3 · Efectivo por mes (consecuencia de la rotación)</div>
-        <div className="sub" style={{ marginBottom: 6 }}>Resultado automático: según la <b>rotación del inventario</b>, el sistema calcula el AUP/AUC efectivo del mes en que se vende cada temporada (ya ponderado por categoría), y la venta/costo/margen. No se llena, se calcula.</div>
-        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '190px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-          <thead><tr><th className="l">Efectivo (según rotación)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+        <div className="sub" style={{ fontWeight: 800, color: 'var(--odoo)', marginBottom: 6 }}>2 · Evolución mensual del AUP / AUC (consecuencia de la rotación)</div>
+        <div className="sub" style={{ marginBottom: 6 }}>Según cómo <b>rota el inventario</b>, cada mes se vende una mezcla distinta de temporadas → el AUP y AUC <b>cambian mes a mes</b>. Ej.: si FW26 (barata) se agota en junio y en julio entra SS28 (más cara), el salto se ve aquí. <b>Estos valores mensuales por categoría son los que usa el resto del app</b> (Ventas, Contribución, Cash Flow).</div>
+        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+          <thead><tr><th className="l">Efectivo mensual (según rotación)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total / prom.</th></tr></thead>
           <tbody>
             <tr><td className="l sub2">Unidades vendidas</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(unitsMes(m))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, m) => a + unitsMes(m), 0))}</td></tr>
-            <tr className="catrow"><td className="l">AUP efectivo</td>{MESES.map((_, m) => <td key={m} className="tot">{money(aupEff(m))}</td>)}<td></td></tr>
-            <tr className="catrow"><td className="l">AUC efectivo</td>{MESES.map((_, m) => <td key={m} className="tot">{money(aucEff(m))}</td>)}<td></td></tr>
+            {cats.map((c) => (
+              <Fragment2 key={c}>
+                <tr className="secrow"><td colSpan={14}>{c}</td></tr>
+                <tr className="catrow"><td className="l">AUP efectivo {c}</td>{MESES.map((_, m) => <td key={m} className="tot">{money(aupCatMes(c, m))}</td>)}<td></td></tr>
+                <tr className="catrow"><td className="l">AUC efectivo {c}</td>{MESES.map((_, m) => <td key={m} className="tot">{money(aucCatMes(c, m))}</td>)}<td></td></tr>
+              </Fragment2>
+            ))}
+            <tr className="secrow"><td colSpan={14}>TOTAL {marca}</td></tr>
+            <tr className="catrow"><td className="l">AUP efectivo marca</td>{MESES.map((_, m) => <td key={m} className="tot">{money(aupMarcaMes(m))}</td>)}<td></td></tr>
+            <tr className="catrow"><td className="l">AUC efectivo marca</td>{MESES.map((_, m) => <td key={m} className="tot">{money(aucMarcaMes(m))}</td>)}<td></td></tr>
             <tr><td className="l sub2">Venta ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(ventaMes(m))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, m) => a + ventaMes(m), 0))}</td></tr>
             <tr><td className="l sub2">Costo ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(costoMes(m))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, m) => a + costoMes(m), 0))}</td></tr>
             <tr className="grandrow"><td className="l">Margen ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(ventaMes(m) - costoMes(m))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, m) => a + ventaMes(m) - costoMes(m), 0))}</td></tr>
