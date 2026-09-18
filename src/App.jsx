@@ -7,7 +7,7 @@ import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoa
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'temp', 'precios', 'comis', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario']
+const ESTADO_KEYS = ['catpct', 'catpart', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'temp', 'precios', 'comis', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -349,7 +349,7 @@ export default function App() {
     )
   }
 
-  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'calendario') {
+  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'calendario' && roleId !== 'aprobaciones') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
@@ -387,6 +387,10 @@ export default function App() {
             {puede('Finanzas') && <button className="app" onClick={() => setRoleId('finanzas')}>
               <span className="appicon" style={{ background: '#2e7d32' }}>💰</span>
               <span className="applabel">Finanzas</span>
+            </button>}
+            {(puede('Finanzas') || esAdmin) && <button className="app" onClick={() => setRoleId('aprobaciones')}>
+              <span className="appicon" style={{ background: '#15803d' }}>✅</span>
+              <span className="applabel">Aprobaciones</span>
             </button>}
             {esAdmin && <button className="app" onClick={() => setRoleId('gerencia')}>
               <span className="appicon" style={{ background: '#1f2d3d' }}>📈</span>
@@ -502,6 +506,17 @@ export default function App() {
     )
   }
 
+  if (roleId === 'aprobaciones') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#15803d' }}>✅ Aprobaciones</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        {estadoReady ? <main><AprobacionesForm key={empresa} empresa={empresa} sbus={sbus} /></main> : cargandoMain}
+      </>
+    )
+  }
+
   return (
     <>
       <header>
@@ -547,6 +562,8 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) 
         : rb.invflow ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="flow" />
         : rb.comis ? <ComisionesForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.gadmin ? <GastosAdminForm key={rb.k} empresa={empresa} />
+        : rb.aprob ? <AprobacionesForm key={rb.k} empresa={empresa} sbus={sbus} />
+
         : rb.porCat ? <CatCaptureForm key={rb.k} {...common} />
         : rb.cat ? <CategoriasForm key={rb.k} role={role} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} />
@@ -1316,11 +1333,12 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
             <tr><td className="l sub2">Venta proyectada (ud) <span className="unit">(Comercial)</span></td><td></td>{ventaProyMes.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0))}</td></tr>
             <tr><td className="l sub2">Salidas por rotación (ud)</td><td></td>{salidasUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
             <tr className="grandrow"><td className="l">Diferencia (proyectada − rotación)</td><td></td>{MESES.map((_, m) => { const d = ventaProyMes[m] - salidasUnits[m]; return <td key={m} className="tot" style={{ color: Math.abs(d) < 0.5 ? 'var(--ok)' : d > 0 ? 'var(--bad)' : 'var(--warn)' }}>{fmt(d)}</td> })}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0) - salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
+            <tr className="grandrow"><td className="l">Cobertura de la venta % <span className="unit" style={{ fontWeight: 400 }}>(salidas ÷ venta proy. — debe ser 100%)</span></td><td></td>{MESES.map((_, m) => { const vp = ventaProyMes[m]; const cov = vp > 0.5 ? salidasUnits[m] / vp * 100 : null; const ok = cov != null && Math.abs(cov - 100) < 1; return <td key={m} className="tot" style={{ color: cov == null ? 'var(--muted)' : ok ? 'var(--ok)' : 'var(--bad)', fontWeight: 800 }}>{cov == null ? '—' : cov.toFixed(0) + '%'}</td> })}<td className="tot">{(() => { const vt = ventaProyMes.reduce((a, b) => a + b, 0), st = salidasUnits.reduce((a, b) => a + b, 0); return vt > 0.5 ? (st / vt * 100).toFixed(0) + '%' : '—' })()}</td></tr>
             {SEASONS.map((s) => { const f = flujos[s]; const buy = BUY_SEASONS.includes(s); return (
               <Fragment2 key={s}>
                 <tr className="secrow"><td colSpan={15}>{s}{buy ? ' · compra 2028' : ' · inventario inicial'}{iiAuto ? <span className="unit" style={{ fontWeight: 400 }}> · inicial {fmt(num(data[K.II(s)]))} ud (de la matriz de arriba)</span> : ''}</td></tr>
                 {buy && !iiAuto && <tr><td className="l sub2">+ Compras</td><td></td>{MESES.map((_, m) => { const k = K.CP(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(rowTot(f, 'comp'))}</td></tr>}
-                <tr><td className="l sub2">Rotación % (del saldo)</td><td></td>{MESES.map((_, m) => { const k = K.RT(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" /></td> })}<td></td></tr>
+                <tr><td className="l sub2">Rotación % (del saldo)</td><td></td>{MESES.map((_, m) => { const k = K.RT(s, m); const hay = ventaProyMes[m] > 0.5; return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder={hay ? '%' : ''} title={hay ? '' : 'Sin ventas proyectadas este mes — normalmente no rota nada aquí'} style={hay ? undefined : { background: '#eef1f4', border: '1px solid #d7dde3', color: '#9aa3ad' }} /></td> })}<td></td></tr>
                 <tr><td className="l sub2">− Salidas (venta)</td><td></td>{f.map((x, m) => <td key={m} className="tot">{fmt(x.sal)}</td>)}<td className="tot">{fmt(rowTot(f, 'sal'))}</td></tr>
                 <tr className="catrow"><td className="l">= Saldo (ud)</td>{iiAuto ? <td className="tot">{fmt(num(data[K.II(s)]))}</td> : <td className="cell"><input value={data[K.II(s)] ?? ''} onChange={(e) => set(K.II(s), e.target.value)} inputMode="decimal" placeholder={buy ? '0' : 'inicial'} /></td>}{f.map((x, m) => <td key={m} className="tot">{fmt(x.fin)}</td>)}<td className="tot">{fmt(f[11].fin)}</td></tr>
               </Fragment2>) })}
@@ -1367,7 +1385,8 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const total = MESES.map((_, m) => costoLog[m] + costoMue[m] + mant[m])
   const rowTot = (arr) => arr.reduce((a, b) => a + b, 0)
   function guardar() { setSaving(true); try { saveEstado(empresa, 'logcost', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (costos logísticos).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
-  const pctInput = (k) => <input className="fillin" value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" style={{ width: 60, textAlign: 'center' }} />
+  const aprobLog = (() => { try { return !!JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')[`LOGISTICA|${marca}`] } catch { return false } })()
+  const pctInput = (k) => <input className={aprobLog ? '' : 'fillin'} value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" style={aprobLog ? { width: 60, textAlign: 'center', background: '#e6f4ea', border: '1px solid #bfe3c9', borderRadius: 6, padding: '6px 8px' } : { width: 60, textAlign: 'center' }} />
 
   return (
     <div className="panel">
@@ -1380,7 +1399,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      <h3>Costos logísticos — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
+      <h3>Costos logísticos — {marca}{M$}{aprobLog ? <span className="empchip" style={{ marginLeft: 8, background: 'var(--ok)', fontSize: 11.5 }}>✓ Aprobado por Finanzas</span> : <span className="fill-badge">✏️ para llenar</span>}</h3>
       <div className="sub">Se calculan por <b>%</b>: costo logístico de venta = % × <b>costo de venta</b> (unidades × AUC); muestras = % × <b>compras</b>; mantenimiento = % × <b>valor del saldo de inventario</b>. Los tres % se ponen arriba.</div>
       <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -1653,6 +1672,41 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
         </table></div>
       </div>}
     </>
+  )
+}
+
+/* ===== APROBACIONES (Finanzas): aprueba por marca los % de Logística ===== */
+function AprobacionesForm({ empresa, sbus }) {
+  const marcas = marcasDe(sbus)
+  const [logd, setLogd] = useState({})
+  const [aprob, setAprob] = useState(() => { try { return JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}') } catch { return {} } })
+  const [msg, setMsg] = useState(null)
+  useEffect(() => { try { setLogd(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setAprob(JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')) } catch { } }, [empresa])
+  const g = (k) => num(logd[k])
+  const isAprob = (mca) => !!aprob[`LOGISTICA|${mca}`]
+  const toggle = (mca) => { const next = { ...aprob, [`LOGISTICA|${mca}`]: !isAprob(mca) }; setAprob(next); saveEstado(empresa, 'aprob', next); setMsg({ t: 'ok', x: (next[`LOGISTICA|${mca}`] ? 'Aprobado' : 'Aprobación quitada') + ' · ' + mca + '. Se refleja en Logística.' }) }
+  const nAp = marcas.filter(({ marca: m }) => isAprob(m)).length
+  return (
+    <div className="panel">
+      <h3>Aprobaciones — Logística {M$}<span className="unit"> (Finanzas · por marca)</span></h3>
+      <div className="sub">Revisa los <b>% de costos logísticos</b> que capturó cada marca y <b>apruébalos</b>. Mientras <b>no</b> apruebas, en Logística esos campos siguen <b>amarillos</b> (para revisar); al aprobar pasan a <b>verde</b> (confirmados). Aprobadas: <b>{nAp}</b> de {marcas.length}.</div>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="tablewrap"><table style={{ width: 'auto' }}>
+        <thead><tr><th className="l">Marca</th><th>% Log. venta</th><th>% Muestras</th><th>% Mant.</th><th>Estado</th><th>Acción</th></tr></thead>
+        <tbody>
+          {marcas.map(({ marca: m }) => { const ap = isAprob(m); return (
+            <tr key={m}>
+              <td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>
+              <td className="tot">{fmt(g(`${m}|PCT_LOGVENTA`))}%</td>
+              <td className="tot">{fmt(g(`${m}|PCT_MUESTRAS`))}%</td>
+              <td className="tot">{fmt(g(`${m}|PCT_MANT`))}%</td>
+              <td className="tot" style={{ color: ap ? 'var(--ok)' : 'var(--warn)', fontWeight: 800 }}>{ap ? '✓ Aprobado' : 'Pendiente'}</td>
+              <td><button className={'btn' + (ap ? '' : ' primary')} onClick={() => toggle(m)}>{ap ? '↺ Quitar aprobación' : '✓ Aprobar'}</button></td>
+            </tr>
+          ) })}
+        </tbody>
+      </table></div>
+    </div>
   )
 }
 
