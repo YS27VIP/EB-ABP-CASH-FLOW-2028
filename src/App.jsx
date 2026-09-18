@@ -1828,12 +1828,12 @@ function BrandContribution({ empresa, marca }) {
   const aucMes = () => { const a = Array(12).fill(0); P.prod.forEach((r) => { if (!inMarca(r) || upper(r[1]) !== 'AUC') return; for (let j = 0; j < 12; j++) a[j] = num(r[4 + j]) }); return a }
   const sumTab = (rows, filt) => { let s = 0; rows.forEach((r) => { if (!inMarca(r)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
 
-  const u = uniMes(), ac = aucMes(), acat = aupCat()
+  const acat = aupCat()
   const catList = P.cats[marca] || []
-  const aupMes = () => { const a = Array(12).fill(0); catList.forEach(({ cat, peso }) => { const x = acat[cat]; if (!x) return; const w = num(peso) / 100; for (let j = 0; j < 12; j++) a[j] += w * x[j] }); return a }
-  const ap = aupMes()
+  const catNames = catList.map((c) => c.cat)
+  const R = realAupAuc(empresa, marca, P.ven, P.prod, catNames)
   let unidades = 0, ventaNeta = 0, costo = 0
-  for (let j = 0; j < 12; j++) { unidades += u[j]; ventaNeta += u[j] * ap[j]; costo += u[j] * ac[j] }
+  for (let j = 0; j < 12; j++) { unidades += R.totalUnits[j]; ventaNeta += R.ventaMes[j]; costo += R.costoMes[j] }
   const comisiones = 0
   const logistica = sumTab(P.log)
   const marketing = sumTab(P.mk)
@@ -1867,9 +1867,9 @@ function BrandContribution({ empresa, marca }) {
         </div>
         {catList.length > 0 && <div className="tablewrap" style={{ marginTop: 14 }}>
           <table>
-            <thead><tr><th className="l">Categoría</th><th>Peso %</th><th>Unidades</th><th>Venta Neta</th></tr></thead>
+            <thead><tr><th className="l">Categoría</th><th>Peso pond. %</th><th>Unidades</th><th>Venta Neta</th></tr></thead>
             <tbody>
-              {catList.map(({ cat, peso }, i) => { const w = num(peso) / 100; const x = acat[cat] || []; let un = 0, vn = 0; for (let j = 0; j < 12; j++) { un += u[j] * w; vn += u[j] * w * (x[j] || 0) } return <tr key={i}><td className="l">{cat}</td><td>{num(peso).toFixed(1)}%</td><td className="tot">{fmt(un)}</td><td className="tot">{fmt(vn)}</td></tr> })}
+              {catList.map(({ cat }, i) => { const uc = R.unitsCat[cat] || []; const x = acat[cat] || []; let un = 0, vn = 0; for (let j = 0; j < 12; j++) { un += uc[j] || 0; vn += (uc[j] || 0) * (x[j] || 0) } const pw = unidades > 0 ? (un / unidades * 100) : 0; return <tr key={i}><td className="l">{cat}</td><td className="tot">{pw.toFixed(1)}%</td><td className="tot">{fmt(un)}</td><td className="tot">{fmt(vn)}</td></tr> })}
             </tbody>
           </table>
         </div>}
@@ -2680,15 +2680,15 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
       <div className="panel">
         <h3>Unidades 2028 por categoría y mes — {marca}</h3>
-        <div className="sub">{usarCat ? 'Las unidades de cada cliente se reparten por categoría según su participación y los pesos del Director.' : 'Categorías desactivadas por el Director: solo el total por mes.'}</div>
+        <div className="sub">{usarCat ? 'Las unidades de cada cliente se reparten por categoría según el % que el Director definió por cliente. El Peso % es ponderado: unidades de la categoría ÷ unidades totales de la marca (no un valor fijo).' : 'Categorías desactivadas por el Director: solo el total por mes.'}</div>
         <div className="tablewrap">
           <table className="vfix">
-            <colgroup><col style={{ width: '270px' }} /><col style={{ width: '60px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
-            <thead><tr><th className="l">Categoría</th><th>Peso %</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+            <colgroup><col style={{ width: '270px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+            <thead><tr><th className="l">Categoría</th><th>Peso pond. %</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
             <tbody>
-              <tr className="grandrow"><td className="l">TOTAL {marca}</td><td></td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
+              <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="tot">{totMarcaSel > 0 ? '100.0%' : '—'}</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
               {!usarCat && <tr><td className="l" colSpan={15}>Categorías desactivadas para {marca}.</td></tr>}
-              {usarCat && catList.map((c, i) => { const row = MESES.map((_, mi) => uCatMes(c.cat, mi)); const t = row.reduce((a, b) => a + b, 0); return <tr key={i}><td className="l">{c.cat}</td><td>{num(c.peso).toFixed(1)}%</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
+              {usarCat && catList.map((c, i) => { const row = MESES.map((_, mi) => uCatMes(c.cat, mi)); const t = row.reduce((a, b) => a + b, 0); const pw = totMarcaSel > 0 ? (t / totMarcaSel * 100) : 0; return <tr key={i}><td className="l">{c.cat}</td><td className="tot">{pw.toFixed(1)}%</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
             </tbody>
           </table>
         </div>
