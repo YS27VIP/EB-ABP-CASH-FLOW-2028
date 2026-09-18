@@ -1172,6 +1172,15 @@ function inventarioCalc(data, marca) {
   return { flujos, saldoUnits, salidasUnits }
 }
 
+/* AUC de una temporada = lo que costó ese inventario al comprarlo: promedio de las
+   categorías de esa temporada ponderado por las unidades disponibles (matriz de Producto). */
+function seasonAUCfrom(precios, marca, s) {
+  const pre = `INV|${marca}|${s}|`
+  let inv = 0, val = 0
+  Object.keys(precios || {}).forEach((k) => { if (k.indexOf(pre) !== 0) return; const cat = k.slice(pre.length); const q = num(precios[k]); inv += q; val += q * num(precios[`PAUC|${marca}|${s}|${cat}`]) })
+  return inv ? val / inv : 0
+}
+
 /* ===== INVENTARIO POR TEMPORADA: captura matriz (Producto) + flujo/rotación (Logística) =====
    Modelo: categoría = nivel de precio/costo · temporada = antigüedad. AUP/AUC por categoría×temporada.
    Rotación = % mensual del saldo. Salidas = saldo × rotación. Saldo = inicial + compras − salidas.
@@ -1185,7 +1194,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
   const [ventas, setVentas] = useState([])
   const [precios, setPrecios] = useState({})
   useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { } })(); try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { } }, [empresa])
-  const saucSeason = (s) => num(precios[`SAUC|${marca}|${s}`])
+  const saucSeason = (s) => seasonAUCfrom(precios, marca, s)
   const K = invKeys(marca)
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   function guardar() { setSaving(true); try { saveEstado(empresa, 'temp', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (inventario).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
@@ -1282,12 +1291,14 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const [tData, setTData] = useState({})
   const [ventas, setVentas] = useState([])
   const [producto, setProducto] = useState([])
+  const [precios, setPrecios] = useState({})
   const stKey = `logcost_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   useEffect(() => {
     try { setTData(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
+    try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { }
     ;(async () => {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
@@ -1299,7 +1310,8 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const ventaUnits = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
   const costoVenta = MESES.map((_, m) => ventaUnits[m] * auc[m])
   const comprasUsd = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(tData[`CP|${marca}|${s}|${m}`]), 0) * auc[m])
-  const saldoValue = MESES.map((_, m) => inv.saldoUnits[m] * auc[m])
+  // Valor del saldo = saldo de cada temporada × el AUC de esa temporada (lo que costó al comprarlo)
+  const saldoValue = MESES.map((_, m) => SEASONS.reduce((a, s) => a + inv.flujos[s][m].fin * seasonAUCfrom(precios, marca, s), 0))
   const kLog = `${marca}|PCT_LOGVENTA`, kMue = `${marca}|PCT_MUESTRAS`, kMant = `${marca}|PCT_MANT`
   const costoLog = MESES.map((_, m) => costoVenta[m] * g(kLog) / 100)
   const costoMue = MESES.map((_, m) => comprasUsd[m] * g(kMue) / 100)
@@ -2251,10 +2263,11 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
 /* ===== RESUMEN DE LOGÍSTICA POR MARCA (vista TOTAL SBU, solo lectura) ===== */
 function LogisticaResumen({ empresa, sbuName, marcasSBU }) {
   const [ventas, setVentas] = useState([]); const [producto, setProducto] = useState([])
-  const [tData, setTData] = useState({}); const [logd, setLogd] = useState({})
+  const [tData, setTData] = useState({}); const [logd, setLogd] = useState({}); const [precios, setPrecios] = useState({})
   useEffect(() => {
     try { setTData(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
     try { setLogd(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { }
+    try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { }
     ;(async () => {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
@@ -2268,7 +2281,7 @@ function LogisticaResumen({ empresa, sbuName, marcasSBU }) {
     const ventaUnits = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
     const costoVenta = MESES.map((_, m) => ventaUnits[m] * auc[m])
     const comprasUsd = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(tData[`CP|${marca}|${s}|${m}`]), 0) * auc[m])
-    const saldoValue = MESES.map((_, m) => inv.saldoUnits[m] * auc[m])
+    const saldoValue = MESES.map((_, m) => SEASONS.reduce((a, s) => a + inv.flujos[s][m].fin * seasonAUCfrom(precios, marca, s), 0))
     const costoLog = MESES.map((_, m) => costoVenta[m] * g(`${marca}|PCT_LOGVENTA`) / 100)
     const costoMue = MESES.map((_, m) => comprasUsd[m] * g(`${marca}|PCT_MUESTRAS`) / 100)
     const mant = MESES.map((_, m) => saldoValue[m] * g(`${marca}|PCT_MANT`) / 100)
