@@ -62,7 +62,7 @@ const VJ = { k: 'VIAJES', u: '$', detalle: VIAJES_GROUPS, extrasKey: 'viajes_ext
 
 const ROLES = [
   { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#0891b2', tab: 'Cap_Ventas',    rubros: [{ k: 'UNIDADES', u: 'ud', proyeccion: true }, VJ] },
-  { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'AUP / AUC / MARGEN', u: '$', preciomargen: true }, VJ, { k: 'INVENTARIO COMPRAS', u: '$', temporada: true }] },
+  { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'INVENTARIO · PRECIOS · MARGEN', u: '$', productoall: true }, VJ] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
   { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'GASTOS ADMIN', gadmin: true }] },
@@ -519,6 +519,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) 
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       {rb.proyeccion ? <ProjectionForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.cash ? <CashFlowForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
+        : rb.productoall ? <ProductoTab key={rb.k} empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.preciomargen ? <PreciosMargenForm key={rb.k} empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.temporada ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" />
         : rb.invflow ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="flow" />
@@ -1185,10 +1186,12 @@ function seasonAUCfrom(precios, marca, s) {
    Modelo: categoría = nivel de precio/costo · temporada = antigüedad. AUP/AUC por categoría×temporada.
    Rotación = % mensual del saldo. Salidas = saldo × rotación. Saldo = inicial + compras − salidas.
    El AUP/AUC de la marca se mezcla según lo que se va vendiendo (categoría×temporada). */
-function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
+function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempState }) {
   const marca = fixedMarca || marcasDe(sbus)[0]?.marca
   const stKey = `temp_${empresa}`
-  const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
+  const [dataInt, setDataInt] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
+  const data = tempState !== undefined ? tempState : dataInt
+  const setData = setTempState || setDataInt
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   const [ventas, setVentas] = useState([])
@@ -1407,16 +1410,37 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
   )
 }
 
+/* ===== PRODUCTO (una sola pestaña): Inventario y rotación → Precios por temporada×categoría → Evolución mensual.
+   Comparten el estado del inventario (temp) para que la evolución reaccione en vivo al editar la rotación. */
+function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
+  const [temp, setTemp] = useState(() => { try { return JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}') } catch { return {} } })
+  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } }, [empresa])
+  return (
+    <>
+      <div className="note ok" style={{ marginBottom: 8 }}>Esta es la historia completa de Producto en un solo lugar: <b>1)</b> Inventario y rotación por temporada · <b>2)</b> Costo y precio por temporada y categoría · <b>3)</b> Evolución mensual del AUP/AUC (consecuencia de la rotación). Guarda el inventario y los precios con sus botones respectivos.</div>
+      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
+        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 1 · Inventario y rotación por temporada</div>
+        <TemporadaForm empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" tempState={temp} setTempState={setTemp} />
+      </div>
+      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14 }}>
+        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 2 · Precios y margen (según la rotación de arriba)</div>
+        <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} />
+      </div>
+    </>
+  )
+}
+
 /* ===== AUP / AUC / MARGEN: captura junta + efectivo por temporada (rotación del inventario) ===== */
-function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
+function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState }) {
   const marca = fixedMarca || marcasDe(sbus)[0]?.marca
   const sbu = sbuDe(sbus, marca) || ''
   const [catList, setCatList] = useState([{ cat: 'General', peso: 0 }])
-  const [temp, setTemp] = useState({})
+  const [tempInt, setTempInt] = useState({})
+  const temp = tempState !== undefined ? tempState : tempInt
   const [snap, setSnap] = useState(() => { try { return JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
   useEffect(() => {
-    try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
+    try { setTempInt(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
     ;(async () => {
       let cl = []
       try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1] && !cl.some((x) => x.cat === r[1])) cl.push({ cat: r[1], peso: num(r[4]) }) }) } catch { }
@@ -1508,6 +1532,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
 
         <div className="sub" style={{ fontWeight: 800, color: 'var(--odoo)', marginBottom: 6 }}>2 · Evolución mensual del AUP / AUC (consecuencia de la rotación)</div>
         <div className="sub" style={{ marginBottom: 6 }}>Según cómo <b>rota el inventario</b>, cada mes se vende una mezcla distinta de temporadas → el AUP y AUC <b>cambian mes a mes</b>. Ej.: si FW26 (barata) se agota en junio y en julio entra SS28 (más cara), el salto se ve aquí. <b>Estos valores mensuales por categoría son los que usa el resto del app</b> (Ventas, Contribución, Cash Flow).</div>
+        {!MESES.some((_, m) => unitsMes(m) > 0.5) && <div className="note warn" style={{ marginBottom: 10 }}>Esta tabla sale <b>vacía</b> porque aún no hay <b>rotación de inventario</b>. Esto <b>no</b> depende de Ventas ni del AUP/AUC: depende de cuánto <b>rota cada temporada cada mes</b>. Ve a <b>Inventario y compras</b> y llena, por temporada, el <b>saldo inicial</b>, las <b>compras</b> y el <b>% de rotación</b> mensual. Con eso el sistema sabe qué se vende cada mes y calcula el AUP/AUC efectivo.</div>}
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Efectivo mensual (según rotación)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total / prom.</th></tr></thead>
           <tbody>
