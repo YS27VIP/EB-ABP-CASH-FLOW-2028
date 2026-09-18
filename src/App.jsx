@@ -2699,6 +2699,13 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   useEffect(() => { try { localStorage.setItem('catpart_' + empresa, JSON.stringify(catPart)) } catch { } }, [catPart, empresa])
   const [catPct, setCatPct] = useState(() => { try { return JSON.parse(localStorage.getItem('catpct_' + empresa) || '{}') } catch { return {} } })
   useEffect(() => { try { localStorage.setItem('catpct_' + empresa, JSON.stringify(catPct)) } catch { } }, [catPct, empresa])
+  // Clientes agregados a mano (por marca) + sus unidades 2028 manuales (clientes sin histórico 2026)
+  const [addCli, setAddCli] = useState(() => { try { return JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}') } catch { return {} } })
+  const [manual, setManual] = useState(() => { try { return JSON.parse(localStorage.getItem('ventas_manual_' + empresa) || '{}') } catch { return {} } })
+  const [baseCli, setBaseCli] = useState([]) // catálogo Base_Clientes (copia del EBP)
+  const [nuevoCli, setNuevoCli] = useState('')
+  const [buscar, setBuscar] = useState('')
+  useEffect(() => { (async () => { try { const j = await gLoadClientes(); if (j && j.ok) setBaseCli(j.clientes) } catch { } })() }, [empresa])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
 
@@ -2715,11 +2722,26 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
   const u2026 = {}, cliByMarca = {}
   hist.forEach((r) => { if (upper(r[3]).indexOf('UNIDAD') < 0) return; if (String(r[1]) !== '2026') return; const mi = mesIdx(r[6]); if (mi < 0) return; const mar = r[5], cli = r[8] || '(sin cliente)', k = cli + '|' + mar; (u2026[k] = u2026[k] || Array(12).fill(0))[mi] += num(r[7]); (cliByMarca[mar] = cliByMarca[mar] || new Set()).add(cli) })
-  const clientes = [...(cliByMarca[marca] || [])].sort((a, b) => (u2026[b + '|' + marca] || []).reduce((s, v) => s + v, 0) - (u2026[a + '|' + marca] || []).reduce((s, v) => s + v, 0))
+  const histClientes = [...(cliByMarca[marca] || [])].sort((a, b) => (u2026[b + '|' + marca] || []).reduce((s, v) => s + v, 0) - (u2026[a + '|' + marca] || []).reduce((s, v) => s + v, 0))
+  const histSet = new Set(histClientes.map((c) => upper(c)))
+  const addedFor = (addCli[marca] || []).filter((c) => !histSet.has(upper(c)))
+  const clientes = [...histClientes, ...addedFor]
+  const esNuevo = (cli) => !histSet.has(upper(cli)) // sin histórico 2026 → unidades 2028 manuales
   const g = (cli) => num(growth[cli + '|' + marca])
   const u26 = (cli, mi) => (u2026[cli + '|' + marca] || [])[mi] || 0
-  const u28 = (cli, mi) => Math.round(u26(cli, mi) * (1 + g(cli) / 100))
+  const mKey = (cli, mi) => marca + '|' + cli + '|' + mi
+  const u28 = (cli, mi) => esNuevo(cli) ? Math.round(num(manual[mKey(cli, mi)])) : Math.round(u26(cli, mi) * (1 + g(cli) / 100))
   const setG = (cli, val) => setGrowth({ ...growth, [cli + '|' + marca]: val })
+  const setMan = (cli, mi, val) => setManual({ ...manual, [mKey(cli, mi)]: val })
+  const agregarCliente = async (nombre) => {
+    const n = String(nombre || '').trim(); if (!n) return
+    if (clientes.some((c) => upper(c) === upper(n))) { setMsg({ t: 'warn', x: 'Ese cliente ya está en la lista de ' + marca + '.' }); return }
+    const next = { ...addCli, [marca]: [...(addCli[marca] || []), n] }
+    setAddCli(next); saveEstado(empresa, 'addcli', next); setNuevoCli('')
+    if (!baseCli.some((c) => upper(c) === upper(n))) { setBaseCli([...baseCli, n].sort((a, b) => a.localeCompare(b))); try { await gAddCliente(n) } catch { } }
+    setMsg({ t: 'ok', x: 'Cliente agregado a ' + marca + '. Escribe sus unidades 2028 y guarda. Finanzas ya lo verá.' })
+  }
+  const quitarCliente = (cli) => { const next = { ...addCli, [marca]: (addCli[marca] || []).filter((c) => upper(c) !== upper(cli)) }; setAddCli(next); saveEstado(empresa, 'addcli', next) }
   const t26 = (cli) => MESES.reduce((a, _, mi) => a + u26(cli, mi), 0)
   const t28 = (cli) => MESES.reduce((a, _, mi) => a + u28(cli, mi), 0)
   const totMarcaSel = clientes.reduce((s, cli) => s + t28(cli), 0)
@@ -2737,6 +2759,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
     const rows = clientes.map((cli) => ({ rubro: cli, sbu, marca, meses: MESES.map((_, mi) => u28(cli, mi)) })).filter((r) => r.meses.some((v) => v !== 0))
     await postToTab('Cap_Ventas', empresa, usuario, role.label, rows, setMsg)
     saveEstado(empresa, 'ventas_growth', growth); saveEstado(empresa, 'catpart', catPart); saveEstado(empresa, 'catpct', catPct)
+    saveEstado(empresa, 'ventas_manual', manual); saveEstado(empresa, 'addcli', addCli)
     setSaving(false)
   }
   const catList = cats[marca] || []
