@@ -89,15 +89,16 @@ async function readValuesFrom(sheetId, tab) {
     const j = await r.json(); return j.values || []
   } catch { return [] }
 }
-let _histCache = null, _histAt = 0
-export async function gHistorico() {
-  if (_histCache && Date.now() - _histAt < 60000) return { ok: true, values: _histCache }
+let _histCache = null, _histAt = 0, _histPromise = null
+async function _buildHistorico() {
   const out = [HIST_HEAD]
   // Otras empresas (TUMAR, TAHO, …): histórico importado por Excel y guardado en la hoja Historico (todo lo que NO sea ENERGY BRANDS).
   try { const tab = await readValues('Historico'); tab.slice(1).forEach((r) => { if (String(r[0] || '').trim().toUpperCase() !== 'ENERGY BRANDS') out.push(r) }) } catch { }
+  let ebRows = 0
   for (const t of EBP_TABS) {
     let rows = []
-    for (const nm of t.names) { rows = await readValuesFrom(EBP_SHEET_ID, nm); if (rows && rows.length) break }
+    // Reintenta la lectura del EBP: un 429/red transitorio no debe dejar el histórico vacío
+    for (const nm of t.names) { for (let intento = 0; intento < 3; intento++) { rows = await readValuesFrom(EBP_SHEET_ID, nm); if (rows && rows.length) break; await new Promise((r) => setTimeout(r, 500 * (intento + 1))) } if (rows && rows.length) break }
     let hr = -1
     for (let i = 0; i < Math.min(rows.length, 15); i++) { const cells = rows[i].map((x) => String(x || '').trim().toUpperCase()); if ((cells.includes('SBU') && cells.includes('MARCA')) || cells.join('|').indexOf('CLIENTE ARMONIZADO') >= 0) { hr = i; break } }
     if (hr < 0) continue
@@ -115,9 +116,18 @@ export async function gHistorico() {
       const yr = (iA >= 0 && row[iA]) ? parseInt(row[iA], 10) : (mm[1] ? 2000 + parseInt(mm[1], 10) : t.year)
       const monto = Number(String(row[iV] || '').replace(/[^0-9.\-]/g, '')) || 0
       out.push(['ENERGY BRANDS', yr, String(row[iT] || ''), String(row[iR] || ''), String(row[iS] || ''), String(row[iM] || ''), yr + '-' + String(mo + 1).padStart(2, '0') + '-01', monto, cli, String(row[iP] || '')])
+      ebRows++
     }
   }
-  _histCache = out; _histAt = Date.now()
+  // Solo cachea si trajo datos del EBP; si vino vacío (cuota/red), NO envenena la caché y reintenta al próximo llamado
+  if (ebRows > 0) { _histCache = out; _histAt = Date.now() }
+  return out
+}
+export async function gHistorico() {
+  if (_histCache && Date.now() - _histAt < 60000) return { ok: true, values: _histCache }
+  // Deduplica llamadas simultáneas: todas las pantallas comparten una sola lectura del EBP
+  if (!_histPromise) _histPromise = _buildHistorico().finally(() => { _histPromise = null })
+  const out = await _histPromise
   return { ok: true, values: out }
 }
 
