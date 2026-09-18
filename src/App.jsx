@@ -131,6 +131,25 @@ function effSBUS(empresa, combos) {
 const marcasDe = (sbus) => Object.entries(sbus).flatMap(([sbu, ms]) => ms.map((m) => ({ sbu, marca: m })))
 const sbuDe = (sbus, marca) => marcasDe(sbus).find((x) => x.marca === marca)?.sbu || ''
 
+/* Venta/costo y AUP/AUC promedio de una marca, con la MEZCLA REAL por categoría:
+   unidades por categoría = Σ_cliente (unidades del cliente × % de esa categoría para ese cliente).
+   El % por cliente lo captura el Director (localStorage catpct_). AUP/AUC vienen por categoría de Cap_Producto. */
+function realAupAuc(empresa, marca, ventasRows, prodRows, catNames) {
+  const cats = (catNames && catNames.length) ? catNames : ['General']
+  let catPct = {}; try { catPct = JSON.parse(localStorage.getItem(`catpct_${empresa}`) || '{}') } catch { }
+  const aupCat = {}, aucCat = {}
+  prodRows.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') === 0) aupCat[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])); else if (rub.indexOf('AUC · ') === 0) aucCat[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])); else if (upper(rub) === 'AUC') { const base = MESES.map((_, j) => num(r[4 + j])); cats.forEach((c) => { if (!aucCat[c]) aucCat[c] = base }) } })
+  const byClient = {}
+  ventasRows.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; const cli = String(r[1] || '').trim(); if (!cli || cli.toUpperCase().startsWith('VIAJES')) return; const arr = byClient[cli] || (byClient[cli] = Array(12).fill(0)); for (let m = 0; m < 12; m++) arr[m] += num(r[4 + m]) })
+  const unitsCat = {}; cats.forEach((c) => unitsCat[c] = Array(12).fill(0)); const totalUnits = Array(12).fill(0)
+  Object.keys(byClient).forEach((cli) => { const pcts = cats.map((c) => num(catPct[`${cli}|${marca}|${c}`])); const den = pcts.reduce((a, b) => a + b, 0); for (let m = 0; m < 12; m++) { const u = byClient[cli][m]; totalUnits[m] += u; cats.forEach((c, i) => { const w = den > 0 ? pcts[i] / den : (cats.length ? 1 / cats.length : 0); unitsCat[c][m] += u * w }) } })
+  const ventaMes = MESES.map((_, m) => cats.reduce((a, c) => a + unitsCat[c][m] * ((aupCat[c] || [])[m] || 0), 0))
+  const costoMes = MESES.map((_, m) => cats.reduce((a, c) => a + unitsCat[c][m] * ((aucCat[c] || [])[m] || 0), 0))
+  const aupW = MESES.map((_, m) => totalUnits[m] ? ventaMes[m] / totalUnits[m] : 0)
+  const aucW = MESES.map((_, m) => totalUnits[m] ? costoMes[m] / totalUnits[m] : 0)
+  return { aupW, aucW, totalUnits, ventaMes, costoMes, unitsCat }
+}
+
 /* ===== APP ===== */
 export default function App() {
   const [usuario, setUsuario] = useState('')
@@ -458,9 +477,11 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) 
 
   return (
     <>
-      {rubros.length > 1 && <div className="toolbar" style={{ display: 'inline-flex', background: '#eef1f4', borderRadius: 9, padding: '7px 10px', marginBottom: 12 }}>
-        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--muted)', marginRight: 4, alignSelf: 'center' }}>VER:</span>
-        {rubros.map((r, i) => (<button key={r.k} className={'seg' + (i === idx ? ' active' : '')} onClick={() => { setTab(i); setMsg(null) }} style={i === idx ? { background: 'var(--accent, #0e7490)', borderColor: 'var(--accent, #0e7490)', color: '#fff' } : {}}>{r.k}</button>))}
+      {rubros.length > 1 && <div className="toolbar" style={{ marginBottom: 12, gap: 8, alignItems: 'center' }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--muted)' }}>VER:</span>
+        <select value={idx} onChange={(e) => { setTab(Number(e.target.value)); setMsg(null) }} style={{ fontWeight: 700, padding: '8px 12px', borderRadius: 8, border: '1.5px solid var(--accent, #0e7490)', color: 'var(--accent, #0e7490)', background: '#fff', minWidth: 200 }}>
+          {rubros.map((r, i) => <option key={r.k} value={i}>{r.k}</option>)}
+        </select>
       </div>}
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       {rb.proyeccion ? <ProjectionForm key={rb.k} role={role} rubro={rb} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
@@ -647,7 +668,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
   // Venta neta (de Comercial) para saber cuánto pesa este rubro (Marketing/Viajes) sobre la venta
   const [vd, setVd] = useState({ ventas: [], producto: [], cats: {} })
   useEffect(() => { (async () => { const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }; const [ventas, producto, cap] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias')]); const cats = {}; cap.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const c = r[1], mar = r[3], peso = num(r[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) }); setVd({ ventas, producto, cats }) })() }, [empresa])
-  const ventaNetaMesG = (mca) => { const uni = {}; vd.ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; for (let j = 0; j < 12; j++) uni[j] = (uni[j] || 0) + num(r[4 + j]) }); const aupCat = {}; vd.producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') !== 0) return; aupCat[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])) }); const aupW = MESES.map((_, m) => (vd.cats[mca] || []).reduce((a, { cat, peso }) => { const x = aupCat[cat]; return a + (x ? num(peso) / 100 * x[m] : 0) }, 0)); return MESES.map((_, m) => (uni[m] || 0) * aupW[m]) }
+  const ventaNetaMesG = (mca) => realAupAuc(empresa, mca, vd.ventas, vd.producto, (vd.cats[mca] || []).map((c) => c.cat)).ventaMes
   const ventaMesT = (mi) => isTotal ? sbuMarcas.reduce((a, m) => a + ventaNetaMesG(m)[mi], 0) : ventaNetaMesG(marca)[mi]
 
   const key = (mca, id, mi) => `${rubro.k}|${mca}|${id}|${mi}`
@@ -835,13 +856,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   // Escalera de cobros: Ventas Netas 2028 = Unidades 2028 (Cap_Ventas) × AUP (Cap_Producto), cobradas según el plazo del cliente.
   const unidades2028 = (mca) => { const out = {}; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli) return; const arr = out[cli] || (out[cli] = Array(12).fill(0)); for (let j = 0; j < 12; j++) arr[j] += num(r[4 + j]) }); return out }
   // AUP ponderado por marca = Σ (peso_categoría × AUP_categoría). El AUP se captura por categoría (Producto).
-  const aupMarca = (mca) => {
-    const aupCat = {}
-    producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') !== 0) return; const cat = rub.slice(6); aupCat[cat] = MESES.map((_, j) => num(r[4 + j])) })
-    const arr = Array(12).fill(0)
-    ;(cats[mca] || []).forEach(({ cat, peso }) => { const a = aupCat[cat]; if (!a) return; const w = num(peso) / 100; for (let j = 0; j < 12; j++) arr[j] += w * a[j] })
-    return arr
-  }
+  // AUP promedio de la marca con la mezcla real por categoría (unidades × % por cliente)
+  const aupMarca = (mca) => realAupAuc(empresa, mca, ventas, producto, (cats[mca] || []).map((c) => c.cat)).aupW
   const cobros2028 = (mca) => {
     const uni = unidades2028(mca), aup = aupMarca(mca), byCli = {}, total = Array(12).fill(0)
     Object.keys(uni).forEach((cli) => {
@@ -856,7 +872,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const getCobros = (mca) => _cobCache[mca] || (_cobCache[mca] = cobros2028(mca))
 
   // Venta Neta 2028 = Σ unidades (Ventas) × AUP (Producto), por mes. Ambos salen de Comercial.
-  const ventaNetaMes = (mca) => { const uni = unidades2028(mca), aup = aupMarca(mca); return MESES.map((_, m) => Object.keys(uni).reduce((a, cli) => a + (uni[cli][m] || 0), 0) * (aup[m] || 0)) }
+  const ventaNetaMes = (mca) => realAupAuc(empresa, mca, ventas, producto, (cats[mca] || []).map((c) => c.cat)).ventaMes
   // Inventario (de Producto): saldo en unidades × AUC. Inicial del mes = saldo del mes anterior.
   const invFinUsd = (mca) => { const { saldoUnits } = inventarioCalc(temp, mca); const auc = aucMes(mca); return MESES.map((_, m) => saldoUnits[m] * (auc[m] || 0)) }
   const invIniUsd = (mca) => { const { saldoUnits } = inventarioCalc(temp, mca); const auc = aucMes(mca); const kk = invKeys(mca); const opening = SEASONS.reduce((a, s) => a + num(temp[kk.II(s)]), 0); return MESES.map((_, m) => (m === 0 ? opening : saldoUnits[m - 1]) * (auc[m] || 0)) }
@@ -1102,11 +1118,17 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [ventas, setVentas] = useState([])
+  const [precios, setPrecios] = useState({})
+  useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { } })(); try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { } }, [empresa])
+  const saucSeason = (s) => num(precios[`SAUC|${marca}|${s}`])
   const K = invKeys(marca)
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   function guardar() { setSaving(true); try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado en este equipo. Persistencia al Sheet se conecta en el siguiente paso.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
-  const { flujos, saldoUnits } = inventarioCalc(data, marca)
+  const { flujos, saldoUnits, salidasUnits } = inventarioCalc(data, marca)
   const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
+  // Venta proyectada (unidades de Comercial) para comparar con lo que va rotando del inventario
+  const ventaProyMes = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
 
   if (mode === 'flow') {
     return (
@@ -1159,6 +1181,10 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '200px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Temporada / concepto</th><th>Inicial</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
           <tbody>
+            <tr className="secrow"><td colSpan={15}>OBJETIVO DE VENTA vs ROTACIÓN</td></tr>
+            <tr><td className="l sub2">Venta proyectada (ud) <span className="unit">(Comercial)</span></td><td></td>{ventaProyMes.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0))}</td></tr>
+            <tr><td className="l sub2">Salidas por rotación (ud)</td><td></td>{salidasUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
+            <tr className="grandrow"><td className="l">Diferencia (proyectada − rotación)</td><td></td>{MESES.map((_, m) => { const d = ventaProyMes[m] - salidasUnits[m]; return <td key={m} className="tot" style={{ color: Math.abs(d) < 0.5 ? 'var(--ok)' : d > 0 ? 'var(--bad)' : 'var(--warn)' }}>{fmt(d)}</td> })}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0) - salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
             {SEASONS.map((s) => { const f = flujos[s]; const buy = BUY_SEASONS.includes(s); return (
               <Fragment2 key={s}>
                 <tr className="secrow"><td colSpan={15}>{s}{buy ? ' · compra 2028' : ' · inventario inicial'}</td></tr>
@@ -1254,10 +1280,8 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
     })()
   }, [empresa, marca])
   const g = (k) => num(data[k]); const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
-  const aupCat = {}; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') !== 0) return; aupCat[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])) })
-  const aupW = MESES.map((_, m) => catList.reduce((a, { cat, peso }) => { const x = aupCat[cat]; return a + (x ? num(peso) / 100 * x[m] : 0) }, 0))
-  const unitsMes = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
-  const ventaExt = MESES.map((_, m) => unitsMes[m] * aupW[m])
+  const rvc = realAupAuc(empresa, marca, ventas, producto, catList.map((c) => c.cat))
+  const ventaExt = rvc.ventaMes
   const comprasUd = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(temp[`CP|${marca}|${s}|${m}`]), 0))
   const c = comisionCalc(marca, data, ventaExt, comprasUd)
   const corp = esCorpMarca(marca)
@@ -1301,7 +1325,7 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
 function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
   const marca = fixedMarca || marcasDe(sbus)[0]?.marca
   const sbu = sbuDe(sbus, marca) || ''
-  const [catList, setCatList] = useState(['General'])
+  const [catList, setCatList] = useState([{ cat: 'General', peso: 0 }])
   const [data, setData] = useState({})
   const [temp, setTemp] = useState({})
   const [snap, setSnap] = useState(() => { try { return JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}') } catch { return {} } })
@@ -1310,14 +1334,14 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
     try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
     ;(async () => {
       let cl = []
-      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push(r[1]) }) } catch { }
-      cl = [...new Set(cl)]; setCatList(cl.length ? cl : ['General'])
-      try { const j = await gReadTab('Cap_Producto'); if (j && j.ok && j.values) { const d = {}; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') === 0) { const c = rub.slice(6); for (let m = 0; m < 12; m++) d[`AUP|${c}|${m}`] = num(r[4 + m]) } else if (upper(rub) === 'AUC') { for (let m = 0; m < 12; m++) d[`AUC|${m}`] = num(r[4 + m]) } }); setData(d) } } catch { }
+      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1] && !cl.some((x) => x.cat === r[1])) cl.push({ cat: r[1], peso: num(r[4]) }) }) } catch { }
+      setCatList(cl.length ? cl : [{ cat: 'General', peso: 0 }])
+      try { const j = await gReadTab('Cap_Producto'); if (j && j.ok && j.values) { const d = {}; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') === 0) { const c = rub.slice(6); for (let m = 0; m < 12; m++) d[`AUP|${c}|${m}`] = num(r[4 + m]) } else if (rub.indexOf('AUC · ') === 0) { const c = rub.slice(6); for (let m = 0; m < 12; m++) d[`AUC|${c}|${m}`] = num(r[4 + m]) } else if (upper(rub) === 'AUC') { const c0 = (cl[0] || {}).cat; if (c0) for (let m = 0; m < 12; m++) { if (!d[`AUC|${c0}|${m}`]) d[`AUC|${c0}|${m}`] = num(r[4 + m]) } } }); setData(d) } } catch { }
     })()
   }, [empresa, marca])
   const g = (k) => num(data[k]); const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   const sg = (k) => num(snap[k]); const sset = (k, v) => setSnap((s) => ({ ...s, [k]: v }))
-  const aup = (c, m) => g(`AUP|${c}|${m}`), auc = (m) => g(`AUC|${m}`)
+  const aup = (c, m) => g(`AUP|${c}|${m}`), auc = (c, m) => g(`AUC|${c}|${m}`)
   const inv = inventarioCalc(temp, marca)
   const SAUP = (s) => `SAUP|${marca}|${s}`, SAUC = (s) => `SAUC|${marca}|${s}`
   const salM = (s, m) => inv.flujos[s][m].sal
@@ -1329,8 +1353,13 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
   async function guardar() {
     setSaving(true); setMsg(null)
     const rows = []
-    catList.forEach((c) => { const meses = MESES.map((_, m) => aup(c, m)); if (meses.some((v) => v)) rows.push({ rubro: 'AUP · ' + c, sbu, marca, meses }) })
-    { const meses = MESES.map((_, m) => auc(m)); if (meses.some((v) => v)) rows.push({ rubro: 'AUC', sbu, marca, meses }) }
+    catList.forEach(({ cat }) => {
+      const mAup = MESES.map((_, m) => aup(cat, m)); if (mAup.some((v) => v)) rows.push({ rubro: 'AUP · ' + cat, sbu, marca, meses: mAup })
+      const mAuc = MESES.map((_, m) => auc(cat, m)); if (mAuc.some((v) => v)) rows.push({ rubro: 'AUC · ' + cat, sbu, marca, meses: mAuc })
+    })
+    // AUC de la marca (promedio de categorías) para compatibilidad con los consolidados
+    const aucMarca = MESES.map((_, m) => { const vals = catList.map(({ cat }) => auc(cat, m)).filter((v) => v > 0); return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0 })
+    if (aucMarca.some((v) => v)) rows.push({ rubro: 'AUC', sbu, marca, meses: aucMarca })
     try { localStorage.setItem(`precios_${empresa}`, JSON.stringify(snap)) } catch { }
     await postToTab('Cap_Producto', empresa, usuario, 'Producto', rows, setMsg)
     setSaving(false)
@@ -1351,15 +1380,14 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
             <tr>{MESES.map((m) => <th key={m} className="yb">{m.replace('-28', '')}</th>)}</tr>
           </thead>
           <tbody>
-            <tr className="secrow"><td colSpan={13}>AUC (costo unitario · marca)</td></tr>
-            <tr><td className="l sub2">AUC</td>{MESES.map((_, m) => cell(`AUC|${m}`))}</tr>
-            {catList.map((c) => (
-              <Fragment2 key={c}>
-                <tr className="secrow"><td colSpan={13}>{c}</td></tr>
-                <tr><td className="l sub2">AUP {c}</td>{MESES.map((_, m) => cell(`AUP|${c}|${m}`))}</tr>
+            {catList.map(({ cat }) => (
+              <Fragment2 key={cat}>
+                <tr className="secrow"><td colSpan={13}>{cat}</td></tr>
+                <tr><td className="l sub2">AUP {cat} <span className="unit">(precio)</span></td>{MESES.map((_, m) => cell(`AUP|${cat}|${m}`))}</tr>
+                <tr><td className="l sub2">AUC {cat} <span className="unit">(costo)</span></td>{MESES.map((_, m) => cell(`AUC|${cat}|${m}`))}</tr>
               </Fragment2>
             ))}
-            <tr className="grandrow"><td className="l">Margen total (AUP prom − AUC)</td>{MESES.map((_, m) => { const vals = catList.map((c) => aup(c, m)).filter((v) => v > 0); const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0; return <td key={m} className="tot">{money(avg - auc(m))}</td> })}</tr>
+            <tr className="grandrow"><td className="l">Margen total (AUP prom − AUC prom)</td>{MESES.map((_, m) => { const ap = catList.map(({ cat }) => aup(cat, m)).filter((v) => v > 0); const ac = catList.map(({ cat }) => auc(cat, m)).filter((v) => v > 0); const avgP = ap.length ? ap.reduce((a, b) => a + b, 0) / ap.length : 0; const avgC = ac.length ? ac.reduce((a, b) => a + b, 0) / ac.length : 0; return <td key={m} className="tot">{money(avgP - avgC)}</td> })}</tr>
           </tbody>
         </table></div>
       </div>
@@ -1545,9 +1573,12 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
               ? <ViajesEquipo empresa={empresa} marca={marca} sbuName={sbuName} marcasSBU={marcasSBU} />
               : secId === 'comercial'
               ? (<>
-                {comercialRoles.length > 1 && <div className="toolbar" style={{ marginBottom: 12, gap: 6, background: '#eef1f4', borderRadius: 9, padding: '8px 10px' }}>
+                {comercialRoles.length > 1 && <div className="toolbar" style={{ marginBottom: 12, gap: 8, alignItems: 'center' }}>
                   <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 800 }}>IR A:</span>
-                  {[['all', '📋 Todos'], ...comercialRoles.map((r) => [r.id, r.icon + ' ' + r.label])].map(([v, l]) => <button key={v} className={'seg' + (comSub === v ? ' active' : '')} onClick={() => setComSub(v)} style={comSub === v ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{l}</button>)}
+                  <select value={comSub} onChange={(e) => setComSub(e.target.value)} style={{ fontWeight: 700, padding: '8px 12px', borderRadius: 8, border: '1.5px solid ' + acc, color: acc, background: '#fff', minWidth: 200 }}>
+                    <option value="all">📋 Todos</option>
+                    {comercialRoles.map((r) => <option key={r.id} value={r.id}>{r.icon} {r.label}</option>)}
+                  </select>
                 </div>}
                 {comercialRoles.filter((r) => comSub === 'all' || r.id === comSub).map((r) => r.id === 'logistica'
                   ? <LogisticaBlock key={sbuName + 'log' + marca} r={r} empresa={empresa} usuario={usuario} oneSbu={oneSbu} marca={marca} />
@@ -1654,8 +1685,9 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   const sumTabG = (rows, mca, filt) => { let s = 0; rows.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
   const esVi = (rub) => rub.toUpperCase().startsWith('VIAJES')
   const fullCalc = (mca) => {
-    const u = uni(mca), ap = aupW(mca), ac = prodRow(mca, 'AUC')
-    let unidades = 0, ventaNeta = 0, costo = 0; for (let j = 0; j < 12; j++) { unidades += u[j]; ventaNeta += u[j] * ap[j]; costo += u[j] * ac[j] }
+    const catNames = (cats[mca] || []).map((c) => c.cat)
+    const r = realAupAuc(empresa, mca, ventas, producto, catNames)
+    const unidades = r.totalUnits.reduce((a, b) => a + b, 0), ventaNeta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0)
     const logistica = sumTabG(log, mca), marketing = sumTabG(mk, mca)
     const viajes = [ventas, producto, mk, log, dir].reduce((t, rows) => t + sumTabG(rows, mca, esVi), 0)
     const comisiones = 0, margenBruto = ventaNeta - costo - comisiones - logistica, brand = margenBruto - marketing - viajes
@@ -1851,9 +1883,9 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   const esViaje = (rub) => rub.toUpperCase().startsWith('VIAJES')
 
   const calc = (mca) => {
-    const u = uniMes(mca), ac = aucMes(mca), acat = aupCat(mca), catL = P.cats[mca] || []
-    const ap = Array(12).fill(0); catL.forEach(({ cat, peso }) => { const x = acat[cat]; if (!x) return; const w = num(peso) / 100; for (let j = 0; j < 12; j++) ap[j] += w * x[j] })
-    let unidades = 0, ventaNeta = 0, costo = 0; for (let j = 0; j < 12; j++) { unidades += u[j]; ventaNeta += u[j] * ap[j]; costo += u[j] * ac[j] }
+    const catNames = (P.cats[mca] || []).map((c) => c.cat)
+    const r = realAupAuc(empresa, mca, P.ven, P.prod, catNames)
+    const unidades = r.totalUnits.reduce((a, b) => a + b, 0), ventaNeta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0)
     const comisiones = 0, logistica = sumTab(P.log, mca), marketing = sumTab(P.mk, mca)
     const viajes = [P.ven, P.prod, P.mk, P.log, P.dir].reduce((t, rows) => t + sumTab(rows, mca, esViaje), 0)
     const margenBruto = ventaNeta - costo - comisiones - logistica
