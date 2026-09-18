@@ -76,8 +76,13 @@ td.cell input:hover{border-color:var(--warn)}
 }
 
 /* Insignia "para llenar" en títulos de bloques editables */
-.fill-badge{display:inline-block;margin-left:8px;font-size:11.5px;font-weight:800;color:#fff;background:var(--accent,#0e7490);border:1px solid var(--accent,#0e7490);border-radius:12px;padding:2px 11px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+/* Insignia "para llenar": amarillo suave, el MISMO color de las celdas editables, para que la persona asocie "todo lo amarillo se llena" */
+.fill-badge{display:inline-block;margin-left:8px;font-size:11.5px;font-weight:800;color:#8a6d1a;background:#fdf7e3;border:1px solid #e6d9a8;border-radius:12px;padding:2px 11px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.10)}
 .fill-badge::before{content:var(--avatar)}
+/* Campo editable fuera de la grilla (toolbars, %): mismo amarillo suave que las celdas de captura */
+.fillin{border:1px solid #f0e6c9;background:#fdf7e3;border-radius:6px;padding:6px 8px;font:inherit;color:inherit;font-variant-numeric:tabular-nums}
+.fillin:focus{border-color:var(--odoo);background:#fff;outline:none}
+.fillin:hover{border-color:var(--warn)}
 td.tot{font-weight:800;font-variant-numeric:tabular-nums;text-align:center}
 /* Icono discreto para indicar que un bloque está en dinero ($) */
 .moneytag{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:#e6f4ea;color:#1e7a34;font-size:11px;font-weight:800;margin-left:7px;vertical-align:middle;border:1px solid #bfe3c9}

@@ -1244,7 +1244,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const total = MESES.map((_, m) => costoLog[m] + costoMue[m] + mant[m])
   const rowTot = (arr) => arr.reduce((a, b) => a + b, 0)
   function guardar() { setSaving(true); try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado en este equipo.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
-  const pctInput = (k) => <input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" style={{ width: 60, padding: 6, border: '1px solid var(--line)', borderRadius: 6, textAlign: 'center' }} />
+  const pctInput = (k) => <input className="fillin" value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" style={{ width: 60, textAlign: 'center' }} />
 
   return (
     <div className="panel">
