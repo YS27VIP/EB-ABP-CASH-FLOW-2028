@@ -2898,8 +2898,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         <div className="sub">{usarCat ? 'Las unidades de cada cliente se reparten por categoría según el % que el Director definió por cliente. El Peso % es ponderado: unidades de la categoría ÷ unidades totales de la marca (no un valor fijo).' : 'Categorías desactivadas por el Director: solo el total por mes.'}</div>
         <div className="tablewrap">
           <table className="vfix">
-            <colgroup><col style={{ width: '270px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
-            <thead><tr><th className="l">Categoría</th><th>Peso pond. %</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+            <colgroup><col style={{ width: '270px' }} /><col style={{ width: '96px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+            <thead><tr><th className="l">Categoría</th><th style={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Peso<br />ponderado %</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
               <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="tot" title="La marca siempre suma 100%: es la suma del peso ponderado de todas sus categorías." style={{ cursor: 'help' }}>{totMarcaSel > 0 ? '100.0%' : '—'}</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
               {!usarCat && <tr><td className="l" colSpan={15}>Categorías desactivadas para {marca}.</td></tr>}
