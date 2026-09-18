@@ -1542,7 +1542,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   const role = SECS.find((r) => r.id === secId)
   const col = sbuColor(sbuName)
   const acc = marca === '__TOTAL__' ? col : marcaColor(marca)
-  const totTabEf = (totTab === 'brand' && !puedeDir) ? 'cash' : (totTab === 'cash' && !pu('Finanzas')) ? 'brand' : totTab
+  const totTabEf = (['brand', 'viajes', 'mk', 'ucvm'].includes(totTab) && !puedeDir) ? 'cash' : (totTab === 'cash' && !pu('Finanzas')) ? 'brand' : totTab
 
   if (isRetail) {
     return <div className="panel"><h3 style={{ color: sbuColor('Retail') }}>Retail — tiendas propias</h3><div className="note warn">Retail le compra internamente a las SBU (venta intercompañía). Para activarlo necesito el <b>precio de transferencia</b> (margen fijo, % sobre costo o AUP interno). En cuanto lo definamos, aquí verás la captura y el consolidado de Retail. 🏬</div></div>
@@ -1563,11 +1563,20 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
               <span className="empchip" style={{ background: col, marginLeft: 0 }}>▣ TOTAL {sbuName}</span>
               {puedeDir && <button className={'seg' + (totTabEf === 'brand' ? ' active' : '')} onClick={() => setTotTab('brand')} style={totTabEf === 'brand' ? { background: col, borderColor: col, color: '#fff' } : {}}>📊 Contribución de la SBU</button>}
               {pu('Finanzas') && <button className={'seg' + (totTabEf === 'cash' ? ' active' : '')} onClick={() => setTotTab('cash')} style={totTabEf === 'cash' ? { background: col, borderColor: col, color: '#fff' } : {}}>💵 Cash Flow</button>}
+              {puedeDir && <button className={'seg' + (totTabEf === 'viajes' ? ' active' : '')} onClick={() => setTotTab('viajes')} style={totTabEf === 'viajes' ? { background: col, borderColor: col, color: '#fff' } : {}}>🧳 Viajes</button>}
+              {puedeDir && <button className={'seg' + (totTabEf === 'mk' ? ' active' : '')} onClick={() => setTotTab('mk')} style={totTabEf === 'mk' ? { background: col, borderColor: col, color: '#fff' } : {}}>📣 Marketing</button>}
+              {puedeDir && <button className={'seg' + (totTabEf === 'ucvm' ? ' active' : '')} onClick={() => setTotTab('ucvm')} style={totTabEf === 'ucvm' ? { background: col, borderColor: col, color: '#fff' } : {}}>📦 Unid · Venta · Costo · Margen</button>}
             </div>
             {!puedeDir && !pu('Finanzas')
               ? <div className="note warn">No tienes acceso al consolidado de esta SBU. Entra a tu área (Ventas/Producto/Logística/Marketing) eligiendo una marca en el panel de la izquierda.</div>
               : totTabEf === 'cash'
               ? <CashFlowForm key={'cftot' + sbuName} role={cashRole} rubro={cashRubro} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={`TOTAL::${sbuName}`} />
+              : totTabEf === 'viajes'
+              ? <ViajesEquipo empresa={empresa} marca="__TOTAL__" sbuName={sbuName} marcasSBU={marcasSBU} modo="total" />
+              : totTabEf === 'mk'
+              ? <ResumenMarcas empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} vista="mk" />
+              : totTabEf === 'ucvm'
+              ? <ResumenMarcas empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} vista="ucvm" />
               : <BrandContribSBU empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />}
           </>)
           : (<>
@@ -1961,7 +1970,7 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
 }
 
 /* ===== VIAJES DEL EQUIPO: consolidado por rol/marca (vista Director) ===== */
-function ViajesEquipo({ empresa, marca, sbuName, marcasSBU }) {
+function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
   const rolesV = ROLES.filter((r) => r.rubros.some((rb) => rb.k === 'VIAJES'))
   const [tabs, setTabs] = useState(null)
   useEffect(() => {
@@ -1987,41 +1996,109 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU }) {
 
   if (!tabs) return <div className="panel"><h3>Viajes del equipo</h3><div className="sub">Cargando…</div></div>
 
-  // Tabla principal: rol × mes para la marca seleccionada
-  const filas = rolesV.map((r) => ({ r, mes: viajesMes(r.tab, marca), tot: anual(r.tab, marca) }))
-  const totMarcaMes = MESES.map((_, mi) => filas.reduce((s, f) => s + f.mes[mi], 0))
-  const totMarca = totMarcaMes.reduce((s, v) => s + v, 0)
-
-  return (
-    <>
-      <div className="panel">
-        <h3 style={{ color: marcaColor(marca) }}>Viajes del equipo — {marca} <span className="unit">(solo lectura · 2028)</span></h3>
-        <div className="sub">Suma de los viajes que cada área captura para esta marca. El Director llena los suyos en la sección <b>Director</b>; aquí ve además los del resto del equipo, el total por marca y el total de la SBU.</div>
+  // Panel: viajes por área (rol × mes) para una marca
+  const teamPanel = (mca) => {
+    const filas = rolesV.map((r) => ({ r, mes: viajesMes(r.tab, mca), tot: anual(r.tab, mca) }))
+    const totMarcaMes = MESES.map((_, mi) => filas.reduce((s, f) => s + f.mes[mi], 0))
+    const totMarca = totMarcaMes.reduce((s, v) => s + v, 0)
+    return (
+      <div className="panel" key={mca}>
+        <h3 style={{ color: marcaColor(mca) }}>Viajes del equipo — {mca} <span className="unit">(solo lectura · 2028)</span></h3>
+        <div className="sub">Suma de los viajes que cada área captura para esta marca. El Director llena los suyos en la sección <b>Director</b>; aquí ve además los del resto del equipo y el total por marca.</div>
         <div className="tablewrap">
           <table className="vfix">
             <colgroup><col style={{ width: '160px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
             <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
             <tbody>
               {filas.map((f) => <tr key={f.r.id}><td className="l">{f.r.icon} {f.r.label}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td></tr>)}
-              <tr className="grandrow"><td className="l">Total {marca}</td>{totMarcaMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarca)}</td></tr>
+              <tr className="grandrow"><td className="l">Total {mca}</td>{totMarcaMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarca)}</td></tr>
             </tbody>
           </table>
         </div>
       </div>
+    )
+  }
+
+  // Panel resumen: total de viajes por cada marca de la SBU
+  const resumenPanel = (
+    <div className="panel" key="__res">
+      <h3 style={{ color: sbuColor(sbuName) }}>Viajes por marca — {sbuName}</h3>
+      <div className="sub">Total de viajes del equipo por cada marca de la SBU, con el total de la SBU al final.</div>
+      <div className="tablewrap">
+        <table>
+          <thead><tr><th className="l">Marca</th>{rolesV.map((r) => <th key={r.id}>{r.label}</th>)}<th>Total marca</th></tr></thead>
+          <tbody>
+            {(marcasSBU || []).map((m) => { const cols = rolesV.map((r) => anual(r.tab, m)); const t = cols.reduce((s, v) => s + v, 0); return <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{cols.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
+            <tr className="grandrow"><td className="l">Total {sbuName}</td>{rolesV.map((r) => <td key={r.id} className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + anual(r.tab, m), 0))}</td>)}<td className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + rolesV.reduce((a, r) => a + anual(r.tab, m), 0), 0))}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+
+  // Vista TOTAL SBU: resumen por marca + una tabla de equipo por cada marca
+  if (modo === 'total') return (<>{resumenPanel}{(marcasSBU || []).map((m) => teamPanel(m))}</>)
+  // Vista por marca: solo la tabla de equipo de esa marca
+  return teamPanel(marca)
+}
+
+/* ===== RESUMEN POR MARCA: Marketing / Unidades·Venta·Costo·Margen (vista TOTAL SBU) ===== */
+function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
+  const [P, setP] = useState(null)
+  useEffect(() => {
+    (async () => {
+      const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
+      const [ven, prod, cap, mk] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing')])
+      const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3]; if (!mar || !c) return; (cats[mar] = cats[mar] || []).push(c) })
+      setP({ ven, prod, cats, mk })
+    })()
+  }, [empresa])
+  if (!P) return <div className="panel"><h3 style={{ color: sbuColor(sbuName) }}>Resumen — {sbuName}</h3><div className="sub">Cargando…</div></div>
+  const inM = (r, mca) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(mca)
+  const esViaje = (rub) => String(rub || '').toUpperCase().startsWith('VIAJES')
+  const marcas = marcasSBU || []
+
+  if (vista === 'mk') {
+    const mkMes = (mca) => { const a = Array(12).fill(0); P.mk.forEach((r) => { if (!inM(r, mca) || esViaje(r[1])) return; for (let j = 0; j < 12; j++) a[j] += num(r[4 + j]) }); return a }
+    const filas = marcas.map((m) => { const mes = mkMes(m); return { m, mes, tot: mes.reduce((s, v) => s + v, 0) } })
+    const totMes = MESES.map((_, mi) => filas.reduce((s, f) => s + f.mes[mi], 0))
+    const gt = totMes.reduce((s, v) => s + v, 0)
+    return (
       <div className="panel">
-        <h3>Viajes por marca — {sbuName}</h3>
-        <div className="sub">Total de viajes del equipo por cada marca de la SBU, con el total de la SBU al final.</div>
+        <h3 style={{ color: sbuColor(sbuName) }}>Marketing por marca — {sbuName}{M$} <span className="unit">(solo lectura · 2028)</span></h3>
+        <div className="sub">Total de marketing que el equipo captura por cada marca de la SBU, mes a mes, con el total de la SBU al final.</div>
         <div className="tablewrap">
-          <table>
-            <thead><tr><th className="l">Marca</th>{rolesV.map((r) => <th key={r.id}>{r.label}</th>)}<th>Total marca</th></tr></thead>
+          <table className="vfix">
+            <colgroup><col style={{ width: '160px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
             <tbody>
-              {(marcasSBU || []).map((m) => { const cols = rolesV.map((r) => anual(r.tab, m)); const t = cols.reduce((s, v) => s + v, 0); return <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{cols.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
-              <tr className="grandrow"><td className="l">Total {sbuName}</td>{rolesV.map((r) => <td key={r.id} className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + anual(r.tab, m), 0))}</td>)}<td className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + rolesV.reduce((a, r) => a + anual(r.tab, m), 0), 0))}</td></tr>
+              {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td></tr>)}
+              <tr className="grandrow"><td className="l">Total {sbuName}</td>{totMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(gt)}</td></tr>
             </tbody>
           </table>
         </div>
       </div>
-    </>
+    )
+  }
+  // vista === 'ucvm'
+  const calc = (mca) => { const catNames = (P.cats[mca] || []); const r = realAupAuc(empresa, mca, P.ven, P.prod, catNames); const unidades = r.totalUnits.reduce((a, b) => a + b, 0), venta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0); return { unidades, venta, costo, margen: venta - costo } }
+  const rows = marcas.map((m) => ({ m, v: calc(m) }))
+  const tot = rows.reduce((a, { v }) => { a.unidades += v.unidades; a.venta += v.venta; a.costo += v.costo; a.margen += v.margen; return a }, { unidades: 0, venta: 0, costo: 0, margen: 0 })
+  const mpct = (v) => v.venta > 0 ? (v.margen / v.venta * 100) : null
+  return (
+    <div className="panel">
+      <h3 style={{ color: sbuColor(sbuName) }}>Unidades · Venta · Costo · Margen — {sbuName}{M$} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
+      <div className="sub">Resumen por marca de la SBU. El <b>margen</b> es Venta Neta − Costo (margen bruto de producto), calculado con la mezcla real de categorías por cliente.</div>
+      <div className="tablewrap">
+        <table>
+          <thead><tr><th className="l">Marca</th><th>Unidades</th><th>Venta Neta</th><th>Costo</th><th>Margen</th><th>Margen %</th></tr></thead>
+          <tbody>
+            {rows.map(({ m, v }) => <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td><td className="tot">{fmt(v.unidades)}</td><td className="tot">{fmt(v.venta)}</td><td className="tot">{fmt(v.costo)}</td><td className="tot">{fmt(v.margen)}</td><td className="tot">{mpct(v) == null ? '—' : mpct(v).toFixed(0) + '%'}</td></tr>)}
+            <tr className="grandrow"><td className="l">Total {sbuName}</td><td className="tot">{fmt(tot.unidades)}</td><td className="tot">{fmt(tot.venta)}</td><td className="tot">{fmt(tot.costo)}</td><td className="tot">{fmt(tot.margen)}</td><td className="tot">{tot.venta > 0 ? (tot.margen / tot.venta * 100).toFixed(0) + '%' : '—'}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 
