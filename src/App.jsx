@@ -132,6 +132,8 @@ const upper = (s) => String(s == null ? '' : s).trim().toUpperCase()
 const mesIdx = (v) => { const d = new Date(v); return isNaN(d.getTime()) ? -1 : d.getUTCMonth() }
 const M$ = <span className="moneytag" title="Valores en dinero ($)">$</span> // icono discreto de dinero
 const UD = <span className="unittag" title="Valores en unidades (ud)"># </span> // icono discreto de unidades
+// ❓ para campos CONSOLIDADOS (suma de partes): al pasar el mouse muestra de qué se compone
+const Q = (t) => <span className="unit" title={t} style={{ cursor: 'help', marginLeft: 5 }}>❓</span>
 
 function effSBUS(empresa, combos) {
   const c = combos[empresa]
@@ -1002,7 +1004,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       const k = key(marca, it, mi)
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
-                    const fila = <tr key={it} className={esCostos ? 'catrow rowline ' + (openCostos ? 'open' : '') : undefined} onClick={esCostos ? () => setOpenCostos((o) => !o) : undefined} style={esCostos ? { cursor: 'pointer' } : undefined}><td className="l">{esCostos ? <span className="caret">▶</span> : null} {it}{esCostos ? <span className="unit" style={{ marginLeft: 6 }}>({openCostos ? 'ocultar' : 'ver'} detalle: {CF_COSTOS.join(' + ')})</span> : null}</td>{celdas}<td className="tot">{fmt(rowTot(it))}</td></tr>
+                    const ayudaComp = it === CASHIN ? 'Cash In (Cobros): cada mes es la venta de meses anteriores cobrada según el plazo de cada cliente (Cash=mismo mes, 30d=+1, 60=+2…), más el saldo (deuda) de cierre 2027. Párate sobre cada mes para ver el detalle.' : it === VENTAS_NETAS ? 'Ventas Netas = Unidades (Comercial) × AUP efectivo del mes (Producto). Párate sobre cada mes.' : it === COMPRAS_FD ? 'Compras = unidades compradas × AUC (Producto). Párate sobre cada mes.' : null
+                    const fila = <tr key={it} className={esCostos ? 'catrow rowline ' + (openCostos ? 'open' : '') : undefined} onClick={esCostos ? () => setOpenCostos((o) => !o) : undefined} style={esCostos ? { cursor: 'pointer' } : undefined}><td className="l">{esCostos ? <span className="caret">▶</span> : null} {it}{ayudaComp && <span className="unit" title={ayudaComp} style={{ cursor: 'help', marginLeft: 5 }}>❓</span>}{esCostos ? <span className="unit" style={{ marginLeft: 6 }}>({openCostos ? 'ocultar' : 'ver'} detalle: {CF_COSTOS.join(' + ')})</span> : null}</td>{celdas}<td className="tot">{fmt(rowTot(it))}</td></tr>
                     if (!esCostos) return fila
                     return (
                       <Fragment2 key={it}>
@@ -1531,6 +1534,13 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
   const unitsAttr = (m) => cats.reduce((a, c) => a + unitsCatMes(c, m), 0)
   const aupMarcaMes = (m) => { const u = unitsAttr(m); return u ? cats.reduce((a, c) => a + ventaCatMes(c, m), 0) / u : 0 }
   const aucMarcaMes = (m) => { const u = unitsAttr(m); return u ? cats.reduce((a, c) => a + costoCatMes(c, m), 0) / u : 0 }
+  // Composición del valor (para el tooltip): de qué temporadas se compone el AUP/AUC efectivo de ese mes
+  const compo = (c, m, precio) => {
+    const parts = SEASONS.map((s) => { const u = salM(s, m) * splitSC(s, c); const p = precio ? aupSC(s, c) : aucSC(s, c); return u > 0.5 ? `${s}: ${fmt(u)} ud × $${money(p)}` : null }).filter(Boolean)
+    if (!parts.length) return 'Sin salidas de ' + c + ' este mes (la rotación no vendió nada).'
+    const res = precio ? aupCatMes(c, m) : aucCatMes(c, m)
+    return `${precio ? 'AUP' : 'AUC'} efectivo ${c} · ${MESES[m].toUpperCase()} = (venta ÷ unidades). Temporadas que rotan este mes:\n` + parts.join('\n') + `\n= $${money(res)} ponderado`
+  }
   async function guardar() {
     setSaving(true); setMsg(null)
     // El AUP/AUC EFECTIVO MENSUAL por categoría (evolución según rotación) alimenta a todo el app vía Cap_Producto
@@ -1588,8 +1598,8 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
             {cats.map((c) => (
               <Fragment2 key={c}>
                 <tr className="secrow"><td colSpan={14}>{c}</td></tr>
-                <tr className="catrow"><td className="l">AUP efectivo {c}</td>{MESES.map((_, m) => <td key={m} className="tot">{money(aupCatMes(c, m))}</td>)}<td></td></tr>
-                <tr className="catrow"><td className="l">AUC efectivo {c}</td>{MESES.map((_, m) => <td key={m} className="tot">{money(aucCatMes(c, m))}</td>)}<td></td></tr>
+                <tr className="catrow"><td className="l">AUP efectivo {c} <span className="unit" title={'Párate sobre cada mes para ver de qué temporadas se compone.'} style={{ cursor: 'help' }}>❓</span></td>{MESES.map((_, m) => <td key={m} className="tot" title={compo(c, m, true)} style={{ cursor: 'help' }}>{money(aupCatMes(c, m))}</td>)}<td></td></tr>
+                <tr className="catrow"><td className="l">AUC efectivo {c} <span className="unit" title={'Párate sobre cada mes para ver de qué temporadas se compone.'} style={{ cursor: 'help' }}>❓</span></td>{MESES.map((_, m) => <td key={m} className="tot" title={compo(c, m, false)} style={{ cursor: 'help' }}>{money(aucCatMes(c, m))}</td>)}<td></td></tr>
               </Fragment2>
             ))}
             <tr className="secrow"><td colSpan={14}>TOTAL {marca}</td></tr>
@@ -1949,9 +1959,9 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
         <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno. Activa <b>🔍 Desglose</b> para ver la marca al pasar el mouse.</div>
         <div className="toolbar" style={{ marginBottom: 8 }}><button className={'seg' + (desglose ? ' active' : '')} onClick={() => setDesglose((d) => !d)}>{desglose ? '✓ ' : ''}🔍 Desglose por marca</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
-          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s }) => <th key={s} style={{ color: sbuColor(s) }}>{s}</th>)}<th>TOTAL {empresa}</th><th className="ya">FY2025</th><th className="ya">Δ25</th><th className="ya">FY2026</th><th className="ya">Δ26</th><th className="yb">ABP2027</th><th className="yb">Δ27</th></tr></thead>
+          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s }) => <th key={s} style={{ color: sbuColor(s) }}>{s}</th>)}<th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th><th className="ya">FY2025</th><th className="ya">Δ25</th><th className="ya">FY2026</th><th className="ya">Δ26</th><th className="yb">ABP2027</th><th className="yb">Δ27</th></tr></thead>
           <tbody>
-            {filasG.map((f) => { const cur = f.g(totAgg); return <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}</td>{sbuList.map(({ s, a }) => <td key={s} className="tot" style={cellStyle} title={brkSBU(f, sbus[s])}>{fmt(f.g(a))}</td>)}<td className="tot">{fmt(cur)}</td>
+            {filasG.map((f) => { const cur = f.g(totAgg); return <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}</td>{sbuList.map(({ s, a }) => <td key={s} className="tot" style={cellStyle} title={brkSBU(f, sbus[s])}>{fmt(f.g(a))}</td>)}<td className="tot" style={{ cursor: 'help' }} title={'Consolidado = suma de las SBU:\n' + sbuList.map(({ s, a }) => `${s}: ${fmt(f.g(a))}`).join('\n')}>{fmt(cur)}</td>
               <td className="tot ya">{f.fy25 != null ? fmt(f.fy25) : '—'}</td>{f.fy25 != null ? dCellG(cur, f.fy25, 'ya') : <td className="tot ya">—</td>}
               <td className="tot ya">{f.fy26 != null ? fmt(f.fy26) : '—'}</td>{f.fy26 != null ? dCellG(cur, f.fy26, 'ya') : <td className="tot ya">—</td>}
               <td className="tot yb">{f.abp27 != null ? fmt(f.abp27) : '—'}</td>{f.abp27 != null ? dCellG(cur, f.abp27, 'yb') : <td className="tot yb">—</td>}
@@ -2133,7 +2143,7 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
       <div className="sub">P&amp;L de cada marca lado a lado. Las columnas <b>FY2026</b>, <b>FY2025</b> y <b>ABP 2027</b> (hoja PLAN del EBP) traen el valor y la <b>variación %</b> del total 2028 vs cada uno (en Venta, Costo y Margen). Los <b>Gastos administrativos</b> son de toda la empresa; al restarlos queda el <b>Resultado Operativo</b>.</div>
       <div className="tablewrap">
         <table className="vfix" style={{ width: 'auto', minWidth: 520 }}>
-          <thead><tr><th className="l">Concepto</th>{cols.map(({ m }) => <th key={m} style={{ color: marcaColor(m) }}>{m}</th>)}<th>TOTAL 2028</th><th className="ya">FY2025</th><th className="ya">Δ vs 25</th><th className="ya">FY2026</th><th className="ya">Δ vs 26</th><th className="yb">ABP 2027</th><th className="yb">Δ vs ABP27</th></tr></thead>
+          <thead><tr><th className="l">Concepto</th>{cols.map(({ m }) => <th key={m} style={{ color: marcaColor(m) }}>{m}</th>)}<th>TOTAL 2028{Q('Consolidado: cada fila de esta columna es la suma de las marcas de la SBU (las columnas de la izquierda).')}</th><th className="ya">FY2025</th><th className="ya">Δ vs 25</th><th className="ya">FY2026</th><th className="ya">Δ vs 26</th><th className="yb">ABP 2027</th><th className="yb">Δ vs ABP27</th></tr></thead>
           <tbody>
             {filas.map((f) => { const cur = f.totVal != null ? f.totVal : f.get(tot); return (
               <tr key={f.k} className={f.strong ? 'grandrow' : undefined}>
@@ -2216,7 +2226,7 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
           <thead><tr><th className="l">Marca</th>{rolesV.map((r) => <th key={r.id}>{r.label}</th>)}<th>Total marca</th></tr></thead>
           <tbody>
             {(marcasSBU || []).map((m) => { const cols = rolesV.map((r) => anual(r.tab, m)); const t = cols.reduce((s, v) => s + v, 0); return <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{cols.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
-            <tr className="grandrow"><td className="l">Total {sbuName}</td>{rolesV.map((r) => <td key={r.id} className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + anual(r.tab, m), 0))}</td>)}<td className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + rolesV.reduce((a, r) => a + anual(r.tab, m), 0), 0))}</td></tr>
+            <tr className="grandrow"><td className="l">Total {sbuName}{Q('Consolidado = suma de los viajes de cada marca:\n' + (marcasSBU || []).map((m) => `${m}: ${fmt(rolesV.reduce((a, r) => a + anual(r.tab, m), 0))}`).join('\n'))}</td>{rolesV.map((r) => <td key={r.id} className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + anual(r.tab, m), 0))}</td>)}<td className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + rolesV.reduce((a, r) => a + anual(r.tab, m), 0), 0))}</td></tr>
           </tbody>
         </table>
       </div>
@@ -2263,7 +2273,7 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
             <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
               {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td></tr>)}
-              <tr className="grandrow"><td className="l">Total {sbuName}</td>{totMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(gt)}</td></tr>
+              <tr className="grandrow"><td className="l">Total {sbuName}{Q('Consolidado = suma del marketing de cada marca:\n' + filas.map((f) => `${f.m}: ${fmt(f.tot)}`).join('\n'))}</td>{totMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(gt)}</td></tr>
             </tbody>
           </table>
         </div>
@@ -2317,7 +2327,7 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
                   {abierta && v.catRows.map((c) => <tr key={m + '|' + c.c}><td className="l sub2">{c.c}</td><td className="tot">{fmt(c.unidades)}</td><td className="tot">{fmt(c.venta)}</td><td className="tot">{fmt(c.costo)}</td><td className="tot">{fmt(c.margen)}</td><td className="tot">{c.venta > 0 ? (c.margen / c.venta * 100).toFixed(0) + '%' : '—'}</td></tr>)}
                 </Fragment2>
               ) })}
-              <tr className="grandrow"><td className="l">Total {sbuName}</td><td className="tot">{fmt(tot.unidades)}</td><td className="tot">{fmt(tot.venta)}</td><td className="tot">{fmt(tot.costo)}</td><td className="tot">{fmt(tot.margen)}</td><td className="tot">{tot.venta > 0 ? (tot.margen / tot.venta * 100).toFixed(0) + '%' : '—'}</td></tr>
+              <tr className="grandrow"><td className="l">Total {sbuName}{Q('Consolidado = suma de las marcas de la SBU:\n' + rows.map(({ m, v }) => `${m}: ${fmt(v.unidades)} ud · venta ${fmt(v.venta)} · margen ${fmt(v.margen)}`).join('\n'))}</td><td className="tot">{fmt(tot.unidades)}</td><td className="tot">{fmt(tot.venta)}</td><td className="tot">{fmt(tot.costo)}</td><td className="tot">{fmt(tot.margen)}</td><td className="tot">{tot.venta > 0 ? (tot.margen / tot.venta * 100).toFixed(0) + '%' : '—'}</td></tr>
             </tbody>
           </table>
         </div>
@@ -2386,7 +2396,7 @@ function LogisticaResumen({ empresa, sbuName, marcasSBU }) {
             <thead><tr><th className="l">Marca</th><th>% Log. venta</th><th>% Muestras</th><th>% Mant.</th><th>Costo logístico</th><th>Muestras</th><th>Mantenimiento</th><th>TOTAL</th></tr></thead>
             <tbody>
               {rows.map(({ m, v }) => <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td><td className="tot">{fmt(v.pctLog)}%</td><td className="tot">{fmt(v.pctMue)}%</td><td className="tot">{fmt(v.pctMant)}%</td><td className="tot">{fmt(v.log)}</td><td className="tot">{fmt(v.mue)}</td><td className="tot">{fmt(v.mant)}</td><td className="tot">{fmt(v.total)}</td></tr>)}
-              <tr className="grandrow"><td className="l">Total {sbuName}</td><td></td><td></td><td></td><td className="tot">{fmt(tot.log)}</td><td className="tot">{fmt(tot.mue)}</td><td className="tot">{fmt(tot.mant)}</td><td className="tot">{fmt(tot.total)}</td></tr>
+              <tr className="grandrow"><td className="l">Total {sbuName}{Q('Consolidado = suma de los costos logísticos de cada marca:\n' + rows.map(({ m, v }) => `${m}: ${fmt(v.total)}`).join('\n'))}</td><td></td><td></td><td></td><td className="tot">{fmt(tot.log)}</td><td className="tot">{fmt(tot.mue)}</td><td className="tot">{fmt(tot.mant)}</td><td className="tot">{fmt(tot.total)}</td></tr>
             </tbody>
           </table>
         </div>
@@ -2400,7 +2410,7 @@ function LogisticaResumen({ empresa, sbuName, marcasSBU }) {
             <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
               {rows.map(({ m, v }) => <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{v.totalMes.map((x, i) => <td key={i} className="tot">{fmt(x)}</td>)}<td className="tot">{fmt(v.total)}</td></tr>)}
-              <tr className="grandrow"><td className="l">Total {sbuName}</td>{tot.totalMes.map((x, i) => <td key={i} className="tot">{fmt(x)}</td>)}<td className="tot">{fmt(tot.total)}</td></tr>
+              <tr className="grandrow"><td className="l">Total {sbuName}{Q('Consolidado = suma del costo logístico total de cada marca:\n' + rows.map(({ m, v }) => `${m}: ${fmt(v.total)}`).join('\n'))}</td>{tot.totalMes.map((x, i) => <td key={i} className="tot">{fmt(x)}</td>)}<td className="tot">{fmt(tot.total)}</td></tr>
             </tbody>
           </table>
         </div>
