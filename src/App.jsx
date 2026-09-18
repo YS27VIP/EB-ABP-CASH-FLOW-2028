@@ -1,6 +1,24 @@
 import { useState, useEffect } from 'react'
 import './App.css'
-import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027 } from './google'
+import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gLoadEstado, gSaveEstado } from './google'
+
+/* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
+   El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
+   caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
+   Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
+   cualquier bloque se escribe a los dos. */
+const ESTADO_KEYS = ['catpct', 'catpart', 'usarcat', 'ventas_growth', 'temp', 'precios', 'comis', 'gadmin', 'gadmin_cfg', 'logcost', 'cf']
+async function hydrateEstado(empresa) {
+  try {
+    const j = await gLoadEstado(empresa)
+    if (j && j.map) ESTADO_KEYS.forEach((k) => { const v = j.map[k]; if (v != null && v !== '') { try { localStorage.setItem(`${k}_${empresa}`, v) } catch { } } })
+  } catch { }
+}
+function saveEstado(empresa, clave, valStr) {
+  const s = typeof valStr === 'string' ? valStr : JSON.stringify(valStr)
+  try { localStorage.setItem(`${clave}_${empresa}`, s) } catch { }
+  Promise.resolve().then(() => gSaveEstado(empresa, clave, s)).catch(() => { })
+}
 
 /* ===== CONFIG ===== */
 
@@ -160,6 +178,7 @@ export default function App() {
   const [roleId, setRoleId] = useState(null)
   const [connError, setConnError] = useState(false)
   const [authed, setAuthed] = useState(isSignedIn())
+  const [estadoReady, setEstadoReady] = useState(false)
   const [avatar, setAvatar] = useState(() => { try { return localStorage.getItem('abp_avatar') || '' } catch { return '' } })
   useEffect(() => { try { document.documentElement.style.setProperty('--avatar', avatar ? '"' + avatar + ' "' : '') } catch { } }, [avatar])
   const elegirAvatar = (a) => { setAvatar(a); try { localStorage.setItem('abp_avatar', a) } catch { } }
@@ -169,6 +188,15 @@ export default function App() {
     const off = onAuth(({ name, email }) => { setAuthed(true); if (name || email) setUsuario((u) => u || name || email) })
     return off
   }, [])
+
+  // Baja el estado del modelo (Cap_Estado) del Sheet a localStorage antes de mostrar los tableros
+  useEffect(() => {
+    if (!authed || !empresa) return
+    setEstadoReady(false)
+    let cancel = false
+    hydrateEstado(empresa).then(() => { if (!cancel) setEstadoReady(true) })
+    return () => { cancel = true }
+  }, [authed, empresa])
 
   useEffect(() => {
     if (!authed) return
@@ -370,13 +398,15 @@ export default function App() {
     )
   }
 
+  const cargandoMain = <main><div className="banner">⏳ Cargando los datos del plan desde Google Sheets…</div></main>
+
   if (roleId === 'comercial') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
           <span className="rolechip" style={{ background: '#0891b2' }}>🧭 Comercial</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        <main><ComercialScreen empresa={empresa} sbus={sbus} usuario={usuario} /></main>
+        {estadoReady ? <main><ComercialScreen empresa={empresa} sbus={sbus} usuario={usuario} /></main> : cargandoMain}
       </>
     )
   }
@@ -388,7 +418,7 @@ export default function App() {
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
           <span className="rolechip" style={{ background: sbuColor(sbuName) }}>🧩 {sbuName}</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        <main><SBUWorkspace sbuName={sbuName} empresa={empresa} usuario={usuario} sbus={sbus} puede={puede} /></main>
+        {estadoReady ? <main><SBUWorkspace key={empresa} sbuName={sbuName} empresa={empresa} usuario={usuario} sbus={sbus} puede={puede} /></main> : cargandoMain}
       </>
     )
   }
@@ -399,7 +429,7 @@ export default function App() {
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
           <span className="rolechip" style={{ background: '#1f2d3d' }}>📈 Gerencia</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        <main><GerenciaScreen empresa={empresa} sbus={sbus} /></main>
+        {estadoReady ? <main><GerenciaScreen key={empresa} empresa={empresa} sbus={sbus} /></main> : cargandoMain}
       </>
     )
   }
@@ -410,7 +440,7 @@ export default function App() {
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
           <span className="rolechip" style={{ background: '#2e7d32' }}>💰 Finanzas</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        <main><FinanzasWorkspace empresa={empresa} usuario={usuario} sbus={sbus} /></main>
+        {estadoReady ? <main><FinanzasWorkspace key={empresa} empresa={empresa} usuario={usuario} sbus={sbus} /></main> : cargandoMain}
       </>
     )
   }
