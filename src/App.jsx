@@ -3042,8 +3042,9 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const aupPorCat = (mca) => { const out = {}; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') !== 0) return; out[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])) }); return out }
   useEffect(() => { try { localStorage.setItem('ventas_growth_' + empresa, JSON.stringify(growth)) } catch { } }, [growth, empresa])
 
-  const u2026 = {}, cliByMarca = {}
+  const u2026 = {}, u2025 = {}, cliByMarca = {}
   hist.forEach((r) => { if (upper(r[3]).indexOf('UNIDAD') < 0) return; if (String(r[1]) !== '2026') return; const mi = mesIdx(r[6]); if (mi < 0) return; const mar = r[5], cli = r[8] || '(sin cliente)', k = cli + '|' + mar; (u2026[k] = u2026[k] || Array(12).fill(0))[mi] += num(r[7]); (cliByMarca[mar] = cliByMarca[mar] || new Set()).add(cli) })
+  hist.forEach((r) => { if (upper(r[3]).indexOf('UNIDAD') < 0) return; if (String(r[1]) !== '2025') return; const mi = mesIdx(r[6]); if (mi < 0) return; const mar = r[5], cli = r[8] || '(sin cliente)', k = cli + '|' + mar; (u2025[k] = u2025[k] || Array(12).fill(0))[mi] += num(r[7]) })
   const histClientes = [...(cliByMarca[marca] || [])].sort((a, b) => (u2026[b + '|' + marca] || []).reduce((s, v) => s + v, 0) - (u2026[a + '|' + marca] || []).reduce((s, v) => s + v, 0))
   const histSet = new Set(histClientes.map((c) => upper(c)))
   const addedFor = (addCli[marca] || []).filter((c) => !histSet.has(upper(c)))
@@ -3051,8 +3052,13 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const esNuevo = (cli) => !histSet.has(upper(cli)) // sin histórico 2026 → unidades 2028 manuales
   const g = (cli) => num(growth[cli + '|' + marca])
   const u26 = (cli, mi) => (u2026[cli + '|' + marca] || [])[mi] || 0
+  const u25 = (cli, mi) => (u2025[cli + '|' + marca] || [])[mi] || 0
   const mKey = (cli, mi) => marca + '|' + cli + '|' + mi
-  const u28 = (cli, mi) => esNuevo(cli) ? Math.round(num(manual[mKey(cli, mi)])) : Math.round(u26(cli, mi) * (1 + g(cli) / 100))
+  // 2028 = el % de crecimiento define el TOTAL (sobre 2026). El reparto por mes lo escribe la persona (amarillo);
+  // si no lo toca, se sugiere el mismo patrón mensual de 2026 escalado por el %.
+  const u28def = (cli, mi) => Math.round(u26(cli, mi) * (1 + g(cli) / 100))
+  const u28 = (cli, mi) => { if (esNuevo(cli)) return Math.round(num(manual[mKey(cli, mi)])); const cur = manual[mKey(cli, mi)]; return (cur === undefined) ? u28def(cli, mi) : Math.round(num(cur)) }
+  const objetivo28 = (cli) => esNuevo(cli) ? null : MESES.reduce((a, _, mi) => a + u28def(cli, mi), 0)
   const setG = (cli, val) => setGrowth({ ...growth, [cli + '|' + marca]: val })
   const setMan = (cli, mi, val) => setManual({ ...manual, [mKey(cli, mi)]: val })
   const agregarCliente = async (nombre) => {
@@ -3064,15 +3070,18 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
     setMsg({ t: 'ok', x: 'Cliente agregado a ' + marca + '. Escribe sus unidades 2028 y guarda. Finanzas ya lo verá.' })
   }
   const quitarCliente = (cli) => { const next = { ...addCli, [marca]: (addCli[marca] || []).filter((c) => upper(c) !== upper(cli)) }; setAddCli(next); saveEstado(empresa, 'addcli', next) }
+  const t25 = (cli) => MESES.reduce((a, _, mi) => a + u25(cli, mi), 0)
   const t26 = (cli) => MESES.reduce((a, _, mi) => a + u26(cli, mi), 0)
   const t28 = (cli) => MESES.reduce((a, _, mi) => a + u28(cli, mi), 0)
   const totMarcaSel = clientes.reduce((s, cli) => s + t28(cli), 0)
   const totMarca = {}
   const mesMarca = {}
-  Object.keys(u2026).forEach((k) => { const p = k.split('|'), cli = p[0], mar = p[1], gg = num(growth[cli + '|' + mar]); const arr = mesMarca[mar] || (mesMarca[mar] = Array(12).fill(0)); let t = 0; for (let mi = 0; mi < 12; mi++) { const v = Math.round((u2026[k][mi] || 0) * (1 + gg / 100)); arr[mi] += v; t += v } totMarca[mar] = (totMarca[mar] || 0) + t })
+  Object.keys(u2026).forEach((k) => { const p = k.split('|'), cli = p[0], mar = p[1], gg = num(growth[cli + '|' + mar]); const arr = mesMarca[mar] || (mesMarca[mar] = Array(12).fill(0)); let t = 0; for (let mi = 0; mi < 12; mi++) { const cur = manual[mar + '|' + cli + '|' + mi]; const v = (cur === undefined || cur === '') ? Math.round((u2026[k][mi] || 0) * (1 + gg / 100)) : Math.round(num(cur)); arr[mi] += v; t += v } totMarca[mar] = (totMarca[mar] || 0) + t })
   const mes28 = MESES.map((_, mi) => clientes.reduce((a, cli) => a + u28(cli, mi), 0))
   const mes26 = MESES.map((_, mi) => clientes.reduce((a, cli) => a + u26(cli, mi), 0))
+  const mes25 = MESES.map((_, mi) => clientes.reduce((a, cli) => a + u25(cli, mi), 0))
   const tot26Marca = mes26.reduce((a, b) => a + b, 0)
+  const tot25Marca = mes25.reduce((a, b) => a + b, 0)
   const crecMarca = tot26Marca ? (totMarcaSel - tot26Marca) / tot26Marca * 100 : 0
 
   async function guardar() {
@@ -3176,7 +3185,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
       <div className="panel">
         <h3>Ventas · Unidades 2028 — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: se aplica a todos los meses de 2026 para proyectar 2028. La fila gris es el histórico 2026 (referencia). Para un <b>cliente nuevo</b> (sin histórico) escribe sus unidades 2028 directamente. Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
+        <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: define el <b>total</b> de unidades 2028 (= total 2026 × (1 + %)). Luego, en las <b>celdas amarillas de 2028</b>, coloca <b>en qué meses</b> quieres vender esas unidades (vienen sugeridas con el mismo patrón de 2026; edítalas libremente). Si tu reparto no cuadra con el total del %, el total se marca en <span style={{ color: '#b45309', fontWeight: 700 }}>ámbar</span>. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente. Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
         <div className="toolbar" style={{ margin: '4px 0 12px', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 200 }} />
           {buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}
@@ -3195,11 +3204,17 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
             <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th><th>% Peso</th></tr></thead>
             <tbody>
               {clientes.length === 0 && <tr><td className="l" colSpan={17}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico, o agrega un cliente con el buscador de arriba.</td></tr>}
-              {clientes.filter((cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0).map((cli) => { const nuevo = esNuevo(cli); return (
+              {clientes.filter((cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0).map((cli) => { const nuevo = esNuevo(cli); const obj = objetivo28(cli); const desc = !nuevo && obj != null && t28(cli) !== obj; return (
                 <Fragment2 key={cli}>
                   <tr>
-                    <td className="l" rowSpan={2}>{cli}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}</td>
-                    <td className="cell" rowSpan={2}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}</td>
+                    <td className="l" rowSpan={3}>{cli}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}</td>
+                    <td className="cell" rowSpan={3}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}</td>
+                    <td className="yl">2025</td>
+                    {MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u25(cli, mi))}</td>)}
+                    <td className="ref"><b>{nuevo ? '—' : fmt(t25(cli))}</b></td>
+                    <td className="ref">{nuevo ? '—' : (tot25Marca ? (t25(cli) / tot25Marca * 100).toFixed(1) + '%' : '—')}</td>
+                  </tr>
+                  <tr>
                     <td className="yl">2026</td>
                     {MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u26(cli, mi))}</td>)}
                     <td className="ref"><b>{nuevo ? '—' : fmt(t26(cli))}</b></td>
@@ -3207,14 +3222,17 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                   </tr>
                   <tr className="proy2028">
                     <td className="yl proyl">2028</td>
-                    {MESES.map((_, mi) => nuevo ? <td key={mi} className="cell"><input value={manual[mKey(cli, mi)] ?? ''} onChange={(e) => setMan(cli, mi, e.target.value)} inputMode="decimal" placeholder="0" /></td> : <td key={mi} className="tot">{fmt(u28(cli, mi))}</td>)}
-                    <td className="tot">{fmt(t28(cli))}</td>
+                    {MESES.map((_, mi) => nuevo
+                      ? <td key={mi} className="cell"><input value={manual[mKey(cli, mi)] ?? ''} onChange={(e) => setMan(cli, mi, e.target.value)} inputMode="decimal" placeholder="0" /></td>
+                      : <td key={mi} className="cell"><input value={manual[mKey(cli, mi)] === undefined ? (u28def(cli, mi) ? String(u28def(cli, mi)) : '') : manual[mKey(cli, mi)]} onChange={(e) => setMan(cli, mi, e.target.value)} inputMode="decimal" placeholder="0" /></td>)}
+                    <td className="tot" style={desc ? { background: '#fdf1e0', color: '#b45309' } : undefined} title={desc ? `El % de crecimiento da un objetivo de ${fmt(obj)} ud, pero tu reparto por mes suma ${fmt(t28(cli))} (diferencia ${(t28(cli) - obj) >= 0 ? '+' : ''}${fmt(t28(cli) - obj)}). Ajusta los meses para cuadrar.` : `Objetivo por %: ${fmt(obj == null ? t28(cli) : obj)} ud`}>{fmt(t28(cli))}{desc ? ' ⚠' : ''}</td>
                     <td className="tot">{totMarcaSel ? (t28(cli) / totMarcaSel * 100).toFixed(1) + '%' : '—'}</td>
                   </tr>
                 </Fragment2>
               ) })}
               {clientes.length > 0 && <>
-                <tr className="grandrow"><td className="l" rowSpan={2}>TOTAL {marca}</td><td rowSpan={2}>{tot26Marca ? (crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1) + '%' : '—'}</td><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>
+                <tr className="grandrow"><td className="l" rowSpan={3}>TOTAL {marca}</td><td rowSpan={3}>{tot26Marca ? (crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1) + '%' : '—'}</td><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></tr>
+                <tr className="grandrow"><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>
                 <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td><td className="tot">100%</td></tr>
               </>}
             </tbody>
