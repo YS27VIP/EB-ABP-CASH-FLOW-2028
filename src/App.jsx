@@ -1186,7 +1186,7 @@ function seasonAUCfrom(precios, marca, s) {
    Modelo: categoría = nivel de precio/costo · temporada = antigüedad. AUP/AUC por categoría×temporada.
    Rotación = % mensual del saldo. Salidas = saldo × rotación. Saldo = inicial + compras − salidas.
    El AUP/AUC de la marca se mezcla según lo que se va vendiendo (categoría×temporada). */
-function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempState, sinResumen }) {
+function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempState, sinResumen, iiAuto }) {
   const marca = fixedMarca || marcasDe(sbus)[0]?.marca
   const stKey = `temp_${empresa}`
   const [dataInt, setDataInt] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
@@ -1262,8 +1262,10 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
         )
       })()}
       <div className="panel">
-        <h3>Inventario y compras por temporada — {marca} <span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">Pon el <b>inventario inicial</b> (columna "Inicial"), las <b>compras 2028</b> y el <b>% de rotación de cada mes</b>. El <b>saldo</b> se calcula solo: saldo = anterior + compras − salidas, y salidas = (saldo+compras) × rotación%. Así llevas el tracking de lo que te queda de cada temporada mes a mes.</div>
+        <h3>Rotación por temporada — {marca} <span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">{iiAuto
+          ? <>Aquí solo pones el <b>% de rotación de cada mes</b> por temporada. El <b>inventario inicial</b> ya viene de la <b>matriz de arriba</b> (suma de categorías), no se reescribe. El <b>saldo</b> se calcula solo: saldo = anterior − salidas, y salidas = saldo × rotación%.</>
+          : <>Pon el <b>inventario inicial</b> (columna "Inicial"), las <b>compras 2028</b> y el <b>% de rotación de cada mes</b>. El <b>saldo</b> se calcula solo: saldo = anterior + compras − salidas, y salidas = (saldo+compras) × rotación%. Así llevas el tracking de lo que te queda de cada temporada mes a mes.</>}</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '200px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Temporada / concepto</th><th>Inicial</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
@@ -1273,11 +1275,11 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
             <tr className="grandrow"><td className="l">Diferencia (proyectada − rotación)</td><td></td>{MESES.map((_, m) => { const d = ventaProyMes[m] - salidasUnits[m]; return <td key={m} className="tot" style={{ color: Math.abs(d) < 0.5 ? 'var(--ok)' : d > 0 ? 'var(--bad)' : 'var(--warn)' }}>{fmt(d)}</td> })}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0) - salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
             {SEASONS.map((s) => { const f = flujos[s]; const buy = BUY_SEASONS.includes(s); return (
               <Fragment2 key={s}>
-                <tr className="secrow"><td colSpan={15}>{s}{buy ? ' · compra 2028' : ' · inventario inicial'}</td></tr>
-                {buy && <tr><td className="l sub2">+ Compras</td><td></td>{MESES.map((_, m) => { const k = K.CP(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(rowTot(f, 'comp'))}</td></tr>}
+                <tr className="secrow"><td colSpan={15}>{s}{buy ? ' · compra 2028' : ' · inventario inicial'}{iiAuto ? <span className="unit" style={{ fontWeight: 400 }}> · inicial {fmt(num(data[K.II(s)]))} ud (de la matriz de arriba)</span> : ''}</td></tr>
+                {buy && !iiAuto && <tr><td className="l sub2">+ Compras</td><td></td>{MESES.map((_, m) => { const k = K.CP(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(rowTot(f, 'comp'))}</td></tr>}
                 <tr><td className="l sub2">Rotación % (del saldo)</td><td></td>{MESES.map((_, m) => { const k = K.RT(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" /></td> })}<td></td></tr>
                 <tr><td className="l sub2">− Salidas (venta)</td><td></td>{f.map((x, m) => <td key={m} className="tot">{fmt(x.sal)}</td>)}<td className="tot">{fmt(rowTot(f, 'sal'))}</td></tr>
-                <tr className="catrow"><td className="l">= Saldo (ud)</td><td className="cell"><input value={data[K.II(s)] ?? ''} onChange={(e) => set(K.II(s), e.target.value)} inputMode="decimal" placeholder={buy ? '0' : 'inicial'} /></td>{f.map((x, m) => <td key={m} className="tot">{fmt(x.fin)}</td>)}<td className="tot">{fmt(f[11].fin)}</td></tr>
+                <tr className="catrow"><td className="l">= Saldo (ud)</td>{iiAuto ? <td className="tot">{fmt(num(data[K.II(s)]))}</td> : <td className="cell"><input value={data[K.II(s)] ?? ''} onChange={(e) => set(K.II(s), e.target.value)} inputMode="decimal" placeholder={buy ? '0' : 'inicial'} /></td>}{f.map((x, m) => <td key={m} className="tot">{fmt(x.fin)}</td>)}<td className="tot">{fmt(f[11].fin)}</td></tr>
               </Fragment2>) })}
             <tr className="grandrow"><td className="l">Saldo total inventario</td><td></td>{saldoUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(saldoUnits[11])}</td></tr>
           </tbody>
@@ -1442,20 +1444,33 @@ function ResumenInventario({ marca, tempState }) {
 function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
   const marca = fixedMarca || marcasDe(sbus)[0]?.marca
   const [temp, setTemp] = useState(() => { try { return JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}') } catch { return {} } })
-  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } }, [empresa])
+  const [precios, setPrecios] = useState(() => { try { return JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}') } catch { return {} } })
+  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { } }, [empresa])
+  // El saldo inicial por temporada (II) se calcula solo = suma de unidades de la matriz (precios). Así no se duplica.
+  useEffect(() => {
+    setTemp((t) => {
+      const next = { ...t }; let changed = false
+      SEASONS.forEach((s) => { const pre = `INV|${marca}|${s}|`; let sum = 0; Object.keys(precios).forEach((k) => { if (k.indexOf(pre) === 0) sum += num(precios[k]) }); const key = `II|${marca}|${s}`; if (num(next[key]) !== sum) { next[key] = sum; changed = true } })
+      return changed ? next : t
+    })
+  }, [precios, marca])
   return (
     <>
-      <div className="note ok" style={{ marginBottom: 8 }}>Esta es la historia completa de Producto en un solo lugar: <b>1)</b> Inventario y rotación por temporada · <b>2)</b> Costo/precio por temporada y categoría → Evolución mensual del AUP/AUC · <b>3)</b> Resumen de inventario. Guarda el inventario y los precios con sus botones respectivos.</div>
+      <div className="note ok" style={{ marginBottom: 8 }}>Producto en un solo lugar y en orden: <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Rotación (% por mes) — el saldo inicial se toma solo del paso 1 · <b>3)</b> Evolución mensual del AUP/AUC (consecuencia) · <b>4)</b> Resumen. Guarda inventario/precios y la rotación con sus botones.</div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
-        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 1 · Inventario y rotación por temporada</div>
-        <TemporadaForm empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" tempState={temp} setTempState={setTemp} sinResumen />
+        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 1 · Inventario, costo y precio por temporada y categoría</div>
+        <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="matriz" />
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
-        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 2 · Precios y margen (según la rotación de arriba)</div>
-        <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} />
+        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 2 · Rotación por temporada (% por mes)</div>
+        <TemporadaForm empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" tempState={temp} setTempState={setTemp} sinResumen iiAuto />
+      </div>
+      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
+        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 3 · Evolución mensual del AUP/AUC (consecuencia)</div>
+        <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="evolucion" />
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14 }}>
-        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 3 · Resumen de inventario</div>
+        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 4 · Resumen de inventario</div>
         <ResumenInventario marca={marca} tempState={temp} />
       </div>
     </>
@@ -1463,13 +1478,17 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
 }
 
 /* ===== AUP / AUC / MARGEN: captura junta + efectivo por temporada (rotación del inventario) ===== */
-function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState }) {
+function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snapState, setSnapState, render = 'all' }) {
   const marca = fixedMarca || marcasDe(sbus)[0]?.marca
   const sbu = sbuDe(sbus, marca) || ''
   const [catList, setCatList] = useState([{ cat: 'General', peso: 0 }])
   const [tempInt, setTempInt] = useState({})
   const temp = tempState !== undefined ? tempState : tempInt
-  const [snap, setSnap] = useState(() => { try { return JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}') } catch { return {} } })
+  const [snapInt, setSnapInt] = useState(() => { try { return JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}') } catch { return {} } })
+  const snap = snapState !== undefined ? snapState : snapInt
+  const setSnap = setSnapState || setSnapInt
+  const showMatriz = render === 'all' || render === 'matriz'
+  const showEvol = render === 'all' || render === 'evolucion'
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
   useEffect(() => {
     try { setTempInt(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
@@ -1541,30 +1560,27 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState }) {
   return (
     <>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
-      <div className="panel">
-        <h3>AUP / AUC / Margen — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">El AUP/AUC de 2028 sale del precio y costo de <b>cada categoría en cada temporada</b>, según la <b>rotación</b> del inventario. <b>1)</b> Producto llena inventario/AUC/AUP por temporada y categoría. <b>2)</b> el efectivo <b>mensual</b> por categoría (consecuencia de qué temporada rota cada mes) — eso es lo que usa el resto del app.</div>
-
-        <div className="sub" style={{ fontWeight: 800, color: 'var(--odoo)', marginTop: 6, marginBottom: 6 }}>1 · Inventario, costo y precio por temporada y categoría</div>
-        <div className="sub" style={{ marginBottom: 6 }}>Por cada <b>temporada</b> (añada) y <b>categoría</b>: cuántas <b>unidades</b>, su <b>AUC</b> (costo) y su <b>AUP</b> (precio). La columna de unidades es: para las temporadas <b>anteriores</b> = el <b>saldo on-hand</b> (lo que te queda); para <b>SS28/FW28</b> = la <b>compra que proyectas</b> comprar en 2028 (aún no hay stock físico). Las categorías vienen de lo que definió el Director.</div>
-        <div className="tablewrap" style={{ marginBottom: 22 }}><table style={{ width: 'auto' }}>
+      {showMatriz && <div className="panel">
+        <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar precios'}</button></div>
+        <h3>Inventario, costo y precio por temporada y categoría — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub" style={{ marginBottom: 6 }}>Por cada <b>temporada</b> (añada) y <b>categoría</b>: cuántas <b>unidades</b>, su <b>AUC</b> (costo) y su <b>AUP</b> (precio). Para las temporadas <b>anteriores</b> las unidades son el <b>saldo on-hand</b>; para <b>SS28/FW28</b> la <b>compra que proyectas</b> (aún no hay stock físico). Estas unidades <b>alimentan solas</b> el saldo inicial por temporada del bloque de rotación de abajo. Las categorías vienen de lo que definió el Director.</div>
+        <div className="tablewrap"><table style={{ width: 'auto' }}>
           <thead><tr><th className="l">Temporada / Categoría</th><th style={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Unidades<br /><span className="unit" style={{ fontWeight: 400 }}>saldo / compra proy.</span></th><th>AUC ($)</th><th>AUP ($)</th><th>Margen ($)</th></tr></thead>
           <tbody>
             {SEASONS.map((s) => (
               <Fragment2 key={s}>
-                <tr className="secrow"><td colSpan={5}>{BUY_SEASONS.includes(s)
-                  ? <>{s} · 2028 · compra proyectada: <b>{fmt(compraSeason(s))} ud</b> <span className="unit" style={{ fontWeight: 400 }}>(de Inventario y compras)</span> <button className="btn" style={{ marginLeft: 10, padding: '2px 9px', fontSize: 11 }} onClick={() => repartir(s)} title="Reparte esa compra entre las categorías (por peso, o en partes iguales) para que solo confirmes/ajustes">➗ Repartir por categoría</button></>
-                  : <>{s} · saldo on-hand (temporada anterior)</>}</td></tr>
+                <tr className="secrow"><td colSpan={5}>{s}{BUY_SEASONS.includes(s) ? ' · 2028 (compra proyectada)' : ' · saldo on-hand (temporada anterior)'} <span className="unit" style={{ fontWeight: 400 }}>· total {fmt(invSeason(s))} ud</span></td></tr>
                 {cats.map((c) => <tr key={s + '|' + c}><td className="l sub2">{c}</td>{scell(kINV(s, c))}{scell(kAUC(s, c))}{scell(kAUP(s, c))}<td className="tot">{money(aupSC(s, c) - aucSC(s, c))}</td></tr>)}
               </Fragment2>
             ))}
           </tbody>
         </table></div>
+      </div>}
 
-        <div className="sub" style={{ fontWeight: 800, color: 'var(--odoo)', marginBottom: 6 }}>2 · Evolución mensual del AUP / AUC (consecuencia de la rotación)</div>
-        <div className="sub" style={{ marginBottom: 6 }}>Según cómo <b>rota el inventario</b>, cada mes se vende una mezcla distinta de temporadas → el AUP y AUC <b>cambian mes a mes</b>. Ej.: si FW26 (barata) se agota en junio y en julio entra SS28 (más cara), el salto se ve aquí. <b>Estos valores mensuales por categoría son los que usa el resto del app</b> (Ventas, Contribución, Cash Flow).</div>
-        {!MESES.some((_, m) => unitsMes(m) > 0.5) && <div className="note warn" style={{ marginBottom: 10 }}>Esta tabla sale <b>vacía</b> porque aún no hay <b>salidas de inventario</b>. Ojo: el <b>% de rotación</b> se aplica <b>sobre el inventario disponible</b> (Inicial + Compras). Si arriba (Paso 1) pusiste el % pero la columna <b>"Inicial"</b> está vacía y no hay compras, entonces es 60% de 0 = 0 salidas. <b>Llena arriba, por temporada, las unidades:</b> el <b>saldo inicial</b> (columna "Inicial") de las temporadas anteriores y/o las <b>compras</b> de SS28/FW28. Con unidades + % de rotación, el sistema calcula qué se vende cada mes y el AUP/AUC efectivo aparece aquí.</div>}
+      {showEvol && <div className="panel">
+        <h3>Evolución mensual del AUP / AUC — {marca}{M$} <span className="unit">(consecuencia de la rotación)</span></h3>
+        <div className="sub" style={{ marginBottom: 6 }}>Según cómo <b>rota el inventario</b>, cada mes se vende una mezcla distinta de temporadas → el AUP y AUC <b>cambian mes a mes</b>. Ej.: si FW26 (barata) se agota en junio y en julio entra SS28 (más cara), el salto se ve aquí. <b>Estos valores mensuales por categoría son los que usa el resto del app</b> (Ventas, Contribución, Cash Flow). Se guardan junto con los precios.</div>
+        {!MESES.some((_, m) => unitsMes(m) > 0.5) && <div className="note warn" style={{ marginBottom: 10 }}>Sale <b>vacía</b> porque aún no hay <b>salidas de inventario</b>. Ya pusiste las unidades arriba; ahora falta el <b>% de rotación</b> en el bloque de rotación (Paso 2). El % se aplica sobre las unidades disponibles y define qué se vende cada mes.</div>}
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Efectivo mensual (según rotación)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total / prom.</th></tr></thead>
           <tbody>
@@ -1584,7 +1600,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState }) {
             <tr className="grandrow"><td className="l">Margen ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(ventaMes(m) - costoMes(m))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, m) => a + ventaMes(m) - costoMes(m), 0))}</td></tr>
           </tbody>
         </table></div>
-      </div>
+      </div>}
     </>
   )
 }
