@@ -1186,7 +1186,7 @@ function seasonAUCfrom(precios, marca, s) {
    Modelo: categoría = nivel de precio/costo · temporada = antigüedad. AUP/AUC por categoría×temporada.
    Rotación = % mensual del saldo. Salidas = saldo × rotación. Saldo = inicial + compras − salidas.
    El AUP/AUC de la marca se mezcla según lo que se va vendiendo (categoría×temporada). */
-function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempState }) {
+function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempState, sinResumen }) {
   const marca = fixedMarca || marcasDe(sbus)[0]?.marca
   const stKey = `temp_${empresa}`
   const [dataInt, setDataInt] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
@@ -1239,7 +1239,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
     <>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
-      {(() => {
+      {!sinResumen && (() => {
         const res = SEASONS.map((s) => { const f = flujos[s]; const ini = num(data[K.II(s)]); const comp = rowTot(f, 'comp'); const vend = rowTot(f, 'sal'); return { s, ini, comp, disp: ini + comp, vend, queda: f[11].fin } })
         const T = res.reduce((a, r) => ({ ini: a.ini + r.ini, comp: a.comp + r.comp, disp: a.disp + r.disp, vend: a.vend + r.vend, queda: a.queda + r.queda }), { ini: 0, comp: 0, disp: 0, vend: 0, queda: 0 })
         return (
@@ -1410,21 +1410,53 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
   )
 }
 
-/* ===== PRODUCTO (una sola pestaña): Inventario y rotación → Precios por temporada×categoría → Evolución mensual.
+/* Resumen de inventario (cálculo) — se muestra al final, como cierre de la historia de Producto. */
+function ResumenInventario({ marca, tempState }) {
+  const data = tempState || {}
+  const { flujos } = inventarioCalc(data, marca)
+  const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
+  const res = SEASONS.map((s) => { const f = flujos[s]; const ini = num(data[`II|${marca}|${s}`]); const comp = rowTot(f, 'comp'); const vend = rowTot(f, 'sal'); return { s, ini, comp, disp: ini + comp, vend, queda: f[11].fin } })
+  const T = res.reduce((a, r) => ({ ini: a.ini + r.ini, comp: a.comp + r.comp, disp: a.disp + r.disp, vend: a.vend + r.vend, queda: a.queda + r.queda }), { ini: 0, comp: 0, disp: 0, vend: 0, queda: 0 })
+  return (
+    <div className="panel">
+      <h3>Resumen de inventario — {marca} <span className="unit">(👁️ cálculo)</span></h3>
+      <div className="sub">De un vistazo: lo que <b>tienes disponible</b> (inicial + compras), lo que <b>vas a vender</b> (salidas) y lo que <b>te queda</b> a fin de año, por temporada y en total.</div>
+      <div className="kpis" style={{ marginBottom: 12 }}>
+        <div className="kpi"><div className="k">Inventario disponible</div><div className="v">{fmt(T.disp)}</div><div className="s">inicial {fmt(T.ini)} + compras {fmt(T.comp)}</div></div>
+        <div className="kpi"><div className="k">Total a vender (salidas)</div><div className="v">{fmt(T.vend)}</div><div className="s">unidades del año</div></div>
+        <div className="kpi"><div className="k">Saldo que queda (fin año)</div><div className="v">{fmt(T.queda)}</div><div className="s">sin rotar</div></div>
+      </div>
+      <div className="tablewrap"><table>
+        <thead><tr><th className="l">Temporada</th><th>Inicial</th><th>Compras</th><th>Disponible</th><th>A vender</th><th>Queda (fin año)</th></tr></thead>
+        <tbody>
+          {res.map((r) => <tr key={r.s}><td className="l">{r.s}</td><td className="tot">{fmt(r.ini)}</td><td className="tot">{fmt(r.comp)}</td><td className="tot">{fmt(r.disp)}</td><td className="tot">{fmt(r.vend)}</td><td className="tot">{fmt(r.queda)}</td></tr>)}
+          <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(T.ini)}</td><td className="tot">{fmt(T.comp)}</td><td className="tot">{fmt(T.disp)}</td><td className="tot">{fmt(T.vend)}</td><td className="tot">{fmt(T.queda)}</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  )
+}
+
+/* ===== PRODUCTO (una sola pestaña): Inventario y rotación → Precios por temporada×categoría → Evolución mensual → Resumen.
    Comparten el estado del inventario (temp) para que la evolución reaccione en vivo al editar la rotación. */
 function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
+  const marca = fixedMarca || marcasDe(sbus)[0]?.marca
   const [temp, setTemp] = useState(() => { try { return JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}') } catch { return {} } })
   useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } }, [empresa])
   return (
     <>
-      <div className="note ok" style={{ marginBottom: 8 }}>Esta es la historia completa de Producto en un solo lugar: <b>1)</b> Inventario y rotación por temporada · <b>2)</b> Costo y precio por temporada y categoría · <b>3)</b> Evolución mensual del AUP/AUC (consecuencia de la rotación). Guarda el inventario y los precios con sus botones respectivos.</div>
+      <div className="note ok" style={{ marginBottom: 8 }}>Esta es la historia completa de Producto en un solo lugar: <b>1)</b> Inventario y rotación por temporada · <b>2)</b> Costo/precio por temporada y categoría → Evolución mensual del AUP/AUC · <b>3)</b> Resumen de inventario. Guarda el inventario y los precios con sus botones respectivos.</div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 1 · Inventario y rotación por temporada</div>
-        <TemporadaForm empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" tempState={temp} setTempState={setTemp} />
+        <TemporadaForm empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" tempState={temp} setTempState={setTemp} sinResumen />
       </div>
-      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14 }}>
+      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 2 · Precios y margen (según la rotación de arriba)</div>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} />
+      </div>
+      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14 }}>
+        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 3 · Resumen de inventario</div>
+        <ResumenInventario marca={marca} tempState={temp} />
       </div>
     </>
   )
@@ -1532,7 +1564,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState }) {
 
         <div className="sub" style={{ fontWeight: 800, color: 'var(--odoo)', marginBottom: 6 }}>2 · Evolución mensual del AUP / AUC (consecuencia de la rotación)</div>
         <div className="sub" style={{ marginBottom: 6 }}>Según cómo <b>rota el inventario</b>, cada mes se vende una mezcla distinta de temporadas → el AUP y AUC <b>cambian mes a mes</b>. Ej.: si FW26 (barata) se agota en junio y en julio entra SS28 (más cara), el salto se ve aquí. <b>Estos valores mensuales por categoría son los que usa el resto del app</b> (Ventas, Contribución, Cash Flow).</div>
-        {!MESES.some((_, m) => unitsMes(m) > 0.5) && <div className="note warn" style={{ marginBottom: 10 }}>Esta tabla sale <b>vacía</b> porque aún no hay <b>rotación de inventario</b>. Esto <b>no</b> depende de Ventas ni del AUP/AUC: depende de cuánto <b>rota cada temporada cada mes</b>. Ve a <b>Inventario y compras</b> y llena, por temporada, el <b>saldo inicial</b>, las <b>compras</b> y el <b>% de rotación</b> mensual. Con eso el sistema sabe qué se vende cada mes y calcula el AUP/AUC efectivo.</div>}
+        {!MESES.some((_, m) => unitsMes(m) > 0.5) && <div className="note warn" style={{ marginBottom: 10 }}>Esta tabla sale <b>vacía</b> porque aún no hay <b>salidas de inventario</b>. Ojo: el <b>% de rotación</b> se aplica <b>sobre el inventario disponible</b> (Inicial + Compras). Si arriba (Paso 1) pusiste el % pero la columna <b>"Inicial"</b> está vacía y no hay compras, entonces es 60% de 0 = 0 salidas. <b>Llena arriba, por temporada, las unidades:</b> el <b>saldo inicial</b> (columna "Inicial") de las temporadas anteriores y/o las <b>compras</b> de SS28/FW28. Con unidades + % de rotación, el sistema calcula qué se vende cada mes y el AUP/AUC efectivo aparece aquí.</div>}
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Efectivo mensual (según rotación)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total / prom.</th></tr></thead>
           <tbody>
