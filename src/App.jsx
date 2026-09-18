@@ -1140,7 +1140,17 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
             <thead><tr><th className="l">Temporada</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Fin año</th></tr></thead>
             <tbody>
               {SEASONS.map((s) => <tr key={s}><td className="l">{s}</td>{flujos[s].map((x, i) => <td key={i} className="tot">{fmt(x.fin)}</td>)}<td className="tot">{fmt(flujos[s][11].fin)}</td></tr>)}
-              <tr className="grandrow"><td className="l">Saldo total</td>{saldoUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(saldoUnits[11])}</td></tr>
+              <tr className="grandrow"><td className="l">Saldo total (ud)</td>{saldoUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(saldoUnits[11])}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="sub" style={{ marginTop: 14, marginBottom: 6 }}><b>Valor del saldo ($)</b> = saldo (ud) × AUC de cada temporada (lo pones en Producto → AUP/AUC).</div>
+        <div className="tablewrap">
+          <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+            <thead><tr><th className="l">Temporada · AUC</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Fin año</th></tr></thead>
+            <tbody>
+              {SEASONS.map((s) => { const a = saucSeason(s); return <tr key={s}><td className="l">{s} · ${fmt(a)}</td>{flujos[s].map((x, i) => <td key={i} className="tot">{fmt(x.fin * a)}</td>)}<td className="tot">{fmt(flujos[s][11].fin * a)}</td></tr> })}
+              <tr className="grandrow"><td className="l">Valor total ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(SEASONS.reduce((acc, s) => acc + flujos[s][m].fin * saucSeason(s), 0))}</td>)}<td className="tot">{fmt(SEASONS.reduce((acc, s) => acc + flujos[s][11].fin * saucSeason(s), 0))}</td></tr>
             </tbody>
           </table>
         </div>
