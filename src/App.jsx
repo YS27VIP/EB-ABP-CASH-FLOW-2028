@@ -1471,6 +1471,16 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
   }
   const scell = (k, w = 72) => <td key={k} className="cell"><input value={snap[k] ?? ''} onChange={(e) => sset(k, e.target.value)} inputMode="decimal" style={{ width: w }} /></td>
   const money = (v) => v ? v.toFixed(1) : ''
+  // Compra proyectada 2028 por temporada (viene de Inventario y compras) + repartir por categoría
+  const compraSeason = (s) => MESES.reduce((a, _, m) => a + num(temp[`CP|${marca}|${s}|${m}`]), 0)
+  const repartir = (s) => {
+    const tot = compraSeason(s)
+    const pesos = cats.map((c) => { const o = catList.find((x) => x.cat === c); return o ? num(o.peso) : 0 })
+    const den = pesos.reduce((a, b) => a + b, 0)
+    const next = { ...snap }
+    cats.forEach((c, i) => { const share = den > 0 ? pesos[i] / den : (cats.length ? 1 / cats.length : 0); next[kINV(s, c)] = Math.round(tot * share) })
+    setSnap(next)
+  }
 
   return (
     <>
@@ -1481,13 +1491,15 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
         <div className="sub">El AUP/AUC de 2028 sale del precio y costo de <b>cada categoría en cada temporada</b>, según la <b>rotación</b> del inventario. <b>1)</b> Producto llena inventario/AUC/AUP por temporada y categoría. <b>2)</b> el efectivo <b>mensual</b> por categoría (consecuencia de qué temporada rota cada mes) — eso es lo que usa el resto del app.</div>
 
         <div className="sub" style={{ fontWeight: 800, color: 'var(--odoo)', marginTop: 6, marginBottom: 6 }}>1 · Inventario, costo y precio por temporada y categoría</div>
-        <div className="sub" style={{ marginBottom: 6 }}>Por cada <b>temporada</b> (añada) y <b>categoría</b>: cuántas <b>unidades</b> hay disponibles, su <b>AUC</b> (costo) y su <b>AUP</b> (precio). Para 2028 (SS28/FW28) es lo que se compra/proyecta; para las anteriores, el saldo que queda. Las categorías vienen de lo que definió el Director.</div>
+        <div className="sub" style={{ marginBottom: 6 }}>Por cada <b>temporada</b> (añada) y <b>categoría</b>: cuántas <b>unidades</b>, su <b>AUC</b> (costo) y su <b>AUP</b> (precio). La columna de unidades es: para las temporadas <b>anteriores</b> = el <b>saldo on-hand</b> (lo que te queda); para <b>SS28/FW28</b> = la <b>compra que proyectas</b> comprar en 2028 (aún no hay stock físico). Las categorías vienen de lo que definió el Director.</div>
         <div className="tablewrap" style={{ marginBottom: 22 }}><table style={{ width: 'auto' }}>
-          <thead><tr><th className="l">Temporada / Categoría</th><th>Inv. disp. (ud)</th><th>AUC ($)</th><th>AUP ($)</th><th>Margen ($)</th></tr></thead>
+          <thead><tr><th className="l">Temporada / Categoría</th><th style={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Unidades<br /><span className="unit" style={{ fontWeight: 400 }}>saldo / compra proy.</span></th><th>AUC ($)</th><th>AUP ($)</th><th>Margen ($)</th></tr></thead>
           <tbody>
             {SEASONS.map((s) => (
               <Fragment2 key={s}>
-                <tr className="secrow"><td colSpan={5}>{s}{BUY_SEASONS.includes(s) ? ' · 2028 (compra)' : ' · saldo anterior'}</td></tr>
+                <tr className="secrow"><td colSpan={5}>{BUY_SEASONS.includes(s)
+                  ? <>{s} · 2028 · compra proyectada: <b>{fmt(compraSeason(s))} ud</b> <span className="unit" style={{ fontWeight: 400 }}>(de Inventario y compras)</span> <button className="btn" style={{ marginLeft: 10, padding: '2px 9px', fontSize: 11 }} onClick={() => repartir(s)} title="Reparte esa compra entre las categorías (por peso, o en partes iguales) para que solo confirmes/ajustes">➗ Repartir por categoría</button></>
+                  : <>{s} · saldo on-hand (temporada anterior)</>}</td></tr>
                 {cats.map((c) => <tr key={s + '|' + c}><td className="l sub2">{c}</td>{scell(kINV(s, c))}{scell(kAUC(s, c))}{scell(kAUP(s, c))}<td className="tot">{money(aupSC(s, c) - aucSC(s, c))}</td></tr>)}
               </Fragment2>
             ))}
