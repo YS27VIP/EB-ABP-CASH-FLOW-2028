@@ -3252,6 +3252,19 @@ function CalendarioScreen({ empresa, puedeEditar }) {
   const orden = items.map((x, i) => ({ ...x, _i: i })).sort((a, b) => (a.fecha || '9999-99-99').localeCompare(b.fecha || '9999-99-99'))
   const pend = items.filter((x) => x.estado !== 'Entregado').length
   const prox = orden.filter((x) => x.estado !== 'Entregado' && x.fecha).find((x) => diasRestan(x.fecha) >= 0)
+  // Calendario visual mensual
+  const [mesView, setMesView] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
+  const [selDia, setSelDia] = useState(null)
+  const byFecha = {}; items.forEach((x, i) => { if (x.fecha) (byFecha[x.fecha] = byFecha[x.fecha] || []).push({ ...x, _i: i }) })
+  const MESNOM = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+  const startWd = (new Date(mesView.y, mesView.m, 1).getDay() + 6) % 7 // Lunes=0
+  const diasMes = new Date(mesView.y, mesView.m + 1, 0).getDate()
+  const fechaDe = (d) => `${mesView.y}-${String(mesView.m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  const celdas = []; for (let i = 0; i < startWd; i++) celdas.push(null); for (let d = 1; d <= diasMes; d++) celdas.push(d)
+  while (celdas.length % 7 !== 0) celdas.push(null)
+  const diaColor = (fecha) => { const its = byFecha[fecha]; if (!its) return null; const overdue = its.some((x) => x.estado !== 'Entregado' && diasRestan(x.fecha) < 0); const allDone = its.every((x) => x.estado === 'Entregado'); return overdue ? '#dc2626' : allDone ? '#16a34a' : '#16a34a' }
+  const mover = (delta) => { let m = mesView.m + delta, y = mesView.y; if (m < 0) { m = 11; y-- } if (m > 11) { m = 0; y++ } setMesView({ y, m }); setSelDia(null) }
+  const hoyF = fechaDe.call ? `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}` : ''
   return (
     <>
       <div className="toolbar">
