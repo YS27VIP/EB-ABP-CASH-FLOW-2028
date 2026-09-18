@@ -2574,6 +2574,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
     const sbu = sbuDe(sbus, marca)
     const rows = lista.filter((o) => String(o.cat).trim()).map((o) => ({ rubro: o.cat, sbu, marca, meses: [num(o.peso), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }))
     await postToTab('Cap_Categorias', empresa, usuario, role.label, rows, setMsg)
+    saveEstado(empresa, 'catpct', catPct)
     setSaving(false)
   }
   return (
@@ -2677,6 +2678,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
     const sbu = sbuDe(sbus, marca)
     const rows = clientes.map((cli) => ({ rubro: cli, sbu, marca, meses: MESES.map((_, mi) => u28(cli, mi)) })).filter((r) => r.meses.some((v) => v !== 0))
     await postToTab('Cap_Ventas', empresa, usuario, role.label, rows, setMsg)
+    saveEstado(empresa, 'ventas_growth', growth); saveEstado(empresa, 'catpart', catPart); saveEstado(empresa, 'catpct', catPct)
     setSaving(false)
   }
   const catList = cats[marca] || []
