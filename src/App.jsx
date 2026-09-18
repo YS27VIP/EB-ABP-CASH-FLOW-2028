@@ -1630,6 +1630,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
               {puedeDir && <button className={'seg' + (totTabEf === 'viajes' ? ' active' : '')} onClick={() => setTotTab('viajes')} style={totTabEf === 'viajes' ? { background: col, borderColor: col, color: '#fff' } : {}}>🧳 Viajes</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'mk' ? ' active' : '')} onClick={() => setTotTab('mk')} style={totTabEf === 'mk' ? { background: col, borderColor: col, color: '#fff' } : {}}>📣 Marketing</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'ucvm' ? ' active' : '')} onClick={() => setTotTab('ucvm')} style={totTabEf === 'ucvm' ? { background: col, borderColor: col, color: '#fff' } : {}}>📦 Unid · Venta · Costo · Margen</button>}
+              {puedeDir && <button className={'seg' + (totTabEf === 'log' ? ' active' : '')} onClick={() => setTotTab('log')} style={totTabEf === 'log' ? { background: col, borderColor: col, color: '#fff' } : {}}>🚚 Logística</button>}
             </div>
             {!puedeDir && !pu('Finanzas')
               ? <div className="note warn">No tienes acceso al consolidado de esta SBU. Entra a tu área (Ventas/Producto/Logística/Marketing) eligiendo una marca en el panel de la izquierda.</div>
@@ -1641,6 +1642,8 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
               ? <ResumenMarcas empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} vista="mk" />
               : totTabEf === 'ucvm'
               ? <ResumenMarcas empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} vista="ucvm" />
+              : totTabEf === 'log'
+              ? <LogisticaResumen empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />
               : <BrandContribSBU empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />}
           </>)
           : (<>
