@@ -1257,7 +1257,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
             <div className="tablewrap"><table>
               <thead><tr><th className="l">Temporada</th><th>Inicial</th><th>Compras</th><th>Disponible</th><th>A vender</th><th>Queda (fin año)</th></tr></thead>
               <tbody>
-                {res.map((r) => <tr key={r.s}><td className="l">{r.s}</td><td className="tot">{fmt(r.ini)}</td><td className="tot">{fmt(r.comp)}</td><td className="tot">{fmt(r.disp)}</td><td className="tot">{fmt(r.vend)}</td><td className="tot">{fmt(r.queda)}</td></tr>)}
+                {res.map((r) => { const buy = BUY_SEASONS.includes(r.s); return <tr key={r.s}><td className="l">{r.s}</td><td className="tot">{fmt(r.ini)}</td>{buy ? <td className="tot">{fmt(r.comp)}</td> : <td className="tot" style={{ background: '#eef1f4', color: '#9aa3ad' }} title="Solo SS28/FW28 (compras 2028) pueden tener compras; las temporadas anteriores son saldo, no se compran">—</td>}<td className="tot">{fmt(r.disp)}</td><td className="tot">{fmt(r.vend)}</td><td className="tot">{fmt(r.queda)}</td></tr> })}
                 <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(T.ini)}</td><td className="tot">{fmt(T.comp)}</td><td className="tot">{fmt(T.disp)}</td><td className="tot">{fmt(T.vend)}</td><td className="tot">{fmt(T.queda)}</td></tr>
               </tbody>
             </table></div>
@@ -1434,7 +1434,7 @@ function ResumenInventario({ marca, tempState }) {
       <div className="tablewrap"><table>
         <thead><tr><th className="l">Temporada</th><th>Inicial</th><th>Compras</th><th>Disponible</th><th>A vender</th><th>Queda (fin año)</th></tr></thead>
         <tbody>
-          {res.map((r) => <tr key={r.s}><td className="l">{r.s}</td><td className="tot">{fmt(r.ini)}</td><td className="tot">{fmt(r.comp)}</td><td className="tot">{fmt(r.disp)}</td><td className="tot">{fmt(r.vend)}</td><td className="tot">{fmt(r.queda)}</td></tr>)}
+          {res.map((r) => { const buy = BUY_SEASONS.includes(r.s); return <tr key={r.s}><td className="l">{r.s}</td><td className="tot">{fmt(r.ini)}</td>{buy ? <td className="tot">{fmt(r.comp)}</td> : <td className="tot" style={{ background: '#eef1f4', color: '#9aa3ad' }} title="Solo SS28/FW28 (compras 2028) pueden tener compras; las temporadas anteriores son saldo, no se compran">—</td>}<td className="tot">{fmt(r.disp)}</td><td className="tot">{fmt(r.vend)}</td><td className="tot">{fmt(r.queda)}</td></tr> })}
           <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(T.ini)}</td><td className="tot">{fmt(T.comp)}</td><td className="tot">{fmt(T.disp)}</td><td className="tot">{fmt(T.vend)}</td><td className="tot">{fmt(T.queda)}</td></tr>
         </tbody>
       </table></div>
@@ -2324,7 +2324,7 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
   const cliRows = marcas.map((mca) => {
     const u28 = uni2028(mca), u26 = uni2026(mca)
     const clientes = [...new Set([...Object.keys(u28), ...Object.keys(u26)])].sort((a, b) => a.localeCompare(b))
-    const filas = clientes.map((cli) => { const a = Math.round(u26[cli] || 0), b = Math.round(u28[cli] || 0); return { cli, u26: a, u28: b, nuevo: a === 0 && b > 0, crec: a > 0 ? (b - a) / a * 100 : null } }).filter((f) => f.u26 > 0 || f.u28 > 0)
+    const filas = clientes.map((cli) => { const a = Math.round(u26[cli] || 0), b = Math.round(u28[cli] || 0); return { cli, u26: a, u28: b, nuevo: a === 0 && b > 0, crec: a > 0 ? (b - a) / a * 100 : null } }).filter((f) => f.u26 > 0 || f.u28 > 0).sort((x, y) => y.u28 - x.u28)
     return { mca, filas, t26: filas.reduce((s, f) => s + f.u26, 0), t28: filas.reduce((s, f) => s + f.u28, 0) }
   }).filter((s) => s.filas.length > 0)
   const crecCell = (f) => f.nuevo ? <td className="tot" style={{ color: 'var(--odoo)', fontWeight: 800 }}>🆕 nuevo</td> : <td className={'tot ' + (f.crec == null ? '' : f.crec >= 0 ? 'pos' : 'neg')}>{f.crec == null ? '—' : (f.crec >= 0 ? '+' : '') + f.crec.toFixed(0) + '%'}</td>
@@ -2355,13 +2355,13 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
         <div className="sub">Por cada cliente: unidades <b>2028</b> (capturadas en Ventas) vs <b>2026</b> (histórico del EBP) y su <b>crecimiento</b>. Los clientes <b>nuevos</b> (sin 2026) también aparecen, marcados 🆕.</div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th className="l">Marca / Cliente</th><th>Unid. 2026</th><th>Unid. 2028</th><th>Crecimiento</th></tr></thead>
+            <thead><tr><th className="l">Marca / Cliente</th><th>Unid. 2026</th><th>Unid. 2028</th><th>Peso 2028 %</th><th>Crecimiento</th></tr></thead>
             <tbody>
-              {cliRows.length === 0 && <tr><td className="l" colSpan={4}>Aún no hay clientes con histórico ni capturados en Ventas para las marcas de esta SBU.</td></tr>}
+              {cliRows.length === 0 && <tr><td className="l" colSpan={5}>Aún no hay clientes con histórico ni capturados en Ventas para las marcas de esta SBU.</td></tr>}
               {cliRows.map(({ mca, filas, t26, t28 }) => (
                 <Fragment2 key={mca}>
-                  <tr className="sburow"><td className="l" style={{ color: marcaColor(mca) }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td className="tot">{fmt(t26)}</td><td className="tot">{fmt(t28)}</td><td className="tot">{t26 > 0 ? ((t28 - t26) / t26 * 100 >= 0 ? '+' : '') + ((t28 - t26) / t26 * 100).toFixed(0) + '%' : '—'}</td></tr>
-                  {filas.map((f) => <tr key={mca + '|' + f.cli}><td className="l sub2">{f.cli}{f.nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}</td><td className="tot">{fmt(f.u26)}</td><td className="tot">{fmt(f.u28)}</td>{crecCell(f)}</tr>)}
+                  <tr className="sburow"><td className="l" style={{ color: marcaColor(mca) }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td className="tot">{fmt(t26)}</td><td className="tot">{fmt(t28)}</td><td className="tot">{t28 > 0 ? '100.0%' : '—'}</td><td className="tot">{t26 > 0 ? ((t28 - t26) / t26 * 100 >= 0 ? '+' : '') + ((t28 - t26) / t26 * 100).toFixed(0) + '%' : '—'}</td></tr>
+                  {filas.map((f) => <tr key={mca + '|' + f.cli}><td className="l sub2">{f.cli}{f.nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}</td><td className="tot">{fmt(f.u26)}</td><td className="tot">{fmt(f.u28)}</td><td className="tot">{t28 > 0 ? (f.u28 / t28 * 100).toFixed(1) + '%' : '—'}</td>{crecCell(f)}</tr>)}
                 </Fragment2>
               ))}
             </tbody>
