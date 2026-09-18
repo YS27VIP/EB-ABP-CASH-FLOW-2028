@@ -7,7 +7,7 @@ import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoa
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'temp', 'precios', 'comis', 'gadmin', 'gadmin_cfg', 'logcost', 'cf']
+const ESTADO_KEYS = ['catpct', 'catpart', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'temp', 'precios', 'comis', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -137,6 +137,8 @@ const M$ = <span className="moneytag" title="Valores en dinero ($)">$</span> // 
 const UD = <span className="unittag" title="Valores en unidades (ud)"># </span> // icono discreto de unidades
 // ❓ para campos CONSOLIDADOS (suma de partes): al pasar el mouse muestra de qué se compone
 const Q = (t) => <span className="unit" title={t} style={{ cursor: 'help', marginLeft: 5 }}>❓</span>
+// 🪞 para vistas ESPEJO (solo lectura, el dato se llena/edita en otro lado): tooltip dice de dónde viene
+const ESP = (t) => <span className="unit" title={t} style={{ cursor: 'help', marginLeft: 6, fontSize: 12 }}>🪞</span>
 
 function effSBUS(empresa, combos) {
   const c = combos[empresa]
@@ -347,7 +349,7 @@ export default function App() {
     )
   }
 
-  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia') {
+  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'calendario') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
@@ -390,6 +392,10 @@ export default function App() {
               <span className="appicon" style={{ background: '#1f2d3d' }}>📈</span>
               <span className="applabel">Gerencia</span>
             </button>}
+            <button className="app" onClick={() => setRoleId('calendario')}>
+              <span className="appicon" style={{ background: '#0e7490' }}>📅</span>
+              <span className="applabel">Calendario</span>
+            </button>
             {puede('Bitácora') && <button className="app" onClick={() => setRoleId('bitacora')}>
               <span className="appicon" style={{ background: '#455a64' }}>📝</span>
               <span className="applabel">Bitácora</span>
@@ -481,6 +487,17 @@ export default function App() {
           <span className="rolechip" style={{ background: '#455a64' }}>📝 Bitácora</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
         <main><BitacoraScreen empresas={empresas} empresaSel={empresa} /></main>
+      </>
+    )
+  }
+
+  if (roleId === 'calendario') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#0e7490' }}>📅 Calendario</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        {estadoReady ? <main><CalendarioScreen key={empresa} empresa={empresa} puedeEditar={esAdmin} /></main> : cargandoMain}
       </>
     )
   }
@@ -995,7 +1012,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         {soloVer ? <span className="note ok" style={{ margin: 0, padding: '6px 12px' }}>👁️ Solo lectura — esto lo llena Finanzas</span> : <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>}
       </div>
       <div className="panel">
-        <h3>{role.label} — CASH FLOW{M$} <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer && <span className="unit" style={{ marginLeft: 8 }}>👁️ espejo de Finanzas</span>}</h3>
+        <h3>{role.label} — CASH FLOW{M$} <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer && ESP('Espejo (solo lectura): estos valores los llena Finanzas en su Cash Flow. Aquí solo se ven.')}</h3>
         <div className="sub">Últimos 3 meses de 2027 + proyección 2028. PSI (inventario, compras, ventas) se calcula solo desde Comercial/Producto; solo se llenan las líneas amarillas de Cash Flow.</div>
         <div className="tablewrap">
           <table className="vfix"><colgroup><col style={{ width: '210px' }} />{CF_MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
@@ -1054,7 +1071,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       </div>
 
       <div className="panel">
-        <h3>{role.label} — Términos de pago y saldo por cliente <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && <span className="unit" style={{ marginLeft: 8 }}>👁️ espejo de Finanzas</span>}</h3>
+        <h3>{role.label} — Términos de pago y saldo por cliente <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): los términos de pago y el saldo por cliente los captura Finanzas por marca. Aquí solo se ven.')}</h3>
         <div className="sub">Clientes con histórico 2025/2026 y nuevos clientes 2028 (capturados en Ventas). {isTotal ? <>Así se ven los <b>términos de pago</b> y el <b>saldo (deuda)</b> que Finanzas definió por cliente en cada marca de la SBU.</> : <>Elige el <b>término de pago</b> y el <b>saldo (deuda) estimado</b> con que cierra 2027 cada cliente.</>}</div>
         {buscador}
         {isTotal ? (() => {
@@ -1598,12 +1615,13 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
         <h3>Inventario, costo y precio por temporada y categoría — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub" style={{ marginBottom: 6 }}>Por cada <b>temporada</b> (añada) y <b>categoría</b>: cuántas <b>unidades</b>, su <b>AUC</b> (costo) y su <b>AUP</b> (precio). Para las temporadas <b>anteriores</b> las unidades son el <b>saldo on-hand</b>; para <b>SS28/FW28</b> la <b>compra que proyectas</b> (aún no hay stock físico). Estas unidades <b>alimentan solas</b> el saldo inicial por temporada del bloque de rotación de abajo. Las categorías vienen de lo que definió el Director.</div>
         <div className="tablewrap"><table style={{ width: 'auto' }}>
-          <thead><tr><th className="l">Temporada / Categoría</th><th style={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Unidades<br /><span className="unit" style={{ fontWeight: 400 }}>saldo / compra proy.</span></th><th>AUC ($)</th><th>AUP ($)</th><th>Margen ($)</th></tr></thead>
+          <thead><tr><th className="l">Categoría / Temporada</th><th style={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Unidades<br /><span className="unit" style={{ fontWeight: 400 }}>saldo / compra proy.</span></th><th>AUC ($)</th><th>AUP ($)</th><th>Margen ($)</th></tr></thead>
           <tbody>
-            {SEASONS.map((s) => (
-              <Fragment2 key={s}>
-                <tr className="secrow"><td colSpan={5}>{s}{BUY_SEASONS.includes(s) ? ' · 2028 (compra proyectada)' : ' · saldo on-hand (temporada anterior)'} <span className="unit" style={{ fontWeight: 400 }}>· total {fmt(invSeason(s))} ud</span></td></tr>
-                {cats.map((c) => <tr key={s + '|' + c}><td className="l sub2">{c}</td>{scell(kINV(s, c))}{scell(kAUC(s, c))}{scell(kAUP(s, c))}<td className="tot">{money(aupSC(s, c) - aucSC(s, c))}</td></tr>)}
+            {cats.map((c) => (
+              <Fragment2 key={c}>
+                <tr className="secrow"><td colSpan={5}>{c} <span className="unit" style={{ fontWeight: 400 }}>· total {fmt(invCat(c))} ud (todas las temporadas)</span></td></tr>
+                {SEASONS.map((s) => <tr key={c + '|' + s}><td className="l sub2">{s} <span className="unit" style={{ fontSize: 10 }}>{BUY_SEASONS.includes(s) ? '(compra 2028)' : '(saldo anterior)'}</span></td>{scell(kINV(s, c))}{scell(kAUC(s, c))}{scell(kAUP(s, c))}<td className="tot">{money(aupSC(s, c) - aucSC(s, c))}</td></tr>)}
+                <tr className="catrow"><td className="l">Subtotal {c} <span className="unit" style={{ fontWeight: 400 }}>(ponderado)</span></td><td className="tot">{fmt(invCat(c))}</td><td className="tot">{money(aucPondCat(c))}</td><td className="tot">{money(aupPondCat(c))}</td><td className="tot">{money(aupPondCat(c) - aucPondCat(c))}</td></tr>
               </Fragment2>
             ))}
           </tbody>
@@ -3145,6 +3163,72 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                 <tr className="grandrow"><td className="l" rowSpan={2}>TOTAL {marca}</td><td rowSpan={2}>{tot26Marca ? (crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1) + '%' : '—'}</td><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>
                 <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td><td className="tot">100%</td></tr>
               </>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ===== CALENDARIO DE TRABAJO: fechas de entregables del ABP, por empresa ===== */
+const CAL_DEFAULT = [
+  { hito: 'Cargar histórico y base de clientes (EBP)', area: 'Finanzas', fecha: '', estado: 'Pendiente' },
+  { hito: 'Ventas: proyección de unidades por cliente', area: 'Ventas', fecha: '', estado: 'Pendiente' },
+  { hito: 'Director: categorías y % por cliente', area: 'Director', fecha: '', estado: 'Pendiente' },
+  { hito: 'Producto: inventario, AUP/AUC y rotación', area: 'Producto', fecha: '', estado: 'Pendiente' },
+  { hito: 'Logística: costos logísticos', area: 'Logística', fecha: '', estado: 'Pendiente' },
+  { hito: 'Marketing y Viajes por marca', area: 'Marketing', fecha: '', estado: 'Pendiente' },
+  { hito: 'Finanzas: Cash Flow y términos de pago', area: 'Finanzas', fecha: '', estado: 'Pendiente' },
+  { hito: 'Revisión y cierre — Gerencia', area: 'Gerencia', fecha: '', estado: 'Pendiente' },
+]
+const CAL_ESTADOS = ['Pendiente', 'En proceso', 'Entregado', 'Atrasado']
+const CAL_AREAS = ['Finanzas', 'Ventas', 'Producto', 'Logística', 'Marketing', 'Director', 'Gerencia', 'General']
+function CalendarioScreen({ empresa, puedeEditar }) {
+  const load = () => { try { const s = JSON.parse(localStorage.getItem(`calendario_${empresa}`) || 'null'); return Array.isArray(s) && s.length ? s : CAL_DEFAULT.map((x) => ({ ...x })) } catch { return CAL_DEFAULT.map((x) => ({ ...x })) } }
+  const [items, setItems] = useState(load)
+  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  const upd = (i, k, v) => setItems(items.map((x, j) => j === i ? { ...x, [k]: v } : x))
+  const add = () => setItems([...items, { hito: '', area: 'General', fecha: '', estado: 'Pendiente' }])
+  const del = (i) => setItems(items.filter((_, j) => j !== i))
+  function guardar() { setSaving(true); try { saveEstado(empresa, 'calendario', items); setMsg({ t: 'ok', x: 'Calendario guardado en Google Sheet para ' + empresa + '.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+  const diasRestan = (f) => { if (!f) return null; const d = new Date(f + 'T00:00:00'); return Math.round((d - hoy) / 86400000) }
+  const estadoColor = (e) => e === 'Entregado' ? 'var(--ok)' : e === 'Atrasado' ? 'var(--bad)' : e === 'En proceso' ? 'var(--warn)' : 'var(--muted)'
+  const orden = items.map((x, i) => ({ ...x, _i: i })).sort((a, b) => (a.fecha || '9999-99-99').localeCompare(b.fecha || '9999-99-99'))
+  const pend = items.filter((x) => x.estado !== 'Entregado').length
+  const prox = orden.filter((x) => x.estado !== 'Entregado' && x.fecha).find((x) => diasRestan(x.fecha) >= 0)
+  return (
+    <>
+      <div className="toolbar">
+        <span className="empchip" style={{ marginLeft: 0, background: '#0e7490' }}>📅 {empresa}</span>
+        <div className="spacer"></div>
+        {puedeEditar && <button className="btn" onClick={add}>➕ Agregar entregable</button>}
+        {puedeEditar && <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>}
+      </div>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="kpis">
+        <div className="kpi"><div className="k">Entregables pendientes</div><div className="v">{pend}</div><div className="s">de {items.length} en total</div></div>
+        <div className="kpi"><div className="k">Próxima entrega</div><div className="v" style={{ fontSize: 16 }}>{prox ? prox.hito : '—'}</div><div className="s">{prox && prox.fecha ? `${prox.fecha} · ${diasRestan(prox.fecha) === 0 ? 'hoy' : 'en ' + diasRestan(prox.fecha) + ' días'}` : 'sin fecha próxima'}</div></div>
+      </div>
+      <div className="panel">
+        <h3>Calendario de trabajo — {empresa} <span className="unit">(fechas de entregables del ABP)</span></h3>
+        <div className="sub">Cada empresa define <b>cuándo</b> debe ir avanzando con cada entregable del proyecto. Se ordena por fecha; los días restantes se calculan solos (rojo si ya pasó, ámbar si faltan ≤7 días). {puedeEditar ? 'Edita, agrega o borra hitos y pulsa Guardar.' : 'Solo lectura — lo configura un administrador.'}</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Entregable / Hito</th><th>Área</th><th>Fecha límite</th><th>Días restantes</th><th>Estado</th>{puedeEditar && <th></th>}</tr></thead>
+            <tbody>
+              {orden.length === 0 && <tr><td className="l" colSpan={puedeEditar ? 6 : 5}>Sin hitos. {puedeEditar ? 'Agrega el primero con el botón de arriba.' : 'Aún no configurado.'}</td></tr>}
+              {orden.map((r) => { const dr = diasRestan(r.fecha); const done = r.estado === 'Entregado'; return (
+                <tr key={r._i}>
+                  <td className="l">{puedeEditar ? <input style={{ width: 320, padding: 6 }} value={r.hito} onChange={(e) => upd(r._i, 'hito', e.target.value)} placeholder="Ej. Ventas: proyección de unidades" /> : r.hito}</td>
+                  <td>{puedeEditar ? <select value={r.area} onChange={(e) => upd(r._i, 'area', e.target.value)}>{CAL_AREAS.map((a) => <option key={a}>{a}</option>)}</select> : r.area}</td>
+                  <td>{puedeEditar ? <input type="date" value={r.fecha || ''} onChange={(e) => upd(r._i, 'fecha', e.target.value)} /> : (r.fecha || '—')}</td>
+                  <td className="tot" style={{ color: done ? 'var(--ok)' : dr == null ? 'var(--muted)' : dr < 0 ? 'var(--bad)' : dr <= 7 ? 'var(--warn)' : 'var(--txt)', fontWeight: 700 }}>{done ? '✓ entregado' : dr == null ? '—' : dr < 0 ? `hace ${-dr} d` : dr === 0 ? 'hoy' : `en ${dr} d`}</td>
+                  <td>{puedeEditar ? <select value={r.estado} onChange={(e) => upd(r._i, 'estado', e.target.value)} style={{ color: estadoColor(r.estado), fontWeight: 700 }}>{CAL_ESTADOS.map((s) => <option key={s}>{s}</option>)}</select> : <span style={{ color: estadoColor(r.estado), fontWeight: 700 }}>{r.estado}</span>}</td>
+                  {puedeEditar && <td><button className="btn" onClick={() => del(r._i)}>✕</button></td>}
+                </tr>
+              ) })}
             </tbody>
           </table>
         </div>
