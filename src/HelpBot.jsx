@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import kai from './kai_head.png' // mascota de la empresa (fondo transparente)
 
 /* Kai: asistente jovial tipo chat (sin servidor). Busca por palabras clave y explica de dónde sale / cómo se calcula cada dato. */
 const KB = [
@@ -43,7 +44,7 @@ export default function HelpBot() {
   }
   const G = 'linear-gradient(135deg,#0891b2,#10b981)'
   const S = {
-    fab: { position: 'fixed', right: 20, bottom: 20, zIndex: 9999, width: 62, height: 62, borderRadius: '50%', border: 'none', cursor: 'pointer', background: G, color: '#fff', fontSize: 28, boxShadow: '0 6px 20px rgba(0,0,0,.25)' },
+    fab: { position: 'fixed', right: 20, bottom: 20, zIndex: 9999, width: 62, height: 62, borderRadius: '50%', border: 'none', cursor: 'pointer', background: G, color: '#fff', fontSize: 28, boxShadow: '0 6px 20px rgba(0,0,0,.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, overflow: 'hidden' },
     panel: { position: 'fixed', right: 20, bottom: 94, zIndex: 9999, width: 360, maxWidth: 'calc(100vw - 40px)', height: '70vh', maxHeight: 560, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 18, boxShadow: '0 16px 44px rgba(0,0,0,.24)', overflow: 'hidden', fontSize: 14 },
     head: { background: G, color: '#fff', padding: '13px 16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 },
     body: { flex: 1, overflow: 'auto', padding: 14, background: '#f7fafb' },
@@ -59,7 +60,7 @@ export default function HelpBot() {
     <>
       {open && (
         <div style={S.panel}>
-          <div style={S.head}><span style={{ fontSize: 22 }}>🤖</span><div style={{ flex: 1 }}><div>Kai · asistente ABP</div><div style={{ fontSize: 11, fontWeight: 500, opacity: .9 }}>en línea · te ayuda al instante</div></div><span onClick={() => setOpen(false)} style={{ cursor: 'pointer', fontSize: 18 }}>✕</span></div>
+          <div style={S.head}><img src={kai} alt="Kai" style={{ width: 34, height: 34, objectFit: 'contain', background: '#fff', borderRadius: '50%', padding: 1 }} /><div style={{ flex: 1 }}><div>Kai · asistente ABP</div><div style={{ fontSize: 11, fontWeight: 500, opacity: .9 }}>en línea · te ayuda al instante</div></div><span onClick={() => setOpen(false)} style={{ cursor: 'pointer', fontSize: 18 }}>✕</span></div>
           <div style={S.body}>
             {msgs.map((m, i) => <div key={i} style={m.from === 'bot' ? S.bot : S.user}>{m.text}</div>)}
             <div ref={endRef} />
@@ -71,7 +72,7 @@ export default function HelpBot() {
           </div>
         </div>
       )}
-      <button style={S.fab} onClick={() => setOpen((o) => !o)} title="Ayuda de Kai">{open ? '✕' : '🤖'}</button>
+      <button style={S.fab} onClick={() => setOpen((o) => !o)} title="Ayuda de Kai">{open ? '✕' : <img src={kai} alt="Kai" style={{ width: 50, height: 50, objectFit: 'contain', display: 'block' }} />}</button>
     </>
   )
 }
