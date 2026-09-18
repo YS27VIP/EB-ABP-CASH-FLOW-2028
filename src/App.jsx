@@ -368,7 +368,7 @@ export default function App() {
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
           <span className="rolechip" style={{ background: sbuColor(sbuName) }}>🧩 {sbuName}</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        <main><SBUWorkspace sbuName={sbuName} empresa={empresa} usuario={usuario} sbus={sbus} /></main>
+        <main><SBUWorkspace sbuName={sbuName} empresa={empresa} usuario={usuario} sbus={sbus} puede={puede} /></main>
       </>
     )
   }
@@ -1480,10 +1480,18 @@ function LogisticaBlock({ r, empresa, usuario, oneSbu, marca }) {
 }
 
 /* ===== SBU WORKSPACE: dentro de una SBU salen las secciones (roles) con sus marcas ===== */
-function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
-  const comercialRoles = ['ventas', 'producto', 'logistica'].map((id) => ROLES.find((r) => r.id === id))
-  const SECS = [{ id: 'comercial', icon: '🧭', label: 'Comercial' }, ROLES.find((r) => r.id === 'marketing'), ROLES.find((r) => r.id === 'director')]
-  const [secId, setSecId] = useState('comercial')
+function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
+  const pu = puede || (() => true)
+  // Acceso por rol: solo se ven las áreas asignadas al colaborador.
+  const comercialRoles = ['ventas', 'producto', 'logistica'].map((id) => ROLES.find((r) => r.id === id)).filter((r) => pu(r.label))
+  const puedeComercial = comercialRoles.length > 0
+  const puedeDir = pu('Director')
+  const SECS = [
+    ...(puedeComercial ? [{ id: 'comercial', icon: '🧭', label: 'Comercial' }] : []),
+    ...(pu('Marketing') ? [ROLES.find((r) => r.id === 'marketing')] : []),
+    ...(puedeDir ? [ROLES.find((r) => r.id === 'director')] : []),
+  ]
+  const [secId, setSecId] = useState(SECS[0] ? SECS[0].id : 'comercial')
   const [comSub, setComSub] = useState('all') // sub-selector dentro de Comercial
   const [marca, setMarca] = useState('__TOTAL__')
   const [totTab, setTotTab] = useState('brand')
@@ -1495,6 +1503,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
   const role = SECS.find((r) => r.id === secId)
   const col = sbuColor(sbuName)
   const acc = marca === '__TOTAL__' ? col : marcaColor(marca)
+  const totTabEf = (totTab === 'brand' && !puedeDir) ? 'cash' : (totTab === 'cash' && !pu('Finanzas')) ? 'brand' : totTab
 
   if (isRetail) {
     return <div className="panel"><h3 style={{ color: sbuColor('Retail') }}>Retail — tiendas propias</h3><div className="note warn">Retail le compra internamente a las SBU (venta intercompañía). Para activarlo necesito el <b>precio de transferencia</b> (margen fijo, % sobre costo o AUP interno). En cuanto lo definamos, aquí verás la captura y el consolidado de Retail. 🏬</div></div>
@@ -1513,10 +1522,12 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
           ? (<>
             <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
               <span className="empchip" style={{ background: col, marginLeft: 0 }}>▣ TOTAL {sbuName}</span>
-              <button className={'seg' + (totTab === 'brand' ? ' active' : '')} onClick={() => setTotTab('brand')} style={totTab === 'brand' ? { background: col, borderColor: col, color: '#fff' } : {}}>📊 Contribución de la SBU</button>
-              <button className={'seg' + (totTab === 'cash' ? ' active' : '')} onClick={() => setTotTab('cash')} style={totTab === 'cash' ? { background: col, borderColor: col, color: '#fff' } : {}}>💵 Cash Flow</button>
+              {puedeDir && <button className={'seg' + (totTabEf === 'brand' ? ' active' : '')} onClick={() => setTotTab('brand')} style={totTabEf === 'brand' ? { background: col, borderColor: col, color: '#fff' } : {}}>📊 Contribución de la SBU</button>}
+              {pu('Finanzas') && <button className={'seg' + (totTabEf === 'cash' ? ' active' : '')} onClick={() => setTotTab('cash')} style={totTabEf === 'cash' ? { background: col, borderColor: col, color: '#fff' } : {}}>💵 Cash Flow</button>}
             </div>
-            {totTab === 'cash'
+            {!puedeDir && !pu('Finanzas')
+              ? <div className="note warn">No tienes acceso al consolidado de esta SBU. Entra a tu área (Ventas/Producto/Logística/Marketing) eligiendo una marca en el panel de la izquierda.</div>
+              : totTabEf === 'cash'
               ? <CashFlowForm key={'cftot' + sbuName} role={cashRole} rubro={cashRubro} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={`TOTAL::${sbuName}`} />
               : <BrandContribSBU empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />}
           </>)
@@ -1524,19 +1535,20 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus }) {
             <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
               <span className="empchip" style={{ background: acc, marginLeft: 0 }}>{marca}</span>
               {SECS.map((r) => { const on = r.id === secId; return <button key={r.id} className={'seg' + (on ? ' active' : '')} onClick={() => setSecId(r.id)} style={on ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{r.icon} {r.label}</button> })}
-              <button className={'seg' + (secId === 'viajes' ? ' active' : '')} onClick={() => setSecId('viajes')} style={secId === 'viajes' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>🧳 Viajes equipo</button>
-              <button className={'seg' + (secId === 'brand' ? ' active' : '')} onClick={() => setSecId('brand')} style={secId === 'brand' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>📊 Contribución de la SBU</button>
+              {puedeDir && <button className={'seg' + (secId === 'viajes' ? ' active' : '')} onClick={() => setSecId('viajes')} style={secId === 'viajes' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>🧳 Viajes equipo</button>}
+              {puedeDir && <button className={'seg' + (secId === 'brand' ? ' active' : '')} onClick={() => setSecId('brand')} style={secId === 'brand' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>📊 Contribución de la SBU</button>}
             </div>
+            {SECS.length === 0 && secId !== 'viajes' && secId !== 'brand' && <div className="note warn">No tienes áreas asignadas en esta SBU. Pídele a un administrador que ajuste tu acceso en Configuración → Colaboradores.</div>}
             {secId === 'brand'
               ? <BrandContribution empresa={empresa} marca={marca} />
               : secId === 'viajes'
               ? <ViajesEquipo empresa={empresa} marca={marca} sbuName={sbuName} marcasSBU={marcasSBU} />
               : secId === 'comercial'
               ? (<>
-                <div className="toolbar" style={{ marginBottom: 12, gap: 6, background: '#eef1f4', borderRadius: 9, padding: '8px 10px' }}>
+                {comercialRoles.length > 1 && <div className="toolbar" style={{ marginBottom: 12, gap: 6, background: '#eef1f4', borderRadius: 9, padding: '8px 10px' }}>
                   <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 800 }}>IR A:</span>
-                  {[['all', '📋 Todos'], ['ventas', '📈 Ventas'], ['producto', '📦 Producto'], ['logistica', '🚚 Logística']].map(([v, l]) => <button key={v} className={'seg' + (comSub === v ? ' active' : '')} onClick={() => setComSub(v)} style={comSub === v ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{l}</button>)}
-                </div>
+                  {[['all', '📋 Todos'], ...comercialRoles.map((r) => [r.id, r.icon + ' ' + r.label])].map(([v, l]) => <button key={v} className={'seg' + (comSub === v ? ' active' : '')} onClick={() => setComSub(v)} style={comSub === v ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{l}</button>)}
+                </div>}
                 {comercialRoles.filter((r) => comSub === 'all' || r.id === comSub).map((r) => r.id === 'logistica'
                   ? <LogisticaBlock key={sbuName + 'log' + marca} r={r} empresa={empresa} usuario={usuario} oneSbu={oneSbu} marca={marca} />
                   : (
