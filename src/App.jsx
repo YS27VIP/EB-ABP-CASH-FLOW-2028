@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import './App.css'
-import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gSyncBaseClientes } from './google'
+import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -198,9 +198,6 @@ export default function App() {
     return () => { cancel = true }
   }, [authed, empresa])
 
-  // Al iniciar sesión: asegura la copia de la base de clientes (Base_Clientes) en nuestro Sheet.
-  // La primera vez la copia del EBP una sola vez; luego solo lee la nuestra.
-  useEffect(() => { if (authed) { gLoadClientes().catch(() => { }) } }, [authed])
 
   useEffect(() => {
     if (!authed) return
@@ -776,7 +773,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         <h3>{rubro.k} sobre la venta — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(👁️ venta viene de Comercial)</span></h3>
         <div className="sub">Cuánto pesa <b>{rubro.k}</b> sobre la <b>venta neta</b> (Unidades×AUP de Comercial), por mes y en total.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
-          <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+          <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
             <tr><td className="l sub2">Venta neta ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(ventaMesT(m))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, m) => a + ventaMesT(m), 0))}</td></tr>
             <tr><td className="l sub2">{rubro.k} ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(totMes(m))}</td>)}<td className="tot">{fmt(totalGeneral)}</td></tr>
@@ -1133,9 +1130,18 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
               <label>Término de pago de {marca} <span className="unit">(a proveedor)</span></label>
               {soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{data[`PTERM|${marca}`] || '—'}</span> : <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>}
             </div>}
+            {isTotal && <div className="tablewrap" style={{ marginBottom: 12, maxWidth: 520 }}>
+              <table style={{ width: 'auto' }}>
+                <thead><tr><th className="l">Marca</th><th>Término de pago a proveedor</th></tr></thead>
+                <tbody>
+                  {listaM.map((mca) => <tr key={mca}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td><span className="empchip" style={{ background: SP, color: '#7a4a10', marginLeft: 0 }}>{data[`PTERM|${mca}`] || '—'}</span></td></tr>)}
+                </tbody>
+              </table>
+              <div className="sub" style={{ marginTop: 6 }}>Solo lectura: el término de cada marca a su proveedor define <b>cuándo</b> la compra se convierte en pago (Cash Out). Se edita entrando a cada marca.</div>
+            </div>}
             <div className="tablewrap">
               <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-                <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+                <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
                   <tr><td className="l">Compra 2028 ($ · fecha disponible)</td>{compras.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(compras.reduce((a, b) => a + b, 0))}</td></tr>
                   <tr className="grandrow"><td className="l">Pago (según término) → Cash Out</td>{pagos.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(pagos.reduce((a, b) => a + b, 0))}</td></tr>
@@ -1190,11 +1196,11 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
   if (mode === 'flow') {
     return (
       <div className="panel">
-        <h3>Saldo de inventario por temporada — {marca} <span className="unit">(👁️ del tracking de Producto)</span></h3>
-        <div className="sub">Lo que va quedando sin rotar de cada temporada, mes a mes. Alimenta el costo de mantenimiento.</div>
+        <h3>Saldo de inventario por temporada — {marca} <span className="empchip" style={{ background: '#5b6470', marginLeft: 6, fontSize: 11 }}>📦 UNIDADES</span> <span className="unit">(👁️ del tracking de Producto)</span></h3>
+        <div className="sub">Lo que va quedando sin rotar de cada temporada, mes a mes, <b>en unidades</b>. Alimenta el costo de mantenimiento. El valor en dinero está en la tabla de abajo.</div>
         <div className="tablewrap">
           <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-            <thead><tr><th className="l">Temporada</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Fin año</th></tr></thead>
+            <thead><tr><th className="l">Temporada</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Fin año</th></tr></thead>
             <tbody>
               {SEASONS.map((s) => <tr key={s}><td className="l">{s}</td>{flujos[s].map((x, i) => <td key={i} className="tot">{fmt(x.fin)}</td>)}<td className="tot">{fmt(flujos[s][11].fin)}</td></tr>)}
               <tr className="grandrow"><td className="l">Saldo total (ud)</td>{saldoUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(saldoUnits[11])}</td></tr>
@@ -1204,7 +1210,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
         <div className="sub" style={{ marginTop: 14, marginBottom: 6 }}><b>Valor del saldo ($)</b> = saldo (ud) × AUC de cada temporada (lo pones en Producto → AUP/AUC).</div>
         <div className="tablewrap">
           <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-            <thead><tr><th className="l">Temporada · AUC</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Fin año</th></tr></thead>
+            <thead><tr><th className="l">Temporada · AUC</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Fin año</th></tr></thead>
             <tbody>
               {SEASONS.map((s) => { const a = saucSeason(s); return <tr key={s}><td className="l">{s} · ${fmt(a)}</td>{flujos[s].map((x, i) => <td key={i} className="tot">{fmt(x.fin * a)}</td>)}<td className="tot">{fmt(flujos[s][11].fin * a)}</td></tr> })}
               <tr className="grandrow"><td className="l">Valor total ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(SEASONS.reduce((acc, s) => acc + flujos[s][m].fin * saucSeason(s), 0))}</td>)}<td className="tot">{fmt(SEASONS.reduce((acc, s) => acc + flujos[s][11].fin * saucSeason(s), 0))}</td></tr>
@@ -1246,7 +1252,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
         <h3>Inventario y compras por temporada — {marca} <span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Pon el <b>inventario inicial</b> (columna "Inicial"), las <b>compras 2028</b> y el <b>% de rotación de cada mes</b>. El <b>saldo</b> se calcula solo: saldo = anterior + compras − salidas, y salidas = (saldo+compras) × rotación%. Así llevas el tracking de lo que te queda de cada temporada mes a mes.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '200px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-          <thead><tr><th className="l">Temporada / concepto</th><th>Inicial</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+          <thead><tr><th className="l">Temporada / concepto</th><th>Inicial</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
             <tr className="secrow"><td colSpan={15}>OBJETIVO DE VENTA vs ROTACIÓN</td></tr>
             <tr><td className="l sub2">Venta proyectada (ud) <span className="unit">(Comercial)</span></td><td></td>{ventaProyMes.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0))}</td></tr>
@@ -1316,7 +1322,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       <h3>Costos logísticos — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
       <div className="sub">Se calculan por <b>%</b>: costo logístico de venta = % × <b>costo de venta</b> (unidades × AUC); muestras = % × <b>compras</b>; mantenimiento = % × <b>valor del saldo de inventario</b>. Los tres % se ponen arriba.</div>
       <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-        <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+        <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
           <tr><td className="l sub2">Costo de venta ($) <span className="unit">(base)</span></td>{costoVenta.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(costoVenta))}</td></tr>
           <tr className="catrow"><td className="l">Costo logístico de la venta <span className="unit">(× {fmt(g(kLog))}%)</span></td>{costoLog.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(costoLog))}</td></tr>
@@ -1364,7 +1370,7 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
         <h3>Cálculo de comisiones — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">El Director pone los <b>% mensuales</b>. La <b>venta externa</b> viene de Comercial (Unid×AUP); la <b>intercompañía</b> viene de Retail (pendiente). El <b>pago de comisión de venta externa</b> alimenta directamente la línea <b>Comisiones</b> del Cash Flow (parte de Costos Operativos).</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-          <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+          <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
             <tr className="secrow"><td colSpan={14}>VENTA EXTERNA</td></tr>
             <tr><td className="l sub2">Venta externa ($) <span className="unit">(Comercial)</span></td>{ventaExt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(ventaExt))}</td></tr>
@@ -1444,7 +1450,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '190px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}</colgroup>
           <thead>
             <tr><th className="l" rowSpan={2}>Concepto</th><th className="yb" colSpan={12}>2028</th></tr>
-            <tr>{MESES.map((m) => <th key={m} className="yb">{m.replace('-28', '')}</th>)}</tr>
+            <tr>{MESES.map((m) => <th key={m} className="yb">{m.toUpperCase()}</th>)}</tr>
           </thead>
           <tbody>
             {catList.map(({ cat }) => (
@@ -1466,7 +1472,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
           <tbody>{SEASONS.map((s) => <tr key={s}><td className="l">{s}</td><td className="cell"><input value={snap[SAUP(s)] ?? ''} onChange={(e) => sset(SAUP(s), e.target.value)} inputMode="decimal" style={{ width: 80 }} /></td><td className="cell"><input value={snap[SAUC(s)] ?? ''} onChange={(e) => sset(SAUC(s), e.target.value)} inputMode="decimal" style={{ width: 80 }} /></td><td className="tot">{money(sg(SAUP(s)) - sg(SAUC(s)))}</td></tr>)}</tbody>
         </table></div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '190px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-          <thead><tr><th className="l">Efectivo (según rotación)</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+          <thead><tr><th className="l">Efectivo (según rotación)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
             <tr><td className="l sub2">Unidades vendidas</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(unitsMes(m))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, m) => a + unitsMes(m), 0))}</td></tr>
             <tr className="catrow"><td className="l">AUP efectivo</td>{MESES.map((_, m) => <td key={m} className="tot">{money(aupEff(m))}</td>)}<td></td></tr>
@@ -1511,7 +1517,7 @@ function GastosAdminForm({ empresa }) {
         <h3>Gastos administrativos <span className="unit">(detalle · compartido por todas las SBU)</span>{M$}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Captura por centro de costo y mes. Con <b>Editar centros de costo</b> puedes cambiar códigos/nombres o agregar rubros; el cambio <b>aplica a todas las SBU</b>. El SUB-TOTAL alimenta la línea Gastos administrativos del Cash Flow.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '270px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-          <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+          <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
             {lista.map((it, i) => (
               <tr key={i}>
@@ -1598,7 +1604,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   const role = SECS.find((r) => r.id === secId)
   const col = sbuColor(sbuName)
   const acc = marca === '__TOTAL__' ? col : marcaColor(marca)
-  const totTabEf = (['brand', 'viajes', 'mk', 'ucvm'].includes(totTab) && !puedeDir) ? 'cash' : (totTab === 'cash' && !pu('Finanzas')) ? 'brand' : totTab
+  const totTabEf = (['brand', 'viajes', 'mk', 'ucvm', 'log'].includes(totTab) && !puedeDir) ? 'cash' : (totTab === 'cash' && !pu('Finanzas')) ? 'brand' : totTab
 
   if (isRetail) {
     return <div className="panel"><h3 style={{ color: sbuColor('Retail') }}>Retail — tiendas propias</h3><div className="note warn">Retail le compra internamente a las SBU (venta intercompañía). Para activarlo necesito el <b>precio de transferencia</b> (margen fijo, % sobre costo o AUP interno). En cuanto lo definamos, aquí verás la captura y el consolidado de Retail. 🏬</div></div>
@@ -2068,7 +2074,7 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
         <div className="tablewrap">
           <table className="vfix">
             <colgroup><col style={{ width: '160px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-            <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+            <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
               {filas.map((f) => <tr key={f.r.id}><td className="l">{f.r.icon} {f.r.label}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td></tr>)}
               <tr className="grandrow"><td className="l">Total {mca}</td>{totMarcaMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarca)}</td></tr>
@@ -2131,7 +2137,7 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
         <div className="tablewrap">
           <table className="vfix">
             <colgroup><col style={{ width: '160px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '90px' }} /></colgroup>
-            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
               {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td></tr>)}
               <tr className="grandrow"><td className="l">Total {sbuName}</td>{totMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(gt)}</td></tr>
@@ -2216,6 +2222,69 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
   )
 }
 
+/* ===== RESUMEN DE LOGÍSTICA POR MARCA (vista TOTAL SBU, solo lectura) ===== */
+function LogisticaResumen({ empresa, sbuName, marcasSBU }) {
+  const [ventas, setVentas] = useState([]); const [producto, setProducto] = useState([])
+  const [tData, setTData] = useState({}); const [logd, setLogd] = useState({})
+  useEffect(() => {
+    try { setTData(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
+    try { setLogd(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { }
+    ;(async () => {
+      try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
+      try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
+    })()
+  }, [empresa])
+  const marcas = marcasSBU || []
+  const calc = (marca) => {
+    const inv = inventarioCalc(tData, marca)
+    const g = (k) => num(logd[k])
+    const auc = MESES.map((_, m) => { let v = 0; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca) || upper(r[1]) !== 'AUC') return; v = num(r[4 + m]) }); return v })
+    const ventaUnits = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
+    const costoVenta = MESES.map((_, m) => ventaUnits[m] * auc[m])
+    const comprasUsd = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(tData[`CP|${marca}|${s}|${m}`]), 0) * auc[m])
+    const saldoValue = MESES.map((_, m) => inv.saldoUnits[m] * auc[m])
+    const costoLog = MESES.map((_, m) => costoVenta[m] * g(`${marca}|PCT_LOGVENTA`) / 100)
+    const costoMue = MESES.map((_, m) => comprasUsd[m] * g(`${marca}|PCT_MUESTRAS`) / 100)
+    const mant = MESES.map((_, m) => saldoValue[m] * g(`${marca}|PCT_MANT`) / 100)
+    const totalMes = MESES.map((_, m) => costoLog[m] + costoMue[m] + mant[m])
+    const sum = (a) => a.reduce((x, y) => x + y, 0)
+    return { pctLog: g(`${marca}|PCT_LOGVENTA`), pctMue: g(`${marca}|PCT_MUESTRAS`), pctMant: g(`${marca}|PCT_MANT`), log: sum(costoLog), mue: sum(costoMue), mant: sum(mant), totalMes, total: sum(totalMes) }
+  }
+  const rows = marcas.map((m) => ({ m, v: calc(m) }))
+  const tot = rows.reduce((a, { v }) => { a.log += v.log; a.mue += v.mue; a.mant += v.mant; a.total += v.total; v.totalMes.forEach((x, i) => a.totalMes[i] += x); return a }, { log: 0, mue: 0, mant: 0, total: 0, totalMes: Array(12).fill(0) })
+  return (
+    <>
+      <div className="panel">
+        <h3 style={{ color: sbuColor(sbuName) }}>Logística por marca — {sbuName}{M$} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
+        <div className="sub">Costos logísticos por marca: <b>logístico de venta</b> (% × costo de venta), <b>muestras</b> (% × compras) y <b>mantenimiento de stock</b> (% × valor del saldo de inventario). Los % los pone cada área de Logística.</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Marca</th><th>% Log. venta</th><th>% Muestras</th><th>% Mant.</th><th>Costo logístico</th><th>Muestras</th><th>Mantenimiento</th><th>TOTAL</th></tr></thead>
+            <tbody>
+              {rows.map(({ m, v }) => <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td><td className="tot">{fmt(v.pctLog)}%</td><td className="tot">{fmt(v.pctMue)}%</td><td className="tot">{fmt(v.pctMant)}%</td><td className="tot">{fmt(v.log)}</td><td className="tot">{fmt(v.mue)}</td><td className="tot">{fmt(v.mant)}</td><td className="tot">{fmt(v.total)}</td></tr>)}
+              <tr className="grandrow"><td className="l">Total {sbuName}</td><td></td><td></td><td></td><td className="tot">{fmt(tot.log)}</td><td className="tot">{fmt(tot.mue)}</td><td className="tot">{fmt(tot.mant)}</td><td className="tot">{fmt(tot.total)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="panel">
+        <h3 style={{ color: sbuColor(sbuName) }}>Costo logístico total por marca y mes — {sbuName}{M$} <span className="unit">(solo lectura)</span></h3>
+        <div className="sub">Total de costos logísticos (logístico + muestras + mantenimiento) de cada marca, mes a mes, con el total de la SBU al final.</div>
+        <div className="tablewrap">
+          <table className="vfix">
+            <colgroup><col style={{ width: '160px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+            <tbody>
+              {rows.map(({ m, v }) => <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{v.totalMes.map((x, i) => <td key={i} className="tot">{fmt(x)}</td>)}<td className="tot">{fmt(v.total)}</td></tr>)}
+              <tr className="grandrow"><td className="l">Total {sbuName}</td>{tot.totalMes.map((x, i) => <td key={i} className="tot">{fmt(x)}</td>)}<td className="tot">{fmt(tot.total)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+}
+
 /* ===== COMBINACIONES ===== */
 function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, abrirHistorico, ebSbus }) {
   const [empresa, setEmpresa] = useState(empresas[0])
@@ -2264,13 +2333,6 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
     try { await gSaveMarcas(next); setMsg({ t: 'ok', x: 'Marca agregada: ' + nm + '. Asígnala a una SBU y guarda.' }) } catch (e) { setMsg({ t: 'bad', x: 'No se pudo guardar la marca: ' + e.message }) }
   }
   function cambiarEmpresa(e) { setEmpresa(e); setAsign(seed(combos[e])); setMsg(null) }
-  const [syncCli, setSyncCli] = useState(false)
-  async function importarClientes() {
-    setSyncCli(true); setMsg(null)
-    try { const j = await gSyncBaseClientes(); setMsg({ t: 'ok', x: `Base de clientes actualizada desde el EBP: ${j.added} nuevos · ${j.total} en total (hoja Base_Clientes).` }) }
-    catch (e) { setMsg({ t: 'bad', x: 'No se pudo importar la base de clientes: ' + e.message }) }
-    setSyncCli(false)
-  }
 
   async function guardar() {
     setSaving(true); setMsg(null)
@@ -2293,7 +2355,6 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
         <button className="btn" onClick={nuevaEmpresa}>＋ Nueva empresa</button>
         <button className="btn" onClick={agregarMarca}>➕ Agregar marca</button>
         {empresa === 'ENERGY BRANDS' && <button className="btn" onClick={cargarDeEBP}>⚡ Cargar de EBP</button>}
-        <button className="btn" disabled={syncCli} onClick={importarClientes} title="Copia la hoja BASE CLIENTES SF del EBP a la hoja Base_Clientes de este proyecto (una sola vez / cuando quieras refrescar)">{syncCli ? 'Importando…' : '👥 Importar clientes del EBP'}</button>
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar combinaciones'}</button>
       </div>
@@ -2803,7 +2864,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         <div className="tablewrap">
           <table className="vfix">
             <colgroup><col style={{ width: '330px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
-            <thead><tr><th className="l">SBU / Marca</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+            <thead><tr><th className="l">SBU / Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
               {Object.entries(sbus).map(([s, ms]) => {
                 const smes = MESES.map((_, mi) => ms.reduce((a, m) => a + ((mesMarca[m] || [])[mi] || 0), 0))
@@ -2833,7 +2894,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         <div className="tablewrap">
           <table className="vfix">
             <colgroup><col style={{ width: '270px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
-            <thead><tr><th className="l">Categoría</th><th>Peso pond. %</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+            <thead><tr><th className="l">Categoría</th><th>Peso pond. %</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
               <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="tot">{totMarcaSel > 0 ? '100.0%' : '—'}</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
               {!usarCat && <tr><td className="l" colSpan={15}>Categorías desactivadas para {marca}.</td></tr>}
@@ -2855,7 +2916,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '270px' }} /><col style={{ width: '60px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
-                <thead><tr><th className="l">Categoría</th><th>AUP</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
+                <thead><tr><th className="l">Categoría</th><th>AUP</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
                   <tr className="grandrow"><td className="l">TOTAL {marca}</td><td></td>{vnMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(vnTot)}</td></tr>
                   {catList.map((c, i) => { const a = aup[c.cat] || []; const row = MESES.map((_, mi) => vnCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); const aupProm = (() => { const nz = a.filter((x) => x !== 0); return nz.length ? nz.reduce((s, x) => s + x, 0) / nz.length : 0 })(); return <tr key={i}><td className="l">{c.cat}</td><td className="ref">{fmt(aupProm)}</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
@@ -2885,7 +2946,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         <div className="tablewrap">
           <table className="vfix" style={{ width: 1228 }}>
             <colgroup><col style={{ width: '220px' }} /><col style={{ width: '55px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /><col style={{ width: '60px' }} /></colgroup>
-            <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th><th>% Peso</th></tr></thead>
+            <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th><th>% Peso</th></tr></thead>
             <tbody>
               {clientes.length === 0 && <tr><td className="l" colSpan={17}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico, o agrega un cliente con el buscador de arriba.</td></tr>}
               {clientes.filter((cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0).map((cli) => { const nuevo = esNuevo(cli); return (
