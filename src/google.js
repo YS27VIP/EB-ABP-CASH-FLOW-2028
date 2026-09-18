@@ -254,10 +254,14 @@ export async function gSyncBaseClientes() {
   if (appends.length) await appendValues('Base_Clientes', appends)
   return { ok: true, added: appends.length, total: (cur.length - 1) + appends.length }
 }
+/* Lee la hoja Base_Clientes de este proyecto. La PRIMERA vez (hoja vacía) la copia
+   automáticamente desde el EBP una sola vez; a partir de ahí todo es contra nuestro
+   Sheet y solo se refresca a mano con el botón de Configuración (gSyncBaseClientes). */
+let _seedTried = false
 export async function gLoadClientes() {
   await ensureTab('Base_Clientes', ['CLIENTE', 'ORIGEN'])
   let v = await readValues('Base_Clientes')
-  if (v.length <= 1) { try { await gSyncBaseClientes(); v = await readValues('Base_Clientes') } catch { } }
+  if (v.length <= 1 && !_seedTried) { _seedTried = true; try { await gSyncBaseClientes(); v = await readValues('Base_Clientes') } catch { } }
   const clientes = v.slice(1).map((r) => String(r[0] || '').trim()).filter(Boolean)
   return { ok: true, clientes: [...new Set(clientes)].sort((a, b) => a.localeCompare(b)) }
 }

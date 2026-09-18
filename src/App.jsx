@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import './App.css'
-import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
+import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gSyncBaseClientes } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -197,6 +197,10 @@ export default function App() {
     hydrateEstado(empresa).then(() => { if (!cancel) setEstadoReady(true) })
     return () => { cancel = true }
   }, [authed, empresa])
+
+  // Al iniciar sesión: asegura la copia de la base de clientes (Base_Clientes) en nuestro Sheet.
+  // La primera vez la copia del EBP una sola vez; luego solo lee la nuestra.
+  useEffect(() => { if (authed) { gLoadClientes().catch(() => { }) } }, [authed])
 
   useEffect(() => {
     if (!authed) return
@@ -860,6 +864,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     const set = new Set()
     hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) set.add(cli) })
     ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (cli) set.add(cli) })
+    try { const add = JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}'); (add[mca] || []).forEach((c) => { if (c) set.add(c) }) } catch { }
     return [...set].sort((a, b) => a.localeCompare(b))
   }
 
@@ -2259,6 +2264,13 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
     try { await gSaveMarcas(next); setMsg({ t: 'ok', x: 'Marca agregada: ' + nm + '. Asígnala a una SBU y guarda.' }) } catch (e) { setMsg({ t: 'bad', x: 'No se pudo guardar la marca: ' + e.message }) }
   }
   function cambiarEmpresa(e) { setEmpresa(e); setAsign(seed(combos[e])); setMsg(null) }
+  const [syncCli, setSyncCli] = useState(false)
+  async function importarClientes() {
+    setSyncCli(true); setMsg(null)
+    try { const j = await gSyncBaseClientes(); setMsg({ t: 'ok', x: `Base de clientes actualizada desde el EBP: ${j.added} nuevos · ${j.total} en total (hoja Base_Clientes).` }) }
+    catch (e) { setMsg({ t: 'bad', x: 'No se pudo importar la base de clientes: ' + e.message }) }
+    setSyncCli(false)
+  }
 
   async function guardar() {
     setSaving(true); setMsg(null)
@@ -2281,6 +2293,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
         <button className="btn" onClick={nuevaEmpresa}>＋ Nueva empresa</button>
         <button className="btn" onClick={agregarMarca}>➕ Agregar marca</button>
         {empresa === 'ENERGY BRANDS' && <button className="btn" onClick={cargarDeEBP}>⚡ Cargar de EBP</button>}
+        <button className="btn" disabled={syncCli} onClick={importarClientes} title="Copia la hoja BASE CLIENTES SF del EBP a la hoja Base_Clientes de este proyecto (una sola vez / cuando quieras refrescar)">{syncCli ? 'Importando…' : '👥 Importar clientes del EBP'}</button>
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar combinaciones'}</button>
       </div>
@@ -2624,7 +2637,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
   useEffect(() => { (async () => { try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { } try { const j2 = await gReadTab('Cap_Ventas'); if (j2 && j2.ok && j2.values) setVentasR(j2.values.slice(1)) } catch { } })() }, [empresa])
   const [catPct, setCatPct] = useState(() => { try { return JSON.parse(localStorage.getItem('catpct_' + empresa) || '{}') } catch { return {} } })
   useEffect(() => { try { localStorage.setItem('catpct_' + empresa, JSON.stringify(catPct)) } catch { } }, [catPct, empresa])
-  const clientes = (() => { const set = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(marca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) set.add(cli) }); ventasR.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; const cli = String(r[1] || '').trim(); if (cli) set.add(cli) }); return [...set].sort((a, b) => a.localeCompare(b)) })()
+  const clientes = (() => { const set = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(marca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) set.add(cli) }); ventasR.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; const cli = String(r[1] || '').trim(); if (cli) set.add(cli) }); try { const add = JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}'); (add[marca] || []).forEach((c) => { if (c) set.add(c) }) } catch { } return [...set].sort((a, b) => a.localeCompare(b)) })()
   const pctKey = (cli, cat) => cli + '|' + marca + '|' + cat
   const setPct = (cli, cat, v) => setCatPct({ ...catPct, [pctKey(cli, cat)]: v })
   async function guardar() {
@@ -2706,6 +2719,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [nuevoCli, setNuevoCli] = useState('')
   const [buscar, setBuscar] = useState('')
   useEffect(() => { (async () => { try { const j = await gLoadClientes(); if (j && j.ok) setBaseCli(j.clientes) } catch { } })() }, [empresa])
+  useEffect(() => { try { localStorage.setItem('ventas_manual_' + empresa, JSON.stringify(manual)) } catch { } }, [manual, empresa])
+  useEffect(() => { try { localStorage.setItem('addcli_' + empresa, JSON.stringify(addCli)) } catch { } }, [addCli, empresa])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
 
@@ -2854,31 +2869,43 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
       <div className="panel">
         <h3>Ventas · Unidades 2028 — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: se aplica a todos los meses de 2026 para proyectar 2028. La fila gris es el histórico 2026 (referencia). Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
+        <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: se aplica a todos los meses de 2026 para proyectar 2028. La fila gris es el histórico 2026 (referencia). Para un <b>cliente nuevo</b> (sin histórico) escribe sus unidades 2028 directamente. Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
+        <div className="toolbar" style={{ margin: '4px 0 12px', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 200 }} />
+          {buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}
+          <div className="spacer"></div>
+          <label>Agregar cliente</label>
+          <select value="" onChange={(e) => { if (e.target.value) agregarCliente(e.target.value) }} style={{ minWidth: 210 }}>
+            <option value="">Elegir de la base…</option>
+            {baseCli.filter((c) => !clientes.some((x) => upper(x) === upper(c))).map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <input className="fillin" value={nuevoCli} onChange={(e) => setNuevoCli(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') agregarCliente(nuevoCli) }} placeholder="…o escribe uno nuevo" style={{ minWidth: 170, background: '#fff' }} />
+          <button className="btn primary" onClick={() => agregarCliente(nuevoCli)}>➕ Agregar</button>
+        </div>
         <div className="tablewrap">
           <table className="vfix" style={{ width: 1228 }}>
             <colgroup><col style={{ width: '220px' }} /><col style={{ width: '55px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /><col style={{ width: '60px' }} /></colgroup>
             <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th><th>% Peso</th></tr></thead>
             <tbody>
-              {clientes.length === 0 && <tr><td className="l" colSpan={17}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico primero (unidades 2026).</td></tr>}
-              {clientes.map((cli) => (
+              {clientes.length === 0 && <tr><td className="l" colSpan={17}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico, o agrega un cliente con el buscador de arriba.</td></tr>}
+              {clientes.filter((cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0).map((cli) => { const nuevo = esNuevo(cli); return (
                 <Fragment2 key={cli}>
                   <tr>
-                    <td className="l" rowSpan={2}>{cli}</td>
-                    <td className="cell" rowSpan={2}><input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" /></td>
+                    <td className="l" rowSpan={2}>{cli}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}</td>
+                    <td className="cell" rowSpan={2}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}</td>
                     <td className="yl">2026</td>
-                    {MESES.map((_, mi) => <td key={mi} className="ref">{fmt(u26(cli, mi))}</td>)}
-                    <td className="ref"><b>{fmt(t26(cli))}</b></td>
-                    <td className="ref">{tot26Marca ? (t26(cli) / tot26Marca * 100).toFixed(1) + '%' : '—'}</td>
+                    {MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u26(cli, mi))}</td>)}
+                    <td className="ref"><b>{nuevo ? '—' : fmt(t26(cli))}</b></td>
+                    <td className="ref">{nuevo ? '—' : (tot26Marca ? (t26(cli) / tot26Marca * 100).toFixed(1) + '%' : '—')}</td>
                   </tr>
                   <tr className="proy2028">
                     <td className="yl proyl">2028</td>
-                    {MESES.map((_, mi) => <td key={mi} className="tot">{fmt(u28(cli, mi))}</td>)}
+                    {MESES.map((_, mi) => nuevo ? <td key={mi} className="cell"><input value={manual[mKey(cli, mi)] ?? ''} onChange={(e) => setMan(cli, mi, e.target.value)} inputMode="decimal" placeholder="0" /></td> : <td key={mi} className="tot">{fmt(u28(cli, mi))}</td>)}
                     <td className="tot">{fmt(t28(cli))}</td>
                     <td className="tot">{totMarcaSel ? (t28(cli) / totMarcaSel * 100).toFixed(1) + '%' : '—'}</td>
                   </tr>
                 </Fragment2>
-              ))}
+              ) })}
               {clientes.length > 0 && <>
                 <tr className="grandrow"><td className="l" rowSpan={2}>TOTAL {marca}</td><td rowSpan={2}>{tot26Marca ? (crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1) + '%' : '—'}</td><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>
                 <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td><td className="tot">100%</td></tr>
