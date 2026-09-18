@@ -112,6 +112,7 @@ const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); r
 const fmt = (v) => (v ? Math.round(v).toLocaleString('en-US') : '')
 const upper = (s) => String(s == null ? '' : s).trim().toUpperCase()
 const mesIdx = (v) => { const d = new Date(v); return isNaN(d.getTime()) ? -1 : d.getUTCMonth() }
+const M$ = <span className="moneytag" title="Valores en dinero ($)">$</span> // icono discreto de dinero
 
 function effSBUS(empresa, combos) {
   const c = combos[empresa]
@@ -738,7 +739,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar todo'}</button>
       </div>
       <div className="panel">
-        <h3>{rubro.k} sobre la venta — {isTotal ? `TOTAL ${sbu}` : marca} <span className="unit">(👁️ venta viene de Comercial)</span></h3>
+        <h3>{rubro.k} sobre la venta — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(👁️ venta viene de Comercial)</span></h3>
         <div className="sub">Cuánto pesa <b>{rubro.k}</b> sobre la <b>venta neta</b> (Unidades×AUP de Comercial), por mes y en total.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
           <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
@@ -750,7 +751,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         </table></div>
       </div>
       <div className="panel">
-        <h3>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>👁️ solo lectura</span> : <span className="fill-badge">✏️ para llenar</span>}</h3>
+        <h3>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>👁️ solo lectura</span> : <span className="fill-badge">✏️ para llenar</span>}</h3>
         <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : 'Captura por rubro y mes. Los rubros son iguales para todas las marcas.'} Total: <b>${fmt(totalGeneral)}</b></div>
         <div className="tablewrap">
           <table>
@@ -942,7 +943,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         {soloVer ? <span className="note ok" style={{ margin: 0, padding: '6px 12px' }}>👁️ Solo lectura — esto lo llena Finanzas</span> : <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>}
       </div>
       <div className="panel">
-        <h3>{role.label} — CASH FLOW <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer && <span className="unit" style={{ marginLeft: 8 }}>👁️ espejo de Finanzas</span>}</h3>
+        <h3>{role.label} — CASH FLOW{M$} <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer && <span className="unit" style={{ marginLeft: 8 }}>👁️ espejo de Finanzas</span>}</h3>
         <div className="sub">Últimos 3 meses de 2027 + proyección 2028. PSI (inventario, compras, ventas) se calcula solo desde Comercial/Producto; solo se llenan las líneas amarillas de Cash Flow.</div>
         <div className="tablewrap">
           <table className="vfix"><colgroup><col style={{ width: '210px' }} />{CF_MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
@@ -1039,7 +1040,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         const totCobro = MESES.map((_, m) => filas.reduce((a, f) => a + f.cobros[m], 0))
         return (
           <div className="panel">
-            <h3>{role.label} — Venta, cobro y saldo por cliente 2028 <span className="unit">({marca})</span></h3>
+            <h3>{role.label} — Venta, cobro y saldo por cliente 2028{M$} <span className="unit">({marca})</span></h3>
             <div className="sub">Por cada cliente: la <b>Venta</b> (Unidades×AUP) en el mes que ocurre, el <b>Cobro</b> cuando entra según su término (Cash=mismo mes · 30d=+1 · 60=+2 · 90=+3 …), y el <b>Saldo</b> que va quedando. La columna <b style={{ background: SI, padding: '1px 6px', borderRadius: 4 }}>Saldo inicial</b> (deuda cierre 2027) la <b>llena Finanzas</b>.</div>
             {buscador}
             <div className="tablewrap">
@@ -1070,7 +1071,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         const pagos = MESES.map((_, m) => listaM.reduce((a, mca) => a + pagosMarca(mca).pagos[m], 0))
         return (
           <div className="panel">
-            <h3>{role.label} — Compras y pagos {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`} <span className="unit">(Cash Out)</span></h3>
+            <h3>{role.label} — Compras y pagos {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(Cash Out)</span></h3>
             <div className="sub">La <b>compra 2028</b> (unidades de Comercial × AUC) genera un <b>pago</b> según el <b>término de pago de la marca</b> a su proveedor (Cash = mismo mes · 30d = +1 · 60 = +2 …). El total de pagos alimenta el <b>Cash Out</b>.</div>
             {!isTotal && <div className="toolbar" style={{ marginBottom: 8 }}>
               <label>Término de pago de {marca} <span className="unit">(a proveedor)</span></label>
@@ -1256,7 +1257,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      <h3>Costos logísticos — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+      <h3>Costos logísticos — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
       <div className="sub">Se calculan por <b>%</b>: costo logístico de venta = % × <b>costo de venta</b> (unidades × AUC); muestras = % × <b>compras</b>; mantenimiento = % × <b>valor del saldo de inventario</b>. Los tres % se ponen arriba.</div>
       <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
@@ -1304,7 +1305,7 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
       <div className="panel">
-        <h3>Cálculo de comisiones — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>Cálculo de comisiones — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">El Director pone los <b>% mensuales</b>. La <b>venta externa</b> viene de Comercial (Unid×AUP); la <b>intercompañía</b> viene de Retail (pendiente). El <b>pago de comisión de venta externa</b> alimenta directamente la línea <b>Comisiones</b> del Cash Flow (parte de Costos Operativos).</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
@@ -1382,7 +1383,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
       <div className="panel">
-        <h3>AUP, AUC y margen por categoría — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>AUP, AUC y margen por categoría — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Precio (AUP) por categoría y costo (AUC) de la marca, por mes. El <b>margen total</b> = AUP promedio − AUC se calcula solo (abajo).</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '190px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}</colgroup>
           <thead>
@@ -1402,7 +1403,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
         </table></div>
       </div>
       <div className="panel">
-        <h3>AUP / AUC por temporada y efectivo por mes — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>AUP / AUC por temporada y efectivo por mes — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Pon el <b>AUP y AUC de cada temporada</b> (ej. FW26 costó $100 y se vende a $299). Según la <b>rotación</b> que definiste en Inventario, el sistema calcula el <b>AUP/AUC efectivo</b> del mes en que se vende cada temporada, y la venta/costo/margen resultante. Así ves el impacto en el mes correcto.</div>
         <div className="tablewrap" style={{ marginBottom: 12 }}><table style={{ width: 'auto' }}>
           <thead><tr><th className="l">Temporada</th><th>AUP ($)</th><th>AUC ($)</th><th>Margen ($)</th></tr></thead>
@@ -1451,7 +1452,7 @@ function GastosAdminForm({ empresa }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       <div className="panel">
-        <h3>Gastos administrativos <span className="unit">(detalle · compartido por todas las SBU)</span><span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>Gastos administrativos <span className="unit">(detalle · compartido por todas las SBU)</span>{M$}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub">Captura por centro de costo y mes. Con <b>Editar centros de costo</b> puedes cambiar códigos/nombres o agregar rubros; el cambio <b>aplica a todas las SBU</b>. El SUB-TOTAL alimenta la línea Gastos administrativos del Cash Flow.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '270px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.replace('-28', '')}</th>)}<th>Total</th></tr></thead>
@@ -1748,7 +1749,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   return (
     <>
       {!soloSBU && !cargando && <div className="panel">
-        <h3>Gerencia — Resultado Operativo consolidado · {empresa} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
+        <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
         <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno. Activa <b>🔍 Desglose</b> para ver la marca al pasar el mouse.</div>
         <div className="toolbar" style={{ marginBottom: 8 }}><button className={'seg' + (desglose ? ' active' : '')} onClick={() => setDesglose((d) => !d)}>{desglose ? '✓ ' : ''}🔍 Desglose por marca</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
@@ -1932,7 +1933,7 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
 
   return (
     <div className="panel">
-      <h3 style={{ color: sbuColor(sbuName) }}>Contribución de la SBU — {sbuName} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
+      <h3 style={{ color: sbuColor(sbuName) }}>Contribución de la SBU — {sbuName}{M$} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
       <div className="sub">P&amp;L de cada marca lado a lado. Las columnas <b>FY2026</b>, <b>FY2025</b> y <b>ABP 2027</b> (hoja PLAN del EBP) traen el valor y la <b>variación %</b> del total 2028 vs cada uno (en Venta, Costo y Margen). Los <b>Gastos administrativos</b> son de toda la empresa; al restarlos queda el <b>Resultado Operativo</b>.</div>
       <div className="tablewrap">
         <table className="vfix" style={{ width: 'auto', minWidth: 520 }}>
