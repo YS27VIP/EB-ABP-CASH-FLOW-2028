@@ -2007,15 +2007,17 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
 
 /* ===== CONTRIBUCIÓN DE LA SBU: P&L por marca (estilo Excel HOKA) ===== */
 function BrandContribution({ empresa, marca }) {
-  const [P, setP] = useState({ ven: [], prod: [], cats: {}, mk: [], log: [], dir: [] })
+  const [P, setP] = useState({ ven: [], prod: [], cats: {}, mk: [], log: [], dir: [], hist: [], plan: {} })
   const [load, setLoad] = useState(true)
   useEffect(() => {
     (async () => {
       setLoad(true)
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
       const [ven, prod, cap, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
+      let hist = []; try { const jh = await gHistorico(); if (jh && jh.ok && jh.values) hist = jh.values.slice(1) } catch { }
+      let plan = {}; try { const jp = await gPlan2027(); if (jp && jp.map) plan = jp.map } catch { }
       const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
-      setP({ ven, prod, cats, mk, log, dir }); setLoad(false)
+      setP({ ven, prod, cats, mk, log, dir, hist, plan }); setLoad(false)
     })()
   }, [empresa])
 
@@ -2038,24 +2040,39 @@ function BrandContribution({ empresa, marca }) {
   const margenBruto = ventaNeta - costo - comisiones - logistica
   const brand = margenBruto - marketing - viajes
   const pct = (x) => ventaNeta ? (x / ventaNeta * 100).toFixed(1) + '%' : '—'
+  // FY histórico (EBP) por marca + ABP2027 (hoja PLAN)
+  const fy = (year, tipo) => { let s = 0; P.hist.forEach((r) => { if (String(r[1]) !== String(year)) return; if (upper(r[5]) !== upper(marca)) return; if (String(r[3] || '').toUpperCase().indexOf(tipo) < 0) return; s += num(r[7]) }); return s }
+  const fyVenta = (y) => fy(y, 'VENTA'), fyCosto = (y) => fy(y, 'COSTO'), fyMargen = (y) => fyVenta(y) - fyCosto(y)
+  const o27 = P.plan[upper(marca)] || {}
+  const abpVenta = o27.venta || 0, abpCosto = o27.costo || 0, abpMargen = abpVenta - abpCosto
+  const dpct = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
+  const dCell = (cur, ref, cls) => { const d = dpct(cur, ref); return <td className={'tot ' + (cls || '') + ' ' + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700 }}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
 
-  const fila = (lbl, val, strong) => <tr className={strong ? 'grandrow' : undefined}><td className="l">{lbl}</td><td className="tot">{fmt(val)}</td><td className="ref">{pct(val)}</td></tr>
+  // fyObj = {fy25, fy26, abp27} (o null si esa fila no tiene comparación histórica)
+  const fila = (lbl, val, strong, fyObj) => (
+    <tr className={strong ? 'grandrow' : undefined}>
+      <td className="l">{lbl}</td><td className="tot">{fmt(val)}</td><td className="ref">{pct(val)}</td>
+      <td className="tot ya">{fyObj && fyObj.fy25 != null ? fmt(fyObj.fy25) : '—'}</td>{fyObj && fyObj.fy25 != null ? dCell(val, fyObj.fy25, 'ya') : <td className="tot ya">—</td>}
+      <td className="tot ya">{fyObj && fyObj.fy26 != null ? fmt(fyObj.fy26) : '—'}</td>{fyObj && fyObj.fy26 != null ? dCell(val, fyObj.fy26, 'ya') : <td className="tot ya">—</td>}
+      <td className="tot yb">{fyObj && fyObj.abp27 != null ? fmt(fyObj.abp27) : '—'}</td>{fyObj && fyObj.abp27 != null ? dCell(val, fyObj.abp27, 'yb') : <td className="tot yb">—</td>}
+    </tr>
+  )
 
   return (
     <div className="panel">
-      <h3 style={{ color: marcaColor(marca) }}>Contribución de la SBU — {marca} <span className="unit">(2028 · solo lectura)</span></h3>
-      <div className="sub">Venta Neta = Unidades × AUP · Costo = Unidades × AUC · Margen Bruto = Venta Neta − Costo − Comisiones − Logística · Contribución = Margen Bruto − Marketing − Viajes.</div>
+      <h3 style={{ color: marcaColor(marca) }}>Contribución de la SBU — {marca}{M$} <span className="unit">(2028 · solo lectura)</span></h3>
+      <div className="sub">Venta Neta = Unidades × AUP · Costo = Unidades × AUC · Margen Bruto = Venta Neta − Costo − Comisiones − Logística · Contribución = Margen Bruto − Marketing − Viajes. Las columnas <b>FY2025/FY2026</b> (histórico EBP) y <b>ABP 2027</b> (hoja PLAN) traen el valor y la <b>variación %</b> del 2028 vs cada uno (solo Venta, Costo y Margen).</div>
       {load ? <div className="sub">Cargando…</div> : (<>
-        <div className="tablewrap" style={{ maxWidth: 560 }}>
-          <table>
-            <thead><tr><th className="l">Concepto</th><th>Monto</th><th>% VN</th></tr></thead>
+        <div className="tablewrap">
+          <table style={{ width: 'auto' }}>
+            <thead><tr><th className="l">Concepto</th><th>Monto</th><th>% VN</th><th className="ya">FY2025</th><th className="ya">Δ vs 25</th><th className="ya">FY2026</th><th className="ya">Δ vs 26</th><th className="yb">ABP 2027</th><th className="yb">Δ vs ABP27</th></tr></thead>
             <tbody>
-              <tr><td className="l">Unidades</td><td className="tot">{fmt(unidades)}</td><td className="ref">—</td></tr>
-              {fila('Venta Neta', ventaNeta, true)}
-              {fila('(−) Costo', costo)}
+              <tr><td className="l">Unidades</td><td className="tot">{fmt(unidades)}</td><td className="ref">—</td><td className="ya">—</td><td className="ya">—</td><td className="ya">—</td><td className="ya">—</td><td className="yb">—</td><td className="yb">—</td></tr>
+              {fila('Venta Neta', ventaNeta, true, { fy25: fyVenta(2025), fy26: fyVenta(2026), abp27: abpVenta })}
+              {fila('(−) Costo', costo, false, { fy25: fyCosto(2025), fy26: fyCosto(2026), abp27: abpCosto })}
               {fila('(−) Comisiones', comisiones)}
               {fila('(−) Logística', logistica)}
-              {fila('= Margen Bruto', margenBruto, true)}
+              {fila('= Margen Bruto', margenBruto, true, { fy25: fyMargen(2025), fy26: fyMargen(2026), abp27: abpMargen })}
               {fila('(−) Marketing', marketing)}
               {fila('(−) Viajes', viajes)}
               {fila('= CONTRIBUCIÓN DE LA SBU', brand, true)}
