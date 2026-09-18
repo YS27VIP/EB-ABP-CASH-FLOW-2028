@@ -934,7 +934,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
 
   function guardar() {
     setSaving(true)
-    try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado en este equipo. La escritura al Google Sheet y las fórmulas se conectan cuando definas la construcción.' }) }
+    try { saveEstado(empresa, 'cf', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (Cash Flow).' }) }
     catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) }
     setSaving(false)
   }
@@ -1176,7 +1176,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
   const saucSeason = (s) => num(precios[`SAUC|${marca}|${s}`])
   const K = invKeys(marca)
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
-  function guardar() { setSaving(true); try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado en este equipo. Persistencia al Sheet se conecta en el siguiente paso.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function guardar() { setSaving(true); try { saveEstado(empresa, 'temp', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (inventario).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   const { flujos, saldoUnits, salidasUnits } = inventarioCalc(data, marca)
   const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
   // Venta proyectada (unidades de Comercial) para comparar con lo que va rotando del inventario
@@ -1294,7 +1294,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const mant = MESES.map((_, m) => saldoValue[m] * g(kMant) / 100)
   const total = MESES.map((_, m) => costoLog[m] + costoMue[m] + mant[m])
   const rowTot = (arr) => arr.reduce((a, b) => a + b, 0)
-  function guardar() { setSaving(true); try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado en este equipo.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function guardar() { setSaving(true); try { saveEstado(empresa, 'logcost', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (costos logísticos).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   const pctInput = (k) => <input className="fillin" value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" style={{ width: 60, textAlign: 'center' }} />
 
   return (
@@ -1348,7 +1348,7 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
   const c = comisionCalc(marca, data, ventaExt, comprasUd)
   const corp = esCorpMarca(marca)
   const rowTot = (arr) => arr.reduce((a, b) => a + b, 0)
-  function guardar() { setSaving(true); try { localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado. Las comisiones de venta externa alimentan Comisiones del Cash Flow.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function guardar() { setSaving(true); try { saveEstado(empresa, 'comis', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet. Las comisiones de venta externa alimentan Comisiones del Cash Flow.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   const pctRow = (kf, ph) => MESES.map((_, m) => { const k = kf(m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder={ph} /></td> })
 
   return (
@@ -1422,7 +1422,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca }) {
     // AUC de la marca (promedio de categorías) para compatibilidad con los consolidados
     const aucMarca = MESES.map((_, m) => { const vals = catList.map(({ cat }) => auc(cat, m)).filter((v) => v > 0); return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0 })
     if (aucMarca.some((v) => v)) rows.push({ rubro: 'AUC', sbu, marca, meses: aucMarca })
-    try { localStorage.setItem(`precios_${empresa}`, JSON.stringify(snap)) } catch { }
+    saveEstado(empresa, 'precios', snap)
     await postToTab('Cap_Producto', empresa, usuario, 'Producto', rows, setMsg)
     setSaving(false)
   }
@@ -1487,7 +1487,7 @@ function GastosAdminForm({ empresa }) {
   const key = (cod, m) => `${cod}|${m}`
   const subtot = MESES.map((_, m) => lista.reduce((a, it) => a + g(key(it.cod, m)), 0))
   const filaTot = (cod) => MESES.reduce((a, _, m) => a + g(key(cod, m)), 0)
-  function guardar() { setSaving(true); try { localStorage.setItem(cfgKey, JSON.stringify(lista)); localStorage.setItem(stKey, JSON.stringify(data)); setMsg({ t: 'ok', x: 'Guardado. Los centros de costo aplican a todas las SBU.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function guardar() { setSaving(true); try { saveEstado(empresa, 'gadmin_cfg', lista); saveEstado(empresa, 'gadmin', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet. Los centros de costo aplican a todas las SBU.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   function agregar() { setLista([...lista, { cod: '', sub: '' }]) }
   function quitar(i) { setLista(lista.filter((_, j) => j !== i)) }
   function editar(i, campo, v) { setLista(lista.map((x, j) => j === i ? { ...x, [campo]: v } : x)) }
@@ -1610,8 +1610,10 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
       <div className="cmz-main" style={{ '--accent': acc, borderTop: '4px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
         {marca === '__TOTAL__'
           ? (<>
-            <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
-              <span className="empchip" style={{ background: col, marginLeft: 0 }}>▣ TOTAL {sbuName}</span>
+            <div style={{ marginBottom: 6 }}>
+              <span className="empchip" style={{ background: col, marginLeft: 0, fontSize: 13 }}>▣ TOTAL {sbuName}</span>
+            </div>
+            <div className="subtabs" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 6, display: 'flex', borderTop: '1px solid var(--line)', paddingTop: 10 }}>
               {puedeDir && <button className={'seg' + (totTabEf === 'brand' ? ' active' : '')} onClick={() => setTotTab('brand')} style={totTabEf === 'brand' ? { background: col, borderColor: col, color: '#fff' } : {}}>📊 Contribución de la SBU</button>}
               {pu('Finanzas') && <button className={'seg' + (totTabEf === 'cash' ? ' active' : '')} onClick={() => setTotTab('cash')} style={totTabEf === 'cash' ? { background: col, borderColor: col, color: '#fff' } : {}}>💵 Cash Flow</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'viajes' ? ' active' : '')} onClick={() => setTotTab('viajes')} style={totTabEf === 'viajes' ? { background: col, borderColor: col, color: '#fff' } : {}}>🧳 Viajes</button>}
@@ -1631,8 +1633,10 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
               : <BrandContribSBU empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />}
           </>)
           : (<>
-            <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
-              <span className="empchip" style={{ background: acc, marginLeft: 0 }}>{marca}</span>
+            <div style={{ marginBottom: 6 }}>
+              <span className="empchip" style={{ background: acc, marginLeft: 0, fontSize: 13 }}>{marca}</span>
+            </div>
+            <div className="subtabs" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 6, display: 'flex', borderTop: '1px solid var(--line)', paddingTop: 10 }}>
               {SECS.map((r) => { const on = r.id === secId; return <button key={r.id} className={'seg' + (on ? ' active' : '')} onClick={() => setSecId(r.id)} style={on ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{r.icon} {r.label}</button> })}
               {puedeDir && <button className={'seg' + (secId === 'viajes' ? ' active' : '')} onClick={() => setSecId('viajes')} style={secId === 'viajes' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>🧳 Viajes equipo</button>}
               {puedeDir && <button className={'seg' + (secId === 'brand' ? ' active' : '')} onClick={() => setSecId('brand')} style={secId === 'brand' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>📊 Contribución de la SBU</button>}
@@ -2100,8 +2104,9 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
     (async () => {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
       const [ven, prod, cap, mk] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing')])
+      let hist = []; try { const jh = await gHistorico(); if (jh && jh.ok && jh.values) hist = jh.values.slice(1) } catch { }
       const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3]; if (!mar || !c) return; (cats[mar] = cats[mar] || []).push(c) })
-      setP({ ven, prod, cats, mk })
+      setP({ ven, prod, cats, mk, hist })
     })()
   }, [empresa])
   if (!P) return <div className="panel"><h3 style={{ color: sbuColor(sbuName) }}>Resumen — {sbuName}</h3><div className="sub">Cargando…</div></div>
@@ -2132,24 +2137,77 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
     )
   }
   // vista === 'ucvm'
-  const calc = (mca) => { const catNames = (P.cats[mca] || []); const r = realAupAuc(empresa, mca, P.ven, P.prod, catNames); const unidades = r.totalUnits.reduce((a, b) => a + b, 0), venta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0); return { unidades, venta, costo, margen: venta - costo } }
+  const aupCatDe = (mca) => { const o = {}; P.prod.forEach((r) => { if (!inM(r, mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') === 0) o[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])) }); return o }
+  const aucCatDe = (mca) => { const o = {}; P.prod.forEach((r) => { if (!inM(r, mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUC · ') === 0) o[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])); else if (upper(rub) === 'AUC') { const base = MESES.map((_, j) => num(r[4 + j])); (P.cats[mca] || []).forEach((c) => { if (!o[c]) o[c] = base }) } }); return o }
+  const calc = (mca) => {
+    const catNames = (P.cats[mca] || [])
+    const r = realAupAuc(empresa, mca, P.ven, P.prod, catNames)
+    const aup = aupCatDe(mca), auc = aucCatDe(mca)
+    const catRows = (catNames.length ? catNames : ['General']).map((c) => {
+      const uc = r.unitsCat[c] || []
+      const unid = uc.reduce((a, b) => a + b, 0)
+      const venta = MESES.reduce((a, _, m) => a + (uc[m] || 0) * ((aup[c] || [])[m] || 0), 0)
+      const costo = MESES.reduce((a, _, m) => a + (uc[m] || 0) * ((auc[c] || [])[m] || 0), 0)
+      return { c, unidades: unid, venta, costo, margen: venta - costo }
+    }).filter((x) => x.unidades > 0.5 || x.venta > 0.5)
+    const unidades = r.totalUnits.reduce((a, b) => a + b, 0), venta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0)
+    return { unidades, venta, costo, margen: venta - costo, catRows }
+  }
   const rows = marcas.map((m) => ({ m, v: calc(m) }))
   const tot = rows.reduce((a, { v }) => { a.unidades += v.unidades; a.venta += v.venta; a.costo += v.costo; a.margen += v.margen; return a }, { unidades: 0, venta: 0, costo: 0, margen: 0 })
   const mpct = (v) => v.venta > 0 ? (v.margen / v.venta * 100) : null
+
+  // Por cliente y marca: unidades 2028 (Cap_Ventas) vs 2026 (histórico EBP) + crecimiento; los clientes nuevos también salen
+  const uni2028 = (mca) => { const o = {}; P.ven.forEach((r) => { if (!inM(r, mca)) return; const cli = String(r[1] || '').trim(); if (!cli) return; let s = 0; for (let j = 0; j < 12; j++) s += num(r[4 + j]); o[cli] = (o[cli] || 0) + s }); return o }
+  const uni2026 = (mca) => { const o = {}; (P.hist || []).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca) || String(r[1]) !== '2026') return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; const cli = String(r[8] || '').trim(); if (!cli) return; o[cli] = (o[cli] || 0) + num(r[7]) }); return o }
+  const cliRows = marcas.map((mca) => {
+    const u28 = uni2028(mca), u26 = uni2026(mca)
+    const clientes = [...new Set([...Object.keys(u28), ...Object.keys(u26)])].sort((a, b) => a.localeCompare(b))
+    const filas = clientes.map((cli) => { const a = Math.round(u26[cli] || 0), b = Math.round(u28[cli] || 0); return { cli, u26: a, u28: b, nuevo: a === 0 && b > 0, crec: a > 0 ? (b - a) / a * 100 : null } }).filter((f) => f.u26 > 0 || f.u28 > 0)
+    return { mca, filas, t26: filas.reduce((s, f) => s + f.u26, 0), t28: filas.reduce((s, f) => s + f.u28, 0) }
+  }).filter((s) => s.filas.length > 0)
+  const crecCell = (f) => f.nuevo ? <td className="tot" style={{ color: 'var(--odoo)', fontWeight: 800 }}>🆕 nuevo</td> : <td className={'tot ' + (f.crec == null ? '' : f.crec >= 0 ? 'pos' : 'neg')}>{f.crec == null ? '—' : (f.crec >= 0 ? '+' : '') + f.crec.toFixed(0) + '%'}</td>
+
   return (
-    <div className="panel">
-      <h3 style={{ color: sbuColor(sbuName) }}>Unidades · Venta · Costo · Margen — {sbuName}{M$} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
-      <div className="sub">Resumen por marca de la SBU. El <b>margen</b> es Venta Neta − Costo (margen bruto de producto), calculado con la mezcla real de categorías por cliente.</div>
-      <div className="tablewrap">
-        <table>
-          <thead><tr><th className="l">Marca</th><th>Unidades</th><th>Venta Neta</th><th>Costo</th><th>Margen</th><th>Margen %</th></tr></thead>
-          <tbody>
-            {rows.map(({ m, v }) => <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td><td className="tot">{fmt(v.unidades)}</td><td className="tot">{fmt(v.venta)}</td><td className="tot">{fmt(v.costo)}</td><td className="tot">{fmt(v.margen)}</td><td className="tot">{mpct(v) == null ? '—' : mpct(v).toFixed(0) + '%'}</td></tr>)}
-            <tr className="grandrow"><td className="l">Total {sbuName}</td><td className="tot">{fmt(tot.unidades)}</td><td className="tot">{fmt(tot.venta)}</td><td className="tot">{fmt(tot.costo)}</td><td className="tot">{fmt(tot.margen)}</td><td className="tot">{tot.venta > 0 ? (tot.margen / tot.venta * 100).toFixed(0) + '%' : '—'}</td></tr>
-          </tbody>
-        </table>
+    <>
+      <div className="panel">
+        <h3 style={{ color: sbuColor(sbuName) }}>Unidades · Venta · Costo · Margen — {sbuName}{M$} <span className="unit">(por marca y categoría · 2028 · solo lectura)</span></h3>
+        <div className="sub">Resumen por marca de la SBU, desglosado por <b>categoría</b>. El <b>margen</b> es Venta Neta − Costo (margen bruto de producto), calculado con la mezcla real de categorías por cliente.</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Marca / Categoría</th><th>Unidades</th><th>Venta Neta</th><th>Costo</th><th>Margen</th><th>Margen %</th></tr></thead>
+            <tbody>
+              {rows.map(({ m, v }) => (
+                <Fragment2 key={m}>
+                  <tr className="sburow"><td className="l" style={{ color: marcaColor(m) }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td><td className="tot">{fmt(v.unidades)}</td><td className="tot">{fmt(v.venta)}</td><td className="tot">{fmt(v.costo)}</td><td className="tot">{fmt(v.margen)}</td><td className="tot">{mpct(v) == null ? '—' : mpct(v).toFixed(0) + '%'}</td></tr>
+                  {v.catRows.map((c) => <tr key={m + '|' + c.c}><td className="l sub2">{c.c}</td><td className="tot">{fmt(c.unidades)}</td><td className="tot">{fmt(c.venta)}</td><td className="tot">{fmt(c.costo)}</td><td className="tot">{fmt(c.margen)}</td><td className="tot">{c.venta > 0 ? (c.margen / c.venta * 100).toFixed(0) + '%' : '—'}</td></tr>)}
+                </Fragment2>
+              ))}
+              <tr className="grandrow"><td className="l">Total {sbuName}</td><td className="tot">{fmt(tot.unidades)}</td><td className="tot">{fmt(tot.venta)}</td><td className="tot">{fmt(tot.costo)}</td><td className="tot">{fmt(tot.margen)}</td><td className="tot">{tot.venta > 0 ? (tot.margen / tot.venta * 100).toFixed(0) + '%' : '—'}</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      <div className="panel">
+        <h3 style={{ color: sbuColor(sbuName) }}>Unidades por cliente y marca — {sbuName} <span className="unit">(2028 vs 2026 · solo lectura)</span></h3>
+        <div className="sub">Por cada cliente: unidades <b>2028</b> (capturadas en Ventas) vs <b>2026</b> (histórico del EBP) y su <b>crecimiento</b>. Los clientes <b>nuevos</b> (sin 2026) también aparecen, marcados 🆕.</div>
+        <div className="tablewrap">
+          <table>
+            <thead><tr><th className="l">Marca / Cliente</th><th>Unid. 2026</th><th>Unid. 2028</th><th>Crecimiento</th></tr></thead>
+            <tbody>
+              {cliRows.length === 0 && <tr><td className="l" colSpan={4}>Aún no hay clientes con histórico ni capturados en Ventas para las marcas de esta SBU.</td></tr>}
+              {cliRows.map(({ mca, filas, t26, t28 }) => (
+                <Fragment2 key={mca}>
+                  <tr className="sburow"><td className="l" style={{ color: marcaColor(mca) }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td className="tot">{fmt(t26)}</td><td className="tot">{fmt(t28)}</td><td className="tot">{t26 > 0 ? ((t28 - t26) / t26 * 100 >= 0 ? '+' : '') + ((t28 - t26) / t26 * 100).toFixed(0) + '%' : '—'}</td></tr>
+                  {filas.map((f) => <tr key={mca + '|' + f.cli}><td className="l sub2">{f.cli}{f.nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}</td><td className="tot">{fmt(f.u26)}</td><td className="tot">{fmt(f.u28)}</td>{crecCell(f)}</tr>)}
+                </Fragment2>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -2549,7 +2607,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [msg, setMsg] = useState(null)
   const [, setTick] = useState(0)
   const usarCat = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] !== false } catch { return true } })()
-  function setUsarCat(v) { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); u[marca] = v; localStorage.setItem('usarcat_' + empresa, JSON.stringify(u)) } catch { } setTick((t) => t + 1) }
+  function setUsarCat(v) { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); u[marca] = v; saveEstado(empresa, 'usarcat', u) } catch { } setTick((t) => t + 1) }
   useEffect(() => {
     (async () => {
       try {
