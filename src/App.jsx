@@ -37,8 +37,11 @@ const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO']
 /* Colores por SBU y por marca (identidad visual dinámica) */
 const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'RETAIL': '#be123c', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
 const sbuColor = (s) => SBU_COLORS[String(s || '').toUpperCase()] || '#0e7490'
-const MARCA_PALETTE = ['#0891b2', '#0d9488', '#2563eb', '#7c3aed', '#db2777', '#ea580c', '#ca8a04', '#16a34a', '#dc2626', '#4f46e5', '#0ea5e9', '#059669', '#9333ea', '#e11d48', '#f59e0b', '#14b8a6', '#6366f1', '#c026d3']
-const marcaColor = (marca) => { let h = 0; const s = String(marca || ''); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return MARCA_PALETTE[h % MARCA_PALETTE.length] }
+// Paleta sin verde ni amarillo, tonos bien separados (para marcas no fijadas)
+const MARCA_PALETTE = ['#2563eb', '#dc2626', '#9333ea', '#ea580c', '#db2777', '#b45309', '#4f46e5', '#e11d48', '#7c3aed', '#c026d3', '#475569', '#be123c']
+// Color fijo por marca conocida: garantiza que cada marca de una SBU se vea distinta
+const MARCA_FIJO = { ALTRA: '#7c3aed', FJALLRAVEN: '#db2777', HOKA: '#2563eb', NORDA: '#ea580c', ARIAT: '#dc2626', BIRKENSTOCK: '#c026d3', BLUNDSTONE: '#4f46e5', ECCO: '#475569', UGG: '#b45309' }
+const marcaColor = (marca) => { const u = String(marca || '').trim().toUpperCase(); if (MARCA_FIJO[u]) return MARCA_FIJO[u]; let h = 0; for (let i = 0; i < u.length; i++) h = (h * 31 + u.charCodeAt(i)) >>> 0; return MARCA_PALETTE[h % MARCA_PALETTE.length] }
 
 /* Desglose de Marketing */
 const MK_GROUPS = [
@@ -873,7 +876,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   const val = (mca, concepto, mi) => num(data[key(mca, concepto, mi)])
   // Cash In (Cobros) de Dic-27 = suma del saldo (deuda) cierre 2027 por cliente (calculado, no editable)
-  const CASHIN = 'Cash In (Cobros)', DIC27 = 2
+  const CASHIN = 'Cash In (Cobros)', DIC27 = 2, CASH_INI = 'Cash Inicial', CASH_FIN = 'Cash Final', CASH_OUT = 'Cash Out (Pagos)'
   const saldoTotal = (mca) => clientesDe(mca).reduce((s, cli) => s + num(data[`SALDO|${mca}|${cli}`]), 0)
   const gadminSubtot = MESES.map((_, m) => gadminCfg.reduce((a, it) => a + num(gadminData[`${it.cod}|${m}`]), 0))
   const cellRaw = (concepto, mi) => {
@@ -917,6 +920,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const CALC_PSI = { [VENTAS_NETAS]: ventaNetaMes, [COMPRAS_FD]: comprasUsdMes, [INV_INI]: invIniUsd, [INV_FIN]: invFinUsd }
   const esCalcComercial = (it) => !!CALC_PSI[it]
   const cell = (concepto, mi) => {
+    if (concepto === CASH_INI) return cashCalc.ini[mi]
+    if (concepto === CASH_FIN) return cashCalc.fin[mi]
     if (concepto === CASHIN) {
       if (mi === DIC27) return isTotal ? sbuMarcas.reduce((s, m) => s + saldoTotal(m), 0) : saldoTotal(marca)   // Dic-27 = saldo cierre 2027
       if (mi >= 3) { const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[j], 0) : getCobros(marca).total[j] } // 2028 = escalera
@@ -928,11 +933,22 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   }
   // Valor de UNA marca (para el desglose del total): misma lógica que cell pero sin sumar SBU.
   const cellMarca = (mca, concepto, mi) => {
+    if (concepto === CASH_INI) return cashCalcMarca(mca).ini[mi]
+    if (concepto === CASH_FIN) return cashCalcMarca(mca).fin[mi]
     if (concepto === CASHIN) { if (mi === DIC27) return saldoTotal(mca); if (mi >= 3) return getCobros(mca).total[mi - 3]; return val(mca, concepto, mi) }
     if (CALC_PSI[concepto]) return mi < 3 ? 0 : CALC_PSI[concepto](mca)[mi - 3]
     if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + val(mca, sub, mi), 0)
     return val(mca, concepto, mi)
   }
+  // Cash Inicial / Cash Final encadenados: Final(Dic-27) lo pone Finanzas (semilla); luego
+  // Inicial(mes) = Final(mes anterior) y Final(mes) = Inicial + Cash In − Cash Out − Costos Operativos.
+  const buildCash = (inFn, outFn, seedFn) => {
+    const ini = Array(CF_MESES.length).fill(0), fin = Array(CF_MESES.length).fill(0)
+    for (let mi = 0; mi < CF_MESES.length; mi++) { ini[mi] = mi === 0 ? 0 : fin[mi - 1]; fin[mi] = mi === DIC27 ? seedFn(mi) : ini[mi] + inFn(mi) - outFn(mi) }
+    return { ini, fin }
+  }
+  const cashCalc = buildCash((mi) => cell(CASHIN, mi), (mi) => cell(CASH_OUT, mi) + cell(CF_COSTOS_PARENT, mi), (mi) => isTotal ? sbuMarcas.reduce((s, m) => s + num(data[key(m, CASH_FIN, mi)]), 0) : num(data[key(marca, CASH_FIN, mi)]))
+  const cashCalcMarca = (mca) => buildCash((mi) => cellMarca(mca, CASHIN, mi), (mi) => cellMarca(mca, CASH_OUT, mi) + cellMarca(mca, CF_COSTOS_PARENT, mi), (mi) => num(data[key(mca, CASH_FIN, mi)]))
   // Texto "ALTRA: 1,234 · HOKA: 567" para el tooltip del total (solo si el desglose está activo).
   const brk = (concepto, mi) => (isTotal && desglose) ? sbuMarcas.map((m) => ({ m, v: cellMarca(m, concepto, mi) })).filter((x) => Math.abs(x.v) > 0.5).map((x) => `${x.m}: ${fmt(x.v)}`).join(' · ') || 'Sin datos por marca' : undefined
   const subTot = (sub) => CF_MESES.reduce((a, _, mi) => a + cellRaw(sub, mi), 0)
@@ -995,6 +1011,13 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                     const esCostos = it === CF_COSTOS_PARENT
                     const celdas = CF_MESES.map((_, mi) => {
                       const cls = mi < 3 ? 'ya' : 'yb'
+                      // Cash Inicial: siempre calculado = Cash Final del mes anterior
+                      if (it === CASH_INI) return <td key={mi} className={'tot ' + cls} style={{ cursor: 'help' }} title="Cash Inicial = Cash Final del mes anterior (calculado)">{fmt(cell(it, mi))}</td>
+                      // Cash Final: Finanzas solo lo escribe en Dic-27 (semilla); el resto se calcula
+                      if (it === CASH_FIN) {
+                        if (mi === DIC27 && !isTotal && !soloVer) { const k = key(marca, it, mi); return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> }
+                        return <td key={mi} className={'tot ' + cls} style={mi === DIC27 ? { cursor: 'help' } : { cursor: 'help' }} title={mi === DIC27 ? 'Saldo inicial de caja (lo pone Finanzas en Dic-27)' : 'Cash Final = Cash Inicial + Cash In − Cash Out − Costos Operativos (calculado)'}>{fmt(cell(it, mi))}</td>
+                      }
                       const cashinCalc = it === CASHIN && mi >= 2
                       const comercialCalc = esCalcComercial(it)
                       if (isTotal || esCostos || cashinCalc || comercialCalc || soloVer) {
