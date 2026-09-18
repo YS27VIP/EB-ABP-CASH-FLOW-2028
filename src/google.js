@@ -57,8 +57,8 @@ async function _api(path, opts = {}) {
 }
 const A1 = (t) => "'" + String(t).replace(/'/g, "''") + "'"
 async function readValues(tab) { try { const j = await _api('/values/' + encodeURIComponent(A1(tab))); return j.values || [] } catch { return [] } }
-async function writeValues(tab, a1, values) { return _api('/values/' + encodeURIComponent(A1(tab) + '!' + a1) + '?valueInputOption=USER_ENTERED', { method: 'PUT', body: JSON.stringify({ values }) }) }
-async function appendValues(tab, values) { return _api('/values/' + encodeURIComponent(A1(tab) + '!A1') + ':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS', { method: 'POST', body: JSON.stringify({ values }) }) }
+async function writeValues(tab, a1, values, raw) { return _api('/values/' + encodeURIComponent(A1(tab) + '!' + a1) + '?valueInputOption=' + (raw ? 'RAW' : 'USER_ENTERED'), { method: 'PUT', body: JSON.stringify({ values }) }) }
+async function appendValues(tab, values, raw) { return _api('/values/' + encodeURIComponent(A1(tab) + '!A1') + ':append?valueInputOption=' + (raw ? 'RAW' : 'USER_ENTERED') + '&insertDataOption=INSERT_ROWS', { method: 'POST', body: JSON.stringify({ values }) }) }
 async function clearValues(tab) { return _api('/values/' + encodeURIComponent(A1(tab)) + ':clear', { method: 'POST', body: '{}' }) }
 async function batchUpdateValues(data) { return _api('/values:batchUpdate', { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) }) }
 async function sheetTitles() { const j = await _api('?fields=sheets.properties.title'); return (j.sheets || []).map((s) => s.properties.title) }
@@ -226,6 +226,29 @@ export async function gSaveHistorico(values) {
   await clearValues('Historico')
   await writeValues('Historico', 'A1', out)
   return { ok: true, filas: incoming.length, total: out.length - 1 }
+}
+
+/* ===== Estado del modelo (clave/valor JSON) por empresa =====
+   Guarda en la hoja Cap_Estado todo lo que antes vivía solo en localStorage:
+   % por cliente-categoría, inventario, precios por temporada, comisiones,
+   gastos administrativos, costos logísticos, cash flow, crecimientos, etc.
+   Cada fila = EMPRESA · CLAVE (nombre del store) · VALOR (JSON en texto). */
+export async function gLoadEstado(empresa) {
+  await ensureTab('Cap_Estado', ['EMPRESA', 'CLAVE', 'VALOR'])
+  const v = await readValues('Cap_Estado')
+  const map = {}
+  for (let r = 1; r < v.length; r++) { const row = v[r]; if (up(row[0]) !== up(empresa)) continue; const clave = String(row[1] || ''); if (clave) map[clave] = String(row[2] == null ? '' : row[2]) }
+  return { ok: true, map }
+}
+export async function gSaveEstado(empresa, clave, valor) {
+  await ensureTab('Cap_Estado', ['EMPRESA', 'CLAVE', 'VALOR'])
+  const valStr = typeof valor === 'string' ? valor : JSON.stringify(valor)
+  const v = await readValues('Cap_Estado')
+  let row = -1
+  for (let r = 1; r < v.length; r++) { if (up(v[r][0]) === up(empresa) && String(v[r][1] || '') === String(clave)) { row = r; break } }
+  if (row >= 0) await writeValues('Cap_Estado', 'A' + (row + 1) + ':C' + (row + 1), [[empresa, clave, valStr]], true)
+  else await appendValues('Cap_Estado', [[empresa, clave, valStr]], true)
+  return { ok: true }
 }
 
 /* Bitácora y Colaboradores usan gSaveRows con esquema genérico (ya definido en la app). */

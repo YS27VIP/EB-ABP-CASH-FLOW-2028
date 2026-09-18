@@ -994,10 +994,31 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       </div>
 
       <div className="panel">
-        <h3>{role.label} — Términos de pago y saldo por cliente <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{soloVer && <span className="unit" style={{ marginLeft: 8 }}>👁️ espejo de Finanzas</span>}</h3>
-        <div className="sub">Clientes con histórico 2025/2026 y nuevos clientes 2028 (capturados en Ventas). Elige el <b>término de pago</b> y el <b>saldo (deuda) estimado</b> con que cierra 2027 cada cliente.</div>
-        {!isTotal && buscador}
-        {isTotal ? <div className="note warn">Selecciona una marca específica (arriba) para editar los términos de pago por cliente.</div> : (() => {
+        <h3>{role.label} — Términos de pago y saldo por cliente <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && <span className="unit" style={{ marginLeft: 8 }}>👁️ espejo de Finanzas</span>}</h3>
+        <div className="sub">Clientes con histórico 2025/2026 y nuevos clientes 2028 (capturados en Ventas). {isTotal ? <>Así se ven los <b>términos de pago</b> y el <b>saldo (deuda)</b> que Finanzas definió por cliente en cada marca de la SBU.</> : <>Elige el <b>término de pago</b> y el <b>saldo (deuda) estimado</b> con que cierra 2027 cada cliente.</>}</div>
+        {buscador}
+        {isTotal ? (() => {
+          const secciones = sbuMarcas.map((mca) => ({ mca, cls: clientesDe(mca).filter(matchCli) })).filter((s) => s.cls.length > 0)
+          const granTotal = sbuMarcas.reduce((s, mca) => s + saldoTotal(mca), 0)
+          if (secciones.length === 0) return <div className="note warn">Aún no hay clientes (con histórico 2025/2026 ni capturados en Ventas) para las marcas de esta SBU.</div>
+          return (
+            <div className="tablewrap">
+              <table>
+                <thead><tr><th className="l">Marca / Cliente</th><th>Término de pagos</th><th>Saldo (deuda) estimado cierre 2027</th></tr></thead>
+                <tbody>
+                  {secciones.map(({ mca, cls }) => (
+                    <Fragment2 key={mca}>
+                      <tr className="sburow"><td className="l" style={{ color: marcaColor(mca) }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td></td><td className="tot">{fmt(saldoTotal(mca))}</td></tr>
+                      {cls.map((cli) => { const tk = `TERM|${mca}|${cli}`, sk = `SALDO|${mca}|${cli}`; return <tr key={mca + '|' + cli}><td className="l sub2">{cli}</td><td>{data[tk] || '—'}</td><td className="tot">{fmt(num(data[sk]))}</td></tr> })}
+                    </Fragment2>
+                  ))}
+                  <tr className="grandrow"><td className="l">TOTAL {sbuLbl}</td><td></td><td className="tot">{fmt(granTotal)}</td></tr>
+                </tbody>
+              </table>
+              <div className="sub" style={{ marginTop: 8 }}>Solo lectura. Este total alimenta <b>Cash In (Cobros) · Dic-27</b> del bloque de arriba. Para editar un cliente, entra a su marca específica.</div>
+            </div>
+          )
+        })() : (() => {
           const cls = clientesDe(marca).filter(matchCli)
           return (
             <div className="tablewrap">
