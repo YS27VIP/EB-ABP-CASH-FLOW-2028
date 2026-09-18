@@ -36,6 +36,9 @@ select:focus{border-color:var(--odoo);outline:none}
 .panel{background:var(--card);border:1.5px solid #c4ccd4;border-left:6px solid var(--accent,var(--odoo));border-radius:12px;padding:16px 18px;margin-bottom:26px;box-shadow:0 3px 14px rgba(0,0,0,.09)}
 .panel h3{margin:0 0 6px;font-size:15px;padding:2px 0 8px 0;border-bottom:1px solid var(--line)}
 .panel .sub{color:var(--muted);font-size:12.5px;margin-bottom:14px}
+/* Grupo de un rol en Comercial: la línea continua de la izquierda identifica a la persona; los paneles internos no llevan borde de color */
+.role-group{padding-top:2px}
+.role-group .panel{border-left:1.5px solid #d7dde3}
 
 table{border-collapse:collapse;width:100%;font-size:12.5px}
 th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}

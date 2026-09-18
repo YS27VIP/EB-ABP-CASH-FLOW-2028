@@ -1502,12 +1502,12 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
 }
 
 /* ===== BLOQUE LOGÍSTICA: captura + inventario + costos, con switch Unidades/Plata (solo aquí) ===== */
-function LogisticaBlock({ r, empresa, usuario, oneSbu, marca }) {
+function LogisticaBlock({ r, empresa, usuario, oneSbu, marca, noHeader }) {
   const [vista, setVista] = useState('ambas') // 'ud' = inventario (unidades) · '$' = costos (plata)
   const acc = marcaColor(marca)
   return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
+    <div style={{ marginBottom: noHeader ? 0 : 18 }}>
+      {!noHeader && <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>}
       <div className="toolbar" style={{ marginBottom: 10, gap: 6 }}>
         <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>Ver:</span>
         {[['ud', '🔢 Unidades (inventario)'], ['$', '💲 Plata (costos)'], ['ambas', '🔢💲 Ambas']].map(([m, lbl]) => <button key={m} className={'seg' + (vista === m ? ' active' : '')} onClick={() => setVista(m)} style={vista === m ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{lbl}</button>)}
@@ -1591,12 +1591,12 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
                     {comercialRoles.map((r) => <option key={r.id} value={r.id}>{r.icon} {r.label}</option>)}
                   </select>
                 </div>}
-                {comercialRoles.filter((r) => comSub === 'all' || r.id === comSub).map((r) => r.id === 'logistica'
-                  ? <LogisticaBlock key={sbuName + 'log' + marca} r={r} empresa={empresa} usuario={usuario} oneSbu={oneSbu} marca={marca} />
-                  : (
-                  <div key={r.id} style={{ marginBottom: 18 }}>
-                    <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
-                    <RoleForm key={sbuName + r.id + marca} role={r} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />
+                {comercialRoles.filter((r) => comSub === 'all' || r.id === comSub).map((r) => (
+                  <div key={r.id} className="role-group" style={{ borderLeft: '7px solid ' + r.color, borderRadius: '0 12px 12px 0', paddingLeft: 14, marginBottom: 34, background: 'linear-gradient(90deg, ' + r.color + '11, transparent 60px)' }}>
+                    <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
+                    {r.id === 'logistica'
+                      ? <LogisticaBlock key={sbuName + 'log' + marca} r={r} empresa={empresa} usuario={usuario} oneSbu={oneSbu} marca={marca} noHeader />
+                      : <RoleForm key={sbuName + r.id + marca} role={r} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
                   </div>))}
               </>)
               : <RoleForm key={sbuName + secId + marca} role={role} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
@@ -2454,7 +2454,6 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
         {!fixedMarca && <><label>Marca</label>
         <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select></>}
         <div className="spacer"></div>
-        <button className="btn" onClick={() => setLista([...lista, { cat: '', peso: 0 }])}>➕ Agregar categoría</button>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
@@ -2466,7 +2465,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
           <table style={{ width: 'auto' }}>
             <thead><tr><th className="l">Categoría</th><th></th></tr></thead>
             <tbody>
-              {lista.length === 0 && <tr><td className="l" colSpan={2}>Agrega categorías con el botón de arriba.</td></tr>}
+              {lista.length === 0 && <tr><td className="l" colSpan={2}>Agrega categorías con el botón de abajo.</td></tr>}
               {lista.map((o, i) => (
                 <tr key={i}>
                   <td className="l"><input style={{ width: 280, padding: '6px' }} value={o.cat} onChange={(e) => setLista(lista.map((x, j) => j === i ? { ...x, cat: e.target.value } : x))} placeholder="Ej. ROAD, TRAIL, HIKE…" /></td>
@@ -2476,6 +2475,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
             </tbody>
           </table>
         </div>
+        <button className="btn" style={{ marginTop: 12 }} onClick={() => setLista([...lista, { cat: '', peso: 0 }])}>➕ Agregar categoría</button>
       </div>
       {usarCat && lista.length > 0 && <div className="panel">
         <h3>Categorías por cliente — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
