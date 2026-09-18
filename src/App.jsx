@@ -1197,7 +1197,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
   if (mode === 'flow') {
     return (
       <div className="panel">
-        <h3>Saldo de inventario por temporada — {marca} <span className="empchip" style={{ background: '#5b6470', marginLeft: 6, fontSize: 11 }}>📦 UNIDADES</span> <span className="unit">(👁️ del tracking de Producto)</span></h3>
+        <h3>Saldo de inventario por temporada — {marca}{UD} <span className="unit">(unidades · 👁️ del tracking de Producto)</span></h3>
         <div className="sub">Lo que va quedando sin rotar de cada temporada, mes a mes, <b>en unidades</b>. Alimenta el costo de mantenimiento. El valor en dinero está en la tabla de abajo.</div>
         <div className="tablewrap">
           <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
@@ -1208,7 +1208,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode }) {
             </tbody>
           </table>
         </div>
-        <div className="sub" style={{ marginTop: 14, marginBottom: 6 }}><b>Valor del saldo ($)</b> = saldo (ud) × AUC de cada temporada (lo pones en Producto → AUP/AUC).</div>
+        <div className="sub" style={{ marginTop: 14, marginBottom: 6 }}><b>Valor del saldo</b>{M$} = saldo (ud) × AUC de cada temporada (lo pones en Producto → AUP/AUC).</div>
         <div className="tablewrap">
           <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
             <thead><tr><th className="l">Temporada · AUC</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Fin año</th></tr></thead>
