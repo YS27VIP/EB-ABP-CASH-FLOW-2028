@@ -104,7 +104,7 @@ async function _buildHistorico() {
     if (hr < 0) continue
     const H = rows[hr].map((x) => String(x || '').trim().toUpperCase())
     const idx = (cands, last) => { let f = -1; for (const c of cands) { for (let k = 0; k < H.length; k++) { if (H[k] === c) { if (last) f = k; else return k } } if (f >= 0 && !last) return f } return f }
-    const iT = idx(['TIPO']), iR = idx(['RUBRO']), iS = idx(['SBU']), iM = idx(['MARCA', 'ARCH']), iC = idx(['CLIENTE ARMONIZADO', 'BUYER', 'CLIENTE']), iV = idx(['VALOR EN DOLARES', 'DOLARES', 'VALOR']), iMes = idx(['FECHA ARREGLADA', 'MES', 'FECHA']), iP = idx(['PAIS'], true), iA = idx(['AÑO', 'ANO'])
+    const iT = idx(['TIPO']), iR = idx(['RUBRO']), iS = idx(['SBU']), iM = idx(['MARCA', 'BRAND', 'ARCH']), iC = idx(['CLIENTE ARMONIZADO', 'BUYER', 'CLIENTE']), iV = idx(['VALOR EN DOLARES', 'DOLARES', 'VALOR']), iMes = idx(['FECHA ARREGLADA', 'MES', 'FECHA']), iP = idx(['PAIS'], true), iA = idx(['AÑO', 'ANO'])
     for (let r = hr + 1; r < rows.length; r++) {
       const row = rows[r]
       const cli = String(row[iC] || '').trim()
@@ -142,7 +142,7 @@ export async function gPlan2027() {
   if (hr >= 0) {
     const H = rows[hr].map((x) => String(x || '').trim().toUpperCase())
     const idx = (cands) => { for (const c of cands) { const k = H.indexOf(c); if (k >= 0) return k } return -1 }
-    const iT = idx(['TIPO']), iR = idx(['RUBRO']), iM = idx(['MARCA', 'ARCH']), iV = idx(['VALOR EN DOLARES', 'VALOR'])
+    const iT = idx(['TIPO']), iR = idx(['RUBRO']), iM = idx(['MARCA', 'BRAND', 'ARCH']), iV = idx(['VALOR EN DOLARES', 'VALOR'])
     for (let r = hr + 1; r < rows.length; r++) {
       const row = rows[r]; if (up(row[iT]) === 'TAHO') continue
       const mar = String(row[iM] || '').trim(); if (!mar) continue

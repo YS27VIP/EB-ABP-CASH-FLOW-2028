@@ -135,8 +135,8 @@ const upper = (s) => String(s == null ? '' : s).trim().toUpperCase()
 const mesIdx = (v) => { const d = new Date(v); return isNaN(d.getTime()) ? -1 : d.getUTCMonth() }
 const M$ = <span className="moneytag" title="Valores en dinero ($)">$</span> // icono discreto de dinero
 const UD = <span className="unittag" title="Valores en unidades (ud)"># </span> // icono discreto de unidades
-// ❓ para campos CONSOLIDADOS (suma de partes): al pasar el mouse muestra de qué se compone
-const Q = (t) => <span className="unit" title={t} style={{ cursor: 'help', marginLeft: 5 }}>❓</span>
+// Marcador discreto (ⓘ gris) para campos CONSOLIDADOS (suma de partes): al pasar el mouse muestra de qué se compone
+const Q = (t) => <span title={t} style={{ cursor: 'help', marginLeft: 5, fontSize: 10.5, fontWeight: 700, color: '#94a3b8', border: '1px solid #cbd5e1', borderRadius: '50%', display: 'inline-block', width: 15, height: 15, lineHeight: '14px', textAlign: 'center', verticalAlign: 'middle' }}>i</span>
 // 🪞 para vistas ESPEJO (solo lectura, el dato se llena/edita en otro lado): tooltip dice de dónde viene
 const ESP = (t) => <span className="unit" title={t} style={{ cursor: 'help', marginLeft: 6, fontSize: 12 }}>🪞</span>
 
@@ -1071,7 +1071,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
                     const ayudaComp = it === CASHIN ? 'Cash In (Cobros): solo sobre la VENTA EXTERNA. Cada mes es la venta externa de meses anteriores cobrada según el plazo de cada cliente (Cash=mismo mes, 30d=+1, 60=+2…), más el saldo (deuda) de cierre 2027. La venta interna (intercompañía) es incobrable y se muestra aparte, abajo. Párate sobre cada mes para ver el detalle.' : it === VENTAS_NETAS ? 'Ventas Netas = Unidades (Comercial) × AUP efectivo del mes (Producto). Párate sobre cada mes.' : it === COMPRAS_FD ? 'Compras = unidades compradas × AUC (Producto). Párate sobre cada mes.' : null
-                    const fila = <tr key={it} className={esCostos ? 'catrow rowline ' + (openCostos ? 'open' : '') : undefined} onClick={esCostos ? () => setOpenCostos((o) => !o) : undefined} style={esCostos ? { cursor: 'pointer' } : undefined}><td className="l">{esCostos ? <span className="caret">▶</span> : null} {it}{ayudaComp && <span className="unit" title={ayudaComp} style={{ cursor: 'help', marginLeft: 5 }}>❓</span>}{esCostos ? <span className="unit" style={{ marginLeft: 6 }}>({openCostos ? 'ocultar' : 'ver'} detalle: {CF_COSTOS.join(' + ')})</span> : null}</td>{celdas}<td className="tot">{fmt(rowTot(it))}</td></tr>
+                    const fila = <tr key={it} className={esCostos ? 'catrow rowline ' + (openCostos ? 'open' : '') : undefined} onClick={esCostos ? () => setOpenCostos((o) => !o) : undefined} style={esCostos ? { cursor: 'pointer' } : undefined}><td className="l">{esCostos ? <span className="caret">▶</span> : null} {it}{ayudaComp && Q(ayudaComp)}{esCostos ? <span className="unit" style={{ marginLeft: 6 }}>({openCostos ? 'ocultar' : 'ver'} detalle: {CF_COSTOS.join(' + ')})</span> : null}</td>{celdas}<td className="tot">{fmt(rowTot(it))}</td></tr>
                     if (it === CASHIN) {
                       const memoRow = (label, pick, color, tip) => { const cs = CF_MESES.map((_, mi) => { const cls = mi < 3 ? 'ya' : 'yb'; return <td key={mi} className={'tot ' + cls} style={{ color }}>{fmt(ventaSplitMemo(pick, mi))}</td> }); const tt = CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo(pick, mi), 0); return <tr><td className="l sub2" style={{ color }} title={tip}>↳ {label}</td>{cs}<td className="tot" style={{ color }}>{fmt(tt)}</td></tr> }
                       return <Fragment2 key={it}>{fila}{memoRow('Venta externa 2028 (base de cobros)', 'ext', '#0b5566', 'Venta a clientes externos (Unid × AUP), por mes de venta. Es la base sobre la que se calcula el Cash In según el plazo de cada cliente.')}{memoRow('Venta interna 2028 (incobrable · intercompañía)', 'int', '#b45309', 'Venta a clientes marcados como Interno en Ventas. No genera Cash In: es intercompañía / incobrable. Se muestra por marca y en TOTAL SBU.')}</Fragment2>
@@ -1671,8 +1671,8 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
             {cats.map((c) => (
               <Fragment2 key={c}>
                 <tr className="secrow"><td colSpan={14}>{c}</td></tr>
-                <tr className="catrow"><td className="l">AUP efectivo {c} <span className="unit" title={'Párate sobre cada mes para ver de qué temporadas se compone.'} style={{ cursor: 'help' }}>❓</span></td>{MESES.map((_, m) => <td key={m} className="tot" title={compo(c, m, true)} style={{ cursor: 'help' }}>{money(aupCatMes(c, m))}</td>)}<td></td></tr>
-                <tr className="catrow"><td className="l">AUC efectivo {c} <span className="unit" title={'Párate sobre cada mes para ver de qué temporadas se compone.'} style={{ cursor: 'help' }}>❓</span></td>{MESES.map((_, m) => <td key={m} className="tot" title={compo(c, m, false)} style={{ cursor: 'help' }}>{money(aucCatMes(c, m))}</td>)}<td></td></tr>
+                <tr className="catrow"><td className="l">AUP efectivo {c} {Q('Párate sobre cada mes para ver de qué temporadas se compone.')}</td>{MESES.map((_, m) => <td key={m} className="tot" title={compo(c, m, true)} style={{ cursor: 'help' }}>{money(aupCatMes(c, m))}</td>)}<td></td></tr>
+                <tr className="catrow"><td className="l">AUC efectivo {c} {Q('Párate sobre cada mes para ver de qué temporadas se compone.')}</td>{MESES.map((_, m) => <td key={m} className="tot" title={compo(c, m, false)} style={{ cursor: 'help' }}>{money(aucCatMes(c, m))}</td>)}<td></td></tr>
               </Fragment2>
             ))}
             <tr className="secrow"><td colSpan={14}>TOTAL {marca}</td></tr>
@@ -3076,11 +3076,10 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const u26 = (cli, mi) => (u2026[cli + '|' + marca] || [])[mi] || 0
   const u25 = (cli, mi) => (u2025[cli + '|' + marca] || [])[mi] || 0
   const mKey = (cli, mi) => marca + '|' + cli + '|' + mi
-  // 2028 = el % de crecimiento define el TOTAL (sobre 2026). El reparto por mes lo escribe la persona (amarillo);
-  // si no lo toca, se sugiere el mismo patrón mensual de 2026 escalado por el %.
-  const u28def = (cli, mi) => Math.round(u26(cli, mi) * (1 + g(cli) / 100))
-  const u28 = (cli, mi) => { if (esNuevo(cli)) return Math.round(num(manual[mKey(cli, mi)])); const cur = manual[mKey(cli, mi)]; return (cur === undefined) ? u28def(cli, mi) : Math.round(num(cur)) }
-  const objetivo28 = (cli) => esNuevo(cli) ? null : MESES.reduce((a, _, mi) => a + u28def(cli, mi), 0)
+  // 2028 = el % de crecimiento define el TOTAL objetivo (sobre 2026). Los meses arrancan VACÍOS:
+  // el vendedor decide cómo repartir ese total por mes (celdas amarillas). Debe completarlo.
+  const u28 = (cli, mi) => { const cur = manual[mKey(cli, mi)]; return (cur === undefined || cur === '') ? 0 : Math.round(num(cur)) }
+  const objetivo28 = (cli) => esNuevo(cli) ? null : Math.round(MESES.reduce((a, _, mi) => a + u26(cli, mi), 0) * (1 + g(cli) / 100))
   const setG = (cli, val) => setGrowth({ ...growth, [cli + '|' + marca]: val })
   const setMan = (cli, mi, val) => setManual({ ...manual, [mKey(cli, mi)]: val })
   const agregarCliente = async (nombre) => {
@@ -3098,7 +3097,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const totMarcaSel = clientes.reduce((s, cli) => s + t28(cli), 0)
   const totMarca = {}
   const mesMarca = {}
-  Object.keys(u2026).forEach((k) => { const p = k.split('|'), cli = p[0], mar = p[1], gg = num(growth[cli + '|' + mar]); const arr = mesMarca[mar] || (mesMarca[mar] = Array(12).fill(0)); let t = 0; for (let mi = 0; mi < 12; mi++) { const cur = manual[mar + '|' + cli + '|' + mi]; const v = (cur === undefined || cur === '') ? Math.round((u2026[k][mi] || 0) * (1 + gg / 100)) : Math.round(num(cur)); arr[mi] += v; t += v } totMarca[mar] = (totMarca[mar] || 0) + t })
+  Object.keys(u2026).forEach((k) => { const p = k.split('|'), cli = p[0], mar = p[1]; const arr = mesMarca[mar] || (mesMarca[mar] = Array(12).fill(0)); let t = 0; for (let mi = 0; mi < 12; mi++) { const cur = manual[mar + '|' + cli + '|' + mi]; const v = (cur === undefined || cur === '') ? 0 : Math.round(num(cur)); arr[mi] += v; t += v } totMarca[mar] = (totMarca[mar] || 0) + t })
   const mes28 = MESES.map((_, mi) => clientes.reduce((a, cli) => a + u28(cli, mi), 0))
   const mes26 = MESES.map((_, mi) => clientes.reduce((a, cli) => a + u26(cli, mi), 0))
   const mes25 = MESES.map((_, mi) => clientes.reduce((a, cli) => a + u25(cli, mi), 0))
@@ -3189,14 +3188,14 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>Venta Neta 2028 por categoría y mes — {marca}{M$} <span className="unit">(dinero $)</span></h3>
-            <div className="sub">Venta Neta = <b>cada mes</b> se valoriza con el <b>AUP de ese mes</b> (unidades del mes × AUP mensual de la categoría, que captura <b>Producto por categoría</b>). Ese cálculo mensual es el real; el Total es la suma de los meses. La columna <b>AUP prom. año</b> es <b>solo referencia</b>: el promedio anual implícito (venta total ÷ unidades del año), no entra en ningún cálculo. No mezcla temporadas: la evolución del AUP por antigüedad de inventario está en <b>Producto → AUP/AUC por temporada</b>.</div>
+            <div className="sub">Venta Neta = <b>cada mes</b> se valoriza con el <b>AUP de ese mes</b> (unidades del mes × AUP mensual de la categoría, que captura <b>Producto por categoría</b>). Ese cálculo mensual es el real; el Total es la suma de los meses. No mezcla temporadas: la evolución del AUP por antigüedad de inventario está en <b>Producto → AUP/AUC por temporada</b>.</div>
             <div className="tablewrap">
               <table className="vfix">
-                <colgroup><col style={{ width: '270px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
-                <thead><tr><th className="l">Categoría</th><th style={{ whiteSpace: 'normal', lineHeight: 1.1 }}>AUP prom.<br />año <span className="unit" style={{ fontWeight: 500 }}>(ref.)</span></th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+                <colgroup><col style={{ width: '270px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+                <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
-                  {(() => { const uT = MESES.reduce((s, _, mi) => s + catList.reduce((a, c) => a + uCatMes(c.cat, mi), 0), 0); const aupPT = uT > 0 ? vnTot / uT : 0; return <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="ref" title={`Referencia (no entra al cálculo): promedio anual implícito = Venta neta total (${fmt(vnTot)}) ÷ unidades totales (${fmt(uT)}) = ${fmt(aupPT)}. La venta real se valoriza mes a mes con el AUP de cada mes.`} style={{ cursor: 'help', fontStyle: 'italic' }}>{fmt(aupPT)}</td>{vnMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(vnTot)}</td></tr> })()}
-                  {catList.map((c, i) => { const row = MESES.map((_, mi) => vnCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); const uCat = MESES.reduce((s, _, mi) => s + uCatMes(c.cat, mi), 0); const aupPond = uCat > 0 ? rt / uCat : 0; return <tr key={i}><td className="l">{c.cat}</td><td className="ref" title={`Referencia (no entra al cálculo): promedio anual implícito = Venta neta de ${c.cat} (${fmt(rt)}) ÷ unidades de ${c.cat} (${fmt(uCat)}) = ${fmt(aupPond)}. La venta real de cada mes usa el AUP de ese mes.`} style={{ cursor: 'help', fontStyle: 'italic' }}>{fmt(aupPond)}</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
+                  <tr className="grandrow"><td className="l">TOTAL {marca}</td>{vnMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(vnTot)}</td></tr>
+                  {catList.map((c, i) => { const row = MESES.map((_, mi) => vnCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); return <tr key={i}><td className="l">{c.cat}</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
                 </tbody>
               </table>
             </div>
@@ -3211,7 +3210,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           <span style={{ fontSize: 20 }}>📦</span>
           <div>Stock disponible de temporadas anteriores de <b>{marca}</b>: <b style={{ fontSize: 15 }}>{fmt(stockViejo(marca))} ud</b>. <span className="unit">Tenlo en cuenta al proyectar: tu venta 2028 debería incluir mover este stock viejo; lo que exceda será compra nueva. (Referencia — lo captura Producto.)</span></div>
         </div>
-        <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: define el <b>total</b> de unidades 2028 (= total 2026 × (1 + %)). Luego, en las <b>celdas amarillas de 2028</b>, coloca <b>en qué meses</b> quieres vender esas unidades (vienen sugeridas con el mismo patrón de 2026; edítalas libremente). Si tu reparto no cuadra con el total del %, el total se marca en <span style={{ color: '#b45309', fontWeight: 700 }}>ámbar</span>. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente. Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
+        <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: junto al % verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)) y la <b>Σ</b> de lo que llevas repartido. Luego, en las <b>celdas amarillas de 2028</b> (que arrancan vacías), tú decides <b>en qué meses</b> vender esas unidades. Cuando la Σ cuadra con el objetivo aparece <b style={{ color: '#15803d' }}>✓</b>; si no, sale en <b style={{ color: '#b45309' }}>ámbar ⚠</b> para que ajustes. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente. Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
         <div className="toolbar" style={{ margin: '4px 0 12px', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 200 }} />
           {buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}
@@ -3234,7 +3233,12 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                 <Fragment2 key={cli}>
                   <tr>
                     <td className="l" rowSpan={3}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}<label style={{ display: 'block', marginTop: 5, fontSize: 11, color: esInt(cli) ? '#b45309' : 'var(--muted)', cursor: 'pointer', fontWeight: 600 }}><input type="checkbox" checked={esInt(cli)} onChange={() => toggleInt(cli)} style={{ marginRight: 5, verticalAlign: 'middle' }} />Interno (intercompañía)</label></td>
-                    <td className="cell" rowSpan={3}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}</td>
+                    <td className="cell" rowSpan={3} style={{ verticalAlign: 'top' }}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}
+                      <div style={{ marginTop: 7, fontSize: 11, lineHeight: 1.45 }}>
+                        {!nuevo && <div style={{ color: 'var(--muted)' }} title="Total objetivo = total 2026 × (1 + % crecimiento). Reparte este total en los meses de 2028.">🎯 obj <b>{fmt(obj)}</b></div>}
+                        <div style={{ color: desc ? '#b45309' : (t28(cli) > 0 ? '#15803d' : 'var(--muted)'), fontWeight: 700 }} title={nuevo ? 'Total 2028 que llevas repartido por mes.' : (desc ? 'Lo repartido por mes NO cuadra con el objetivo del %. Ajusta los meses.' : 'El reparto por mes cuadra con el objetivo ✓')}>Σ <b>{fmt(t28(cli))}</b>{!nuevo && (desc ? ' ⚠' : (t28(cli) > 0 ? ' ✓' : ''))}</div>
+                      </div>
+                    </td>
                     <td className="yl">2025</td>
                     {MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u25(cli, mi))}</td>)}
                     <td className="ref"><b>{nuevo ? '—' : fmt(t25(cli))}</b></td>
@@ -3248,9 +3252,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                   </tr>
                   <tr className="proy2028">
                     <td className="yl proyl">2028</td>
-                    {MESES.map((_, mi) => nuevo
-                      ? <td key={mi} className="cell"><input value={manual[mKey(cli, mi)] ?? ''} onChange={(e) => setMan(cli, mi, e.target.value)} inputMode="decimal" placeholder="0" /></td>
-                      : <td key={mi} className="cell"><input value={manual[mKey(cli, mi)] === undefined ? (u28def(cli, mi) ? String(u28def(cli, mi)) : '') : manual[mKey(cli, mi)]} onChange={(e) => setMan(cli, mi, e.target.value)} inputMode="decimal" placeholder="0" /></td>)}
+                    {MESES.map((_, mi) => <td key={mi} className="cell"><input value={manual[mKey(cli, mi)] ?? ''} onChange={(e) => setMan(cli, mi, e.target.value)} inputMode="decimal" placeholder="0" /></td>)}
                     <td className="tot" style={desc ? { background: '#fdf1e0', color: '#b45309' } : undefined} title={desc ? `El % de crecimiento da un objetivo de ${fmt(obj)} ud, pero tu reparto por mes suma ${fmt(t28(cli))} (diferencia ${(t28(cli) - obj) >= 0 ? '+' : ''}${fmt(t28(cli) - obj)}). Ajusta los meses para cuadrar.` : `Objetivo por %: ${fmt(obj == null ? t28(cli) : obj)} ud`}>{fmt(t28(cli))}{desc ? ' ⚠' : ''}</td>
                     <td className="tot">{totMarcaSel ? (t28(cli) / totMarcaSel * 100).toFixed(1) + '%' : '—'}</td>
                   </tr>
