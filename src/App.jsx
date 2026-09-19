@@ -3218,7 +3218,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
             <div className="sub">Venta Neta = <b>cada mes</b> se valoriza con el <b>AUP de ese mes</b> (unidades del mes × AUP mensual de la categoría, que captura <b>Producto por categoría</b>). Ese cálculo mensual es el real; el Total es la suma de los meses. No mezcla temporadas: la evolución del AUP por antigüedad de inventario está en <b>Producto → AUP/AUC por temporada</b>.</div>
             <div className="tablewrap">
               <table className="vfix">
-                <colgroup><col style={{ width: '270px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+                <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
                 <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
                   <tr className="grandrow"><td className="l">TOTAL {marca}</td>{vnMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(vnTot)}</td></tr>
