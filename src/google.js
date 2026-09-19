@@ -246,23 +246,32 @@ function _idxCliente(H) {
   if (k < 0) k = H.findIndex((c) => c.indexOf('CLIENTE') >= 0)
   return k < 0 ? 0 : k
 }
-export async function gLoadClientes() {
-  const v = await readValues('BASE CLIENTES SF')
-  if (!v || v.length < 2) return { ok: true, clientes: [] }
+/* Una hoja de clientes POR EMPRESA (aislada). Energy Brands conserva "BASE CLIENTES SF";
+   las demás usan "BASE CLIENTES <EMPRESA>" (ej. BASE CLIENTES TUMAR, BASE CLIENTES TAHO). */
+const CLIENTES_TAB = { 'ENERGY BRANDS': 'BASE CLIENTES SF' }
+const CLI_HEAD = ['CLIENTE', 'CLIENTE ARMONIZADO', 'PAIS']
+function clientesTab(empresa) { const e = String(empresa || '').trim().toUpperCase(); return CLIENTES_TAB[e] || ('BASE CLIENTES ' + e) }
+export async function gLoadClientes(empresa) {
+  const tab = clientesTab(empresa)
+  let v
+  try { v = await readValues(tab) } catch { return { ok: true, clientes: [], tab } }
+  if (!v || v.length < 2) return { ok: true, clientes: [], tab }
   const H = (v[0] || []).map((x) => String(x || '').trim().toUpperCase())
   const iC = _idxCliente(H)
   const set = new Set()
   for (let r = 1; r < v.length; r++) { const n = String((v[r] || [])[iC] || '').trim(); if (n) set.add(n) }
-  return { ok: true, clientes: [...set].sort((a, b) => a.localeCompare(b)) }
+  return { ok: true, clientes: [...set].sort((a, b) => a.localeCompare(b)), tab }
 }
-export async function gAddCliente(nombre) {
+export async function gAddCliente(empresa, nombre) {
   const n = String(nombre || '').trim(); if (!n) return { ok: false }
-  const v = await readValues('BASE CLIENTES SF')
+  const tab = clientesTab(empresa)
+  await ensureTab(tab, CLI_HEAD)
+  const v = await readValues(tab)
   const H = (v[0] || []).map((x) => String(x || '').trim().toUpperCase())
   const iC = _idxCliente(H)
   const exists = v.slice(1).some((r) => up(r[iC]) === up(n))
   // Se agrega en CLIENTE y en CLIENTE ARMONIZADO (mismo nombre); PAIS vacío
-  if (!exists) await appendValues('BASE CLIENTES SF', [[n, n, '']])
+  if (!exists) await appendValues(tab, [[n, n, '']])
   return { ok: true, added: exists ? 0 : 1 }
 }
 

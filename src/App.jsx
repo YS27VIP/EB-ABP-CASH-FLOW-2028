@@ -3096,7 +3096,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [baseCli, setBaseCli] = useState([]) // catálogo Base_Clientes (copia del EBP)
   const [nuevoCli, setNuevoCli] = useState('')
   const [buscar, setBuscar] = useState('')
-  useEffect(() => { (async () => { try { const j = await gLoadClientes(); if (j && j.ok) setBaseCli(j.clientes) } catch { } })() }, [empresa])
+  useEffect(() => { (async () => { try { const j = await gLoadClientes(empresa); if (j && j.ok) setBaseCli(j.clientes) } catch { } })() }, [empresa])
   useEffect(() => { try { localStorage.setItem('ventas_manual_' + empresa, JSON.stringify(manual)) } catch { } }, [manual, empresa])
   useEffect(() => { try { localStorage.setItem('addcli_' + empresa, JSON.stringify(addCli)) } catch { } }, [addCli, empresa])
   const [saving, setSaving] = useState(false)
@@ -3136,7 +3136,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
     if (clientes.some((c) => upper(c) === upper(n))) { setMsg({ t: 'warn', x: 'Ese cliente ya está en la lista de ' + marca + '.' }); return }
     const next = { ...addCli, [marca]: [...(addCli[marca] || []), n] }
     setAddCli(next); saveEstado(empresa, 'addcli', next); setNuevoCli('')
-    if (!baseCli.some((c) => upper(c) === upper(n))) { setBaseCli([...baseCli, n].sort((a, b) => a.localeCompare(b))); try { await gAddCliente(n) } catch { } }
+    if (!baseCli.some((c) => upper(c) === upper(n))) { setBaseCli([...baseCli, n].sort((a, b) => a.localeCompare(b))); try { await gAddCliente(empresa, n) } catch { } }
     setMsg({ t: 'ok', x: 'Cliente agregado a ' + marca + '. Escribe sus unidades 2028 y guarda. Finanzas ya lo verá.' })
   }
   const quitarCliente = (cli) => { const next = { ...addCli, [marca]: (addCli[marca] || []).filter((c) => upper(c) !== upper(cli)) }; setAddCli(next); saveEstado(empresa, 'addcli', next) }
