@@ -1,5 +1,27 @@
 import { useState, useEffect } from 'react'
 import './App.css'
+// Rastreador global de "cambios sin guardar": lo marcan las celdas de captura y lo limpia Guardar.
+const ABP_DIRTY = { on: false }
+// Barra global: botón "Actualizar" (trae lo último del Sheet) + aviso si cierras con cambios sin guardar.
+export function SyncBar() {
+  const refrescar = () => {
+    if (ABP_DIRTY.on && !window.confirm('Tienes cambios SIN GUARDAR. Si actualizas ahora se perderán. ¿Quieres actualizar de todas formas?')) return
+    ABP_DIRTY.on = false
+    window.location.reload()
+  }
+  useEffect(() => {
+    const esCaptura = (t) => { try { return !!(t && ((t.closest && (t.closest('td.cell') || t.closest('table'))) || (t.classList && (t.classList.contains('fillin') || t.classList.contains('cell'))))) } catch { return false } }
+    const mark = (e) => { if (esCaptura(e.target)) ABP_DIRTY.on = true }
+    const clear = (e) => { const b = e.target && e.target.closest && e.target.closest('button'); if (b && /guardar/i.test(b.textContent || '')) ABP_DIRTY.on = false }
+    const before = (e) => { if (ABP_DIRTY.on) { e.preventDefault(); e.returnValue = '' } }
+    document.addEventListener('input', mark, true)
+    document.addEventListener('change', mark, true)
+    document.addEventListener('click', clear, true)
+    window.addEventListener('beforeunload', before)
+    return () => { document.removeEventListener('input', mark, true); document.removeEventListener('change', mark, true); document.removeEventListener('click', clear, true); window.removeEventListener('beforeunload', before) }
+  }, [])
+  return <button onClick={refrescar} title="Trae los últimos cambios que guardó tu equipo (recarga la página)" style={{ position: 'fixed', left: 18, bottom: 20, zIndex: 9998, background: '#fff', border: '1px solid #cbd5e1', borderRadius: 22, padding: '9px 15px', fontWeight: 700, fontSize: 13, color: '#0e7490', boxShadow: '0 4px 14px rgba(0,0,0,.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}>🔄 Actualizar</button>
+}
 import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
