@@ -7,7 +7,7 @@ import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoa
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'temp', 'precios', 'comis', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob']
+const ESTADO_KEYS = ['catpct', 'catpart', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -911,7 +911,10 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const val = (mca, concepto, mi) => num(data[key(mca, concepto, mi)])
   // Cash In (Cobros) de Dic-27 = suma del saldo (deuda) cierre 2027 por cliente (calculado, no editable)
   const CASHIN = 'Cash In (Cobros)', DIC27 = 2, CASH_INI = 'Cash Inicial', CASH_FIN = 'Cash Final', CASH_OUT = 'Cash Out (Pagos)'
-  const saldoTotal = (mca) => clientesDe(mca).reduce((s, cli) => s + num(data[`SALDO|${mca}|${cli}`]), 0)
+  // Clientes internos (intercompañía): venta incobrable → no genera Cash In (se marca en Ventas).
+  const internoMap = (() => { try { return JSON.parse(localStorage.getItem('interno_' + empresa) || '{}') } catch { return {} } })()
+  const esInterno = (mca, cli) => !!internoMap[`${mca}|${cli}`]
+  const saldoTotal = (mca) => clientesDe(mca).reduce((s, cli) => esInterno(mca, cli) ? s : s + num(data[`SALDO|${mca}|${cli}`]), 0)
   const gadminSubtot = MESES.map((_, m) => gadminCfg.reduce((a, it) => a + num(gadminData[`${it.cod}|${m}`]), 0))
   const cellRaw = (concepto, mi) => {
     if (concepto === 'Comisiones') { if (mi < 3) return 0; const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[j], 0) : comisTotalMes(marca)[j] }
@@ -935,6 +938,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const cobros2028 = (mca) => {
     const uni = unidades2028(mca), aup = aupMarca(mca), byCli = {}, total = Array(12).fill(0)
     Object.keys(uni).forEach((cli) => {
+      if (esInterno(mca, cli)) return // venta interna (intercompañía): incobrable, no genera cobros
       const p = CF_PLAZO_MESES[data[`TERM|${mca}|${cli}`]] ?? 0
       const row = Array(12).fill(0)
       for (let j = 0; j < 12; j++) { const src = j - p; if (src >= 0) row[j] = (uni[cli][src] || 0) * (aup[src] || 0) }
@@ -944,6 +948,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   }
   const _cobCache = {}
   const getCobros = (mca) => _cobCache[mca] || (_cobCache[mca] = cobros2028(mca))
+  // Venta 2028 por mes de venta (no cobro), separada en externa (cobrable) vs interna (incobrable, intercompañía).
+  const ventaSplit2028 = (mca) => { const uni = unidades2028(mca), aup = aupMarca(mca), ext = Array(12).fill(0), int = Array(12).fill(0); Object.keys(uni).forEach((cli) => { const tgt = esInterno(mca, cli) ? int : ext; for (let j = 0; j < 12; j++) tgt[j] += (uni[cli][j] || 0) * (aup[j] || 0) }); return { ext, int } }
+  const _vsCache = {}
+  const ventaSplit = (mca) => _vsCache[mca] || (_vsCache[mca] = ventaSplit2028(mca))
+  const ventaSplitMemo = (pick, mi) => { if (mi < 3) return 0; const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + ventaSplit(m)[pick][j], 0) : ventaSplit(marca)[pick][j] }
 
   // Venta Neta 2028 = Σ unidades (Ventas) × AUP (Producto), por mes. Ambos salen de Comercial.
   const ventaNetaMes = (mca) => realAupAuc(empresa, mca, ventas, producto, (cats[mca] || []).map((c) => c.cat)).ventaMes
@@ -1061,8 +1070,12 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       const k = key(marca, it, mi)
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
-                    const ayudaComp = it === CASHIN ? 'Cash In (Cobros): cada mes es la venta de meses anteriores cobrada según el plazo de cada cliente (Cash=mismo mes, 30d=+1, 60=+2…), más el saldo (deuda) de cierre 2027. Párate sobre cada mes para ver el detalle.' : it === VENTAS_NETAS ? 'Ventas Netas = Unidades (Comercial) × AUP efectivo del mes (Producto). Párate sobre cada mes.' : it === COMPRAS_FD ? 'Compras = unidades compradas × AUC (Producto). Párate sobre cada mes.' : null
+                    const ayudaComp = it === CASHIN ? 'Cash In (Cobros): solo sobre la VENTA EXTERNA. Cada mes es la venta externa de meses anteriores cobrada según el plazo de cada cliente (Cash=mismo mes, 30d=+1, 60=+2…), más el saldo (deuda) de cierre 2027. La venta interna (intercompañía) es incobrable y se muestra aparte, abajo. Párate sobre cada mes para ver el detalle.' : it === VENTAS_NETAS ? 'Ventas Netas = Unidades (Comercial) × AUP efectivo del mes (Producto). Párate sobre cada mes.' : it === COMPRAS_FD ? 'Compras = unidades compradas × AUC (Producto). Párate sobre cada mes.' : null
                     const fila = <tr key={it} className={esCostos ? 'catrow rowline ' + (openCostos ? 'open' : '') : undefined} onClick={esCostos ? () => setOpenCostos((o) => !o) : undefined} style={esCostos ? { cursor: 'pointer' } : undefined}><td className="l">{esCostos ? <span className="caret">▶</span> : null} {it}{ayudaComp && <span className="unit" title={ayudaComp} style={{ cursor: 'help', marginLeft: 5 }}>❓</span>}{esCostos ? <span className="unit" style={{ marginLeft: 6 }}>({openCostos ? 'ocultar' : 'ver'} detalle: {CF_COSTOS.join(' + ')})</span> : null}</td>{celdas}<td className="tot">{fmt(rowTot(it))}</td></tr>
+                    if (it === CASHIN) {
+                      const memoRow = (label, pick, color, tip) => { const cs = CF_MESES.map((_, mi) => { const cls = mi < 3 ? 'ya' : 'yb'; return <td key={mi} className={'tot ' + cls} style={{ color }}>{fmt(ventaSplitMemo(pick, mi))}</td> }); const tt = CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo(pick, mi), 0); return <tr><td className="l sub2" style={{ color }} title={tip}>↳ {label}</td>{cs}<td className="tot" style={{ color }}>{fmt(tt)}</td></tr> }
+                      return <Fragment2 key={it}>{fila}{memoRow('Venta externa 2028 (base de cobros)', 'ext', '#0b5566', 'Venta a clientes externos (Unid × AUP), por mes de venta. Es la base sobre la que se calcula el Cash In según el plazo de cada cliente.')}{memoRow('Venta interna 2028 (incobrable · intercompañía)', 'int', '#b45309', 'Venta a clientes marcados como Interno en Ventas. No genera Cash In: es intercompañía / incobrable. Se muestra por marca y en TOTAL SBU.')}</Fragment2>
+                    }
                     if (!esCostos) return fila
                     return (
                       <Fragment2 key={it}>
@@ -3022,6 +3035,15 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   // Clientes agregados a mano (por marca) + sus unidades 2028 manuales (clientes sin histórico 2026)
   const [addCli, setAddCli] = useState(() => { try { return JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}') } catch { return {} } })
   const [manual, setManual] = useState(() => { try { return JSON.parse(localStorage.getItem('ventas_manual_' + empresa) || '{}') } catch { return {} } })
+  // Stock de temporadas anteriores (referencia para el vendedor): inventario inicial de las temporadas viejas (de Producto).
+  const [tempInv, setTempInv] = useState(() => { try { return JSON.parse(localStorage.getItem('temp_' + empresa) || '{}') } catch { return {} } })
+  useEffect(() => { try { setTempInv(JSON.parse(localStorage.getItem('temp_' + empresa) || '{}')) } catch { } }, [empresa])
+  const stockViejo = (mca) => INV_SEASONS.reduce((a, s) => a + num(tempInv[`II|${mca}|${s}`]), 0)
+  // Cliente interno (intercompañía): su venta es incobrable y no genera Cash In.
+  const [interno, setInterno] = useState(() => { try { return JSON.parse(localStorage.getItem('interno_' + empresa) || '{}') } catch { return {} } })
+  useEffect(() => { try { localStorage.setItem('interno_' + empresa, JSON.stringify(interno)) } catch { } }, [interno, empresa])
+  const esInt = (cli) => !!interno[marca + '|' + cli]
+  const toggleInt = (cli) => { const next = { ...interno, [marca + '|' + cli]: !esInt(cli) }; setInterno(next); saveEstado(empresa, 'interno', next) }
   const [baseCli, setBaseCli] = useState([]) // catálogo Base_Clientes (copia del EBP)
   const [nuevoCli, setNuevoCli] = useState('')
   const [buscar, setBuscar] = useState('')
@@ -3090,7 +3112,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
     const rows = clientes.map((cli) => ({ rubro: cli, sbu, marca, meses: MESES.map((_, mi) => u28(cli, mi)) })).filter((r) => r.meses.some((v) => v !== 0))
     await postToTab('Cap_Ventas', empresa, usuario, role.label, rows, setMsg)
     saveEstado(empresa, 'ventas_growth', growth); saveEstado(empresa, 'catpart', catPart); saveEstado(empresa, 'catpct', catPct)
-    saveEstado(empresa, 'ventas_manual', manual); saveEstado(empresa, 'addcli', addCli)
+    saveEstado(empresa, 'ventas_manual', manual); saveEstado(empresa, 'addcli', addCli); saveEstado(empresa, 'interno', interno)
     setSaving(false)
   }
   const catList = cats[marca] || []
@@ -3185,6 +3207,10 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
       <div className="panel">
         <h3>Ventas · Unidades 2028 — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="note ok" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 20 }}>📦</span>
+          <div>Stock disponible de temporadas anteriores de <b>{marca}</b>: <b style={{ fontSize: 15 }}>{fmt(stockViejo(marca))} ud</b>. <span className="unit">Tenlo en cuenta al proyectar: tu venta 2028 debería incluir mover este stock viejo; lo que exceda será compra nueva. (Referencia — lo captura Producto.)</span></div>
+        </div>
         <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: define el <b>total</b> de unidades 2028 (= total 2026 × (1 + %)). Luego, en las <b>celdas amarillas de 2028</b>, coloca <b>en qué meses</b> quieres vender esas unidades (vienen sugeridas con el mismo patrón de 2026; edítalas libremente). Si tu reparto no cuadra con el total del %, el total se marca en <span style={{ color: '#b45309', fontWeight: 700 }}>ámbar</span>. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente. Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
         <div className="toolbar" style={{ margin: '4px 0 12px', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 200 }} />
@@ -3207,7 +3233,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
               {clientes.filter((cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0).map((cli) => { const nuevo = esNuevo(cli); const obj = objetivo28(cli); const desc = !nuevo && obj != null && t28(cli) !== obj; return (
                 <Fragment2 key={cli}>
                   <tr>
-                    <td className="l" rowSpan={3}>{cli}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}</td>
+                    <td className="l" rowSpan={3}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}<label style={{ display: 'block', marginTop: 5, fontSize: 11, color: esInt(cli) ? '#b45309' : 'var(--muted)', cursor: 'pointer', fontWeight: 600 }}><input type="checkbox" checked={esInt(cli)} onChange={() => toggleInt(cli)} style={{ marginRight: 5, verticalAlign: 'middle' }} />Interno (intercompañía)</label></td>
                     <td className="cell" rowSpan={3}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}</td>
                     <td className="yl">2025</td>
                     {MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u25(cli, mi))}</td>)}
