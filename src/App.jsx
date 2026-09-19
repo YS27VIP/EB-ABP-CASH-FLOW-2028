@@ -1738,6 +1738,31 @@ function GastosAdminForm({ empresa }) {
   function agregar() { setLista([...lista, { cod: '', sub: '' }]) }
   function quitar(i) { setLista(lista.filter((_, j) => j !== i)) }
   function editar(i, campo, v) { setLista(lista.map((x, j) => j === i ? { ...x, [campo]: v } : x)) }
+  function plantilla() { const aoa = [['CÓD', 'SUB RUBRO', ...MESES.map((m) => m.toUpperCase())]]; lista.forEach((it) => aoa.push([it.cod, it.sub, ...MESES.map(() => '')])); exportXlsx(aoa, `Plantilla_Gastos_Admin_${empresa}.xlsx`) }
+  function importar(ev) {
+    const file = ev.target.files[0]; ev.target.value = ''; if (!file) return
+    const norm = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase()
+    importXlsx(file, (aoa) => {
+      if (!aoa || aoa.length < 2) { setMsg({ t: 'bad', x: 'El Excel no tiene filas para importar.' }); return }
+      const hdr = (aoa[0] || []).map(norm)
+      const iCod = hdr.findIndex((h) => h.indexOf('COD') >= 0)
+      const iSub = hdr.findIndex((h) => h.indexOf('RUBRO') >= 0 || h.indexOf('SUB') >= 0)
+      const base = Math.max(iCod, iSub, -1) + 1
+      const monthCol = MESES.map((m, mi) => { const mm = norm(m).slice(0, 3); const i = hdr.findIndex((h) => h.indexOf(mm) >= 0); return i >= 0 ? i : base + mi })
+      const nueva = lista.map((x) => ({ ...x })); const nd = { ...data }; let filas = 0
+      aoa.slice(1).forEach((r) => {
+        if (!r || r.every((c) => c === '' || c == null)) return
+        let cod = String((iCod >= 0 ? r[iCod] : r[0]) || '').trim(); const sub = String((iSub >= 0 ? r[iSub] : r[1]) || '').trim()
+        if (!cod && !sub) return
+        if (!cod) cod = sub
+        if (!nueva.some((x) => String(x.cod) === cod)) nueva.push({ cod, sub: sub || cod })
+        MESES.forEach((_, m) => { const v = r[monthCol[m]]; if (v !== '' && v != null) nd[`${cod}|${m}`] = String(v).replace(/[^0-9.\-]/g, '') })
+        filas++
+      })
+      setLista(nueva); setData(nd)
+      setMsg({ t: 'ok', x: `Importados ${filas} rubro(s) desde Excel. Revisa los números y pulsa 💾 Guardar para enviarlo al Google Sheet.` })
+    })
+  }
 
   return (
     <>
@@ -1746,12 +1771,14 @@ function GastosAdminForm({ empresa }) {
         <span className="empchip" style={{ marginLeft: 0, background: 'var(--accent, #0e7490)' }}>Gastos administrativos</span>
         <button className={'seg' + (edit ? ' active' : '')} onClick={() => setEdit((e) => !e)}>{edit ? '✓ Editando centros de costo' : '✏️ Editar centros de costo'}</button>
         {edit && <button className="btn" onClick={agregar}>➕ Agregar rubro</button>}
+        <button className="btn" onClick={plantilla}>📄 Descargar plantilla</button>
+        <label className="btn" style={{ cursor: 'pointer' }}>📥 Importar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={importar} style={{ display: 'none' }} /></label>
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       <div className="panel">
         <h3>Gastos administrativos <span className="unit">(detalle · compartido por todas las SBU)</span>{M$}<span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">Captura por centro de costo y mes. Con <b>Editar centros de costo</b> puedes cambiar códigos/nombres o agregar rubros; el cambio <b>aplica a todas las SBU</b>. El SUB-TOTAL alimenta la línea Gastos administrativos del Cash Flow.</div>
+        <div className="sub">Captura por centro de costo y mes. Con <b>Editar centros de costo</b> puedes cambiar códigos/nombres o agregar rubros; el cambio <b>aplica a todas las SBU</b>. El SUB-TOTAL alimenta la línea Gastos administrativos del Cash Flow.<br /><b>Importar desde Excel:</b> descarga la plantilla (columnas CÓD · SUB RUBRO · ENE-28…DIC-28), llénala y súbela con <b>📥 Importar Excel</b>. Se cruza por código; los rubros nuevos se agregan solos. Luego pulsa 💾 Guardar.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '270px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
