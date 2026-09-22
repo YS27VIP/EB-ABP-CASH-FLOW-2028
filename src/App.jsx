@@ -985,7 +985,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const _cptCache = {}
   const cobrosPorTerm = (mca) => _cptCache[mca] || (_cptCache[mca] = (() => { const { byCli } = getCobros(mca); const out = {}; CF_TERMINOS.forEach((t) => out[t] = Array(12).fill(0)); Object.keys(byCli).forEach((cli) => { let t = data[`TERM|${mca}|${cli}`]; if (!out[t]) t = 'Cash'; for (let m = 0; m < 12; m++) out[t][m] += byCli[cli][m] }); return out })())
   // Venta 2028 por mes de venta (no cobro), separada en externa (cobrable) vs interna (incobrable, intercompañía).
-  const ventaSplit2028 = (mca) => { const uni = unidades2028(mca), aup = aupMarca(mca), ext = Array(12).fill(0), int = Array(12).fill(0); Object.keys(uni).forEach((cli) => { const tgt = esInterno(mca, cli) ? int : ext; for (let j = 0; j < 12; j++) tgt[j] += (uni[cli][j] || 0) * (aup[j] || 0) }); return { ext, int } }
+  const ventaSplit2028 = (mca) => { const uni = unidades2028(mca), aup = aupMarca(mca), ext = Array(12).fill(0), int = Array(12).fill(0); Object.keys(uni).forEach((cli) => { const tgt = esIncobrable(mca, cli) ? int : ext; for (let j = 0; j < 12; j++) tgt[j] += (uni[cli][j] || 0) * (aup[j] || 0) }); return { ext, int } }
   const _vsCache = {}
   const ventaSplit = (mca) => _vsCache[mca] || (_vsCache[mca] = ventaSplit2028(mca))
   const ventaSplitMemo = (pick, mi) => isTotal ? sbuMarcas.reduce((s, m) => s + ventaSplit(m)[pick][mi], 0) : ventaSplit(marca)[pick][mi]
@@ -1175,7 +1175,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                     {secciones.map(({ mca, cls }) => (
                       <Fragment2 key={mca}>
                         <tr className="sburow"><td className="l" style={{ color: marcaColor(mca) }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td></td>{arrIdx.map((mi) => <td key={mi} className="tot" style={mi === 0 ? DIV : undefined}>{fmt(arr27Total(mca, mi))}</td>)}<td className="tot">{fmt(arrIdx.reduce((a, mi) => a + arr27Total(mca, mi), 0))}</td></tr>
-                        {cls.map((cli) => { const tk = `TERM|${mca}|${cli}`; return <tr key={mca + '|' + cli}><td className="l sub2">{cli}</td><td>{data[tk] || '—'}</td>{arrIdx.map((mi) => <td key={mi} className="tot" style={mi === 0 ? DIV : undefined}>{fmt(arr27(mca, cli, mi))}</td>)}<td className="tot">{fmt(arr27Cli(mca, cli))}</td></tr> })}
+                        {cls.map((cli) => { const tk = `TERM|${mca}|${cli}`; const inc = esIncobrable(mca, cli); return <tr key={mca + '|' + cli}><td className="l sub2" style={inc ? { color: '#b91c1c' } : undefined}>{cli}{inc && <span className="unit" style={{ marginLeft: 6, color: '#b91c1c' }}>⛔ incobrable</span>}</td><td>{data[tk] || '—'}</td>{arrIdx.map((mi) => <td key={mi} className="tot" style={{ ...(mi === 0 ? DIV : {}), ...(inc ? { color: '#b91c1c' } : {}) }}>{inc ? '—' : fmt(arr27(mca, cli, mi))}</td>)}<td className="tot" style={inc ? { color: '#b91c1c' } : undefined}>{inc ? '—' : fmt(arr27Cli(mca, cli))}</td></tr> })}
                       </Fragment2>
                     ))}
                     <tr className="grandrow"><td className="l">TOTAL {sbuLbl}</td><td></td>{gt.map((v, mi) => <td key={mi} className="tot" style={mi === 0 ? DIV : undefined}>{fmt(v)}</td>)}<td className="tot">{fmt(gt.reduce((a, b) => a + b, 0))}</td></tr>
@@ -1196,13 +1196,13 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                 <tbody>
                   {cls.length === 0 && <tr><td className="l" colSpan={9}>No hay clientes para {marca}. Carga el Histórico o captura clientes en Ventas.</td></tr>}
                   {cls.map((cli) => {
-                    const tk = `TERM|${marca}|${cli}`
+                    const tk = `TERM|${marca}|${cli}`; const inc = esIncobrable(marca, cli)
                     return (
                       <tr key={cli}>
-                        <td className="l">{cli}</td>
+                        <td className="l" style={inc ? { color: '#b91c1c' } : undefined}>{cli}{inc && <span className="unit" style={{ marginLeft: 6, color: '#b91c1c', fontWeight: 700 }}>⛔ incobrable</span>}</td>
                         <td>{soloVer ? (data[tk] || '—') : <select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>}</td>
-                        {arrIdx.map((mi) => { const ck = arr27Key(marca, cli, mi); return <td key={mi} className={soloVer ? 'tot' : 'cell'} style={mi === 0 ? DIV : undefined}>{soloVer ? fmt(num(data[ck])) : <input value={data[ck] ?? ''} onChange={(e) => set(ck, e.target.value)} inputMode="decimal" style={{ width: 64 }} />}</td> })}
-                        <td className="tot">{fmt(arr27Cli(marca, cli))}</td>
+                        {arrIdx.map((mi) => { const ck = arr27Key(marca, cli, mi); return <td key={mi} className={(soloVer || inc) ? 'tot' : 'cell'} style={{ ...(mi === 0 ? DIV : {}), ...(inc ? { background: '#fdecec' } : {}) }}>{inc ? <span style={{ color: '#d99a9a' }}>—</span> : soloVer ? fmt(num(data[ck])) : <input value={data[ck] ?? ''} onChange={(e) => set(ck, e.target.value)} inputMode="decimal" style={{ width: 64 }} />}</td> })}
+                        <td className="tot" style={inc ? { color: '#b91c1c' } : undefined}>{inc ? '—' : fmt(arr27Cli(marca, cli))}</td>
                       </tr>
                     )
                   })}
