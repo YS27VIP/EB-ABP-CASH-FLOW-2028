@@ -1082,8 +1082,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
               <tr><th className="l">Concepto</th>{CF_M2028.map((m) => <th key={m} className="yb">{m}</th>)}<th>Total</th></tr>
             </thead>
             <tbody>
-              {CF_GROUPS.map((gr) => (
+              {CF_GROUPS.map((gr, gi) => (
                 <Fragment2 key={gr.g}>
+                  {gi > 0 && <tr className="sep"><td colSpan={14}></td></tr>}
                   <tr className="secrow"><td colSpan={14}>{gr.g}</td></tr>
                   {gr.items.map((it) => {
                     const esCostos = it === CF_COSTOS_PARENT
