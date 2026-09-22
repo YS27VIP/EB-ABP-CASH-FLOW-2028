@@ -1157,7 +1157,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b> lo que <b>vendiste en 2027 y aún te deben</b>, colócalo por cliente en el <b>mes de 2028 en que va a entrar</b> el dinero (ene a jun). Así el Cash In no queda sesgado. El <b>plazo</b> de cada cliente es solo para sus <b>ventas 2028</b> (no para esto). Todo esto entra solo al <b>Cash In</b> de arriba.</div>
         {buscador}
         {(() => {
-          const arrIdx = [0, 1, 2, 3, 4, 5]; const arrLbl = CF_M2028.slice(0, 6)
+          const arrIdx = [0, 1, 2, 3, 4, 5]; const arrLbl = CF_M2028.slice(0, 6); const DIV = { borderLeft: '3px solid var(--odoo)' }
           if (isTotal) {
             const secciones = sbuMarcas.map((mca) => ({ mca, cls: clientesDe(mca).filter(matchCli) })).filter((s) => s.cls.length > 0)
             const gt = arrIdx.map((mi) => sbuMarcas.reduce((s, mca) => s + arr27Total(mca, mi), 0))
@@ -1165,15 +1165,18 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
             return (
               <div className="tablewrap">
                 <table>
-                  <thead><tr><th className="l">Marca / Cliente</th><th>Plazo (ventas 2028)</th>{arrLbl.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
+                  <thead>
+                    <tr><th className="l" rowSpan={2}>Marca / Cliente</th><th rowSpan={2}>Plazo (ventas 2028)</th><th colSpan={arrLbl.length + 1} style={{ borderLeft: '3px solid var(--odoo)', background: '#faf7f9', color: 'var(--odoo)', textTransform: 'none', letterSpacing: 0 }}>📌 Arrastre 2027 — ¿en qué mes de 2028 entra?</th></tr>
+                    <tr>{arrLbl.map((m, i) => <th key={m} style={i === 0 ? DIV : undefined}>{m}</th>)}<th>Total</th></tr>
+                  </thead>
                   <tbody>
                     {secciones.map(({ mca, cls }) => (
                       <Fragment2 key={mca}>
-                        <tr className="sburow"><td className="l" style={{ color: marcaColor(mca) }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td></td>{arrIdx.map((mi) => <td key={mi} className="tot">{fmt(arr27Total(mca, mi))}</td>)}<td className="tot">{fmt(arrIdx.reduce((a, mi) => a + arr27Total(mca, mi), 0))}</td></tr>
-                        {cls.map((cli) => { const tk = `TERM|${mca}|${cli}`; return <tr key={mca + '|' + cli}><td className="l sub2">{cli}</td><td>{data[tk] || '—'}</td>{arrIdx.map((mi) => <td key={mi} className="tot">{fmt(arr27(mca, cli, mi))}</td>)}<td className="tot">{fmt(arr27Cli(mca, cli))}</td></tr> })}
+                        <tr className="sburow"><td className="l" style={{ color: marcaColor(mca) }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td></td>{arrIdx.map((mi) => <td key={mi} className="tot" style={mi === 0 ? DIV : undefined}>{fmt(arr27Total(mca, mi))}</td>)}<td className="tot">{fmt(arrIdx.reduce((a, mi) => a + arr27Total(mca, mi), 0))}</td></tr>
+                        {cls.map((cli) => { const tk = `TERM|${mca}|${cli}`; return <tr key={mca + '|' + cli}><td className="l sub2">{cli}</td><td>{data[tk] || '—'}</td>{arrIdx.map((mi) => <td key={mi} className="tot" style={mi === 0 ? DIV : undefined}>{fmt(arr27(mca, cli, mi))}</td>)}<td className="tot">{fmt(arr27Cli(mca, cli))}</td></tr> })}
                       </Fragment2>
                     ))}
-                    <tr className="grandrow"><td className="l">TOTAL {sbuLbl}</td><td></td>{gt.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(gt.reduce((a, b) => a + b, 0))}</td></tr>
+                    <tr className="grandrow"><td className="l">TOTAL {sbuLbl}</td><td></td>{gt.map((v, mi) => <td key={mi} className="tot" style={mi === 0 ? DIV : undefined}>{fmt(v)}</td>)}<td className="tot">{fmt(gt.reduce((a, b) => a + b, 0))}</td></tr>
                   </tbody>
                 </table>
                 <div className="sub" style={{ marginTop: 8 }}>🪞 Solo lectura. Entra al <b>Cash In</b> en el mes indicado. Para editar, entra a la marca.</div>
@@ -1184,7 +1187,10 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           return (
             <div className="tablewrap">
               <table>
-                <thead><tr><th className="l">Cliente</th><th>Plazo <span className="unit">(ventas 2028)</span></th>{arrLbl.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
+                <thead>
+                  <tr><th className="l" rowSpan={2}>Cliente</th><th rowSpan={2}>Plazo <span className="unit">(ventas 2028)</span></th><th colSpan={arrLbl.length + 1} style={{ borderLeft: '3px solid var(--odoo)', background: '#faf7f9', color: 'var(--odoo)', textTransform: 'none', letterSpacing: 0 }}>📌 Arrastre 2027 — ¿en qué mes de 2028 entra el cobro?</th></tr>
+                  <tr>{arrLbl.map((m, i) => <th key={m} style={i === 0 ? DIV : undefined}>{m}</th>)}<th>Total</th></tr>
+                </thead>
                 <tbody>
                   {cls.length === 0 && <tr><td className="l" colSpan={9}>No hay clientes para {marca}. Carga el Histórico o captura clientes en Ventas.</td></tr>}
                   {cls.map((cli) => {
@@ -1193,12 +1199,12 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       <tr key={cli}>
                         <td className="l">{cli}</td>
                         <td>{soloVer ? (data[tk] || '—') : <select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>}</td>
-                        {arrIdx.map((mi) => { const ck = arr27Key(marca, cli, mi); return <td key={mi} className={soloVer ? 'tot' : 'cell'}>{soloVer ? fmt(num(data[ck])) : <input value={data[ck] ?? ''} onChange={(e) => set(ck, e.target.value)} inputMode="decimal" style={{ width: 64 }} />}</td> })}
+                        {arrIdx.map((mi) => { const ck = arr27Key(marca, cli, mi); return <td key={mi} className={soloVer ? 'tot' : 'cell'} style={mi === 0 ? DIV : undefined}>{soloVer ? fmt(num(data[ck])) : <input value={data[ck] ?? ''} onChange={(e) => set(ck, e.target.value)} inputMode="decimal" style={{ width: 64 }} />}</td> })}
                         <td className="tot">{fmt(arr27Cli(marca, cli))}</td>
                       </tr>
                     )
                   })}
-                  {cls.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td></td>{arrIdx.map((mi) => <td key={mi} className="tot">{fmt(arr27Total(marca, mi))}</td>)}<td className="tot">{fmt(arrIdx.reduce((a, mi) => a + arr27Total(marca, mi), 0))}</td></tr>}
+                  {cls.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td></td>{arrIdx.map((mi) => <td key={mi} className="tot" style={mi === 0 ? DIV : undefined}>{fmt(arr27Total(marca, mi))}</td>)}<td className="tot">{fmt(arrIdx.reduce((a, mi) => a + arr27Total(marca, mi), 0))}</td></tr>}
                 </tbody>
               </table>
               <div className="sub" style={{ marginTop: 8 }}>Escribe cuánto del arrastre 2027 entra en cada mes. Se suma solo al <b>Cash In</b> de arriba.</div>
