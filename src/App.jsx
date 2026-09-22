@@ -942,7 +942,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const saldoTotal = (mca) => clientesDe(mca).reduce((s, cli) => esIncobrable(mca, cli) ? s : s + num(data[`SALDO|${mca}|${cli}`]), 0)
   // ARRASTRE 2027 (venta externa ya vendida, pendiente de cobro): la persona coloca por cliente CUÁNTO entra en cada
   // mes de 2028 (ene..jun cubren hasta 180 días desde el cierre). Directo, sin adivinar plazos. Los internos no cuentan.
-  const ARR_N = 6 // ene..jun-28
+  const ARR_N = 3 // ene..mar-28 (arrastre del cierre 2027)
   const arr27Key = (mca, cli, mi) => `COB2027|${mca}|${cli}|${mi}`
   const arr27 = (mca, cli, mi) => esIncobrable(mca, cli) ? 0 : num(data[arr27Key(mca, cli, mi)])
   const arr27Total = (mca, mi) => (mi < ARR_N ? clientesDe(mca).reduce((s, cli) => s + arr27(mca, cli, mi), 0) : 0) // arrastre que entra en el mes mi
@@ -1110,7 +1110,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       const cashoutCalc = it === CASH_OUT // Cash Out siempre calculado (pagos a proveedores)
                       const comercialCalc = esCalcComercial(it)
                       if (isTotal || esCostos || cashinCalc || cashoutCalc || comercialCalc || soloVer) {
-                        const tit = brk(it, mi) || (it === CASHIN ? 'Cobros del mes: cola de cuentas por cobrar 2027 + ventas 2028 cobradas según el plazo' : it === CASH_OUT ? 'Pagos a proveedores (compras × término de pago)' : (it === VENTAS_NETAS ? 'Unidades × AUP (Comercial)' : it === COMPRAS_FD ? 'Compras × AUC (Producto)' : (it === INV_INI || it === INV_FIN) ? 'Inventario (Producto) × AUC' : undefined))
+                        const cashinBrk = () => { const a = isTotal ? sbuMarcas.reduce((s, m) => s + arr27Total(m, mi), 0) : arr27Total(marca, mi); const e = isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[mi], 0) : getCobros(marca).total[mi]; return `Cobros del mes → Arrastre 2027: ${fmt(a) || '0'} + Ventas 2028: ${fmt(e) || '0'} = ${fmt(a + e) || '0'}` }
+                        const tit = it === CASHIN ? cashinBrk() : (brk(it, mi) || (it === CASH_OUT ? 'Pagos a proveedores (compras × término de pago)' : (it === VENTAS_NETAS ? 'Unidades × AUP (Comercial)' : it === COMPRAS_FD ? 'Compras × AUC (Producto)' : (it === INV_INI || it === INV_FIN) ? 'Inventario (Producto) × AUC' : undefined)))
                         const v = cell(it, mi)
                         return <td key={mi} className={'tot ' + cls} style={{ ...(isTotal && desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : {}), color: colFila }} title={tit}>{Math.abs(v) > 0.5 ? signo : ''}{fmt(v)}</td>
                       }
@@ -1159,17 +1160,17 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b> lo que <b>vendiste en 2027 y aún te deben</b>, colócalo por cliente en el <b>mes de 2028 en que va a entrar</b> el dinero (ene a jun). Así el Cash In no queda sesgado. El <b>plazo</b> de cada cliente es solo para sus <b>ventas 2028</b> (no para esto). Todo esto entra solo al <b>Cash In</b> de arriba.</div>
         {buscador}
         {(() => {
-          const arrIdx = [0, 1, 2, 3, 4, 5]; const arrLbl = CF_M2028.slice(0, 6); const DIV = { borderLeft: '3px solid var(--odoo)' }
+          const arrIdx = [0, 1, 2]; const arrLbl = CF_M2028.slice(0, 3); const DIV = { borderLeft: '3px solid var(--odoo)' }; const STK = { position: 'sticky', top: 0, zIndex: 3, background: '#f7fafb' }; const STK2 = { position: 'sticky', top: 33, zIndex: 3, background: '#f7fafb' }
           if (isTotal) {
             const secciones = sbuMarcas.map((mca) => ({ mca, cls: clientesDe(mca).filter(matchCli) })).filter((s) => s.cls.length > 0)
             const gt = arrIdx.map((mi) => sbuMarcas.reduce((s, mca) => s + arr27Total(mca, mi), 0))
             if (secciones.length === 0) return <div className="note warn">Aún no hay clientes para las marcas de esta SBU.</div>
             return (
-              <div className="tablewrap">
+              <div className="tablewrap" style={{ maxHeight: '62vh', overflowY: 'auto' }}>
                 <table>
                   <thead>
-                    <tr><th className="l" rowSpan={2}>Marca / Cliente</th><th rowSpan={2}>Plazo (ventas 2028)</th><th colSpan={arrLbl.length + 1} style={{ borderLeft: '3px solid var(--odoo)', background: '#faf7f9', color: 'var(--odoo)', textTransform: 'none', letterSpacing: 0 }}>📌 Arrastre 2027 — ¿en qué mes de 2028 entra?</th></tr>
-                    <tr>{arrLbl.map((m, i) => <th key={m} style={i === 0 ? DIV : undefined}>{m}</th>)}<th>Total</th></tr>
+                    <tr><th className="l" rowSpan={2} style={STK}>Marca / Cliente</th><th rowSpan={2} style={STK}>Plazo (ventas 2028)</th><th colSpan={arrLbl.length + 1} style={{ ...STK, borderLeft: '3px solid var(--odoo)', background: '#faf7f9', color: 'var(--odoo)', textTransform: 'none', letterSpacing: 0 }}>📌 Arrastre 2027 — ¿en qué mes de 2028 entra?</th></tr>
+                    <tr>{arrLbl.map((m, i) => <th key={m} style={{ ...STK2, ...(i === 0 ? DIV : {}) }}>{m}</th>)}<th style={STK2}>Total</th></tr>
                   </thead>
                   <tbody>
                     {secciones.map(({ mca, cls }) => (
@@ -1187,11 +1188,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           }
           const cls = clientesDe(marca).filter(matchCli)
           return (
-            <div className="tablewrap">
+            <div className="tablewrap" style={{ maxHeight: '62vh', overflowY: 'auto' }}>
               <table>
                 <thead>
-                  <tr><th className="l" rowSpan={2}>Cliente</th><th rowSpan={2}>Plazo <span className="unit">(ventas 2028)</span></th><th colSpan={arrLbl.length + 1} style={{ borderLeft: '3px solid var(--odoo)', background: '#faf7f9', color: 'var(--odoo)', textTransform: 'none', letterSpacing: 0 }}>📌 Arrastre 2027 — ¿en qué mes de 2028 entra el cobro?</th></tr>
-                  <tr>{arrLbl.map((m, i) => <th key={m} style={i === 0 ? DIV : undefined}>{m}</th>)}<th>Total</th></tr>
+                  <tr><th className="l" rowSpan={2} style={STK}>Cliente</th><th rowSpan={2} style={STK}>Plazo <span className="unit">(ventas 2028)</span></th><th colSpan={arrLbl.length + 1} style={{ ...STK, borderLeft: '3px solid var(--odoo)', background: '#faf7f9', color: 'var(--odoo)', textTransform: 'none', letterSpacing: 0 }}>📌 Arrastre 2027 — ¿en qué mes de 2028 entra el cobro?</th></tr>
+                  <tr>{arrLbl.map((m, i) => <th key={m} style={{ ...STK2, ...(i === 0 ? DIV : {}) }}>{m}</th>)}<th style={STK2}>Total</th></tr>
                 </thead>
                 <tbody>
                   {cls.length === 0 && <tr><td className="l" colSpan={9}>No hay clientes para {marca}. Carga el Histórico o captura clientes en Ventas.</td></tr>}
