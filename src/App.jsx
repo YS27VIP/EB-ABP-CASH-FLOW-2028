@@ -134,15 +134,16 @@ const DEFAULT_GADMIN = [
 const CORP_MARCAS = ['HOKA', 'UGG']
 const esCorpMarca = (m) => CORP_MARCAS.includes(upper(m))
 /* Cálculo de comisiones por marca (lo llena el Director; venta externa viene de Comercial, interna de Retail). */
-function comisionCalc(marca, comisData, ventaExtMes, comprasUdMes) {
+function comisionCalc(marca, comisData, ventaExtMes) {
   const g = (k) => num(comisData[k])
   const pagoExt = MESES.map((_, m) => ventaExtMes[m] * g(`PCTEXT|${marca}|${m}`) / 100)
   const ventaInt = MESES.map(() => 0) // intercompañía (Retail): pendiente
   const pagoInt = MESES.map((_, m) => ventaInt[m] * g(`PCTINT|${marca}|${m}`) / 100)
-  const pagoCorp = MESES.map((_, m) => esCorpMarca(marca) ? comprasUdMes[m] * g(`CORP|${marca}`) : 0)
-  const total = MESES.map((_, m) => pagoExt[m] + pagoInt[m] + pagoCorp[m])
-  return { pagoExt, ventaInt, pagoInt, pagoCorp, total }
+  const total = MESES.map((_, m) => pagoExt[m] + pagoInt[m])
+  return { pagoExt, ventaInt, pagoInt, total }
 }
+// Comisión CORPORATIVA (solo HOKA/UGG): $/ud sobre las compras. La captura Finanzas y es un PAGO (Cash Out).
+function comisionCorpMes(marca, cfData, comprasUdMes) { return MESES.map((_, m) => esCorpMarca(marca) ? comprasUdMes[m] * num(cfData[`CORP|${marca}`]) : 0) }
 
 /* Temporadas: inventario inicial (stock viejo) vs compras 2028 (nuevo, porque el presupuesto es 2028) */
 const INV_SEASONS = ['Otros', 'FW26', 'SS26', 'FW27', 'SS27']
@@ -936,16 +937,13 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const internoMap = (() => { try { return JSON.parse(localStorage.getItem('interno_' + empresa) || '{}') } catch { return {} } })()
   const esInterno = (mca, cli) => !!internoMap[`${mca}|${cli}`]
   const saldoTotal = (mca) => clientesDe(mca).reduce((s, cli) => esInterno(mca, cli) ? s : s + num(data[`SALDO|${mca}|${cli}`]), 0)
-  // Cuentas por cobrar de VENTA EXTERNA que se cobran en el tramo final de 2027 (OCT=0, NOV=1, DIC=2), por cliente.
-  // DIC conserva la llave antigua SALDO|mca|cli (retrocompatible); OCT y NOV usan SALDO|mca|cli|0 y |1.
-  const cob27Key = (mca, cli, m) => m === 2 ? `SALDO|${mca}|${cli}` : `SALDO|${mca}|${cli}|${m}`
-  const cob27 = (mca, cli, m) => esInterno(mca, cli) ? 0 : num(data[cob27Key(mca, cli, m)])
-  const cob27Total = (mca, m) => clientesDe(mca).reduce((s, cli) => s + cob27(mca, cli, m), 0)
-  // Escalera de las cuentas por cobrar 2027: lo pendiente originado en oct(0)/nov(1)/dic(2)-27 se cobra
-  // 'plazo' meses después según el término del cliente → cae en el mes de caja mi = origen + plazo (puede caer en 2028).
-  const cob2027Landing = (mca, mi) => clientesDe(mca).reduce((s, cli) => { const p = CF_PLAZO_MESES[data[`TERM|${mca}|${cli}`]] ?? 0; let x = 0; for (let o = 0; o < 3; o++) { if (o + p - 3 === mi) x += cob27(mca, cli, o) } return s + x }, 0)
-  // ¿En qué mes cae lo pendiente originado en el mes 'o' (0=oct,1=nov,2=dic-27) según el término?
-  const caeEn = (o, term) => { const p = CF_PLAZO_MESES[term]; if (p == null) return null; const mi = o + p - 3; if (mi < 0) return 'ya en banco'; return mi < CF_MESES.length ? CF_MESES[mi] : 'fuera de 2028' }
+  // ARRASTRE 2027 (venta externa ya vendida, pendiente de cobro): la persona coloca por cliente CUÁNTO entra en cada
+  // mes de 2028 (ene..jun cubren hasta 180 días desde el cierre). Directo, sin adivinar plazos. Los internos no cuentan.
+  const ARR_N = 6 // ene..jun-28
+  const arr27Key = (mca, cli, mi) => `COB2027|${mca}|${cli}|${mi}`
+  const arr27 = (mca, cli, mi) => esInterno(mca, cli) ? 0 : num(data[arr27Key(mca, cli, mi)])
+  const arr27Total = (mca, mi) => (mi < ARR_N ? clientesDe(mca).reduce((s, cli) => s + arr27(mca, cli, mi), 0) : 0) // arrastre que entra en el mes mi
+  const arr27Cli = (mca, cli) => { let t = 0; for (let mi = 0; mi < ARR_N; mi++) t += arr27(mca, cli, mi); return t }
   const gadminSubtot = MESES.map((_, m) => gadminCfg.reduce((a, it) => a + num(gadminData[`${it.cod}|${m}`]), 0))
   const cellRaw = (concepto, mi) => {
     if (concepto === 'Comisiones') { return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[mi], 0) : comisTotalMes(marca)[mi] }
@@ -953,13 +951,14 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     return isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
   }
   // Comisiones (del Director): venta externa (Unid×AUP) × % + corporativa (compras × $/ud en HOKA/UGG).
-  const comisTotalMes = (mca) => comisionCalc(mca, comisData, ventaNetaMes(mca), comprasUdMes(mca)).total
+  const comisTotalMes = (mca) => comisionCalc(mca, comisData, ventaNetaMes(mca)).total
 
   // Compras 2028 (de Comercial) → pago según el término de pago de la marca (a proveedor). Parte del Cash Out.
   const comprasUdMes = (mca) => MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(temp[`CP|${mca}|${s}|${m}`]), 0))
   const aucMes = (mca) => { const a = Array(12).fill(0); producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca) || upper(r[1]) !== 'AUC') return; for (let j = 0; j < 12; j++) a[j] = num(r[4 + j]) }); return a }
   const comprasUsdMes = (mca) => { const u = comprasUdMes(mca), c = aucMes(mca); return MESES.map((_, m) => u[m] * c[m]) }
   const pagosMarca = (mca) => { const compras = comprasUsdMes(mca); const plazo = CF_PLAZO_MESES[data[`PTERM|${mca}`]] ?? 0; return { compras, pagos: MESES.map((_, m) => (m >= plazo ? compras[m - plazo] : 0)), plazo } }
+  const corpPagoMes = (mca) => comisionCorpMes(mca, data, comprasUdMes(mca)) // comisión corporativa (HOKA/UGG): $/ud × compras, es un pago (Cash Out)
 
   // Escalera de cobros: Ventas Netas 2028 = Unidades 2028 (Cap_Ventas) × AUP (Cap_Producto), cobradas según el plazo del cliente.
   const unidades2028 = (mca) => { const out = {}; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli) return; const arr = out[cli] || (out[cli] = Array(12).fill(0)); for (let j = 0; j < 12; j++) arr[j] += num(r[4 + j]) }); return out }
@@ -997,11 +996,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     if (concepto === CASH_INI) return cashCalc.ini[mi]
     if (concepto === CASH_FIN) return cashCalc.fin[mi]
     if (concepto === CASHIN) {
-      const tail = isTotal ? sbuMarcas.reduce((s, m) => s + cob2027Landing(m, mi), 0) : cob2027Landing(marca, mi)  // cola de cuentas por cobrar 2027 que cae este mes (según término)
+      const tail = isTotal ? sbuMarcas.reduce((s, m) => s + arr27Total(m, mi), 0) : arr27Total(marca, mi)  // arrastre 2027 que entra este mes (lo coloca Finanzas por cliente)
       const esc = isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[mi], 0) : getCobros(marca).total[mi]  // escalera de ventas 2028
       return tail + esc
     }
-    if (concepto === CASH_OUT) { return isTotal ? sbuMarcas.reduce((s, m) => s + pagosMarca(m).pagos[mi], 0) : pagosMarca(marca).pagos[mi] } // = pagos a proveedores (compras × término)
+    if (concepto === CASH_OUT) { return isTotal ? sbuMarcas.reduce((s, m) => s + pagosMarca(m).pagos[mi] + corpPagoMes(m)[mi], 0) : pagosMarca(marca).pagos[mi] + corpPagoMes(marca)[mi] } // pagos a proveedores + comisión corporativa (HOKA/UGG)
     if (CALC_PSI[concepto]) { const fn = CALC_PSI[concepto]; return isTotal ? sbuMarcas.reduce((s, m) => s + fn(m)[mi], 0) : fn(marca)[mi] }
     if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + cellRaw(sub, mi), 0)
     return cellRaw(concepto, mi)
@@ -1010,8 +1009,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const cellMarca = (mca, concepto, mi) => {
     if (concepto === CASH_INI) return cashCalcMarca(mca).ini[mi]
     if (concepto === CASH_FIN) return cashCalcMarca(mca).fin[mi]
-    if (concepto === CASHIN) { return cob2027Landing(mca, mi) + getCobros(mca).total[mi] }
-    if (concepto === CASH_OUT) return pagosMarca(mca).pagos[mi]
+    if (concepto === CASHIN) { return arr27Total(mca, mi) + getCobros(mca).total[mi] }
+    if (concepto === CASH_OUT) return pagosMarca(mca).pagos[mi] + corpPagoMes(mca)[mi]
     if (CALC_PSI[concepto]) return CALC_PSI[concepto](mca)[mi]
     if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + val(mca, sub, mi), 0)
     return val(mca, concepto, mi)
@@ -1161,56 +1160,79 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       </div>
 
       <div className="panel">
-        <h3>{role.label} — Cuentas por cobrar del cierre 2027 <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): lo captura Finanzas por marca. Aquí solo se ve.')}</h3>
-        <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b> por cada cliente, elige <b>a qué plazo te paga</b> (término) y escribe <b>lo que te quedó por cobrar</b> de sus ventas de oct, nov y dic-27. La herramienta lo cobra solo en el mes que caiga según el plazo — por ejemplo, lo de <b>octubre a 90 días entra en enero-28</b>. Eso alimenta el <b>Cash In</b> de arriba (la "cola" de 2027).</div>
-        <div className="sub">{isTotal ? <>Espejo por marca. El <b>término</b> y lo <b>pendiente por mes</b> lo definió Finanzas en cada marca.</> : <>Solo la <b>venta externa</b> (los clientes internos no cuentan). Las columnas son el <b>mes en que se vendió</b>, no cuándo se cobra.</>}</div>
+        <h3>{role.label} — Arrastre de cobros 2027 <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): lo captura Finanzas por marca. Aquí solo se ve.')}</h3>
+        <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b> lo que <b>vendiste en 2027 y aún te deben</b>, colócalo por cliente en el <b>mes de 2028 en que va a entrar</b> el dinero (ene a jun). Así el Cash In no queda sesgado. El <b>plazo</b> de cada cliente es solo para sus <b>ventas 2028</b> (no para esto). Todo esto entra solo al <b>Cash In</b> de arriba.</div>
         {buscador}
-        {isTotal ? (() => {
-          const secciones = sbuMarcas.map((mca) => ({ mca, cls: clientesDe(mca).filter(matchCli) })).filter((s) => s.cls.length > 0)
-          const gt = [0, 1, 2].map((m) => sbuMarcas.reduce((s, mca) => s + cob27Total(mca, m), 0))
-          if (secciones.length === 0) return <div className="note warn">Aún no hay clientes (con histórico 2025/2026 ni capturados en Ventas) para las marcas de esta SBU.</div>
-          return (
-            <div className="tablewrap">
-              <table>
-                <thead><tr><th className="l">Marca / Cliente</th><th>Plazo</th><th>Vendido OCT-27</th><th>Vendido NOV-27</th><th>Vendido DIC-27</th></tr></thead>
-                <tbody>
-                  {secciones.map(({ mca, cls }) => (
-                    <Fragment2 key={mca}>
-                      <tr className="sburow"><td className="l" style={{ color: marcaColor(mca) }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td></td>{[0, 1, 2].map((m) => <td key={m} className="tot">{fmt(cob27Total(mca, m))}</td>)}</tr>
-                      {cls.map((cli) => { const tk = `TERM|${mca}|${cli}`; return <tr key={mca + '|' + cli}><td className="l sub2">{cli}</td><td>{data[tk] || '—'}</td>{[0, 1, 2].map((m) => <td key={m} className="tot">{fmt(cob27(mca, cli, m))}</td>)}</tr> })}
-                    </Fragment2>
-                  ))}
-                  <tr className="grandrow"><td className="l">TOTAL {sbuLbl}</td><td></td>{gt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}</tr>
-                </tbody>
-              </table>
-              <div className="sub" style={{ marginTop: 8 }}>🪞 Solo lectura. Estas cuentas por cobrar entran al <b>Cash In</b> en el mes que caiga según el plazo (la cola de 2027). Para editar un cliente, entra a su marca específica.</div>
-            </div>
-          )
-        })() : (() => {
+        {(() => {
+          const arrIdx = [0, 1, 2, 3, 4, 5]; const arrLbl = CF_M2028.slice(0, 6)
+          if (isTotal) {
+            const secciones = sbuMarcas.map((mca) => ({ mca, cls: clientesDe(mca).filter(matchCli) })).filter((s) => s.cls.length > 0)
+            const gt = arrIdx.map((mi) => sbuMarcas.reduce((s, mca) => s + arr27Total(mca, mi), 0))
+            if (secciones.length === 0) return <div className="note warn">Aún no hay clientes para las marcas de esta SBU.</div>
+            return (
+              <div className="tablewrap">
+                <table>
+                  <thead><tr><th className="l">Marca / Cliente</th><th>Plazo (ventas 2028)</th>{arrLbl.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
+                  <tbody>
+                    {secciones.map(({ mca, cls }) => (
+                      <Fragment2 key={mca}>
+                        <tr className="sburow"><td className="l" style={{ color: marcaColor(mca) }}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td></td>{arrIdx.map((mi) => <td key={mi} className="tot">{fmt(arr27Total(mca, mi))}</td>)}<td className="tot">{fmt(arrIdx.reduce((a, mi) => a + arr27Total(mca, mi), 0))}</td></tr>
+                        {cls.map((cli) => { const tk = `TERM|${mca}|${cli}`; return <tr key={mca + '|' + cli}><td className="l sub2">{cli}</td><td>{data[tk] || '—'}</td>{arrIdx.map((mi) => <td key={mi} className="tot">{fmt(arr27(mca, cli, mi))}</td>)}<td className="tot">{fmt(arr27Cli(mca, cli))}</td></tr> })}
+                      </Fragment2>
+                    ))}
+                    <tr className="grandrow"><td className="l">TOTAL {sbuLbl}</td><td></td>{gt.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(gt.reduce((a, b) => a + b, 0))}</td></tr>
+                  </tbody>
+                </table>
+                <div className="sub" style={{ marginTop: 8 }}>🪞 Solo lectura. Entra al <b>Cash In</b> en el mes indicado. Para editar, entra a la marca.</div>
+              </div>
+            )
+          }
           const cls = clientesDe(marca).filter(matchCli)
           return (
             <div className="tablewrap">
               <table>
-                <thead><tr><th className="l">Cliente</th><th>¿A qué plazo paga?</th><th>Vendido OCT-27</th><th>Vendido NOV-27</th><th>Vendido DIC-27</th></tr></thead>
+                <thead><tr><th className="l">Cliente</th><th>Plazo <span className="unit">(ventas 2028)</span></th>{arrLbl.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
                 <tbody>
-                  {cls.length === 0 && <tr><td className="l" colSpan={5}>No hay clientes para {marca}. Carga el Histórico (2025/2026) o captura clientes en Ventas.</td></tr>}
+                  {cls.length === 0 && <tr><td className="l" colSpan={9}>No hay clientes para {marca}. Carga el Histórico o captura clientes en Ventas.</td></tr>}
                   {cls.map((cli) => {
-                    const tk = `TERM|${marca}|${cli}`; const term = data[tk]
+                    const tk = `TERM|${marca}|${cli}`
                     return (
                       <tr key={cli}>
                         <td className="l">{cli}</td>
-                        <td>{soloVer ? (data[tk] || '—') : <select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>}{term && <div className="unit" style={{ fontSize: 10.5, marginTop: 3, color: 'var(--muted)' }}>se cobra: oct→<b>{caeEn(0, term)}</b>, nov→<b>{caeEn(1, term)}</b>, dic→<b>{caeEn(2, term)}</b></div>}</td>
-                        {[0, 1, 2].map((m) => { const ck = cob27Key(marca, cli, m); return <td key={m} className={soloVer ? 'tot' : 'cell'}>{soloVer ? fmt(num(data[ck])) : <input value={data[ck] ?? ''} onChange={(e) => set(ck, e.target.value)} inputMode="decimal" style={{ width: 90 }} />}</td> })}
+                        <td>{soloVer ? (data[tk] || '—') : <select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>}</td>
+                        {arrIdx.map((mi) => { const ck = arr27Key(marca, cli, mi); return <td key={mi} className={soloVer ? 'tot' : 'cell'}>{soloVer ? fmt(num(data[ck])) : <input value={data[ck] ?? ''} onChange={(e) => set(ck, e.target.value)} inputMode="decimal" style={{ width: 64 }} />}</td> })}
+                        <td className="tot">{fmt(arr27Cli(marca, cli))}</td>
                       </tr>
                     )
                   })}
-                  {cls.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td></td>{[0, 1, 2].map((m) => <td key={m} className="tot">{fmt(cob27Total(marca, m))}</td>)}</tr>}
+                  {cls.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td></td>{arrIdx.map((mi) => <td key={mi} className="tot">{fmt(arr27Total(marca, mi))}</td>)}<td className="tot">{fmt(arrIdx.reduce((a, mi) => a + arr27Total(marca, mi), 0))}</td></tr>}
                 </tbody>
               </table>
-              <div className="sub" style={{ marginTop: 8 }}>Debajo del plazo verás <b>en qué mes cae</b> cada uno. Todo esto entra solo al <b>Cash In</b> de arriba (la cola de 2027); no se escribe a mano allá.</div>
+              <div className="sub" style={{ marginTop: 8 }}>Escribe cuánto del arrastre 2027 entra en cada mes. Se suma solo al <b>Cash In</b> de arriba.</div>
             </div>
           )
         })()}
+      </div>
+
+      <div className="panel">
+        <h3>{role.label} — Mapa de cobros{M$} <span className="unit">(de dónde sale el Cash In · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span></h3>
+        <div className="sub">Cada mes el <b>Cash In</b> sale de dos fuentes: el <b style={{ color: '#b45309' }}>arrastre de 2027</b> (lo que ya vendiste y te entra este año) y las <b style={{ color: '#15803d' }}>ventas 2028</b> cobradas según el plazo de cada cliente.</div>
+        <div className="tablewrap">
+          <table className="vfix"><colgroup><col style={{ width: '210px' }} />{CF_MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+            <thead><tr><th className="l">Fuente del cobro</th>{CF_M2028.map((m) => <th key={m} className="yb">{m}</th>)}<th>Total</th></tr></thead>
+            <tbody>
+              {(() => {
+                const arrM = (mi) => isTotal ? sbuMarcas.reduce((s, m) => s + arr27Total(m, mi), 0) : arr27Total(marca, mi)
+                const escM = (mi) => isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[mi], 0) : getCobros(marca).total[mi]
+                const filas = [['Arrastre 2027 (cola)', '#b45309', arrM], ['Ventas 2028 (escalera por plazo)', '#15803d', escM]]
+                return <Fragment2>
+                  {filas.map(([lbl, color, fn]) => <tr key={lbl}><td className="l" style={{ color }}>{lbl}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color }}>{fmt(fn(mi))}</td>)}<td className="tot" style={{ color }}>{fmt(CF_MESES.reduce((a, _, mi) => a + fn(mi), 0))}</td></tr>)}
+                  <tr className="grandrow"><td className="l">= Cash In del mes</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot">{fmt(arrM(mi) + escM(mi))}</td>)}<td className="tot">{fmt(CF_MESES.reduce((a, _, mi) => a + arrM(mi) + escM(mi), 0))}</td></tr>
+                </Fragment2>
+              })()}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {!isTotal && (() => {
@@ -1258,13 +1280,17 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         const listaM = isTotal ? sbuMarcas : [marca]
         const compras = MESES.map((_, m) => listaM.reduce((a, mca) => a + comprasUsdMes(mca)[m], 0))
         const pagos = MESES.map((_, m) => listaM.reduce((a, mca) => a + pagosMarca(mca).pagos[m], 0))
+        const hayCorp = listaM.some((mca) => esCorpMarca(mca))
+        const corpUnid = MESES.map((_, m) => listaM.reduce((a, mca) => a + (esCorpMarca(mca) ? comprasUdMes(mca)[m] : 0), 0))
+        const corpPago = MESES.map((_, m) => listaM.reduce((a, mca) => a + corpPagoMes(mca)[m], 0))
         return (
           <div className="panel">
             <h3>{role.label} — Compras y pagos {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(Cash Out)</span></h3>
-            <div className="sub">La <b>compra 2028</b> (unidades de Comercial × AUC) genera un <b>pago</b> según el <b>término de pago de la marca</b> a su proveedor (Cash = mismo mes · 30d = +1 · 60 = +2 …). El total de pagos alimenta el <b>Cash Out</b>.</div>
-            {!isTotal && <div className="toolbar" style={{ marginBottom: 8 }}>
-              <label>Término de pago de {marca} <span className="unit">(a proveedor)</span></label>
-              {soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{data[`PTERM|${marca}`] || '—'}</span> : <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>}
+            <div className="sub">La <b>compra 2028</b> (unidades de Comercial × AUC) genera un <b>pago</b> según el <b>término de pago de la marca</b> a su proveedor (Cash = mismo mes · 30d = +1 · 60 = +2 …). {hayCorp && <>Además, HOKA/UGG pagan una <b>comisión corporativa</b> de <b>$/ud sobre las compras</b>. </>}Todo esto alimenta el <b>Cash Out</b>.</div>
+            {!isTotal && <div className="toolbar" style={{ marginBottom: 8, gap: 14, flexWrap: 'wrap' }}>
+              <span><label>Término de pago de {marca} <span className="unit">(a proveedor)</span> </label>
+              {soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{data[`PTERM|${marca}`] || '—'}</span> : <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>}</span>
+              {esCorpMarca(marca) && <span><label>Comisión corporativa <span className="unit">($/ud sobre compras)</span> </label>{soloVer ? <span className="empchip" style={{ background: '#eef1f4', color: '#475569' }}>{data[`CORP|${marca}`] || '—'} $/ud</span> : <input className="fillin" value={data[`CORP|${marca}`] ?? ''} onChange={(e) => set(`CORP|${marca}`, e.target.value)} inputMode="decimal" placeholder="$/ud" style={{ width: 70 }} />}</span>}
             </div>}
             {isTotal && <div className="tablewrap" style={{ marginBottom: 12, maxWidth: 520 }}>
               <table style={{ width: 'auto' }}>
@@ -1280,7 +1306,12 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                 <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
                   <tr><td className="l">Compra 2028 ($ · fecha disponible)</td>{compras.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(compras.reduce((a, b) => a + b, 0))}</td></tr>
-                  <tr className="grandrow"><td className="l">Pago (según término) → Cash Out</td>{pagos.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(pagos.reduce((a, b) => a + b, 0))}</td></tr>
+                  <tr className="catrow"><td className="l">Pago a proveedor (según término)</td>{pagos.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(pagos.reduce((a, b) => a + b, 0))}</td></tr>
+                  {hayCorp && <>
+                    <tr><td className="l sub2">Compra en unidades <span className="unit">(HOKA/UGG)</span></td>{corpUnid.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(corpUnid.reduce((a, b) => a + b, 0))}</td></tr>
+                    <tr className="catrow"><td className="l">Pago comisión corporativa <span className="unit">($/ud × compras)</span></td>{corpPago.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(corpPago.reduce((a, b) => a + b, 0))}</td></tr>
+                  </>}
+                  <tr className="grandrow"><td className="l">TOTAL Cash Out (pagos)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(pagos[m] + corpPago[m])}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, m) => a + pagos[m] + corpPago[m], 0))}</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1510,8 +1541,7 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
   const rvc = realAupAuc(empresa, marca, ventas, producto, catList.map((c) => c.cat))
   const ventaExt = rvc.ventaMes
   const comprasUd = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(temp[`CP|${marca}|${s}|${m}`]), 0))
-  const c = comisionCalc(marca, data, ventaExt, comprasUd)
-  const corp = esCorpMarca(marca)
+  const c = comisionCalc(marca, data, ventaExt)
   const rowTot = (arr) => arr.reduce((a, b) => a + b, 0)
   function guardar() { setSaving(true); try { saveEstado(empresa, 'comis', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet. Las comisiones de venta externa alimentan Comisiones del Cash Flow.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   const pctRow = (kf, ph) => MESES.map((_, m) => { const k = kf(m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder={ph} /></td> })
@@ -1534,12 +1564,7 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
             <tr><td className="l sub2">Venta intercompañía ($) <span className="unit">(Retail · pendiente)</span></td>{c.ventaInt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">0</td></tr>
             <tr><td className="l sub2">% comisión venta interna</td>{pctRow((m) => `PCTINT|${marca}|${m}`, '%')}<td></td></tr>
             <tr className="catrow"><td className="l">Pago comisión venta interna</td>{c.pagoInt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.pagoInt))}</td></tr>
-            {corp && <>
-              <tr className="secrow"><td colSpan={14}>COMPRAS (solo {CORP_MARCAS.join(' / ')})</td></tr>
-              <tr><td className="l sub2">Compras unidades (XFD)</td>{comprasUd.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(comprasUd))}</td></tr>
-              <tr><td className="l sub2">Comisión corporativa $/ud <input value={data[`CORP|${marca}`] ?? ''} onChange={(e) => set(`CORP|${marca}`, e.target.value)} inputMode="decimal" placeholder="$/ud" style={{ width: 60, marginLeft: 6, padding: 4, border: '1px solid var(--line)', borderRadius: 5 }} /></td>{MESES.map((_, m) => <td key={m}></td>)}<td></td></tr>
-              <tr className="catrow"><td className="l">Pago comisión corporativa</td>{c.pagoCorp.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.pagoCorp))}</td></tr>
-            </>}
+            {esCorpMarca(marca) && <tr><td className="l" colSpan={14} style={{ color: 'var(--muted)', fontSize: 12 }}>ℹ️ La <b>comisión corporativa $/ud</b> sobre compras (HOKA/UGG) se movió a <b>Finanzas → Compras y pagos</b> y ahora es un <b>pago (Cash Out)</b>, no una comisión.</td></tr>}
             <tr className="grandrow"><td className="l">TOTAL comisiones</td>{c.total.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.total))}</td></tr>
           </tbody>
         </table></div>
