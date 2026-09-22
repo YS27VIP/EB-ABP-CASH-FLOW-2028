@@ -942,6 +942,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const cob27Key = (mca, cli, m) => m === 2 ? `SALDO|${mca}|${cli}` : `SALDO|${mca}|${cli}|${m}`
   const cob27 = (mca, cli, m) => esInterno(mca, cli) ? 0 : num(data[cob27Key(mca, cli, m)])
   const cob27Total = (mca, m) => clientesDe(mca).reduce((s, cli) => s + cob27(mca, cli, m), 0)
+  // Escalera de las cuentas por cobrar 2027: lo pendiente originado en oct(0)/nov(1)/dic(2)-27 se cobra
+  // 'plazo' meses después según el término del cliente → cae en el mes de caja mi = origen + plazo (puede caer en 2028).
+  const cob2027Landing = (mca, mi) => clientesDe(mca).reduce((s, cli) => { const p = CF_PLAZO_MESES[data[`TERM|${mca}|${cli}`]] ?? 0; let x = 0; for (let o = 0; o < 3; o++) { if (o + p === mi) x += cob27(mca, cli, o) } return s + x }, 0)
+  // ¿En qué mes cae lo pendiente originado en el mes 'o' (0=oct,1=nov,2=dic-27) según el término?
+  const caeEn = (o, term) => { const p = CF_PLAZO_MESES[term]; if (p == null) return null; const mi = o + p; return mi < CF_MESES.length ? CF_MESES[mi] : null }
   const gadminSubtot = MESES.map((_, m) => gadminCfg.reduce((a, it) => a + num(gadminData[`${it.cod}|${m}`]), 0))
   const cellRaw = (concepto, mi) => {
     if (concepto === 'Comisiones') { if (mi < 3) return 0; const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[j], 0) : comisTotalMes(marca)[j] }
@@ -993,8 +998,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     if (concepto === CASH_INI) return cashCalc.ini[mi]
     if (concepto === CASH_FIN) return cashCalc.fin[mi]
     if (concepto === CASHIN) {
-      if (mi <= DIC27) return isTotal ? sbuMarcas.reduce((s, m) => s + cob27Total(m, mi), 0) : cob27Total(marca, mi)   // OCT/NOV/DIC-27 = cuentas por cobrar (venta externa) por cliente
-      const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[j], 0) : getCobros(marca).total[j] // 2028 = escalera
+      const tail = isTotal ? sbuMarcas.reduce((s, m) => s + cob2027Landing(m, mi), 0) : cob2027Landing(marca, mi)  // cola de cuentas por cobrar 2027 que cae este mes (según término)
+      const esc = mi < 3 ? 0 : (isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[mi - 3], 0) : getCobros(marca).total[mi - 3])  // escalera de ventas 2028
+      return tail + esc
     }
     if (concepto === CASH_OUT) { if (mi < 3) return 0; const j = mi - 3; return isTotal ? sbuMarcas.reduce((s, m) => s + pagosMarca(m).pagos[j], 0) : pagosMarca(marca).pagos[j] } // = pagos a proveedores (compras × término)
     if (CALC_PSI[concepto]) { if (mi < 3) return 0; const j = mi - 3; const fn = CALC_PSI[concepto]; return isTotal ? sbuMarcas.reduce((s, m) => s + fn(m)[j], 0) : fn(marca)[j] }
@@ -1005,7 +1011,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const cellMarca = (mca, concepto, mi) => {
     if (concepto === CASH_INI) return cashCalcMarca(mca).ini[mi]
     if (concepto === CASH_FIN) return cashCalcMarca(mca).fin[mi]
-    if (concepto === CASHIN) { if (mi <= DIC27) return cob27Total(mca, mi); return getCobros(mca).total[mi - 3] }
+    if (concepto === CASHIN) { return cob2027Landing(mca, mi) + (mi < 3 ? 0 : getCobros(mca).total[mi - 3]) }
     if (concepto === CASH_OUT) return mi < 3 ? 0 : pagosMarca(mca).pagos[mi - 3]
     if (CALC_PSI[concepto]) return mi < 3 ? 0 : CALC_PSI[concepto](mca)[mi - 3]
     if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + val(mca, sub, mi), 0)
@@ -1106,7 +1112,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       const k = key(marca, it, mi)
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
-                    const ayudaComp = it === CASHIN ? 'Cash In (Cobros): calculado, no se escribe a mano. OCT/NOV/DIC-27 = las cuentas por cobrar de VENTA EXTERNA que Finanzas capturó por cliente abajo. 2028 = la venta externa cobrada según el plazo de cada cliente (Cash=mismo mes, 30d=+1, 60=+2…). La venta interna (intercompañía) es incobrable y se muestra aparte, abajo.' : it === CASH_OUT ? 'Cash Out (Pagos): calculado, no se escribe a mano. Es la consecuencia de los pagos a proveedores: la compra 2028 × término de pago de la marca (bloque "Compras y pagos" de abajo).' : it === VENTAS_NETAS ? 'Ventas Netas = Unidades (Comercial) × AUP efectivo del mes (Producto). Párate sobre cada mes.' : it === COMPRAS_FD ? 'Compras = unidades compradas × AUC (Producto). Párate sobre cada mes.' : null
+                    const ayudaComp = it === CASHIN ? 'Cash In (Cobros): calculado, no se escribe a mano. Suma dos cosas: (1) la COLA de las cuentas por cobrar del cierre 2027 — lo que quedó pendiente de oct/nov/dic-27 entra en su mes según el plazo del cliente (ej: octubre a 90 días → enero-28); y (2) las VENTAS 2028 cobradas por su propia escalera (Cash=mismo mes, 30d=+1, 60=+2…). La venta interna (intercompañía) es incobrable y va aparte, abajo.' : it === CASH_OUT ? 'Cash Out (Pagos): calculado, no se escribe a mano. Es la consecuencia de los pagos a proveedores: la compra 2028 × término de pago de la marca (bloque "Compras y pagos" de abajo).' : it === VENTAS_NETAS ? 'Ventas Netas = Unidades (Comercial) × AUP efectivo del mes (Producto). Párate sobre cada mes.' : it === COMPRAS_FD ? 'Compras = unidades compradas × AUC (Producto). Párate sobre cada mes.' : null
                     const fila = <tr key={it} className={esCostos ? 'catrow rowline ' + (openCostos ? 'open' : '') : undefined} onClick={esCostos ? () => setOpenCostos((o) => !o) : undefined} style={esCostos ? { cursor: 'pointer' } : undefined}><td className="l">{esCostos ? <span className="caret">▶</span> : null} {it}{ayudaComp && Q(ayudaComp)}{esCostos ? <span className="unit" style={{ marginLeft: 6 }}>({openCostos ? 'ocultar' : 'ver'} detalle: {CF_COSTOS.join(' + ')})</span> : null}</td>{celdas}<td className="tot">{fmt(rowTot(it))}</td></tr>
                     if (it === CASH_FIN) {
                       const flujoCeldas = CF_MESES.map((_, mi) => { const cls = mi < 3 ? 'ya' : 'yb'; const v = flujoNeto(mi); const s = v > 0.5 ? '+ ' : v < -0.5 ? '− ' : ''; return <td key={mi} className={'tot ' + cls} style={{ color: v < -0.5 ? '#b91c1c' : v > 0.5 ? '#15803d' : undefined }}>{s}{fmt(Math.abs(v))}</td> })
@@ -1156,8 +1162,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       </div>
 
       <div className="panel">
-        <h3>{role.label} — Términos de pago y saldo por cliente <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): los términos de pago y el saldo por cliente los captura Finanzas por marca. Aquí solo se ven.')}</h3>
-        <div className="sub">Clientes con histórico 2025/2026 y nuevos clientes 2028 (capturados en Ventas). {isTotal ? <>Así se ven los <b>términos de pago</b> y las <b>cuentas por cobrar OCT/NOV/DIC-27</b> que Finanzas definió por cliente en cada marca de la SBU.</> : <>Elige el <b>término de pago</b> y escribe <b>cuánto se cobra en OCT, NOV y DIC de 2027</b> por cliente (cuentas por cobrar de venta externa). Eso alimenta el <b>Cash In</b> de esos meses arriba.</>}</div>
+        <h3>{role.label} — Cuentas por cobrar del cierre 2027 <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): lo captura Finanzas por marca. Aquí solo se ve.')}</h3>
+        <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b> por cada cliente, elige <b>a qué plazo te paga</b> (término) y escribe <b>lo que te quedó por cobrar</b> de sus ventas de oct, nov y dic-27. La herramienta lo cobra solo en el mes que caiga según el plazo — por ejemplo, lo de <b>octubre a 90 días entra en enero-28</b>. Eso alimenta el <b>Cash In</b> de arriba (la "cola" de 2027).</div>
+        <div className="sub">{isTotal ? <>Espejo por marca. El <b>término</b> y lo <b>pendiente por mes</b> lo definió Finanzas en cada marca.</> : <>Solo la <b>venta externa</b> (los clientes internos no cuentan). Las columnas son el <b>mes en que se vendió</b>, no cuándo se cobra.</>}</div>
         {buscador}
         {isTotal ? (() => {
           const secciones = sbuMarcas.map((mca) => ({ mca, cls: clientesDe(mca).filter(matchCli) })).filter((s) => s.cls.length > 0)
@@ -1166,7 +1173,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           return (
             <div className="tablewrap">
               <table>
-                <thead><tr><th className="l">Marca / Cliente</th><th>Término de pagos</th><th>OCT-27</th><th>NOV-27</th><th>DIC-27</th></tr></thead>
+                <thead><tr><th className="l">Marca / Cliente</th><th>Plazo</th><th>Vendido OCT-27</th><th>Vendido NOV-27</th><th>Vendido DIC-27</th></tr></thead>
                 <tbody>
                   {secciones.map(({ mca, cls }) => (
                     <Fragment2 key={mca}>
@@ -1177,7 +1184,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                   <tr className="grandrow"><td className="l">TOTAL {sbuLbl}</td><td></td>{gt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}</tr>
                 </tbody>
               </table>
-              <div className="sub" style={{ marginTop: 8 }}>🪞 Solo lectura. Estas cuentas por cobrar alimentan <b>Cash In (Cobros) · OCT/NOV/DIC-27</b> del bloque de arriba. Para editar un cliente, entra a su marca específica.</div>
+              <div className="sub" style={{ marginTop: 8 }}>🪞 Solo lectura. Estas cuentas por cobrar entran al <b>Cash In</b> en el mes que caiga según el plazo (la cola de 2027). Para editar un cliente, entra a su marca específica.</div>
             </div>
           )
         })() : (() => {
@@ -1185,15 +1192,15 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           return (
             <div className="tablewrap">
               <table>
-                <thead><tr><th className="l">Cliente</th><th>Término de pagos</th><th>OCT-27</th><th>NOV-27</th><th>DIC-27</th></tr></thead>
+                <thead><tr><th className="l">Cliente</th><th>¿A qué plazo paga?</th><th>Vendido OCT-27</th><th>Vendido NOV-27</th><th>Vendido DIC-27</th></tr></thead>
                 <tbody>
                   {cls.length === 0 && <tr><td className="l" colSpan={5}>No hay clientes para {marca}. Carga el Histórico (2025/2026) o captura clientes en Ventas.</td></tr>}
                   {cls.map((cli) => {
-                    const tk = `TERM|${marca}|${cli}`
+                    const tk = `TERM|${marca}|${cli}`; const term = data[tk]
                     return (
                       <tr key={cli}>
                         <td className="l">{cli}</td>
-                        <td>{soloVer ? (data[tk] || '—') : <select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>}</td>
+                        <td>{soloVer ? (data[tk] || '—') : <select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>}{term && caeEn(0, term) && <div className="unit" style={{ fontSize: 10.5, marginTop: 3, color: 'var(--muted)' }}>cae en: {caeEn(0, term)} · {caeEn(1, term)} · {caeEn(2, term) || 'fuera'}</div>}</td>
                         {[0, 1, 2].map((m) => { const ck = cob27Key(marca, cli, m); return <td key={m} className={soloVer ? 'tot' : 'cell'}>{soloVer ? fmt(num(data[ck])) : <input value={data[ck] ?? ''} onChange={(e) => set(ck, e.target.value)} inputMode="decimal" style={{ width: 90 }} />}</td> })}
                       </tr>
                     )
@@ -1201,7 +1208,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                   {cls.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td></td>{[0, 1, 2].map((m) => <td key={m} className="tot">{fmt(cob27Total(marca, m))}</td>)}</tr>}
                 </tbody>
               </table>
-              <div className="sub" style={{ marginTop: 8 }}>Estas cuentas por cobrar alimentan automáticamente <b>Cash In (Cobros) · OCT/NOV/DIC-27</b> del bloque de arriba (ya no se escriben a mano allá).</div>
+              <div className="sub" style={{ marginTop: 8 }}>Debajo del plazo verás <b>en qué mes cae</b> cada uno. Todo esto entra solo al <b>Cash In</b> de arriba (la cola de 2027); no se escribe a mano allá.</div>
             </div>
           )
         })()}
