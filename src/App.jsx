@@ -890,6 +890,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   const [openCostos, setOpenCostos] = useState(false)
+  const [openVentas, setOpenVentas] = useState(false)
   const [desglose, setDesglose] = useState(false)
   const [buscar, setBuscar] = useState('')
   const matchCli = (cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0
@@ -1086,6 +1087,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                   <tr className="secrow"><td colSpan={14}>{gr.g}</td></tr>
                   {gr.items.map((it) => {
                     const esCostos = it === CF_COSTOS_PARENT
+                    const esVentas = it === VENTAS_NETAS // desplegable: muestra venta externa / interna
                     // Signo y color: entradas (+ verde), salidas (− rojo). El resto neutro.
                     const signo = it === CASHIN ? '+ ' : (it === CASH_OUT || esCostos) ? '− ' : ''
                     const colFila = it === CASHIN ? '#15803d' : (it === CASH_OUT || esCostos) ? '#b91c1c' : undefined
@@ -1110,12 +1112,16 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
                     const ayudaComp = it === CASHIN ? 'Cash In (Cobros): calculado, no se escribe a mano. Suma dos cosas: (1) la COLA de las cuentas por cobrar del cierre 2027 — lo que quedó pendiente de oct/nov/dic-27 entra en su mes según el plazo del cliente (ej: octubre a 90 días → enero-28); y (2) las VENTAS 2028 cobradas por su propia escalera (Cash=mismo mes, 30d=+1, 60=+2…). La venta interna (intercompañía) es incobrable y va aparte, abajo.' : it === CASH_OUT ? 'Cash Out (Pagos): calculado, no se escribe a mano. Es la consecuencia de los pagos a proveedores: la compra 2028 × término de pago de la marca (bloque "Compras y pagos" de abajo).' : it === VENTAS_NETAS ? 'Ventas Netas TOTAL = venta interna + externa (todos los clientes) = Unidades × AUP efectivo del mes. Es la venta CONTABLE (devengada), no el cobro: por eso no coincide con el Cash In, que solo cuenta la venta externa y aplica el plazo de cada cliente.' : it === COMPRAS_FD ? 'Compras = unidades compradas × AUC (Producto). Párate sobre cada mes.' : null
-                    const fila = <tr key={it} className={esCostos ? 'rowline ' + (openCostos ? 'open' : '') : undefined} onClick={esCostos ? () => setOpenCostos((o) => !o) : undefined} style={esCostos ? { cursor: 'pointer' } : undefined}><td className="l" style={{ color: colFila }}>{esCostos ? <span className="caret">▶</span> : null} {it === VENTAS_NETAS ? 'Ventas Netas Total' : it}{ayudaComp && Q(ayudaComp)}{esCostos ? <span className="unit" style={{ marginLeft: 6, color: 'var(--muted)' }}>({openCostos ? 'ocultar' : 'ver'} detalle)</span> : null}</td>{celdas}<td className="tot" style={{ color: colFila }}>{Math.abs(rowTot(it)) > 0.5 ? signo : ''}{fmt(Math.abs(rowTot(it)))}</td></tr>
+                    const exp = esCostos || esVentas; const abierto = esCostos ? openCostos : openVentas; const toggle = esCostos ? () => setOpenCostos((o) => !o) : () => setOpenVentas((o) => !o)
+                    const fila = <tr key={it} className={exp ? 'rowline ' + (abierto ? 'open' : '') : undefined} onClick={exp ? toggle : undefined} style={exp ? { cursor: 'pointer' } : undefined}><td className="l" style={{ color: colFila }}>{exp ? <span className="caret">▶</span> : null} {esVentas ? 'Ventas Netas Total' : it}{ayudaComp && Q(ayudaComp)}{exp ? <span className="unit" style={{ marginLeft: 6, color: 'var(--muted)' }}>({abierto ? 'ocultar' : 'ver'} {esVentas ? 'externa / interna' : 'detalle'})</span> : null}</td>{celdas}<td className="tot" style={{ color: colFila }}>{Math.abs(rowTot(it)) > 0.5 ? signo : ''}{fmt(Math.abs(rowTot(it)))}</td></tr>
                     if (it === CASH_FIN) {
                       const flujoCeldas = CF_MESES.map((_, mi) => { const cls = 'yb'; const v = flujoNeto(mi); const s = v > 0.5 ? '+ ' : v < -0.5 ? '− ' : ''; return <td key={mi} className={'tot ' + cls} style={{ color: v < -0.5 ? '#b91c1c' : v > 0.5 ? '#15803d' : undefined }}>{s}{fmt(Math.abs(v))}</td> })
                       const flujoTot = CF_MESES.reduce((a, _, mi) => a + flujoNeto(mi), 0)
                       const flujoRow = <tr key="flujoneto" className="grandrow"><td className="l">= Flujo neto del mes <span className="unit">(cobros − pagos − costos)</span></td>{flujoCeldas}<td className="tot">{fmt(flujoTot)}</td></tr>
                       return <Fragment2 key={it}>{flujoRow}{fila}</Fragment2>
+                    }
+                    if (esVentas) {
+                      return <Fragment2 key={it}>{fila}{openVentas && [['Venta externa (base de cobros)', '#0b5566', 'ext'], ['Venta interna (incobrable · intercompañía)', '#b45309', 'int']].map(([lbl, color, pick]) => <tr key={pick}><td className="l sub2" style={{ color }}>{lbl}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color }}>{fmt(ventaSplitMemo(pick, mi))}</td>)}<td className="tot" style={{ color }}>{fmt(CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo(pick, mi), 0))}</td></tr>)}</Fragment2>
                     }
                     if (!esCostos) return fila
                     return (
@@ -1141,23 +1147,6 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         </div>
       </div>
 
-      <div className="panel">
-        <h3>{role.label} — Informativo: venta 2028 externa vs interna <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span></h3>
-        <div className="sub">No entra al Cash Flow: es solo la base para entenderlo. La <b style={{ color: '#0b5566' }}>venta externa</b> es la que genera los cobros (Cash In); la <b style={{ color: '#b45309' }}>venta interna</b> (intercompañía) es incobrable.</div>
-        <div className="tablewrap">
-          <table className="vfix"><colgroup><col style={{ width: '210px' }} />{CF_MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-            <thead><tr><th className="l">Concepto</th>{CF_M2028.map((m) => <th key={m} className="yb">{m}</th>)}<th>Total</th></tr></thead>
-            <tbody>
-              {[['Venta externa 2028 (base de cobros)', 'ext', '#0b5566'], ['Venta interna 2028 (incobrable · intercompañía)', 'int', '#b45309']].map(([label, pick, color]) => {
-                const cs = CF_MESES.map((_, mi) => { const cls = 'yb'; return <td key={mi} className={'tot ' + cls} style={{ color }}>{fmt(ventaSplitMemo(pick, mi))}</td> })
-                const tt = CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo(pick, mi), 0)
-                return <tr key={pick}><td className="l" style={{ color }}>{label}</td>{cs}<td className="tot" style={{ color }}>{fmt(tt)}</td></tr>
-              })}
-              {(() => { const cs = CF_MESES.map((_, mi) => { const cls = 'yb'; return <td key={mi} className={'tot ' + cls}>{fmt(ventaSplitMemo('ext', mi) + ventaSplitMemo('int', mi))}</td> }); const tt = CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo('ext', mi) + ventaSplitMemo('int', mi), 0); return <tr className="grandrow"><td className="l">Venta total 2028 (externa + interna)</td>{cs}<td className="tot">{fmt(tt)}</td></tr> })()}
-            </tbody>
-          </table>
-        </div>
-      </div>
 
       <div className="panel">
         <h3>{role.label} — Arrastre de cobros 2027 <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): lo captura Finanzas por marca. Aquí solo se ve.')}</h3>
