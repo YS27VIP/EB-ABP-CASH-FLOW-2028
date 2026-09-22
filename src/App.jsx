@@ -891,6 +891,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [msg, setMsg] = useState(null)
   const [openCostos, setOpenCostos] = useState(false)
   const [openVentas, setOpenVentas] = useState(false)
+  const [vistaCC, setVistaCC] = useState('todo') // Venta/cobro/saldo por cliente: qué mostrar
   const [desglose, setDesglose] = useState(false)
   const [buscar, setBuscar] = useState('')
   const matchCli = (cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0
@@ -1244,36 +1245,41 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       {!isTotal && (() => {
         const cls = clientesDe(marca).filter(matchCli)
         const uni = unidades2028(marca), aup = aupMarca(marca)
-        const SI = '#dcebfb' // color "lo llena Finanzas"
+        const STKh = { position: 'sticky', top: 0, zIndex: 2, background: '#f7fafb' }
         const filas = cls.map((cli) => {
-          const term = data[`TERM|${marca}|${cli}`]
-          const plazo = CF_PLAZO_MESES[term] ?? 0
-          const ini = num(data[`SALDO|${marca}|${cli}`])
+          const term = data[`TERM|${marca}|${cli}`]; const plazo = CF_PLAZO_MESES[term] ?? 0; const inc = esIncobrable(marca, cli)
           const ventas = MESES.map((_, m) => (uni[cli]?.[m] || 0) * (aup[m] || 0))
-          const cobros = MESES.map((_, m) => (m >= plazo ? ventas[m - plazo] : 0) + (m === Math.min(plazo, 11) ? ini : 0))
-          let saldo = ini; const run = MESES.map((_, m) => { saldo = saldo + ventas[m] - cobros[m]; return saldo })
-          return { cli, term, plazo, ini, ventas, cobros, run }
-        }).filter((f) => f.ini !== 0 || f.ventas.some((v) => v > 0.5))
-        const totCobro = MESES.map((_, m) => filas.reduce((a, f) => a + f.cobros[m], 0))
+          const cobros = MESES.map((_, m) => { const src = m - plazo; return (src >= 0 && !inc) ? ventas[src] : 0 }) // cobro de ventas 2028 (interno no cobra)
+          const arr = MESES.map((_, m) => arr27(marca, cli, m)) // arrastre 2027 colocado arriba
+          let saldo = 0; const run = MESES.map((_, m) => { saldo = saldo + ventas[m] - cobros[m]; return saldo })
+          return { cli, term, inc, ventas, cobros, arr, run }
+        }).filter((f) => f.ventas.some((v) => v > 0.5) || f.arr.some((v) => v > 0.5))
+        const totCobro = MESES.map((_, m) => filas.reduce((a, f) => a + f.cobros[m] + f.arr[m], 0))
+        const showV = vistaCC === 'todo' || vistaCC === 'venta', showC = vistaCC === 'todo' || vistaCC === 'cobro', showS = vistaCC === 'todo' || vistaCC === 'saldo'
         return (
           <div className="panel">
             <h3>{role.label} — Venta, cobro y saldo por cliente 2028{M$} <span className="unit">({marca})</span></h3>
-            <div className="sub">Por cada cliente: la <b>Venta</b> (Unidades×AUP) en el mes que ocurre, el <b>Cobro</b> cuando entra según su término (Cash=mismo mes · 30d=+1 · 60=+2 · 90=+3 …), y el <b>Saldo</b> que va quedando. La columna <b style={{ background: SI, padding: '1px 6px', borderRadius: 4 }}>Saldo inicial</b> (deuda cierre 2027) la <b>llena Finanzas</b>.</div>
+            <div className="sub">Por cada cliente: la <b>Venta</b> (Unid×AUP) en su mes, el <b>Cobro</b> de esas ventas cuando entra según su plazo, el <b style={{ color: '#b45309' }}>Cobro del arrastre 2027</b> (lo que colocaste arriba), y el <b>Saldo por cobrar</b> de 2028 que va quedando.</div>
+            <div className="toolbar" style={{ margin: '4px 0 10px', gap: 6 }}>
+              <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>Ver:</span>
+              {[['todo', 'Todo'], ['venta', 'Venta'], ['cobro', 'Cobro'], ['saldo', 'Saldo']].map(([k, lbl]) => <button key={k} className={'seg' + (vistaCC === k ? ' active' : '')} onClick={() => setVistaCC(k)}>{lbl}</button>)}
+            </div>
             {buscador}
-            <div className="tablewrap">
-              <table className="vfix"><colgroup><col style={{ width: '210px' }} /><col style={{ width: '96px' }} />{CF_M2028.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-                <thead><tr><th className="l">Cliente / concepto</th><th style={{ background: SI }}>Saldo inicial</th>{CF_M2028.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
+            <div className="tablewrap" style={{ maxHeight: '62vh', overflowY: 'auto' }}>
+              <table className="vfix"><colgroup><col style={{ width: '260px' }} />{CF_M2028.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+                <thead><tr><th className="l" style={STKh}>Cliente / concepto</th>{CF_M2028.map((m) => <th key={m} style={STKh}>{m}</th>)}<th style={STKh}>Total</th></tr></thead>
                 <tbody>
-                  {filas.length === 0 && <tr><td className="l" colSpan={15}>Sin datos aún. Captura unidades (Ventas) y AUP (Producto) de {marca}.</td></tr>}
+                  {filas.length === 0 && <tr><td className="l" colSpan={14}>Sin datos aún. Captura unidades (Ventas) y AUP (Producto), o el arrastre 2027 arriba.</td></tr>}
                   {filas.map((f) => (
                     <Fragment2 key={f.cli}>
-                      <tr className="secrow"><td className="l">{f.cli} · {f.term || 'sin plazo'}</td><td style={{ background: SI, padding: 2 }}>{soloVer ? <span className="tot">{fmt(f.ini)}</span> : <input value={data[`SALDO|${marca}|${f.cli}`] ?? ''} onChange={(e) => set(`SALDO|${marca}|${f.cli}`, e.target.value)} inputMode="decimal" style={{ width: '90%', background: '#fff', border: '1px solid #b6d4f2', borderRadius: 5, padding: '5px', textAlign: 'center' }} />}</td>{CF_M2028.map((_, m) => <td key={m}></td>)}<td></td></tr>
-                      <tr><td className="l sub2">Venta (Unid×AUP)</td><td></td>{f.ventas.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.ventas.reduce((a, b) => a + b, 0))}</td></tr>
-                      <tr><td className="l sub2">Cobro (según plazo)</td><td></td>{f.cobros.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.cobros.reduce((a, b) => a + b, 0))}</td></tr>
-                      <tr className="catrow"><td className="l">= Saldo cliente</td><td className="tot">{fmt(f.ini)}</td>{f.run.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td></td></tr>
+                      <tr className="secrow"><td className="l" colSpan={14}>{f.cli} · {f.term || 'sin plazo'}{f.inc && <span style={{ color: '#b91c1c', marginLeft: 6 }}>⛔ incobrable</span>}</td></tr>
+                      {showV && <tr><td className="l sub2">Venta (Unid×AUP)</td>{f.ventas.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.ventas.reduce((a, b) => a + b, 0))}</td></tr>}
+                      {showC && <tr><td className="l sub2" style={{ color: '#15803d' }}>Cobro ventas 2028</td>{f.cobros.map((v, m) => <td key={m} className="tot" style={{ color: '#15803d' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(f.cobros.reduce((a, b) => a + b, 0))}</td></tr>}
+                      {showC && <tr><td className="l sub2" style={{ color: '#b45309' }}>Cobro arrastre 2027</td>{f.arr.map((v, m) => <td key={m} className="tot" style={{ color: '#b45309' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#b45309' }}>{fmt(f.arr.reduce((a, b) => a + b, 0))}</td></tr>}
+                      {showS && <tr className="catrow"><td className="l">= Saldo por cobrar (2028)</td>{f.run.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td></td></tr>}
                     </Fragment2>
                   ))}
-                  {filas.length > 0 && <tr className="grandrow"><td className="l">TOTAL COBROS del mes → Cash In</td><td></td>{totCobro.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totCobro.reduce((a, b) => a + b, 0))}</td></tr>}
+                  {filas.length > 0 && <tr className="grandrow"><td className="l">TOTAL COBROS del mes → Cash In</td>{totCobro.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totCobro.reduce((a, b) => a + b, 0))}</td></tr>}
                 </tbody>
               </table>
             </div>
