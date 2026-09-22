@@ -937,12 +937,14 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   // Clientes internos (intercompañía): venta incobrable → no genera Cash In (se marca en Ventas).
   const internoMap = (() => { try { return JSON.parse(localStorage.getItem('interno_' + empresa) || '{}') } catch { return {} } })()
   const esInterno = (mca, cli) => !!internoMap[`${mca}|${cli}`]
-  const saldoTotal = (mca) => clientesDe(mca).reduce((s, cli) => esInterno(mca, cli) ? s : s + num(data[`SALDO|${mca}|${cli}`]), 0)
+  // Incobrable = marcado Interno en Ventas, O con plazo "Intercompañía". No genera Cash In.
+  const esIncobrable = (mca, cli) => esInterno(mca, cli) || data[`TERM|${mca}|${cli}`] === 'Intercompañía'
+  const saldoTotal = (mca) => clientesDe(mca).reduce((s, cli) => esIncobrable(mca, cli) ? s : s + num(data[`SALDO|${mca}|${cli}`]), 0)
   // ARRASTRE 2027 (venta externa ya vendida, pendiente de cobro): la persona coloca por cliente CUÁNTO entra en cada
   // mes de 2028 (ene..jun cubren hasta 180 días desde el cierre). Directo, sin adivinar plazos. Los internos no cuentan.
   const ARR_N = 6 // ene..jun-28
   const arr27Key = (mca, cli, mi) => `COB2027|${mca}|${cli}|${mi}`
-  const arr27 = (mca, cli, mi) => esInterno(mca, cli) ? 0 : num(data[arr27Key(mca, cli, mi)])
+  const arr27 = (mca, cli, mi) => esIncobrable(mca, cli) ? 0 : num(data[arr27Key(mca, cli, mi)])
   const arr27Total = (mca, mi) => (mi < ARR_N ? clientesDe(mca).reduce((s, cli) => s + arr27(mca, cli, mi), 0) : 0) // arrastre que entra en el mes mi
   const arr27Cli = (mca, cli) => { let t = 0; for (let mi = 0; mi < ARR_N; mi++) t += arr27(mca, cli, mi); return t }
   const gadminSubtot = MESES.map((_, m) => gadminCfg.reduce((a, it) => a + num(gadminData[`${it.cod}|${m}`]), 0))
@@ -969,7 +971,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const cobros2028 = (mca) => {
     const uni = unidades2028(mca), aup = aupMarca(mca), byCli = {}, total = Array(12).fill(0)
     Object.keys(uni).forEach((cli) => {
-      if (esInterno(mca, cli)) return // venta interna (intercompañía): incobrable, no genera cobros
+      if (esIncobrable(mca, cli)) return // venta interna / Intercompañía: incobrable, no genera cobros
       const p = CF_PLAZO_MESES[data[`TERM|${mca}|${cli}`]] ?? 0
       const row = Array(12).fill(0)
       for (let j = 0; j < 12; j++) { const src = j - p; if (src >= 0) row[j] = (uni[cli][src] || 0) * (aup[src] || 0) }
