@@ -979,6 +979,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   }
   const _cobCache = {}
   const getCobros = (mca) => _cobCache[mca] || (_cobCache[mca] = cobros2028(mca))
+  // Cobros 2028 agrupados por PLAZO del cliente (Cash, 30, 60…), para el mapa de cobros tipo COBROS USD.
+  const _cptCache = {}
+  const cobrosPorTerm = (mca) => _cptCache[mca] || (_cptCache[mca] = (() => { const { byCli } = getCobros(mca); const out = {}; CF_TERMINOS.forEach((t) => out[t] = Array(12).fill(0)); Object.keys(byCli).forEach((cli) => { let t = data[`TERM|${mca}|${cli}`]; if (!out[t]) t = 'Cash'; for (let m = 0; m < 12; m++) out[t][m] += byCli[cli][m] }); return out })())
   // Venta 2028 por mes de venta (no cobro), separada en externa (cobrable) vs interna (incobrable, intercompañía).
   const ventaSplit2028 = (mca) => { const uni = unidades2028(mca), aup = aupMarca(mca), ext = Array(12).fill(0), int = Array(12).fill(0); Object.keys(uni).forEach((cli) => { const tgt = esInterno(mca, cli) ? int : ext; for (let j = 0; j < 12; j++) tgt[j] += (uni[cli][j] || 0) * (aup[j] || 0) }); return { ext, int } }
   const _vsCache = {}
@@ -1206,17 +1209,21 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
 
       <div className="panel">
         <h3>{role.label} — Mapa de cobros{M$} <span className="unit">(de dónde sale el Cash In · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span></h3>
-        <div className="sub">Cada mes el <b>Cash In</b> sale de dos fuentes: el <b style={{ color: '#b45309' }}>arrastre de 2027</b> (lo que ya vendiste y te entra este año) y las <b style={{ color: '#15803d' }}>ventas 2028</b> cobradas según el plazo de cada cliente.</div>
+        <div className="sub">Cada mes el <b>Cash In</b> sale del <b style={{ color: '#b45309' }}>arrastre de 2027</b> más las <b style={{ color: '#15803d' }}>ventas 2028</b>, y estas últimas <b>desglosadas por plazo</b> (Cash, 30, 60, 90… días) — como tu tabla de COBROS USD.</div>
         <div className="tablewrap">
           <table className="vfix"><colgroup><col style={{ width: '210px' }} />{CF_MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
             <thead><tr><th className="l">Fuente del cobro</th>{CF_M2028.map((m) => <th key={m} className="yb">{m}</th>)}<th>Total</th></tr></thead>
             <tbody>
               {(() => {
                 const arrM = (mi) => isTotal ? sbuMarcas.reduce((s, m) => s + arr27Total(m, mi), 0) : arr27Total(marca, mi)
+                const termM = (t, mi) => isTotal ? sbuMarcas.reduce((s, m) => { const o = cobrosPorTerm(m)[t]; return s + (o ? o[mi] : 0) }, 0) : (() => { const o = cobrosPorTerm(marca)[t]; return o ? o[mi] : 0 })()
                 const escM = (mi) => isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[mi], 0) : getCobros(marca).total[mi]
-                const filas = [['Arrastre 2027 (cola)', '#b45309', arrM], ['Ventas 2028 (escalera por plazo)', '#15803d', escM]]
+                const terminos = CF_TERMINOS.filter((t) => t !== 'Intercompañía')
+                const conDatos = terminos.filter((t) => CF_MESES.some((_, mi) => Math.abs(termM(t, mi)) > 0.5))
                 return <Fragment2>
-                  {filas.map(([lbl, color, fn]) => <tr key={lbl}><td className="l" style={{ color }}>{lbl}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color }}>{fmt(fn(mi))}</td>)}<td className="tot" style={{ color }}>{fmt(CF_MESES.reduce((a, _, mi) => a + fn(mi), 0))}</td></tr>)}
+                  <tr><td className="l" style={{ color: '#b45309' }}>Arrastre 2027 (cola)</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#b45309' }}>{fmt(arrM(mi))}</td>)}<td className="tot" style={{ color: '#b45309' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + arrM(mi), 0))}</td></tr>
+                  <tr className="secrow"><td colSpan={14}>Ventas 2028 cobradas por plazo</td></tr>
+                  {(conDatos.length ? conDatos : ['Cash']).map((t) => <tr key={t}><td className="l sub2" style={{ color: '#15803d' }}>{t}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#15803d' }}>{fmt(termM(t, mi))}</td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + termM(t, mi), 0))}</td></tr>)}
                   <tr className="grandrow"><td className="l">= Cash In del mes</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot">{fmt(arrM(mi) + escM(mi))}</td>)}<td className="tot">{fmt(CF_MESES.reduce((a, _, mi) => a + arrM(mi) + escM(mi), 0))}</td></tr>
                 </Fragment2>
               })()}
