@@ -58,6 +58,7 @@ export default function HelpBot() {
   }
   return (
     <>
+      <style>{`@keyframes kaiFloat{0%,100%{transform:translateY(0) rotate(0deg)}25%{transform:translateY(-7px) rotate(-3deg)}75%{transform:translateY(-3px) rotate(3deg)}}@keyframes kaiPulse{0%,100%{box-shadow:0 6px 20px rgba(0,0,0,.25)}50%{box-shadow:0 10px 26px rgba(8,145,178,.45)}}`}</style>
       {open && (
         <div style={S.panel}>
           <div style={S.head}><img src={kai} alt="Kai" style={{ width: 34, height: 34, objectFit: 'contain', background: '#fff', borderRadius: '50%', padding: 1 }} /><div style={{ flex: 1 }}><div>Kai · asistente ABP</div><div style={{ fontSize: 11, fontWeight: 500, opacity: .9 }}>en línea · te ayuda al instante</div></div><span onClick={() => setOpen(false)} style={{ cursor: 'pointer', fontSize: 18 }}>✕</span></div>
@@ -72,7 +73,7 @@ export default function HelpBot() {
           </div>
         </div>
       )}
-      <button style={S.fab} onClick={() => setOpen((o) => !o)} title="Ayuda de Kai">{open ? '✕' : <img src={kai} alt="Kai" style={{ width: 50, height: 50, objectFit: 'contain', display: 'block' }} />}</button>
+      <button style={{ ...S.fab, animation: open ? 'none' : 'kaiPulse 2.8s ease-in-out infinite' }} onClick={() => setOpen((o) => !o)} title="Ayuda de Kai">{open ? '✕' : <img src={kai} alt="Kai" style={{ width: 50, height: 50, objectFit: 'contain', display: 'block', animation: 'kaiFloat 3s ease-in-out infinite' }} />}</button>
     </>
   )
 }
