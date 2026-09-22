@@ -1156,6 +1156,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                 const tt = CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo(pick, mi), 0)
                 return <tr key={pick}><td className="l" style={{ color }}>{label}</td>{cs}<td className="tot" style={{ color }}>{fmt(tt)}</td></tr>
               })}
+              {(() => { const cs = CF_MESES.map((_, mi) => { const cls = mi < 3 ? 'ya' : 'yb'; return <td key={mi} className={'tot ' + cls}>{fmt(ventaSplitMemo('ext', mi) + ventaSplitMemo('int', mi))}</td> }); const tt = CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo('ext', mi) + ventaSplitMemo('int', mi), 0); return <tr className="grandrow"><td className="l">Venta total 2028 (externa + interna)</td>{cs}<td className="tot">{fmt(tt)}</td></tr> })()}
             </tbody>
           </table>
         </div>
