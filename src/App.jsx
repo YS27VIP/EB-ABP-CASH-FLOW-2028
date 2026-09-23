@@ -203,15 +203,18 @@ function realAupAuc(empresa, marca, ventasRows, prodRows, catNames) {
 export default function App() {
   const [usuario, setUsuario] = useState('')
   const [empresas, setEmpresas] = useState(SEED_EMPRESAS)
-  const [empresa, setEmpresa] = useState('ENERGY BRANDS')
+  const [empresa, setEmpresa] = useState(() => { try { return sessionStorage.getItem('abp_nav_emp') || 'ENERGY BRANDS' } catch { return 'ENERGY BRANDS' } })
   const [combos, setCombos] = useState({})
-  const [roleId, setRoleId] = useState(null)
+  const [roleId, setRoleId] = useState(() => { try { const v = sessionStorage.getItem('abp_nav_role'); return v || null } catch { return null } })
   const [connError, setConnError] = useState(false)
   const [authed, setAuthed] = useState(isSignedIn())
   const [estadoReady, setEstadoReady] = useState(false)
   const [avatar, setAvatar] = useState(() => { try { return localStorage.getItem('abp_avatar') || '' } catch { return '' } })
   useEffect(() => { try { document.documentElement.style.setProperty('--avatar', avatar ? '"' + avatar + ' "' : '') } catch { } }, [avatar])
   const elegirAvatar = (a) => { setAvatar(a); try { localStorage.setItem('abp_avatar', a) } catch { } }
+  // Recuerda dónde estás (sección + empresa) SOLO en esta pestaña, para que "Actualizar" recargue sin sacarte al menú.
+  useEffect(() => { try { if (roleId) sessionStorage.setItem('abp_nav_role', roleId); else sessionStorage.removeItem('abp_nav_role') } catch { } }, [roleId])
+  useEffect(() => { try { sessionStorage.setItem('abp_nav_emp', empresa) } catch { } }, [empresa])
 
   useEffect(() => {
     initAuth()
