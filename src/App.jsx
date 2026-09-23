@@ -107,7 +107,7 @@ const CF_TERMINOS = ['Cash', '30 días', '60 días', '90 días', '120 días', '1
 const CF_PLAZO_MESES = { 'Cash': 0, '30 días': 1, '60 días': 2, '90 días': 3, '120 días': 4, '150 días': 5, '180 días': 6, 'Intercompañía': 0 }
 /* Costos Operativos = suma de estos 4 sub-rubros (el usuario los llena; el total es calculado) */
 const CF_COSTOS_PARENT = 'Costos Operativos'
-const CF_COSTOS = ['Gastos administrativos', 'Viajes', 'Marketing', 'Comisiones']
+const CF_COSTOS = ['Gastos administrativos', 'Logística', 'Viajes', 'Marketing', 'Comisiones']
 
 /* Referencia de peso por categoría (unidades históricas) para decidir el % 2028.
    DEMO: solo ALTRA (leído de FW26 y SS26). Otras marcas se cargan luego por importación. */
@@ -921,6 +921,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [cats, setCats] = useState({})
   const [temp, setTemp] = useState({})
   const [comisData, setComisData] = useState({})
+  const [logcost, setLogcost] = useState({}); const [precios, setPrecios] = useState({}) // % logísticos por marca (los llena Logística) + costos por temporada
   const [gadminData, setGadminData] = useState({}); const [gadminCfg, setGadminCfg] = useState(DEFAULT_GADMIN)
   // Cliente NUEVO (sin histórico 2025/2026): lo agregó Ventas. Se marca discretamente para que Finanzas lo sepa.
   const newSet = (() => {
@@ -933,7 +934,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   })()
   const esNew = (cli) => newSet.has(upper(cli))
   const [mkRows, setMkRows] = useState([]); const [logRows, setLogRows] = useState([]); const [dirRows, setDirRows] = useState([]) // Marketing / Logística / Director (para espejo de Costos Operativos)
-  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } try { setGadminData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) setGadminCfg(s) } catch { } }, [empresa])
+  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } try { setLogcost(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { } try { setGadminData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) setGadminCfg(s) } catch { } }, [empresa])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   const sbuLbl = sbu === '__ALL__' ? 'TODAS' : sbu
@@ -956,6 +957,17 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const esViajeRub = (rub) => String(rub || '').toUpperCase().startsWith('VIAJES')
   const marketingMes = (mca) => MESES.map((_, m) => mkRows.reduce((a, r) => (rowMatchCF(r, mca) && !esViajeRub(r[1])) ? a + num(r[4 + m]) : a, 0))
   const viajesMes = (mca) => MESES.map((_, m) => [ventas, producto, mkRows, logRows, dirRows].reduce((s, rows) => s + rows.reduce((a, r) => (rowMatchCF(r, mca) && esViajeRub(r[1])) ? a + num(r[4 + m]) : a, 0), 0))
+  // Costos logísticos (espejo del modelo de % que llena Logística por marca):
+  //   venta = % logístico × costo de venta (unid×AUC); muestras = % × compras; mantenimiento = % × valor del saldo.
+  const logUnitsVentaMes = (mca) => MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; if (esViajeRub(r[1])) return; s += num(r[4 + m]) }); return s })
+  const logCostoVentaBase = (mca) => { const u = logUnitsVentaMes(mca), c = aucMes(mca); return MESES.map((_, m) => u[m] * c[m]) }
+  const logSaldoValBase = (mca) => { try { const inv = inventarioCalc(temp, mca); return MESES.map((_, m) => SEASONS.reduce((a, s) => a + inv.flujos[s][m].fin * seasonAUCfrom(precios, mca, s), 0)) } catch { return Array(12).fill(0) } }
+  const logPct = (mca, k) => num(logcost[`${mca}|${k}`])
+  const logVentaMes = (mca) => { const b = logCostoVentaBase(mca), p = logPct(mca, 'PCT_LOGVENTA'); return b.map((v) => v * p / 100) }
+  const logMuestrasMes = (mca) => { const b = comprasUsdMes(mca), p = logPct(mca, 'PCT_MUESTRAS'); return b.map((v) => v * p / 100) }
+  const logMantMes = (mca) => { const b = logSaldoValBase(mca), p = logPct(mca, 'PCT_MANT'); return b.map((v) => v * p / 100) }
+  const logTotalMes = (mca) => { const a = logVentaMes(mca), b = logMuestrasMes(mca), c = logMantMes(mca); return MESES.map((_, m) => a[m] + b[m] + c[m]) }
+  const logisticaMes = (mca) => logTotalMes(mca) // el total (venta + muestras + mantenimiento) alimenta la línea Logística de Costos Operativos
 
   // Clientes de una marca: histórico 2025/2026 + nuevos capturados en Ventas (2028)
   const clientesDe = (mca) => {
@@ -990,6 +1002,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     if (concepto === 'Gastos administrativos') return isTotal ? gadminSubtot[mi] : 0 // gastos admin solo existen a TOTAL SBU
     if (concepto === 'Viajes') return isTotal ? sbuMarcas.reduce((s, m) => s + viajesMes(m)[mi], 0) : viajesMes(marca)[mi]
     if (concepto === 'Marketing') return isTotal ? sbuMarcas.reduce((s, m) => s + marketingMes(m)[mi], 0) : marketingMes(marca)[mi]
+    if (concepto === 'Logística') return isTotal ? sbuMarcas.reduce((s, m) => s + logisticaMes(m)[mi], 0) : logisticaMes(marca)[mi]
     return isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
   }
   // Comisiones (del Director): venta externa (Unid×AUP) × % + corporativa (compras × $/ud en HOKA/UGG).
@@ -1174,7 +1187,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       <Fragment2 key={it}>
                         {fila}
                         {openCostos && CF_COSTOS.map((sub) => {
-                          const fuente = sub === 'Gastos administrativos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Viajes' ? 'suma de los viajes de todo el equipo' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)'
+                          const fuente = sub === 'Gastos administrativos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de todo el equipo' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)'
                           const sceldas = CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={brk(sub, mi) || fuente}>{fmt(cellRaw(sub, mi))}</td>)
                           return <tr key={sub}><td className="l sub2">{sub} {ESP(fuente)}</td>{sceldas}<td className="tot">{fmt(subTot(sub))}</td></tr>
                         })}
