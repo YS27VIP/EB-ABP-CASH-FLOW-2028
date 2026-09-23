@@ -2457,6 +2457,7 @@ function BrandContribution({ empresa, marca }) {
 /* ===== CONTRIBUCIÓN DE LA SBU por SBU: todas las marcas lado a lado + comparación FY2026/FY2025 ===== */
 function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   const [P, setP] = useState(null)
+  const [ppt, setPpt] = useState(false)
   useEffect(() => {
     (async () => {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
@@ -2515,9 +2516,37 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   const dpct = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
   const dCell = (cur, ref, strong) => { const d = dpct(cur, ref); return <td className={'tot ' + (strong ? '' : '') + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700 }}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
 
+  async function descargarPptx() {
+    setPpt(true)
+    try { await loadPptx() } catch { alert('No se pudo cargar el generador de PowerPoint. Revisa tu conexión.'); setPpt(false); return }
+    try {
+      const M$f = (v) => '$' + Math.round(v || 0).toLocaleString('en-US')
+      const TEAL = '0E7490', DARK = '134E4A'
+      const pptx = new window.PptxGenJS(); pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 }); pptx.layout = 'W'
+      let s = pptx.addSlide(); s.background = { color: 'F7FAFB' }
+      s.addText('ABP 2028', { x: 0.7, y: 2.3, w: 12, h: 1.1, fontSize: 54, bold: true, color: TEAL })
+      s.addText('Contribución — ' + sbuName + ' · ' + empresa, { x: 0.7, y: 3.5, w: 12, h: 0.6, fontSize: 22, color: DARK })
+      s.addText(new Date().toLocaleDateString('es'), { x: 0.7, y: 6.7, w: 12, h: 0.4, fontSize: 12, color: '888888' })
+      const filasP = [['Unidades', (v) => Math.round(v.unidades || 0).toLocaleString('en-US')], ['Venta Neta', (v) => M$f(v.ventaNeta)], ['(−) Costo', (v) => M$f(v.costo)], ['(−) Logística', (v) => M$f(v.logistica)], ['= Margen Bruto', (v) => M$f(v.margenBruto)], ['(−) Marketing', (v) => M$f(v.marketing)], ['(−) Viajes', (v) => M$f(v.viajes)], ['= Contribución', (v) => M$f(v.brand)]]
+      const head = [{ text: 'Concepto', options: { bold: true, color: 'FFFFFF', fill: TEAL } }, ...cols.map((c) => ({ text: c.m, options: { bold: true, color: 'FFFFFF', fill: TEAL, align: 'right' } })), { text: 'TOTAL', options: { bold: true, color: 'FFFFFF', fill: DARK, align: 'right' } }]
+      const rows = [head]; filasP.forEach(([lbl, f]) => { const st = lbl.startsWith('=') || lbl === 'Venta Neta'; rows.push([{ text: lbl, options: { bold: st } }, ...cols.map((c) => ({ text: f(c.v), options: { align: 'right' } })), { text: f(tot), options: { align: 'right', bold: true } }]) })
+      const sl = pptx.addSlide(); sl.addText('Contribución — ' + sbuName, { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 26, bold: true, color: TEAL })
+      sl.addTable(rows, { x: 0.5, y: 1.1, w: 12.3, fontSize: 12, border: { type: 'solid', pt: 0.5, color: 'D7DDE3' }, valign: 'middle' })
+      const f2 = pptx.addSlide(); f2.addText('Resultado operativo — ' + sbuName, { x: 0.7, y: 1.4, w: 12, h: 0.8, fontSize: 28, bold: true, color: TEAL })
+      const rr = [[{ text: 'Concepto', options: { bold: true, color: 'FFFFFF', fill: TEAL } }, { text: '2028', options: { bold: true, color: 'FFFFFF', fill: TEAL, align: 'right' } }], [{ text: 'Contribución de la BU' }, { text: M$f(tot.brand), options: { align: 'right' } }], [{ text: '(−) Gastos administrativos' }, { text: M$f(gadminAnual), options: { align: 'right' } }], [{ text: '= Resultado operativo', options: { bold: true } }, { text: M$f((tot.brand || 0) - gadminAnual), options: { align: 'right', bold: true } }]]
+      f2.addTable(rr, { x: 2.5, y: 2.6, w: 8, fontSize: 16, border: { type: 'solid', pt: 0.5, color: 'D7DDE3' }, valign: 'middle', rowH: 0.5 })
+      await pptx.writeFile({ fileName: `ABP_2028_${empresa}_${sbuName}.pptx`.replace(/\s+/g, '_') })
+    } catch (e) { alert('No se pudo generar la presentación: ' + e.message) }
+    setPpt(false)
+  }
+
   return (
     <div className="panel">
-      <h3 style={{ color: sbuColor(sbuName) }}>Contribución de la SBU — {sbuName}{M$} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
+      <div className="toolbar" style={{ marginBottom: 8, alignItems: 'center' }}>
+        <h3 style={{ color: sbuColor(sbuName), margin: 0 }}>Contribución de la SBU — {sbuName}{M$} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
+        <div className="spacer"></div>
+        <button className="btn primary" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar</>)}</button>
+      </div>
       <div className="sub">P&amp;L de cada marca lado a lado. Las columnas <b>FY2026</b>, <b>FY2025</b> y <b>ABP 2027</b> (hoja PLAN del EBP) traen el valor y la <b>variación %</b> del total 2028 vs cada uno (en Venta, Costo y Margen). Los <b>Gastos administrativos</b> son de toda la empresa; al restarlos queda el <b>Resultado Operativo</b>.</div>
       <div className="tablewrap">
         <table className="vfix" style={{ width: 'auto', minWidth: 520 }}>
@@ -2800,7 +2829,7 @@ function LogisticaResumen({ empresa, sbuName, marcasSBU }) {
 /* ===== COMBINACIONES ===== */
 function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, abrirHistorico, ebSbus }) {
   const [empresa, setEmpresa] = useState(empresas[0])
-  const [asign, setAsign] = useState(() => seed(combos[empresa]))
+  const [asign, setAsign] = useState(() => seedWith(combos[empresa], [...ALL_MARCAS]))
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   const [colabs, setColabs] = useState([])
