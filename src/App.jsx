@@ -317,9 +317,8 @@ export default function App() {
   const role = ROLES.find((r) => r.id === roleId)
   // EB: manda el EBP en vivo (3 SBU con sus marcas). Mientras carga, se usan las SBU por defecto
   // (NO la config vieja guardada), para que no parpadee mostrando/ocultando SBU 2 y 3.
-  const sbus = empresa === 'ENERGY BRANDS'
-    ? (ebSbus || DEFAULT_SBUS)
-    : effSBUS(empresa, combos)
+  const sbusFor = (emp) => emp === 'ENERGY BRANDS' ? (ebSbus || DEFAULT_SBUS) : effSBUS(emp, combos)
+  const sbus = sbusFor(empresa)
 
   function nuevaEmpresa() {
     const n = window.prompt('Nombre de la nueva empresa:')
@@ -371,7 +370,7 @@ export default function App() {
     )
   }
 
-  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'calendario' && roleId !== 'aprobaciones') {
+  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'holding' && roleId !== 'calendario' && roleId !== 'aprobaciones') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
@@ -417,6 +416,10 @@ export default function App() {
             {esAdmin && <button className="app" onClick={() => setRoleId('gerencia')}>
               <span className="appicon" style={{ background: '#1f2d3d' }}>📈</span>
               <span className="applabel">Gerencia</span>
+            </button>}
+            {esAdmin && empresas.length > 1 && <button className="app" onClick={() => setRoleId('holding')}>
+              <span className="appicon" style={{ background: '#7c3aed' }}>🏛️</span>
+              <span className="applabel">Total Holding</span>
             </button>}
             <button className="app" onClick={() => setRoleId('calendario')}>
               <span className="appicon" style={{ background: '#0e7490' }}>📅</span>
@@ -469,6 +472,17 @@ export default function App() {
           <span className="rolechip" style={{ background: '#1f2d3d' }}>📈 Gerencia</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
         {estadoReady ? <main><GerenciaScreen key={empresa} empresa={empresa} sbus={sbus} /></main> : cargandoMain}
+      </>
+    )
+  }
+
+  if (roleId === 'holding') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip" style={{ background: '#7c3aed' }}>TOTAL HOLDING</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#7c3aed' }}>🏛️ Total Holding</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        {estadoReady ? <main><HoldingScreen empresas={empresas} sbusFor={sbusFor} /></main> : cargandoMain}
       </>
     )
   }
@@ -2229,7 +2243,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
       {!soloSBU && !cargando && <div className="panel">
         <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
         <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno. Activa <b>🔍 Desglose</b> para ver la marca al pasar el mouse.</div>
-        <div className="toolbar" style={{ marginBottom: 8 }}><button className={'seg' + (desglose ? ' active' : '')} onClick={() => setDesglose((d) => !d)}>{desglose ? '✓ ' : ''}🔍 Desglose por marca</button><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarPptx}>{ppt ? 'Generando…' : '📊 Descargar presentación (PowerPoint)'}</button></div>
+        <div className="toolbar" style={{ marginBottom: 8 }}><button className={'seg' + (desglose ? ' active' : '')} onClick={() => setDesglose((d) => !d)}>{desglose ? '✓ ' : ''}🔍 Desglose por marca</button><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar</>)}</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s }) => <th key={s} style={{ color: sbuColor(s) }}>{s}</th>)}<th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th><th className="ya">FY2025</th><th className="ya">Δ25</th><th className="ya">FY2026</th><th className="ya">Δ26</th><th className="yb">ABP2027</th><th className="yb">Δ27</th></tr></thead>
           <tbody>
@@ -2273,6 +2287,81 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
           </div>
         )}
       </div>}
+    </>
+  )
+}
+
+/* ===== TOTAL HOLDING: consolida las 3 empresas con la misma lógica de Gerencia ===== */
+function HoldingScreen({ empresas, sbusFor }) {
+  const [data, setData] = useState(null)
+  const [detEmp, setDetEmp] = useState(empresas[0] || '')
+  useEffect(() => {
+    (async () => {
+      const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
+      const [ventas, producto, capCat, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
+      try { await Promise.all(empresas.map((e) => hydrateEstado(e))) } catch { }
+      setData({ ventas, producto, capCat, mk, log, dir })
+    })()
+  }, [])
+  if (!data) return <div className="panel"><div className="banner">⏳ Consolidando las {empresas.length} empresas del holding…</div></div>
+  const calcEmp = (emp) => {
+    const { ventas, producto, capCat, mk, log, dir } = data
+    const cats = {}; capCat.forEach((row) => { if (upper(row[0]) !== upper(emp)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+    const esVi = (rub) => rub.toUpperCase().startsWith('VIAJES')
+    const sumTabG = (rows, mca, filt) => { let s = 0; rows.forEach((r) => { if (upper(r[0]) !== upper(emp) || upper(r[3]) !== upper(mca)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
+    const fullCalc = (mca) => {
+      const catNames = (cats[mca] || []).map((c) => c.cat)
+      const r = realAupAuc(emp, mca, ventas, producto, catNames)
+      const unidades = r.totalUnits.reduce((a, b) => a + b, 0), ventaNeta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0)
+      const logistica = sumTabG(log, mca), marketing = sumTabG(mk, mca)
+      const viajes = [ventas, producto, mk, log, dir].reduce((t, rows) => t + sumTabG(rows, mca, esVi), 0)
+      const comisiones = 0, margenBruto = ventaNeta - costo - comisiones - logistica, brand = margenBruto - marketing - viajes
+      return { unidades, ventaNeta, costo, comisiones, logistica, marketing, viajes, margenBruto, brand }
+    }
+    const sbus = sbusFor(emp) || {}
+    const allM = Object.values(sbus).flat()
+    const tot = allM.reduce((a, m) => { const c = fullCalc(m); Object.keys(c).forEach((k) => a[k] = (a[k] || 0) + c[k]); return a }, {})
+    let gadmin = 0
+    try { const d = JSON.parse(localStorage.getItem(`gadmin_${emp}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${emp}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } gadmin = cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { }
+    return { ...tot, gadmin, resultado: (tot.brand || 0) - gadmin }
+  }
+  const byEmp = empresas.map((e) => ({ e, v: calcEmp(e) }))
+  const filas = [
+    { k: 'Unidades', g: (v) => v.unidades },
+    { k: 'Venta Neta', g: (v) => v.ventaNeta, strong: true },
+    { k: '(−) Costo', g: (v) => v.costo },
+    { k: '(−) Logística', g: (v) => v.logistica },
+    { k: '= Margen Bruto', g: (v) => v.margenBruto, strong: true },
+    { k: '(−) Marketing', g: (v) => v.marketing },
+    { k: '(−) Viajes', g: (v) => v.viajes },
+    { k: '= Contribución de las BU', g: (v) => v.brand, strong: true },
+    { k: '(−) Gastos administrativos', g: (v) => v.gadmin },
+    { k: '🎯 = Resultado Operativo', g: (v) => v.resultado, strong: true },
+  ]
+  const totHold = (g) => byEmp.reduce((a, { v }) => a + (g(v) || 0), 0)
+  return (
+    <>
+      <div className="panel">
+        <h3>🏛️ Total Holding — Resultado Operativo consolidado <span className="unit">(todas las empresas · 2028 · solo lectura)</span></h3>
+        <div className="sub">Cada columna es una empresa (misma lógica que Gerencia); la columna <b>TOTAL HOLDING</b> suma las {empresas.length} empresas. Para ver el detalle por SBU y el Cash Flow de una empresa, elígela abajo.</div>
+        <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
+          <thead><tr><th className="l">Concepto</th>{byEmp.map(({ e }) => <th key={e}>{e}</th>)}<th style={{ color: '#7c3aed' }}>TOTAL HOLDING</th></tr></thead>
+          <tbody>
+            {filas.map((f) => <tr key={f.k} className={f.strong ? 'grandrow' : undefined}>
+              <td className="l">{f.k}</td>
+              {byEmp.map(({ e, v }) => <td key={e} className="tot">{fmt(f.g(v))}</td>)}
+              <td className="tot" style={{ fontWeight: 800, color: '#7c3aed' }}>{fmt(totHold(f.g))}</td>
+            </tr>)}
+          </tbody>
+        </table></div>
+      </div>
+      <div className="panel">
+        <div className="toolbar" style={{ marginBottom: 8 }}>
+          <span style={{ fontWeight: 800, fontSize: 15 }}>🔎 Detalle por empresa</span>
+          {empresas.map((e) => <button key={e} className={'seg' + (detEmp === e ? ' active' : '')} onClick={() => setDetEmp(e)} style={detEmp === e ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : {}}>{e}</button>)}
+        </div>
+        {detEmp && <GerenciaScreen key={detEmp} empresa={detEmp} sbus={sbusFor(detEmp)} />}
+      </div>
     </>
   )
 }
@@ -3490,7 +3579,6 @@ function CalendarioScreen({ empresa, puedeEditar }) {
       </div>
       <div className="panel">
         <h3>Calendario visual — {empresa} <span className="unit">(horizonte completo · haz clic en un día para ver qué toca)</span></h3>
-        <div className="sub">Todos los meses del plan en una sola vista. Los días con entregables aparecen marcados: <b style={{ color: '#16a34a' }}>verde</b> = a tiempo o entregado, <b style={{ color: '#dc2626' }}>rojo</b> = atrasado (venció y sigue pendiente). Haz clic en un día para ver el detalle abajo.</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(232px,1fr))', gap: 16, marginTop: 12 }}>
           {meses.map(({ y, m }) => (
             <div key={y + '-' + m} style={{ border: '1px solid #e8edf1', borderRadius: 12, padding: '10px 10px 12px' }}>
