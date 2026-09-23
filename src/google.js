@@ -100,7 +100,7 @@ async function _buildHistorico() {
     // Reintenta la lectura del EBP: un 429/red transitorio no debe dejar el histórico vacío
     for (const nm of t.names) { for (let intento = 0; intento < 3; intento++) { rows = await readValuesFrom(EBP_SHEET_ID, nm); if (rows && rows.length) break; await new Promise((r) => setTimeout(r, 500 * (intento + 1))) } if (rows && rows.length) break }
     let hr = -1
-    for (let i = 0; i < Math.min(rows.length, 15); i++) { const cells = rows[i].map((x) => String(x || '').trim().toUpperCase()); if ((cells.includes('SBU') && cells.includes('MARCA')) || cells.join('|').indexOf('CLIENTE ARMONIZADO') >= 0) { hr = i; break } }
+    for (let i = 0; i < Math.min(rows.length, 15); i++) { const cells = rows[i].map((x) => String(x || '').trim().toUpperCase()); if ((cells.includes('SBU') && (cells.includes('MARCA') || cells.includes('BRAND'))) || cells.join('|').indexOf('CLIENTE ARMONIZADO') >= 0 || cells.includes('BUYER')) { hr = i; break } }
     if (hr < 0) continue
     const H = rows[hr].map((x) => String(x || '').trim().toUpperCase())
     const idx = (cands, last) => { let f = -1; for (const c of cands) { for (let k = 0; k < H.length; k++) { if (H[k] === c) { if (last) f = k; else return k } } if (f >= 0 && !last) return f } return f }

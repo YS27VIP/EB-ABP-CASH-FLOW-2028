@@ -2581,7 +2581,6 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
           </tbody>
         </table>
       </div>
-      <div className="sub" style={{ marginTop: 8 }}>Nota: Comisiones y Venta Bruta/Descuentos aún no se capturan por marca; Marketing y Viajes no tienen histórico, por eso FY solo compara Venta, Costo y Margen.</div>
     </div>
   )
 }
@@ -3523,7 +3522,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         <div className="tablewrap" ref={botScRef} onScroll={() => { if (topScRef.current) topScRef.current.scrollLeft = botScRef.current.scrollLeft }}>
           <table className="vfix" style={{ width: 1228 }}>
             <colgroup><col style={{ width: '220px' }} /><col style={{ width: '55px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /><col style={{ width: '60px' }} /></colgroup>
-            <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th><th>% Peso</th></tr></thead>
+            <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Total</th><th>% Peso</th></tr></thead>
             <tbody>
               {clientes.length === 0 && <tr><td className="l" colSpan={17}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico, o agrega un cliente con el buscador de arriba.</td></tr>}
               {clientes.filter((cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0).map((cli) => { const nuevo = esNuevo(cli); const obj = objetivo28(cli); const desc = !nuevo && obj != null && t28(cli) !== obj; return (
