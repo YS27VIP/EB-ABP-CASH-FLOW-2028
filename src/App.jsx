@@ -1203,7 +1203,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
 
 
       <div className="panel">
-        <h3>{role.label} — Arrastre de cobros 2027 <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): lo captura Finanzas por marca. Aquí solo se ve.')}</h3>
+        <h3>{role.label} — Término de cobros a los clientes <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): lo captura Finanzas por marca. Aquí solo se ve.')}</h3>
         {(isTotal || soloVer)
           ? <div className="note ok" style={{ marginBottom: 12 }}>🪞 <b>Espejo (solo lectura):</b> el arrastre de cobros 2027 lo captura <b>Finanzas por cada marca</b>. Aquí solo ves el consolidado.</div>
           : <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b> lo que <b>vendiste en 2027 y aún te deben</b>, colócalo por cliente en el <b>mes de 2028 en que va a entrar</b> el dinero (ene a mar). Así el Cash In no queda sesgado. El <b>plazo</b> de cada cliente es solo para sus <b>ventas 2028</b> (no para esto). Todo esto entra solo al <b>Cash In</b> de arriba.</div>}
