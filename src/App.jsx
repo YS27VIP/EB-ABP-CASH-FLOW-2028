@@ -1379,6 +1379,46 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           </div>
         )
       })()}
+      {rubro.cash && (() => {
+        // Espejo (solo lectura) del detalle de costos logísticos que llena Logística por marca (modelo de %).
+        const listaL = isTotal ? sbuMarcas : [marca]
+        const sMap = (fn) => MESES.map((_, m) => listaL.reduce((a, mca) => a + (fn(mca)[m] || 0), 0))
+        const cvBase = sMap(logCostoVentaBase), cLog = sMap(logVentaMes)
+        const cmpBase = sMap(comprasUsdMes), cMue = sMap(logMuestrasMes)
+        const svBase = sMap(logSaldoValBase), cMant = sMap(logMantMes)
+        const paraCF = MESES.map((_, m) => cLog[m] + cMue[m])
+        const cTot = MESES.map((_, m) => cLog[m] + cMue[m] + cMant[m])
+        const RT = (arr) => arr.reduce((a, b) => a + b, 0)
+        const pl = (k) => isTotal ? '' : ` (× ${fmt(logPct(marca, k))}%)`
+        return (
+          <div className="panel">
+            <h3>Costos logísticos — detalle {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(🪞 espejo · lo llena Logística por marca)</span></h3>
+            <div className="sub">Cálculo por <b>%</b> (los define <b>Logística</b> y aprueba Finanzas): <b>costo logístico de la venta</b> = % × costo de venta (unid×AUC); <b>muestras</b> = % × compras; <b>mantenimiento</b> = % × valor del saldo de inventario. El <b>total</b> alimenta la línea <b>Logística</b> de Costos Operativos (arriba).</div>
+            {isTotal && <div className="tablewrap" style={{ marginBottom: 12, maxWidth: 560 }}>
+              <table style={{ width: 'auto' }}>
+                <thead><tr><th className="l">Marca</th><th>% venta</th><th>% muestras</th><th>% mant.</th></tr></thead>
+                <tbody>{listaL.map((mca) => <tr key={mca}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td className="tot">{fmt(logPct(mca, 'PCT_LOGVENTA'))}%</td><td className="tot">{fmt(logPct(mca, 'PCT_MUESTRAS'))}%</td><td className="tot">{fmt(logPct(mca, 'PCT_MANT'))}%</td></tr>)}</tbody>
+              </table>
+            </div>}
+            <div className="tablewrap">
+              <table className="vfix"><colgroup><col style={{ width: '240px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+                <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Total</th></tr></thead>
+                <tbody>
+                  <tr><td className="l sub2">Costo de venta ($) <span className="unit">(base)</span></td>{cvBase.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cvBase))}</td></tr>
+                  <tr className="catrow"><td className="l">Costo logístico de la venta<span className="unit">{pl('PCT_LOGVENTA')}</span></td>{cLog.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cLog))}</td></tr>
+                  <tr><td className="l sub2">Compras / movimiento ($) <span className="unit">(base)</span></td>{cmpBase.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cmpBase))}</td></tr>
+                  <tr className="catrow"><td className="l">Costo de movimiento de muestras<span className="unit">{pl('PCT_MUESTRAS')}</span></td>{cMue.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cMue))}</td></tr>
+                  <tr className="grandrow" style={{ background: '#eef6ff' }}><td className="l">Subtotal para Cash Flow <span className="unit">(venta + muestras)</span></td>{paraCF.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(paraCF))}</td></tr>
+                  <tr><td className="l sub2">Valor saldo inventario ($) <span className="unit">(base)</span></td>{svBase.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(svBase))}</td></tr>
+                  <tr className="catrow"><td className="l">Costo mantenimiento de stock<span className="unit">{pl('PCT_MANT')}</span></td>{cMant.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cMant))}</td></tr>
+                  <tr className="grandrow"><td className="l">= Costo logístico TOTAL</td>{cTot.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cTot))}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            {cTot.every((v) => !v) && <div className="sub" style={{ marginTop: 8 }}>Aún en cero: falta que <b>Logística</b> capture los % de {isTotal ? 'las marcas' : marca} (y que haya ventas/compras). Se aprueban en <b>Finanzas → Aprobaciones</b>.</div>}
+          </div>
+        )
+      })()}
     </>
   )
 }
