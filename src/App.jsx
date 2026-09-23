@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 // Rastreador global de "cambios sin guardar": lo marcan las celdas de captura y lo limpia Guardar.
 const ABP_DIRTY = { on: false }
@@ -919,6 +919,16 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [temp, setTemp] = useState({})
   const [comisData, setComisData] = useState({})
   const [gadminData, setGadminData] = useState({}); const [gadminCfg, setGadminCfg] = useState(DEFAULT_GADMIN)
+  // Cliente NUEVO (sin histórico 2025/2026): lo agregó Ventas. Se marca discretamente para que Finanzas lo sepa.
+  const newSet = (() => {
+    try {
+      const add = JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}')
+      const names = new Set(); Object.values(add).forEach((arr) => (arr || []).forEach((c) => { if (c) names.add(upper(c)) }))
+      const histAll = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) histAll.add(upper(cli)) })
+      const out = new Set(); names.forEach((n) => { if (!histAll.has(n)) out.add(n) }); return out
+    } catch { return new Set() }
+  })()
+  const esNew = (cli) => newSet.has(upper(cli))
   const [mkRows, setMkRows] = useState([]); const [logRows, setLogRows] = useState([]); const [dirRows, setDirRows] = useState([]) // Marketing / Logística / Director (para espejo de Costos Operativos)
   useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } try { setGadminData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) setGadminCfg(s) } catch { } }, [empresa])
   const isTotal = String(marca).startsWith('TOTAL::')
@@ -1294,7 +1304,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                   {filas.length === 0 && <tr><td className="l" colSpan={14}>Sin datos aún. Captura unidades (Ventas) y AUP (Producto), o el arrastre 2027 arriba.</td></tr>}
                   {filas.map((f) => (
                     <Fragment2 key={f.cli}>
-                      <tr className="secrow"><td className="l" colSpan={14}>{f.cli} · {f.term || 'sin plazo'}{f.inc && <span style={{ color: '#b91c1c', marginLeft: 6 }}>⛔ incobrable</span>}</td></tr>
+                      <tr className="secrow"><td className="l" colSpan={14}>{f.cli}{esNew(f.cli) && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, color: '#0e7490', border: '1px solid #0e7490', borderRadius: 4, padding: '0 4px', verticalAlign: 'middle' }} title="Cliente nuevo: sin histórico 2025/2026 (lo agregó Ventas)">NEW</span>} · {f.term || 'sin plazo'}{f.inc && <span style={{ color: '#b91c1c', marginLeft: 6 }}>⛔ incobrable</span>}</td></tr>
                       {showV && <tr><td className="l sub2">Venta (Unid×AUP)</td>{f.ventas.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.ventas.reduce((a, b) => a + b, 0))}</td></tr>}
                       {showC && <tr><td className="l sub2" style={{ color: '#15803d' }}>Cobro ventas 2028</td>{f.cobros.map((v, m) => <td key={m} className="tot" style={{ color: '#15803d' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(f.cobros.reduce((a, b) => a + b, 0))}</td></tr>}
                       {showC && <tr><td className="l sub2" style={{ color: '#b45309' }}>Cobro arrastre 2027</td>{f.arr.map((v, m) => <td key={m} className="tot" style={{ color: '#b45309' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#b45309' }}>{fmt(f.arr.reduce((a, b) => a + b, 0))}</td></tr>}
@@ -3329,6 +3339,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [baseCli, setBaseCli] = useState([]) // catálogo Base_Clientes (copia del EBP)
   const [nuevoCli, setNuevoCli] = useState('')
   const [buscar, setBuscar] = useState('')
+  const topScRef = useRef(null), botScRef = useRef(null) // barra de scroll horizontal (arriba) sincronizada con la tabla
   useEffect(() => { (async () => { try { const j = await gLoadClientes(empresa); if (j && j.ok) setBaseCli(j.clientes) } catch { } })() }, [empresa])
   useEffect(() => { try { localStorage.setItem('ventas_manual_' + empresa, JSON.stringify(manual)) } catch { } }, [manual, empresa])
   useEffect(() => { try { localStorage.setItem('addcli_' + empresa, JSON.stringify(addCli)) } catch { } }, [addCli, empresa])
@@ -3505,7 +3516,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           <input className="fillin" value={nuevoCli} onChange={(e) => setNuevoCli(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') agregarCliente(nuevoCli) }} placeholder="…o escribe uno nuevo" style={{ minWidth: 170, background: '#fff' }} />
           <button className="btn primary" onClick={() => agregarCliente(nuevoCli)}>➕ Agregar</button>
         </div>
-        <div className="tablewrap">
+        <div ref={topScRef} onScroll={() => { if (botScRef.current) botScRef.current.scrollLeft = topScRef.current.scrollLeft }} className="tablewrap" style={{ maxHeight: 'none', overflowY: 'hidden', border: 'none', borderRadius: 0, marginBottom: 2 }}><div style={{ width: 1228, height: 1 }} /></div>
+        <div className="tablewrap" ref={botScRef} onScroll={() => { if (topScRef.current) topScRef.current.scrollLeft = botScRef.current.scrollLeft }}>
           <table className="vfix" style={{ width: 1228 }}>
             <colgroup><col style={{ width: '220px' }} /><col style={{ width: '55px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /><col style={{ width: '60px' }} /></colgroup>
             <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th><th>% Peso</th></tr></thead>
