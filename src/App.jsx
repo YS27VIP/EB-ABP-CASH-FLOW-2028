@@ -1092,7 +1092,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       </div>
       <div className="panel">
         <h3>{role.label} — CASH FLOW{M$} <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer && ESP('Espejo (solo lectura): estos valores los llena Finanzas en su Cash Flow. Aquí solo se ven.')}</h3>
-        <div className="sub">Proyección 2028 (enero a diciembre). <b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span></b>. Lo único que llena Finanzas a mano es el <b>saldo en banco al cierre de 2027</b> (el Cash Inicial de enero-28, la celda amarilla); todo lo demás se calcula. El PSI (inventario, compras, ventas) viene de Comercial/Producto.</div>
+        <div className="sub">Proyección 2028 (enero a diciembre). <b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span></b>. {(isTotal || soloVer) ? <>🪞 Vista de solo lectura (consolidado). El <b>saldo en banco al cierre de 2027</b> lo pone Finanzas al entrar a cada marca.</> : <>Lo único que llenas a mano es el <b>saldo en banco al cierre de 2027</b> (el Cash Inicial de enero-28, la celda amarilla); todo lo demás se calcula.</>} El PSI (inventario, compras, ventas) viene de Comercial/Producto.</div>
         <div className="tablewrap">
           <table className="vfix"><colgroup><col style={{ width: '210px' }} />{CF_MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
             <thead>
@@ -1164,7 +1164,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
 
       <div className="panel">
         <h3>{role.label} — Arrastre de cobros 2027 <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): lo captura Finanzas por marca. Aquí solo se ve.')}</h3>
-        <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b> lo que <b>vendiste en 2027 y aún te deben</b>, colócalo por cliente en el <b>mes de 2028 en que va a entrar</b> el dinero (ene a jun). Así el Cash In no queda sesgado. El <b>plazo</b> de cada cliente es solo para sus <b>ventas 2028</b> (no para esto). Todo esto entra solo al <b>Cash In</b> de arriba.</div>
+        {(isTotal || soloVer)
+          ? <div className="note ok" style={{ marginBottom: 12 }}>🪞 <b>Espejo (solo lectura):</b> el arrastre de cobros 2027 lo captura <b>Finanzas por cada marca</b>. Aquí solo ves el consolidado.</div>
+          : <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b> lo que <b>vendiste en 2027 y aún te deben</b>, colócalo por cliente en el <b>mes de 2028 en que va a entrar</b> el dinero (ene a mar). Así el Cash In no queda sesgado. El <b>plazo</b> de cada cliente es solo para sus <b>ventas 2028</b> (no para esto). Todo esto entra solo al <b>Cash In</b> de arriba.</div>}
         {buscador}
         {(() => {
           const arrIdx = [0, 1, 2]; const arrLbl = CF_M2028.slice(0, 3); const DIV = { borderLeft: '3px solid var(--odoo)' }; const STK = { position: 'sticky', top: 0, zIndex: 3, background: '#f7fafb' }; const STK2 = { position: 'sticky', top: 33, zIndex: 3, background: '#f7fafb' }
@@ -1265,7 +1267,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>{role.label} — Venta, cobro y saldo por cliente 2028{M$} <span className="unit">({marca})</span></h3>
-            <div className="sub">Por cada cliente: la <b>Venta</b> (Unid×AUP) en su mes, el <b>Cobro</b> de esas ventas cuando entra según su plazo, el <b style={{ color: '#b45309' }}>Cobro del arrastre 2027</b> (lo que colocaste arriba), y el <b>Saldo por cobrar</b> de 2028 que va quedando.</div>
+            <div className="sub">Por cada cliente: la <b>Venta</b> (Unid×AUP) en su mes, el <b>Cobro</b> de esas ventas cuando entra según su plazo, el <b style={{ color: '#b45309' }}>Cobro del arrastre 2027</b> ({soloVer ? 'lo que capturó Finanzas' : 'lo que colocaste arriba'}), y el <b>Saldo por cobrar</b> de 2028 que va quedando.{soloVer ? ' 🪞 Solo lectura.' : ''}</div>
             <div className="toolbar" style={{ margin: '4px 0 10px', gap: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>Ver:</span>
               {[['todo', 'Todo'], ['venta', 'Venta'], ['cobro', 'Cobro'], ['saldo', 'Saldo']].map(([k, lbl]) => <button key={k} className={'seg' + (vistaCC === k ? ' active' : '')} onClick={() => setVistaCC(k)}>{lbl}</button>)}
@@ -1994,10 +1996,10 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
             <div className="subtabs" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 6, display: 'flex', borderTop: '1px solid var(--line)', paddingTop: 10 }}>
               {puedeDir && <button className={'seg' + (totTabEf === 'brand' ? ' active' : '')} onClick={() => setTotTab('brand')} style={totTabEf === 'brand' ? { background: col, borderColor: col, color: '#fff' } : {}}>📊 Contribución de la SBU</button>}
               {pu('Finanzas') && <button className={'seg' + (totTabEf === 'cash' ? ' active' : '')} onClick={() => setTotTab('cash')} style={totTabEf === 'cash' ? { background: col, borderColor: col, color: '#fff' } : {}}>💵 Cash Flow</button>}
-              {puedeDir && <button className={'seg' + (totTabEf === 'viajes' ? ' active' : '')} onClick={() => setTotTab('viajes')} style={totTabEf === 'viajes' ? { background: col, borderColor: col, color: '#fff' } : {}}>🧳 Viajes</button>}
-              {puedeDir && <button className={'seg' + (totTabEf === 'mk' ? ' active' : '')} onClick={() => setTotTab('mk')} style={totTabEf === 'mk' ? { background: col, borderColor: col, color: '#fff' } : {}}>📣 Marketing</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'ucvm' ? ' active' : '')} onClick={() => setTotTab('ucvm')} style={totTabEf === 'ucvm' ? { background: col, borderColor: col, color: '#fff' } : {}}>📦 Unid · Venta · Costo · Margen</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'log' ? ' active' : '')} onClick={() => setTotTab('log')} style={totTabEf === 'log' ? { background: col, borderColor: col, color: '#fff' } : {}}>🚚 Logística</button>}
+              {puedeDir && <button className={'seg' + (totTabEf === 'mk' ? ' active' : '')} onClick={() => setTotTab('mk')} style={totTabEf === 'mk' ? { background: col, borderColor: col, color: '#fff' } : {}}>📣 Marketing</button>}
+              {puedeDir && <button className={'seg' + (totTabEf === 'viajes' ? ' active' : '')} onClick={() => setTotTab('viajes')} style={totTabEf === 'viajes' ? { background: col, borderColor: col, color: '#fff' } : {}}>🧳 Viajes</button>}
             </div>
             {!puedeDir && !pu('Finanzas')
               ? <div className="note warn">No tienes acceso al consolidado de esta SBU. Entra a tu área (Ventas/Producto/Logística/Marketing) eligiendo una marca en el panel de la izquierda.</div>
@@ -3627,8 +3629,27 @@ async function postRows(role, usuario, empresa, rows, setMsg) {
   } catch (e) { setMsg({ t: 'bad', x: 'No se pudo guardar: ' + e.message }) }
 }
 
-// Carga PptxGenJS bajo demanda (solo cuando se pide la presentación) desde el CDN.
-function loadPptx() { return new Promise((res, rej) => { if (window.PptxGenJS) return res(); const el = document.createElement('script'); el.src = 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js'; el.onload = () => res(); el.onerror = () => rej(new Error('cdn')); document.head.appendChild(el) }) }
+// Carga PptxGenJS bajo demanda (solo cuando se pide la presentación). Intenta varios CDNs por si uno falla.
+function loadPptx() {
+  if (window.PptxGenJS) return Promise.resolve()
+  const urls = [
+    'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js',
+    'https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js',
+  ]
+  return new Promise((res, rej) => {
+    let i = 0
+    const tryNext = () => {
+      if (window.PptxGenJS) return res()
+      if (i >= urls.length) return rej(new Error('cdn'))
+      const el = document.createElement('script'); el.src = urls[i++]
+      el.onload = () => window.PptxGenJS ? res() : tryNext()
+      el.onerror = () => tryNext()
+      document.head.appendChild(el)
+    }
+    tryNext()
+  })
+}
 function exportXlsx(aoa, nombre) {
   const XLSX = window.XLSX
   if (!XLSX) { alert('Excel aún se está cargando, intenta de nuevo en un segundo.'); return }
