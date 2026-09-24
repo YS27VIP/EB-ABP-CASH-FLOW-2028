@@ -1814,8 +1814,8 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp }) {
   return (
     <div>
       <div className="toolbar" style={{ marginBottom: 8, gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <label>Tiempo de tránsito de {marca} <span className="unit">(meses entre XFD y disponible)</span></label>
-        <input className="fillin" value={temp[`TR|${marca}`] ?? ''} onChange={(e) => setTemp((t) => ({ ...t, [`TR|${marca}`]: e.target.value }))} inputMode="numeric" placeholder="0" style={{ width: 60, textAlign: 'center' }} />
+        <label>Tiempo de tránsito de {marca} <span className="unit">(entre XFD y disponible)</span></label>
+        <select className="fillin" value={temp[`TR|${marca}`] ?? '0'} onChange={(e) => setTemp((t) => ({ ...t, [`TR|${marca}`]: e.target.value }))} style={{ minWidth: 120 }}><option value="0">Sin tránsito</option><option value="1">30 días</option><option value="2">60 días</option><option value="3">90 días</option></select>
         <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>VER:</span>
         {[['ud', 'Unidades'], ['$', 'Plata'], ['ambas', 'Ambas']].map(([k, lbl]) => <button key={k} className={'seg' + (vista === k ? ' active' : '')} onClick={() => setVista(k)}>{lbl}</button>)}
         <div className="spacer"></div>
@@ -1950,6 +1950,14 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
                 <tr className="catrow"><td className="l">Subtotal {c} <span className="unit" style={{ fontWeight: 400 }}>(ponderado)</span></td><td className="tot">{fmt(invCat(c))}</td><td className="tot">{money(aucPondCat(c))}</td><td className="tot">{money(aupPondCat(c))}</td><td className="tot">{money(aupPondCat(c) - aucPondCat(c))}</td></tr>
               </Fragment2>
             ))}
+          </tbody>
+        </table></div>
+        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 13.5, margin: '16px 0 6px' }}>Total por temporada <span className="unit" style={{ fontWeight: 400 }}>(suma de todas las categorías · solo lectura)</span></div>
+        <div className="tablewrap"><table style={{ width: 'auto' }}>
+          <thead><tr><th className="l">Temporada</th><th>Unidades</th><th>AUC ($)</th><th>AUP ($)</th><th>Margen ($)</th></tr></thead>
+          <tbody>
+            {SEASONS.map((s) => { const buy = BUY_SEASONS.includes(s); return <tr key={s}><td className="l">{s} <span className="unit" style={{ fontSize: 10 }}>{buy ? '(compra 2028)' : '(saldo anterior)'}</span></td><td className="tot">{fmt(invSeason(s))}</td><td className="tot">{money(seasonAUC(s))}</td><td className="tot">{money(seasonAUP(s))}</td><td className="tot">{money(seasonAUP(s) - seasonAUC(s))}</td></tr> })}
+            <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="tot">{fmt(invTot)}</td><td className="tot">{money(aucPondMarca)}</td><td className="tot">{money(aupPondMarca)}</td><td className="tot">{money(aupPondMarca - aucPondMarca)}</td></tr>
           </tbody>
         </table></div>
       </div>}
