@@ -22,6 +22,30 @@ export function SyncBar() {
   }, [])
   return <button onClick={refrescar} title="Trae los últimos cambios que guardó tu equipo (recarga la página)" style={{ position: 'fixed', left: 18, bottom: 20, zIndex: 9998, background: '#fff', border: '1px solid #cbd5e1', borderRadius: 22, padding: '9px 15px', fontWeight: 700, fontSize: 13, color: '#0e7490', boxShadow: '0 4px 14px rgba(0,0,0,.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}>🔄 Actualizar</button>
 }
+
+/* Tooltip propio: aparece AL INSTANTE (sin la demora del navegador) y con estilo uniforme.
+   Funciona sobre cualquier elemento que ya tenga `title`: al pasar el mouse lo muestra en una cajita
+   y quita el title nativo (para que no salga duplicado ni con retardo); al salir lo restaura. */
+export function TipLayer() {
+  useEffect(() => {
+    const box = document.createElement('div')
+    Object.assign(box.style, { position: 'fixed', zIndex: '100000', maxWidth: '380px', background: '#1f2d3d', color: '#fff', padding: '9px 12px', borderRadius: '9px', fontSize: '12.5px', lineHeight: '1.5', boxShadow: '0 8px 24px rgba(0,0,0,.28)', pointerEvents: 'none', whiteSpace: 'pre-line', display: 'none' })
+    document.body.appendChild(box)
+    let cur = null
+    const tipOf = (el) => el && el.getAttribute ? (el.getAttribute('title') || el._tip) : null
+    const findTip = (t) => { let el = t; for (let i = 0; i < 5 && el; i++) { if (tipOf(el)) return el; el = el.parentElement } return null }
+    const place = (x, y) => { const pad = 15; const r = box.getBoundingClientRect(); let bx = x + pad, by = y + pad; if (bx + r.width > window.innerWidth) bx = x - r.width - pad; if (by + r.height > window.innerHeight) by = y - r.height - pad; box.style.left = Math.max(4, bx) + 'px'; box.style.top = Math.max(4, by) + 'px' }
+    const hide = () => { if (cur) { if (cur._tip) { cur.setAttribute('title', cur._tip); cur._tip = null } cur = null } box.style.display = 'none' }
+    const over = (e) => { const el = findTip(e.target); if (!el) { hide(); return } if (el !== cur) { hide(); cur = el; const t = el.getAttribute('title'); if (t) { el._tip = t; el.removeAttribute('title') } box.textContent = el._tip || ''; box.style.display = 'block'; place(e.clientX, e.clientY) } }
+    const move = (e) => { if (cur) place(e.clientX, e.clientY) }
+    const out = (e) => { if (cur && (!e.relatedTarget || !cur.contains(e.relatedTarget))) hide() }
+    document.addEventListener('mouseover', over, true)
+    document.addEventListener('mousemove', move, true)
+    document.addEventListener('mouseout', out, true)
+    return () => { document.removeEventListener('mouseover', over, true); document.removeEventListener('mousemove', move, true); document.removeEventListener('mouseout', out, true); box.remove() }
+  }, [])
+  return null
+}
 import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
