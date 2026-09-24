@@ -170,7 +170,7 @@ function comisionCalc(marca, comisData, ventaExtMes) {
 function comisionCorpMes(marca, cfData, comprasUdMes) { return MESES.map((_, m) => esCorpMarca(marca) ? comprasUdMes[m] * num(cfData[`CORP|${marca}`]) : 0) }
 
 /* Temporadas: inventario inicial (stock viejo) vs compras 2028 (nuevo, porque el presupuesto es 2028) */
-const INV_SEASONS = ['Otros', 'SS26', 'FW26', 'SS27', 'FW27']
+const INV_SEASONS = ['SS25', 'FW25', 'SS26', 'FW26', 'SS27', 'FW27']
 const BUY_SEASONS = ['SS28', 'FW28', 'SS29']
 const SEASONS = [...INV_SEASONS, ...BUY_SEASONS]
 
@@ -1571,14 +1571,14 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
         <div className="sub">{iiAuto
           ? <>Aquí solo pones el <b>% de rotación de cada mes</b> por temporada. El <b>inventario inicial</b> ya viene de la <b>matriz de arriba</b> (suma de categorías), no se reescribe. El <b>saldo</b> se calcula solo: saldo = anterior − salidas, y salidas = saldo × rotación%.</>
           : <>Pon el <b>inventario inicial</b> (columna "Inicial"), las <b>compras 2028</b> y el <b>% de rotación de cada mes</b>. El <b>saldo</b> se calcula solo: saldo = anterior + compras − salidas, y salidas = (saldo+compras) × rotación%. Así llevas el tracking de lo que te queda de cada temporada mes a mes.</>}</div>
-        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '200px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '260px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Temporada / concepto</th><th>Inicial</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
             <tr className="secrow"><td colSpan={15}>OBJETIVO DE VENTA vs ROTACIÓN</td></tr>
             <tr><td className="l sub2">Venta proyectada (ud) <span className="unit">(Comercial)</span></td><td></td>{ventaProyMes.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0))}</td></tr>
             <tr><td className="l sub2">Salidas por rotación (ud)</td><td></td>{salidasUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
-            <tr className="grandrow"><td className="l">Diferencia (proyectada − rotación)</td><td></td>{MESES.map((_, m) => { const d = ventaProyMes[m] - salidasUnits[m]; return <td key={m} className="tot" style={{ color: Math.abs(d) < 0.5 ? 'var(--ok)' : d > 0 ? 'var(--bad)' : 'var(--warn)' }}>{fmt(d)}</td> })}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0) - salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
-            <tr className="grandrow"><td className="l">Cobertura de la venta % <span className="unit" style={{ fontWeight: 400 }}>(salidas ÷ venta proy. — debe ser 100%)</span></td><td></td>{MESES.map((_, m) => { const vp = ventaProyMes[m]; const cov = vp > 0.5 ? salidasUnits[m] / vp * 100 : null; const ok = cov != null && Math.abs(cov - 100) < 1; return <td key={m} className="tot" style={{ color: cov == null ? 'var(--muted)' : ok ? 'var(--ok)' : 'var(--bad)', fontWeight: 800 }}>{cov == null ? '—' : cov.toFixed(0) + '%'}</td> })}<td className="tot">{(() => { const vt = ventaProyMes.reduce((a, b) => a + b, 0), st = salidasUnits.reduce((a, b) => a + b, 0); return vt > 0.5 ? (st / vt * 100).toFixed(0) + '%' : '—' })()}</td></tr>
+            <tr className="grandrow"><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Diferencia (proyectada − rotación)</td><td></td>{MESES.map((_, m) => { const d = ventaProyMes[m] - salidasUnits[m]; return <td key={m} className="tot" style={{ color: Math.abs(d) < 0.5 ? 'var(--ok)' : d > 0 ? 'var(--bad)' : 'var(--warn)' }}>{fmt(d)}</td> })}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0) - salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
+            <tr className="grandrow"><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Cobertura de la venta % <span className="unit" style={{ fontWeight: 400 }}>(salidas ÷ venta proy. — debe ser 100%)</span></td><td></td>{MESES.map((_, m) => { const vp = ventaProyMes[m]; const cov = vp > 0.5 ? salidasUnits[m] / vp * 100 : null; const ok = cov != null && Math.abs(cov - 100) < 1; return <td key={m} className="tot" style={{ color: cov == null ? 'var(--muted)' : ok ? 'var(--ok)' : 'var(--bad)', fontWeight: 800 }}>{cov == null ? '—' : cov.toFixed(0) + '%'}</td> })}<td className="tot">{(() => { const vt = ventaProyMes.reduce((a, b) => a + b, 0), st = salidasUnits.reduce((a, b) => a + b, 0); return vt > 0.5 ? (st / vt * 100).toFixed(0) + '%' : '—' })()}</td></tr>
             {SEASONS.map((s) => { const f = flujos[s]; const buy = BUY_SEASONS.includes(s); return (
               <Fragment2 key={s}>
                 <tr className="secrow"><td colSpan={15}>{s}{buy ? ' · compra 2028' : ' · inventario inicial'}{iiAuto ? <span className="unit" style={{ fontWeight: 400 }}> · inicial {fmt(num(data[K.II(s)]))} ud (de la matriz de arriba)</span> : ''}</td></tr>
@@ -1829,7 +1829,8 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp, precios }) {
     <div>
       <div className="toolbar" style={{ marginBottom: 8, gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <label>Tiempo de tránsito de {marca} <span className="unit">(entre XFD y disponible)</span></label>
-        <select className="fillin" value={temp[`TR|${marca}`] ?? '0'} onChange={(e) => setTemp((t) => ({ ...t, [`TR|${marca}`]: e.target.value }))} style={{ minWidth: 120, background: '#fdf3c9', border: '1.5px solid #e3cf78', fontWeight: 700 }}><option value="0">Sin tránsito</option><option value="1">30 días</option><option value="2">60 días</option><option value="3">90 días</option></select>
+        <select className="fillin" value={temp[`TR|${marca}`] ?? '0'} onChange={(e) => setTemp((t) => ({ ...t, [`TR|${marca}`]: e.target.value }))} style={{ minWidth: 120, fontWeight: 700 }}><option value="0">Sin tránsito</option><option value="1">30 días</option><option value="2">60 días</option><option value="3">90 días</option></select>
+        <span className="fill-badge">✏️</span>
         <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>VER:</span>
         {[['ud', 'Unidades'], ['$', 'Plata'], ['ambas', 'Ambas']].map(([k, lbl]) => <button key={k} className={'seg' + (vista === k ? ' active' : '')} onClick={() => setVista(k)}>{lbl}</button>)}
         <div className="spacer"></div>
@@ -1933,7 +1934,8 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
     })
     const mAucMarca = MESES.map((_, m) => aucMarcaMes(m)); if (mAucMarca.some((v) => v)) rows.push({ rubro: 'AUC', sbu, marca, meses: mAucMarca })
     saveEstado(empresa, 'precios', snap)
-    await postToTab('Cap_Producto', empresa, usuario, 'Producto', rows, setMsg)
+    if (rows.length) await postToTab('Cap_Producto', empresa, usuario, 'Producto', rows, setMsg)
+    else setMsg({ t: 'ok', x: 'Precios guardados ✓. El AUP/AUC mensual efectivo se calculará cuando definas la rotación en el Paso 2.' })
     setSaving(false)
   }
   const scell = (k, w = 72) => <td key={k} className="cell"><input value={snap[k] ?? ''} onChange={(e) => sset(k, e.target.value)} inputMode="decimal" style={{ width: w }} /></td>
