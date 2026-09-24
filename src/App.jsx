@@ -989,7 +989,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   //   venta = % logístico × costo de venta (unid×AUC); muestras = % × compras; mantenimiento = % × valor del saldo.
   const logUnitsVentaMes = (mca) => MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; if (esViajeRub(r[1])) return; s += num(r[4 + m]) }); return s })
   const logCostoVentaBase = (mca) => { const u = logUnitsVentaMes(mca), c = aucMes(mca); return MESES.map((_, m) => u[m] * c[m]) }
-  const logSaldoValBase = (mca) => { try { const inv = inventarioCalc(temp, mca); return MESES.map((_, m) => SEASONS.reduce((a, s) => a + inv.flujos[s][m].fin * seasonAUCfrom(precios, mca, s), 0)) } catch { return Array(12).fill(0) } }
+  const logSaldoValBase = (mca) => { try { const inv = inventarioCalc(temp, mca, ventaMarcaMes(ventas, empresa, mca)); return MESES.map((_, m) => SEASONS.reduce((a, s) => a + inv.flujos[s][m].fin * seasonAUCfrom(precios, mca, s), 0)) } catch { return Array(12).fill(0) } }
   const logPct = (mca, k) => num(logcost[`${mca}|${k}`])
   const logVentaMes = (mca) => { const b = logCostoVentaBase(mca), p = logPct(mca, 'PCT_LOGVENTA'); return b.map((v) => v * p / 100) }
   const logMuestrasMes = (mca) => { const b = comprasUsdMes(mca), p = logPct(mca, 'PCT_MUESTRAS'); return b.map((v) => v * p / 100) }
@@ -1078,8 +1078,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   // Venta Neta 2028 = Σ unidades (Ventas) × AUP (Producto), por mes. Ambos salen de Comercial.
   const ventaNetaMes = (mca) => realAupAuc(empresa, mca, ventas, producto, (cats[mca] || []).map((c) => c.cat)).ventaMes
   // Inventario (de Producto): saldo en unidades × AUC. Inicial del mes = saldo del mes anterior.
-  const invFinUsd = (mca) => { const { saldoUnits } = inventarioCalc(temp, mca); const auc = aucMes(mca); return MESES.map((_, m) => saldoUnits[m] * (auc[m] || 0)) }
-  const invIniUsd = (mca) => { const { saldoUnits } = inventarioCalc(temp, mca); const auc = aucMes(mca); const kk = invKeys(mca); const opening = SEASONS.reduce((a, s) => a + num(temp[kk.II(s)]), 0); return MESES.map((_, m) => (m === 0 ? opening : saldoUnits[m - 1]) * (auc[m] || 0)) }
+  const invFinUsd = (mca) => { const { saldoUnits } = inventarioCalc(temp, mca, ventaMarcaMes(ventas, empresa, mca)); const auc = aucMes(mca); return MESES.map((_, m) => saldoUnits[m] * (auc[m] || 0)) }
+  const invIniUsd = (mca) => { const { saldoUnits } = inventarioCalc(temp, mca, ventaMarcaMes(ventas, empresa, mca)); const auc = aucMes(mca); const kk = invKeys(mca); const opening = SEASONS.reduce((a, s) => a + num(temp[kk.II(s)]), 0); return MESES.map((_, m) => (m === 0 ? opening : saldoUnits[m - 1]) * (auc[m] || 0)) }
   const VENTAS_NETAS = 'Ventas Netas', COMPRAS_FD = 'Compras (Fecha disponible)', INV_INI = 'Inventario Inicial', INV_FIN = 'Inventario Final'
   const CALC_PSI = { [VENTAS_NETAS]: ventaNetaMes, [COMPRAS_FD]: comprasUsdDisp, [INV_INI]: invIniUsd, [INV_FIN]: invFinUsd }
   const esCalcComercial = (it) => !!CALC_PSI[it]
@@ -1466,14 +1466,21 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
 function invKeys(marca) {
   return { II: (s) => `II|${marca}|${s}`, CP: (s, m) => `CP|${marca}|${s}|${m}`, RT: (s, m) => `RT|${marca}|${s}|${m}` }
 }
-function inventarioCalc(data, marca) {
+// Venta (unidades) por mes de una marca, desde las filas de Cap_Ventas (excluye VIAJES).
+function ventaMarcaMes(rows, empresa, marca) {
+  return MESES.map((_, m) => { let s = 0; (rows || []).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
+}
+// Modelo: el VENDEDOR manda el total del mes (ventaArr); Producto solo decide el % de MEZCLA por temporada (RT).
+// Salidas[temporada][mes] = venta del mes × % de esa temporada, topado por lo disponible. Así las salidas siempre cuadran con la venta.
+// Si no se pasa ventaArr (compatibilidad), se usa el modelo viejo: salidas = disponible × % de rotación.
+function inventarioCalc(data, marca, ventaArr) {
   const g = (k) => num(data[k])
   const { II, CP, RT } = invKeys(marca)
-  // La compra se captura por fecha XFD; queda DISPONIBLE en inventario `tránsito` meses después (default 0 = igual que antes).
-  const tr = Math.max(0, Math.round(num(data[`TR|${marca}`])))
+  const tr = Math.max(0, Math.round(num(data[`TR|${marca}`]))) // la compra XFD queda disponible `tránsito` meses después
+  const useMix = Array.isArray(ventaArr)
   const flujos = {}
-  // Unidades SIEMPRE enteras: no se venden zapatillas partidas. Las salidas se redondean y el saldo queda entero mes a mes.
-  SEASONS.forEach((s) => { const arr = []; let saldo = Math.round(g(II(s))); for (let m = 0; m < 12; m++) { const ini = saldo; const comp = Math.round(m - tr >= 0 ? g(CP(s, m - tr)) : 0); const disp = ini + comp; const rot = g(RT(s, m)) / 100; const sal = Math.min(disp, Math.round(disp * rot)); const fin = disp - sal; arr.push({ ini, comp, sal, fin }); saldo = fin } flujos[s] = arr })
+  // Unidades SIEMPRE enteras: no se venden zapatillas partidas.
+  SEASONS.forEach((s) => { const arr = []; let saldo = Math.round(g(II(s))); for (let m = 0; m < 12; m++) { const ini = saldo; const comp = Math.round(m - tr >= 0 ? g(CP(s, m - tr)) : 0); const disp = ini + comp; const pct = g(RT(s, m)) / 100; const want = useMix ? Math.round((num(ventaArr[m])) * pct) : Math.round(disp * pct); const sal = Math.max(0, Math.min(disp, want)); const fin = disp - sal; arr.push({ ini, comp, sal, fin }); saldo = fin } flujos[s] = arr })
   const saldoUnits = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].fin, 0))
   const salidasUnits = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].sal, 0))
   return { flujos, saldoUnits, salidasUnits }
@@ -1507,10 +1514,11 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
   const K = invKeys(marca)
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   function guardar() { setSaving(true); try { saveEstado(empresa, 'temp', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (inventario).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
-  const { flujos, saldoUnits, salidasUnits } = inventarioCalc(data, marca)
   const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
-  // Venta proyectada (unidades de Comercial) para comparar con lo que va rotando del inventario
+  // Venta proyectada (unidades del vendedor): es el TOTAL a vender del mes. Producto solo reparte de qué temporada sale.
   const ventaProyMes = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
+  const { flujos, saldoUnits, salidasUnits } = inventarioCalc(data, marca, ventaProyMes)
+  const mixSumMes = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(data[K.RT(s, m)]), 0)) // suma del % de mezcla por mes (debe ser 100)
 
   if (mode === 'flow') {
     return (
