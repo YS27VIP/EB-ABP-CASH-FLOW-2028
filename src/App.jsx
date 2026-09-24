@@ -171,7 +171,7 @@ function comisionCorpMes(marca, cfData, comprasUdMes) { return MESES.map((_, m) 
 
 /* Temporadas: inventario inicial (stock viejo) vs compras 2028 (nuevo, porque el presupuesto es 2028) */
 const INV_SEASONS = ['Otros', 'FW26', 'SS26', 'FW27', 'SS27']
-const BUY_SEASONS = ['SS28', 'FW28']
+const BUY_SEASONS = ['SS28', 'FW28', 'SS29']
 const SEASONS = [...INV_SEASONS, ...BUY_SEASONS]
 
 /* ===== helpers ===== */
@@ -1795,12 +1795,12 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp }) {
     })()
   }, [empresa])
   const tr = Math.max(0, Math.round(num(temp[`TR|${marca}`])))
-  const seasonOf = (m) => m < 6 ? 'SS28' : 'FW28' // ene–jun = SS28 · jul–dic = FW28
+  const seasonOf = (m) => m < 6 ? 'SS28' : m < 10 ? 'FW28' : 'SS29' // ene–jun = SS28 · jul–oct = FW28 · nov–dic = SS29
   const cpKey = (m) => `CP|${marca}|${seasonOf(m)}|${m}`
   const setCP = (m, v) => setTemp((t) => ({ ...t, [cpKey(m)]: v }))
   const xfd = MESES.map((_, m) => num(temp[cpKey(m)]))
   const disp = MESES.map((_, m) => (m - tr >= 0 ? xfd[m - tr] : 0))
-  const ini2028 = num(temp[`II|${marca}|SS28`]) + num(temp[`II|${marca}|FW28`])
+  const ini2028 = num(temp[`II|${marca}|SS28`]) + num(temp[`II|${marca}|FW28`]) + num(temp[`II|${marca}|SS29`])
   const auc = MESES.map((_, m) => { let v = 0; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca) || upper(r[1]) !== 'AUC') return; v = num(r[4 + m]) }); return v })
   const ventasU = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
   const saldo = []; { let s = ini2028; MESES.forEach((_, m) => { s = s + disp[m] - ventasU[m]; saldo.push(s) }) }
@@ -1821,11 +1821,11 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      <div className="sub">Escribe las <b>unidades a comprar</b> por mes en la fila amarilla (fecha <b>XFD</b>): de <b>ene a jun = SS28</b>, de <b>jul a dic = FW28</b>. La <b>disponible</b> = XFD + <b>{tr}</b> mes(es) de tránsito. Abajo, el <b>saldo de inventario 2028</b> = inicial + compras disponibles − ventas, mes a mes. Plata = unidades × AUC.</div>
+      <div className="sub">Escribe las <b>unidades a comprar</b> por mes en la fila amarilla (fecha <b>XFD</b>): de <b>ene a jun = SS28</b>, de <b>jul a oct = FW28</b> y de <b>nov a dic = SS29</b> (ya empieza la compra de la próxima temporada). La <b>disponible</b> = XFD + <b>{tr}</b> mes(es) de tránsito. Abajo, el <b>saldo de inventario 2028</b> = inicial + compras disponibles − ventas, mes a mes. Plata = unidades × AUC.</div>
       <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '84px' }} /></colgroup>
         <thead>
           <tr><th className="l">Concepto</th>{MESES.map((m, i) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Total</th></tr>
-          <tr><th className="l" style={{ fontWeight: 600, color: 'var(--muted)' }}>Temporada</th>{MESES.map((_, i) => <th key={i} style={{ fontWeight: 600, color: i < 6 ? '#0e7490' : '#b45309' }}>{i < 6 ? 'SS28' : 'FW28'}</th>)}<th></th></tr>
+          <tr><th className="l" style={{ fontWeight: 600, color: 'var(--muted)' }}>Temporada</th>{MESES.map((_, i) => { const lbl = i === 0 ? 'SS28' : i === 6 ? 'FW28' : i === 10 ? 'SS29' : ''; const c = i < 6 ? '#0e7490' : i < 10 ? '#b45309' : '#7c3aed'; return <th key={i} style={{ fontWeight: 800, color: c }}>{lbl}</th> })}<th></th></tr>
         </thead>
         <tbody>
           <tr><td className="l">Compras a comprar · <b>XFD</b> <span className="fill-badge" style={{ marginLeft: 4 }}>✏️</span></td>{MESES.map((_, m) => <td key={m} className="cell"><input value={temp[cpKey(m)] ?? ''} onChange={(e) => setCP(m, e.target.value)} inputMode="decimal" style={{ width: '100%' }} /></td>)}<td className="tot">{vista === '$' ? fmt(RT(money(xfd))) : fmt(RT(xfd))}</td></tr>
