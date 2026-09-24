@@ -203,6 +203,19 @@ export async function gSaveConfig(empresa, combos) {
   return { ok: true }
 }
 
+export async function gLoadAvatars() {
+  try { const rows = await readValues('Cap_Avatares'); const map = {}; rows.slice(1).forEach((r) => { const em = String(r[0] || '').trim().toLowerCase(); if (em) map[em] = { avatar: r[1] || '', nombre: r[2] || '' } }); return map } catch { return {} }
+}
+export async function gSaveAvatar(email, avatar, nombre) {
+  if (!email) return { ok: false }
+  await ensureTab('Cap_Avatares', ['EMAIL', 'AVATAR', 'NOMBRE'])
+  const all = await readValues('Cap_Avatares'); const header = all[0] || ['EMAIL', 'AVATAR', 'NOMBRE']
+  const em = String(email).trim().toLowerCase()
+  const kept = all.slice(1).filter((r) => String(r[0] || '').trim().toLowerCase() !== em)
+  await clearValues('Cap_Avatares'); await writeValues('Cap_Avatares', 'A1', [header, ...kept, [email, avatar || '', nombre || '']])
+  return { ok: true }
+}
+
 export async function gDeleteEmpresa(empresa) {
   // Quita la empresa de la configuración (lista + combinaciones). No borra los datos ya capturados en las hojas Cap_*.
   try {

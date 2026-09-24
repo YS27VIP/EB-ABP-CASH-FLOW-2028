@@ -46,7 +46,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
+import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -235,7 +235,7 @@ export default function App() {
   const [estadoReady, setEstadoReady] = useState(false)
   const [avatar, setAvatar] = useState(() => { try { return localStorage.getItem('abp_avatar') || '' } catch { return '' } })
   useEffect(() => { try { document.documentElement.style.setProperty('--avatar', avatar ? '"' + avatar + ' "' : '') } catch { } }, [avatar])
-  const elegirAvatar = (a) => { setAvatar(a); try { localStorage.setItem('abp_avatar', a) } catch { } }
+  const elegirAvatar = (a) => { setAvatar(a); try { localStorage.setItem('abp_avatar', a) } catch { } try { const em = getEmail(); if (em) gSaveAvatar(em, a, getName() || '').catch(() => { }) } catch { } }
   // Recuerda dónde estás (sección + empresa) SOLO en esta pestaña, para que "Actualizar" recargue sin sacarte al menú.
   useEffect(() => { try { if (roleId) { sessionStorage.setItem('abp_nav_role', roleId); sessionStorage.setItem('abp_nav_ts', String(Date.now())) } else sessionStorage.removeItem('abp_nav_role') } catch { } }, [roleId])
   // Mantiene "viva" la ubicación mientras trabajas (refresca la marca de tiempo con la actividad, máx. cada 20 s).
@@ -2103,6 +2103,43 @@ function LogisticaBlock({ r, empresa, usuario, oneSbu, marca, noHeader }) {
 }
 
 /* ===== SBU WORKSPACE: dentro de una SBU salen las secciones (roles) con sus marcas ===== */
+/* ===== Panel de equipo: quién participa en la empresa, su avatar, rol, qué llena y qué consulta ===== */
+const TEAM_FILL = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director']
+function TeamPanel({ empresa }) {
+  const [open, setOpen] = useState(false)
+  const [colabs, setColabs] = useState([])
+  const [avatars, setAvatars] = useState({})
+  useEffect(() => {
+    (async () => {
+      try { const j = await gReadTab('Cap_Colaboradores'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '', acceso: String(row[4] || '').split(';').filter(Boolean), todas: upper(row[5]) === 'TODAS' }) }); setColabs(out) } else setColabs([]) } catch { }
+      try { const a = await gLoadAvatars(); setAvatars(a || {}) } catch { }
+    })()
+  }, [empresa])
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button className="btn" onClick={() => setOpen((o) => !o)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>👥 Equipo de {empresa} <span style={{ fontSize: 11 }}>{open ? '▲' : '▼'}</span></button>
+      {open && <div className="panel" style={{ marginTop: 8 }}>
+        <div className="sub">Quién participa en <b>{empresa}</b>: su avatar, rol, qué <b style={{ color: '#15803d' }}>llena</b> y qué <b style={{ color: '#0e7490' }}>consulta</b>. Se define en Configuración → Colaboradores.</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+          {colabs.length === 0 && <div className="note warn" style={{ margin: 0 }}>Aún no hay colaboradores cargados para {empresa}.</div>}
+          {colabs.map((c, i) => {
+            const av = (avatars[(c.email || '').toLowerCase()] || {}).avatar || '👤'
+            const llena = c.acceso.filter((x) => TEAM_FILL.includes(x))
+            const consulta = c.acceso.filter((x) => !TEAM_FILL.includes(x))
+            return (
+              <div key={i} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: '10px 13px', minWidth: 230, maxWidth: 300, background: '#fff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><span style={{ fontSize: 28, lineHeight: 1 }}>{av}</span><div><div style={{ fontWeight: 800 }}>{c.nombre || '(sin nombre)'}</div><div className="unit">{c.rol || '—'}{c.todas ? ' · ve todas las empresas' : ''}</div></div></div>
+                <div style={{ marginTop: 8, fontSize: 12.5 }}><b style={{ color: '#15803d' }}>Llena:</b> {llena.length ? llena.join(', ') : '—'}</div>
+                <div style={{ fontSize: 12.5, marginTop: 2 }}><b style={{ color: '#0e7490' }}>Consulta:</b> {(consulta.length ? consulta.join(', ') + ' · ' : '')}Gerencia (solo lectura)</div>
+              </div>
+            )
+          })}
+        </div>
+      </div>}
+    </div>
+  )
+}
+
 function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   const pu = puede || (() => true)
   // Acceso por rol: solo se ven las áreas asignadas al colaborador.
@@ -2141,6 +2178,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
         </div>
       </aside>
       <div className="cmz-main" style={{ '--accent': acc, borderTop: '4px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
+        <TeamPanel empresa={empresa} />
         {marca === '__TOTAL__'
           ? (<>
             <div style={{ marginBottom: 6 }}>

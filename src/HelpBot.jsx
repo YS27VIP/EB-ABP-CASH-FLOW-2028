@@ -63,7 +63,7 @@ export default function HelpBot() {
       <style>{`@keyframes kaiFloat{0%,100%{transform:translateY(0) rotate(0deg)}25%{transform:translateY(-7px) rotate(-3deg)}75%{transform:translateY(-3px) rotate(3deg)}}@keyframes kaiPulse{0%,100%{box-shadow:0 6px 20px rgba(0,0,0,.25)}50%{box-shadow:0 10px 26px rgba(8,145,178,.45)}}`}</style>
       {open && (
         <div style={S.panel}>
-          <div style={S.head}><img src={kai} alt="Kai" style={{ width: 34, height: 34, objectFit: 'contain', background: '#fff', borderRadius: '50%', padding: 1 }} /><div style={{ flex: 1 }}><div>Kai · asistente ABP</div><div style={{ fontSize: 11, fontWeight: 500, opacity: .9 }}>en línea · te ayuda al instante</div></div><span onClick={() => setOpen(false)} style={{ cursor: 'pointer', fontSize: 18 }}>✕</span></div>
+          <div style={S.head}><img src={kai} alt="Kai" style={{ width: 34, height: 34, objectFit: 'contain', background: '#fff', borderRadius: '50%', padding: 1 }} /><div style={{ flex: 1 }}><div>Kai · asistente ABP</div><div style={{ fontSize: 11, fontWeight: 500, opacity: .9 }}>en línea · te ayuda al instante</div></div><span onClick={() => { setMsgs([{ from: 'bot', text: GREET }]); setInp('') }} title="Volver a las preguntas rápidas" style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 700, marginRight: 12, whiteSpace: 'nowrap' }}>↺ Menú</span><span onClick={() => setOpen(false)} style={{ cursor: 'pointer', fontSize: 18 }}>✕</span></div>
           <div style={S.body}>
             {msgs.map((m, i) => <div key={i} style={m.from === 'bot' ? S.bot : S.user}>{m.text}</div>)}
             <div ref={endRef} />
