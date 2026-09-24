@@ -1576,23 +1576,21 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
         )
       })()}
       <div className="panel">
-        <h3>Rotación por temporada — {marca} <span className="fill-badge">✏️ para llenar</span></h3>
-        <div className="sub">{iiAuto
-          ? <>Aquí solo pones el <b>% de rotación de cada mes</b> por temporada. El <b>inventario inicial</b> ya viene de la <b>matriz de arriba</b> (suma de categorías), no se reescribe. El <b>saldo</b> se calcula solo: saldo = anterior − salidas, y salidas = saldo × rotación%.</>
-          : <>Pon el <b>inventario inicial</b> (columna "Inicial"), las <b>compras 2028</b> y el <b>% de rotación de cada mes</b>. El <b>saldo</b> se calcula solo: saldo = anterior + compras − salidas, y salidas = (saldo+compras) × rotación%. Así llevas el tracking de lo que te queda de cada temporada mes a mes.</>}</div>
+        <h3>Mezcla de venta por temporada — {marca} <span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">El <b>vendedor manda el total a vender</b> de cada mes. Aquí Producto solo decide <b>de qué temporada sale ese total</b>: pon el <b>% de mezcla</b> por temporada (deben <b>sumar 100%</b> cada mes). Las <b>salidas = venta × %</b>, así siempre cuadran con lo que vende el vendedor. Si una temporada no tiene suficiente stock, se marca el <b>faltante</b> (compra más o cambia el mix). {iiAuto ? <>El <b>inventario inicial</b> viene de la matriz de arriba.</> : <>Pon también el <b>inventario inicial</b> y las <b>compras 2028</b>.</>}</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '260px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Temporada / concepto</th><th>Inicial</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
-            <tr className="secrow"><td colSpan={15}>OBJETIVO DE VENTA vs ROTACIÓN</td></tr>
-            <tr><td className="l sub2">Venta proyectada (ud) <span className="unit">(Comercial)</span></td><td></td>{ventaProyMes.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0))}</td></tr>
-            <tr><td className="l sub2">Salidas por rotación (ud)</td><td></td>{salidasUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
-            <tr className="grandrow"><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Diferencia (proyectada − rotación)</td><td></td>{MESES.map((_, m) => { const d = ventaProyMes[m] - salidasUnits[m]; return <td key={m} className="tot" style={{ color: Math.abs(d) < 0.5 ? 'var(--ok)' : d > 0 ? 'var(--bad)' : 'var(--warn)' }}>{fmt(d)}</td> })}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0) - salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
-            <tr className="grandrow"><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Cobertura de la venta % <span className="unit" style={{ fontWeight: 400 }}>(salidas ÷ venta proy. — debe ser 100%)</span></td><td></td>{MESES.map((_, m) => { const vp = ventaProyMes[m]; const cov = vp > 0.5 ? salidasUnits[m] / vp * 100 : null; const ok = cov != null && Math.abs(cov - 100) < 1; return <td key={m} className="tot" style={{ color: cov == null ? 'var(--muted)' : ok ? 'var(--ok)' : 'var(--bad)', fontWeight: 800 }}>{cov == null ? '—' : cov.toFixed(0) + '%'}</td> })}<td className="tot">{(() => { const vt = ventaProyMes.reduce((a, b) => a + b, 0), st = salidasUnits.reduce((a, b) => a + b, 0); return vt > 0.5 ? (st / vt * 100).toFixed(0) + '%' : '—' })()}</td></tr>
+            <tr className="secrow"><td colSpan={15}>VENTA DEL VENDEDOR vs MEZCLA POR TEMPORADA</td></tr>
+            <tr><td className="l sub2">Venta del mes (ud) <span className="unit">(la manda el vendedor)</span></td><td></td>{ventaProyMes.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0))}</td></tr>
+            <tr><td className="l sub2" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Suma de la mezcla % <span className="unit">(debe ser 100%)</span></td><td></td>{MESES.map((_, m) => { const hay = ventaProyMes[m] > 0.5; const sm = mixSumMes[m]; const ok = Math.abs(sm - 100) < 1; return <td key={m} className="tot" style={{ fontWeight: 800, color: !hay ? 'var(--muted)' : ok ? 'var(--ok)' : 'var(--bad)' }} title={!hay ? 'Sin venta este mes' : ok ? 'La mezcla suma 100% ✓' : 'La mezcla NO suma 100% — ajusta los %'}>{!hay ? '—' : sm.toFixed(0) + '%'}{hay && (ok ? ' ✓' : ' ⚠')}</td> })}<td></td></tr>
+            <tr className="grandrow"><td className="l">Salidas totales (ud)</td><td></td>{salidasUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
+            <tr className="grandrow"><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Faltante por stock (ud) <span className="unit" style={{ fontWeight: 400 }}>(venta − salidas; si sale rojo, falta inventario)</span></td><td></td>{MESES.map((_, m) => { const d = ventaProyMes[m] - salidasUnits[m]; const bad = d > 0.5; return <td key={m} className="tot" style={{ fontWeight: 800, color: bad ? 'var(--bad)' : 'var(--ok)' }} title={bad ? 'No hay suficiente inventario para cubrir la venta con la mezcla elegida: compra más o cambia el mix' : 'La venta se cubre completa ✓'}>{fmt(d)}</td> })}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0) - salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
             {SEASONS.map((s) => { const f = flujos[s]; const buy = BUY_SEASONS.includes(s); return (
               <Fragment2 key={s}>
                 <tr className="secrow"><td colSpan={15}>{s}{buy ? ' · compra 2028' : ' · inventario inicial'}{iiAuto ? <span className="unit" style={{ fontWeight: 400 }}> · inicial {fmt(num(data[K.II(s)]))} ud (de la matriz de arriba)</span> : ''}</td></tr>
                 {buy && !iiAuto && <tr><td className="l sub2">+ Compras</td><td></td>{MESES.map((_, m) => { const k = K.CP(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(rowTot(f, 'comp'))}</td></tr>}
-                <tr><td className="l sub2">Rotación % (del saldo)</td><td></td>{MESES.map((_, m) => { const k = K.RT(s, m); const hay = ventaProyMes[m] > 0.5; return <td key={m} className={hay ? 'cell' : ''} style={hay ? undefined : { background: '#f1f3f6' }} title={hay ? '' : 'Sin ventas proyectadas este mes — no hace falta rotación aquí'}>{hay ? <input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" /> : <span style={{ display: 'inline-block', width: 64, color: '#aab2bc', textAlign: 'center', userSelect: 'none' }}>—</span>}</td> })}<td></td></tr>
+                <tr><td className="l sub2">% de mezcla <span className="unit">(de la venta del mes)</span></td><td></td>{MESES.map((_, m) => { const k = K.RT(s, m); const hay = ventaProyMes[m] > 0.5; return <td key={m} className={hay ? 'cell' : ''} style={hay ? undefined : { background: '#f1f3f6' }} title={hay ? '% de la venta de este mes que sale de esta temporada' : 'Sin ventas este mes — no hace falta mezcla aquí'}>{hay ? <input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" /> : <span style={{ display: 'inline-block', width: 64, color: '#aab2bc', textAlign: 'center', userSelect: 'none' }}>—</span>}</td> })}<td></td></tr>
                 <tr><td className="l sub2">− Salidas (venta)</td><td></td>{f.map((x, m) => <td key={m} className="tot">{fmt(x.sal)}</td>)}<td className="tot">{fmt(rowTot(f, 'sal'))}</td></tr>
                 <tr className="catrow"><td className="l">= Saldo (ud)</td>{iiAuto ? <td className="tot">{fmt(num(data[K.II(s)]))}</td> : <td className="cell"><input value={data[K.II(s)] ?? ''} onChange={(e) => set(K.II(s), e.target.value)} inputMode="decimal" placeholder={buy ? '0' : 'inicial'} /></td>}{f.map((x, m) => <td key={m} className="tot">{fmt(x.fin)}</td>)}<td className="tot">{fmt(f[11].fin)}</td></tr>
               </Fragment2>) })}
@@ -1624,7 +1622,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
     })()
   }, [empresa, marca])
-  const inv = inventarioCalc(tData, marca)
+  const inv = inventarioCalc(tData, marca, ventaMarcaMes(ventas, empresa, marca))
   const g = (k) => num(data[k]); const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   const auc = MESES.map((_, m) => { let v = 0; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca) || upper(r[1]) !== 'AUC') return; v = num(r[4 + m]) }); return v })
   const ventaUnits = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
@@ -1726,9 +1724,9 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
 function ResumenInventario({ marca, tempState, precios, empresa }) {
   const data = tempState || {}
   const [vista, setVista] = useState('ud') // ud | $ | ambas
-  const [catList, setCatList] = useState([])
-  useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const cl = []; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl) } } catch { } })() }, [empresa, marca])
-  const { flujos } = inventarioCalc(data, marca)
+  const [catList, setCatList] = useState([]); const [ventas, setVentas] = useState([])
+  useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const cl = []; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl) } } catch { } try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVentas(jv.values.slice(1)) } catch { } })() }, [empresa, marca])
+  const { flujos } = inventarioCalc(data, marca, ventaMarcaMes(ventas, empresa, marca))
   const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
   const seasonAUC = (s) => { let n = 0, d = 0; catList.forEach(({ cat, peso }) => { const a = num((precios || {})[`PAUC|${marca}|${s}|${cat}`]); const w = (num(peso) || 0) + 0.0001; if (a > 0) { n += a * w; d += w } }); return d ? n / d : 0 }
   const res = SEASONS.map((s) => { const f = flujos[s]; const ini = num(data[`II|${marca}|${s}`]); const comp = rowTot(f, 'comp'); const vend = rowTot(f, 'sal'); return { s, ini, comp, disp: ini + comp, vend, queda: f[11].fin, auc: seasonAUC(s) } })
@@ -1880,12 +1878,14 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
   const showMatriz = render === 'all' || render === 'matriz'
   const showEvol = render === 'all' || render === 'evolucion'
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  const [ventasRows, setVentasRows] = useState([])
   useEffect(() => {
     try { setTempInt(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
     ;(async () => {
       let cl = []
       try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1] && !cl.some((x) => x.cat === r[1])) cl.push({ cat: r[1], peso: num(r[4]) }) }) } catch { }
       setCatList(cl.length ? cl : [{ cat: 'General', peso: 0 }])
+      try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVentasRows(jv.values.slice(1)) } catch { }
     })()
   }, [empresa, marca])
   const sg = (k) => num(snap[k]); const sset = (k, v) => setSnap((s) => ({ ...s, [k]: v }))
@@ -1918,7 +1918,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
   const invSeason = (s) => cats.reduce((a, c) => a + invSC(s, c), 0)
   const seasonAUP = (s) => { const w = invSeason(s); return w ? cats.reduce((a, c) => a + invSC(s, c) * aupSC(s, c), 0) / w : 0 }
   const seasonAUC = (s) => { const w = invSeason(s); return w ? cats.reduce((a, c) => a + invSC(s, c) * aucSC(s, c), 0) / w : 0 }
-  const inv = inventarioCalc(temp, marca)
+  const inv = inventarioCalc(temp, marca, ventaMarcaMes(ventasRows, empresa, marca))
   const salM = (s, m) => inv.flujos[s][m].sal
   const ventaMes = (m) => SEASONS.reduce((a, s) => a + salM(s, m) * seasonAUP(s), 0)
   const costoMes = (m) => SEASONS.reduce((a, s) => a + salM(s, m) * seasonAUC(s), 0)
@@ -3037,7 +3037,7 @@ function LogisticaResumen({ empresa, sbuName, marcasSBU }) {
   }, [empresa])
   const marcas = marcasSBU || []
   const calc = (marca) => {
-    const inv = inventarioCalc(tData, marca)
+    const inv = inventarioCalc(tData, marca, ventaMarcaMes(ventas, empresa, marca))
     const g = (k) => num(logd[k])
     const auc = MESES.map((_, m) => { let v = 0; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca) || upper(r[1]) !== 'AUC') return; v = num(r[4 + m]) }); return v })
     const ventaUnits = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
