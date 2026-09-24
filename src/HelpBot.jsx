@@ -19,9 +19,11 @@ const KB = [
   { k: ['guardar', 'se guarda', 'guarda solo'], a: '💾 Se guarda cuando pulsas Guardar. Todo va directo al Google Sheet, así tu equipo lo ve al instante desde cualquier PC.' },
   { k: ['empresa', 'cambiar empresa', 'tumar', 'taho'], a: '🏢 Cambia de empresa con el selector "Empresa" en el menú (TUMAR, ENERGY BRANDS, TAHO…). Cada una tiene su propia información.' },
   { k: ['color', 'colores', 'marca color'], a: '🎨 Cada SBU y cada marca tienen su color. Al elegir una marca, la vista se pinta con ese color para que ubiques rápido en qué estás trabajando.' },
+  { k: ['quien llena', 'quien hace', 'quien captura', 'quien pone', 'responsable', 'quien llena que', 'llena cada', 'quien hace que', 'roles', 'quien es responsable'], a: '👥 Quién llena qué:\n• 🧭 Ventas: unidades 2028 por cliente (% de crecimiento) y agrega clientes.\n• 📦 Producto: inventario por temporada, AUP/AUC (precio y costo), rotación, compras (fecha XFD) y tiempo de tránsito.\n• 📣 Marketing: el gasto de marketing por marca y mes.\n• 🚚 Logística: los % de costos logísticos (venta, muestras, mantenimiento).\n• 🧑‍💼 Director: categorías y su peso, % de comisiones, y ve los viajes del equipo.\n• 💰 Finanzas: Cash Flow (saldo inicial, condiciones comerciales/compras, gastos administrativos), el saldo pendiente por cobrar del 2027, y aprueba los % de Logística.\n• 📈 Gerencia / 🏛️ Total Holding: solo leen el consolidado (no llenan nada).' },
+  { k: ['mapa', 'mapa del app', 'mapa de la app', 'estructura', 'secciones', 'flujo', 'como se conecta', 'overview', 'mapa del abp', 'como funciona todo', 'panorama'], a: '🗺️ Mapa del ABP (cómo se conecta todo):\n1) 🧭 Ventas pone las UNIDADES por cliente.\n2) 📦 Producto pone AUP/AUC y las COMPRAS → con eso se arma Venta Neta, Costo y Margen.\n3) 📣 Marketing, 🚚 Logística, 🧳 Viajes y 💵 Comisiones son costos que bajan hasta la CONTRIBUCIÓN de cada SBU.\n4) 💰 Finanzas arma el CASH FLOW: Cash In (cobros por escalera de plazos + saldo pendiente 2027) − Cash Out (pagos a proveedores) − Costos Operativos = Cash Final.\n5) 📈 Gerencia consolida por SBU y 🏛️ Total Holding suma todas las empresas.\nTip: lo que cada área guarda alimenta a las demás; usa 🔄 Actualizar para ver lo último del equipo.' },
 ]
 const GREET = '¡Hola! 👋 Soy Kai, tu asistente del ABP. Pregúntame lo que quieras: cómo llenar algo, de dónde sale un dato o cómo se calcula. También puedes tocar una pregunta rápida 👇'
-const CHIPS = ['¿Cómo se calcula la venta neta?', '¿De dónde sale el histórico?', '¿Cómo funciona la escalera de cobros?', '¿Qué lleno yo?']
+const CHIPS = ['¿Quién llena qué?', '🗺️ Mapa del ABP', '¿Cómo se calcula la venta neta?', '¿Cómo funciona la escalera de cobros?']
 
 function responder(txt) {
   const t = (txt || '').toLowerCase()
@@ -48,8 +50,8 @@ export default function HelpBot() {
     panel: { position: 'fixed', right: 20, bottom: 94, zIndex: 9999, width: 360, maxWidth: 'calc(100vw - 40px)', height: '70vh', maxHeight: 560, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 18, boxShadow: '0 16px 44px rgba(0,0,0,.24)', overflow: 'hidden', fontSize: 14 },
     head: { background: G, color: '#fff', padding: '13px 16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 },
     body: { flex: 1, overflow: 'auto', padding: 14, background: '#f7fafb' },
-    bot: { background: '#e6f6f6', color: '#134e4a', borderRadius: '12px 12px 12px 3px', padding: '10px 12px', margin: '6px 0', maxWidth: '85%', lineHeight: 1.5 },
-    user: { background: '#0891b2', color: '#fff', borderRadius: '12px 12px 3px 12px', padding: '10px 12px', margin: '6px 0 6px auto', maxWidth: '85%', lineHeight: 1.5 },
+    bot: { background: '#e6f6f6', color: '#134e4a', borderRadius: '12px 12px 12px 3px', padding: '10px 12px', margin: '6px 0', maxWidth: '85%', lineHeight: 1.5, whiteSpace: 'pre-line' },
+    user: { background: '#0891b2', color: '#fff', borderRadius: '12px 12px 3px 12px', padding: '10px 12px', margin: '6px 0 6px auto', maxWidth: '85%', lineHeight: 1.5, whiteSpace: 'pre-line' },
     chips: { padding: '0 14px 8px', display: 'flex', flexWrap: 'wrap', gap: 6, background: '#f7fafb' },
     chip: { background: '#fff', border: '1px solid #bfe3e5', color: '#0e7490', borderRadius: 14, padding: '5px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
     foot: { display: 'flex', gap: 6, padding: 10, borderTop: '1px solid #eee', background: '#fff' },

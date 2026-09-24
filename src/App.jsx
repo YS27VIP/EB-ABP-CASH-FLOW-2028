@@ -1044,8 +1044,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const aucMes = (mca) => { const a = Array(12).fill(0); producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca) || upper(r[1]) !== 'AUC') return; for (let j = 0; j < 12; j++) a[j] = num(r[4 + j]) }); return a }
   const comprasUsdMes = (mca) => { const u = comprasUdMes(mca), c = aucMes(mca); return MESES.map((_, m) => u[m] * c[m]) } // XFD ($)
   const comprasUsdDisp = (mca) => { const u = comprasUdDisp(mca), c = aucMes(mca); return MESES.map((_, m) => u[m] * c[m]) } // disponible ($)
-  const pagoBaseOf = (mca) => (data[`PBASE|${mca}`] === 'DISP' ? 'DISP' : 'XFD') // base del pago al proveedor (default XFD)
-  const comprasPagoUsd = (mca) => pagoBaseOf(mca) === 'DISP' ? comprasUsdDisp(mca) : comprasUsdMes(mca)
+  const comprasPagoUsd = (mca) => comprasUsdMes(mca) // el pago al proveedor siempre se calcula sobre la compra por fecha XFD
   const pagosMarca = (mca) => { const compras = comprasPagoUsd(mca); const plazo = CF_PLAZO_MESES[data[`PTERM|${mca}`]] ?? 0; return { compras, pagos: MESES.map((_, m) => (m >= plazo ? compras[m - plazo] : 0)), plazo } }
   const corpPagoMes = (mca) => comisionCorpMes(mca, data, comprasUdMes(mca)) // comisión corporativa (HOKA/UGG): $/ud × compras XFD, es un pago (Cash Out)
 
@@ -1376,7 +1375,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         const comprasD = MESES.map((_, m) => listaM.reduce((a, mca) => a + comprasUsdDisp(mca)[m], 0)) // disponible
         const compras = comprasX
         const pagos = MESES.map((_, m) => listaM.reduce((a, mca) => a + pagosMarca(mca).pagos[m], 0))
-        const baseLbl = !isTotal ? (pagoBaseOf(marca) === 'DISP' ? 'fecha disponible' : 'fecha XFD') : 'según cada marca'
+        const baseLbl = 'fecha XFD'
         const hayCorp = listaM.some((mca) => esCorpMarca(mca))
         const corpUnid = MESES.map((_, m) => listaM.reduce((a, mca) => a + (esCorpMarca(mca) ? comprasUdMes(mca)[m] : 0), 0))
         const corpPago = MESES.map((_, m) => listaM.reduce((a, mca) => a + corpPagoMes(mca)[m], 0))
@@ -1387,15 +1386,14 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
             {!isTotal && <div className="toolbar" style={{ marginBottom: 8, gap: 14, flexWrap: 'wrap' }}>
               <span><label>Término de pago de {marca} <span className="unit">(a proveedor)</span> </label>
               {soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{data[`PTERM|${marca}`] || '—'}</span> : <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.filter((t) => t !== 'Intercompañía').map((t) => <option key={t}>{t}</option>)}</select>}</span>
-              <span><label>Pago según <span className="unit">(fecha base)</span> </label>{soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{pagoBaseOf(marca) === 'DISP' ? 'Fecha disponible' : 'Fecha XFD'}</span> : <select value={data[`PBASE|${marca}`] || 'XFD'} onChange={(e) => set(`PBASE|${marca}`, e.target.value)} style={{ background: SP }}><option value="XFD">Fecha XFD</option><option value="DISP">Fecha disponible</option></select>}</span>
-              <span className="unit" style={{ alignSelf: 'center' }}>Tránsito de {marca}: <b>{transitOf(marca)}</b> mes(es) {ESP('El tiempo de tránsito se define en Producto · Paso 5. La compra se coloca por XFD y queda disponible ese número de meses después.')}</span>
+              <span className="unit" style={{ alignSelf: 'center' }}>Pago sobre <b>fecha XFD</b> · Tránsito de {marca}: <b>{transitOf(marca)}</b> mes(es) {ESP('El pago al proveedor se calcula siempre sobre la compra por fecha XFD. El tiempo de tránsito se define en Producto · Paso 5 (solo afecta la fecha disponible del inventario).')}</span>
               {esCorpMarca(marca) && <span><label>Comisión corporativa <span className="unit">($/ud sobre compras)</span> </label>{soloVer ? <span className="empchip" style={{ background: '#eef1f4', color: '#475569' }}>{data[`CORP|${marca}`] || '—'} $/ud</span> : <input className="fillin" value={data[`CORP|${marca}`] ?? ''} onChange={(e) => set(`CORP|${marca}`, e.target.value)} inputMode="decimal" placeholder="$/ud" style={{ width: 70 }} />}</span>}
             </div>}
             {isTotal && <div className="tablewrap" style={{ marginBottom: 12, maxWidth: 520 }}>
               <table style={{ width: 'auto' }}>
-                <thead><tr><th className="l">Marca</th><th>Término de pago {ESP('Espejo: refleja el término que se capturó al entrar a cada marca. No se edita aquí.')}</th><th>Base del pago</th><th>Tránsito</th></tr></thead>
+                <thead><tr><th className="l">Marca</th><th>Término de pago {ESP('Espejo: refleja el término que se capturó al entrar a cada marca. No se edita aquí.')}</th><th>Tránsito</th></tr></thead>
                 <tbody>
-                  {listaM.map((mca) => <tr key={mca}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td><span className="empchip" style={{ background: '#eef1f4', color: '#475569', marginLeft: 0, border: '1px solid #dbe1e8' }}>{data[`PTERM|${mca}`] || '—'}</span></td><td><span className="empchip" style={{ background: '#eef1f4', color: '#475569', marginLeft: 0, border: '1px solid #dbe1e8' }}>{pagoBaseOf(mca) === 'DISP' ? 'Disponible' : 'XFD'}</span></td><td className="tot">{transitOf(mca)} mes(es)</td></tr>)}
+                  {listaM.map((mca) => <tr key={mca}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td><span className="empchip" style={{ background: '#eef1f4', color: '#475569', marginLeft: 0, border: '1px solid #dbe1e8' }}>{data[`PTERM|${mca}`] || '—'}</span></td><td className="tot">{transitOf(mca)} mes(es)</td></tr>)}
                 </tbody>
               </table>
               <div className="sub" style={{ marginTop: 6 }}>🪞 <b>Espejo</b> (solo lectura): refleja el término que cada marca cargó a su proveedor; define <b>cuándo</b> la compra se convierte en pago (Cash Out). Se edita entrando a cada marca.</div>
