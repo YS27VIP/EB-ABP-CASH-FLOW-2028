@@ -1714,26 +1714,36 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
 }
 
 /* Resumen de inventario (cálculo) — se muestra al final, como cierre de la historia de Producto. */
-function ResumenInventario({ marca, tempState }) {
+function ResumenInventario({ marca, tempState, precios, empresa }) {
   const data = tempState || {}
+  const [vista, setVista] = useState('ud') // ud | $ | ambas
+  const [catList, setCatList] = useState([])
+  useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const cl = []; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl) } } catch { } })() }, [empresa, marca])
   const { flujos } = inventarioCalc(data, marca)
   const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
-  const res = SEASONS.map((s) => { const f = flujos[s]; const ini = num(data[`II|${marca}|${s}`]); const comp = rowTot(f, 'comp'); const vend = rowTot(f, 'sal'); return { s, ini, comp, disp: ini + comp, vend, queda: f[11].fin } })
-  const T = res.reduce((a, r) => ({ ini: a.ini + r.ini, comp: a.comp + r.comp, disp: a.disp + r.disp, vend: a.vend + r.vend, queda: a.queda + r.queda }), { ini: 0, comp: 0, disp: 0, vend: 0, queda: 0 })
+  const seasonAUC = (s) => { let n = 0, d = 0; catList.forEach(({ cat, peso }) => { const a = num((precios || {})[`PAUC|${marca}|${s}|${cat}`]); const w = (num(peso) || 0) + 0.0001; if (a > 0) { n += a * w; d += w } }); return d ? n / d : 0 }
+  const res = SEASONS.map((s) => { const f = flujos[s]; const ini = num(data[`II|${marca}|${s}`]); const comp = rowTot(f, 'comp'); const vend = rowTot(f, 'sal'); return { s, ini, comp, disp: ini + comp, vend, queda: f[11].fin, auc: seasonAUC(s) } })
+  const T = res.reduce((a, r) => ({ ini: a.ini + r.ini, comp: a.comp + r.comp, disp: a.disp + r.disp, vend: a.vend + r.vend, queda: a.queda + r.queda, $ini: a.$ini + r.ini * r.auc, $comp: a.$comp + r.comp * r.auc, $disp: a.$disp + r.disp * r.auc, $vend: a.$vend + r.vend * r.auc, $queda: a.$queda + r.queda * r.auc }), { ini: 0, comp: 0, disp: 0, vend: 0, queda: 0, $ini: 0, $comp: 0, $disp: 0, $vend: 0, $queda: 0 })
+  const C = (u, $) => vista === 'ud' ? fmt(u) : vista === '$' ? fmt($) : <>{fmt(u)}<div className="unit" style={{ fontSize: 10 }}>${fmt($)}</div></>
   return (
     <div className="panel">
-      <h3>Resumen de inventario — {marca} <span className="unit">(👁️ cálculo)</span></h3>
-      <div className="sub">De un vistazo: lo que <b>tienes disponible</b> (inicial + compras), lo que <b>vas a vender</b> (salidas) y lo que <b>te queda</b> a fin de año, por temporada y en total.</div>
+      <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
+        <h3 style={{ margin: 0 }}>Resumen de inventario — {marca} <span className="unit">(👁️ cálculo)</span></h3>
+        <div className="spacer"></div>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>VER:</span>
+        {[['ud', 'Unidades'], ['$', 'Plata'], ['ambas', 'Ambas']].map(([k, lbl]) => <button key={k} className={'seg' + (vista === k ? ' active' : '')} onClick={() => setVista(k)}>{lbl}</button>)}
+      </div>
+      <div className="sub">De un vistazo: lo que <b>tienes disponible</b> (inicial + compras), lo que <b>vas a vender</b> (salidas) y lo que <b>te queda</b> a fin de año, por temporada y en total. Plata = unidades × AUC de compra de la temporada.</div>
       <div className="kpis" style={{ marginBottom: 12 }}>
-        <div className="kpi"><div className="k">Inventario disponible</div><div className="v">{fmt(T.disp)}</div><div className="s">inicial {fmt(T.ini)} + compras {fmt(T.comp)}</div></div>
-        <div className="kpi"><div className="k">Total a vender (salidas)</div><div className="v">{fmt(T.vend)}</div><div className="s">unidades del año</div></div>
-        <div className="kpi"><div className="k">Saldo que queda (fin año)</div><div className="v">{fmt(T.queda)}</div><div className="s">sin rotar</div></div>
+        <div className="kpi"><div className="k">Inventario disponible {vista === '$' ? '($)' : vista === 'ambas' ? '(ud · $)' : '(ud)'}</div><div className="v">{vista === '$' ? '$' + fmt(T.$disp) : fmt(T.disp)}</div><div className="s">inicial {fmt(T.ini)} + compras {fmt(T.comp)}</div></div>
+        <div className="kpi"><div className="k">Total a vender (salidas)</div><div className="v">{vista === '$' ? '$' + fmt(T.$vend) : fmt(T.vend)}</div><div className="s">unidades del año</div></div>
+        <div className="kpi"><div className="k">Saldo que queda (fin año)</div><div className="v">{vista === '$' ? '$' + fmt(T.$queda) : fmt(T.queda)}</div><div className="s">sin rotar</div></div>
       </div>
       <div className="tablewrap"><table>
         <thead><tr><th className="l">Temporada</th><th>Inicial</th><th>Compras</th><th>Disponible</th><th>A vender</th><th>Queda (fin año)</th></tr></thead>
         <tbody>
-          {res.map((r) => { const buy = BUY_SEASONS.includes(r.s); return <tr key={r.s}><td className="l">{r.s}</td><td className="tot">{fmt(r.ini)}</td>{buy ? <td className="tot">{fmt(r.comp)}</td> : <td className="tot" style={{ background: '#eef1f4', color: '#9aa3ad' }} title="Solo SS28/FW28 (compras 2028) pueden tener compras; las temporadas anteriores son saldo, no se compran">—</td>}<td className="tot">{fmt(r.disp)}</td><td className="tot">{fmt(r.vend)}</td><td className="tot">{fmt(r.queda)}</td></tr> })}
-          <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(T.ini)}</td><td className="tot">{fmt(T.comp)}</td><td className="tot">{fmt(T.disp)}</td><td className="tot">{fmt(T.vend)}</td><td className="tot">{fmt(T.queda)}</td></tr>
+          {res.map((r) => { const buy = BUY_SEASONS.includes(r.s); return <tr key={r.s}><td className="l">{r.s}</td><td className="tot">{C(r.ini, r.ini * r.auc)}</td>{buy ? <td className="tot">{C(r.comp, r.comp * r.auc)}</td> : <td className="tot" style={{ background: '#eef1f4', color: '#9aa3ad' }} title="Solo SS28/FW28/SS29 (compras 2028) pueden tener compras; las temporadas anteriores son saldo, no se compran">—</td>}<td className="tot">{C(r.disp, r.disp * r.auc)}</td><td className="tot">{C(r.vend, r.vend * r.auc)}</td><td className="tot">{C(r.queda, r.queda * r.auc)}</td></tr> })}
+          <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{C(T.ini, T.$ini)}</td><td className="tot">{C(T.comp, T.$comp)}</td><td className="tot">{C(T.disp, T.$disp)}</td><td className="tot">{C(T.vend, T.$vend)}</td><td className="tot">{C(T.queda, T.$queda)}</td></tr>
         </tbody>
       </table></div>
     </div>
@@ -1772,11 +1782,11 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 4 · Compras 2028 y disponibilidad (SS28 / FW28)</div>
-        <ComprasXFDStep empresa={empresa} marca={marca} temp={temp} setTemp={setTemp} />
+        <ComprasXFDStep empresa={empresa} marca={marca} temp={temp} setTemp={setTemp} precios={precios} />
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14 }}>
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 5 · Resumen de inventario</div>
-        <ResumenInventario marca={marca} tempState={temp} />
+        <ResumenInventario marca={marca} tempState={temp} precios={precios} empresa={empresa} />
       </div>
     </>
   )
@@ -1784,16 +1794,17 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
 
 /* ===== Paso 4: compras 2028 (Producto captura unidades a comprar por XFD: SS28 ene–jun, FW28 jul–dic)
    → disponible = XFD + tránsito → flujo de inventario 2028 (inicial + compras − ventas = saldo). ===== */
-function ComprasXFDStep({ empresa, marca, temp, setTemp }) {
+function ComprasXFDStep({ empresa, marca, temp, setTemp, precios }) {
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
   const [vista, setVista] = useState('ud') // ud | $ | ambas
-  const [ventas, setVentas] = useState([]); const [producto, setProducto] = useState([])
+  const [ventas, setVentas] = useState([]); const [producto, setProducto] = useState([]); const [catList, setCatList] = useState([])
   useEffect(() => {
     (async () => {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
+      try { const j3 = await gReadTab('Cap_Categorias'); if (j3 && j3.ok && j3.values) { const cl = []; j3.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl) } } catch { }
     })()
-  }, [empresa])
+  }, [empresa, marca])
   const tr = Math.max(0, Math.round(num(temp[`TR|${marca}`])))
   const seasonOf = (m) => m < 6 ? 'SS28' : m < 10 ? 'FW28' : 'SS29' // ene–jun = SS28 · jul–oct = FW28 · nov–dic = SS29
   const cpKey = (m) => `CP|${marca}|${seasonOf(m)}|${m}`
@@ -1802,7 +1813,10 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp }) {
   const disp = MESES.map((_, m) => (m - tr >= 0 ? xfd[m - tr] : 0))
   // Inventario inicial 2028 = saldo de arranque de TODAS las temporadas anteriores ya cargadas (Otros…FW27).
   const ini2028 = INV_SEASONS.reduce((a, s) => a + num(temp[`II|${marca}|${s}`]), 0)
-  const auc = MESES.map((_, m) => { let v = 0; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca) || upper(r[1]) !== 'AUC') return; v = num(r[4 + m]) }); return v })
+  const aucEff = MESES.map((_, m) => { let v = 0; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca) || upper(r[1]) !== 'AUC') return; v = num(r[4 + m]) }); return v })
+  // AUC de compra por temporada (de la matriz de Producto · Paso 1, ponderado por peso de categoría). Valoriza las compras aunque no haya ventas ese mes.
+  const seasonAUCbuy = (s) => { let n = 0, d = 0; catList.forEach(({ cat, peso }) => { const a = num((precios || {})[`PAUC|${marca}|${s}|${cat}`]); const w = (num(peso) || 0) + 0.0001; if (a > 0) { n += a * w; d += w } }); return d ? n / d : 0 }
+  const auc = MESES.map((_, m) => seasonAUCbuy(seasonOf(m)) || aucEff[m])
   const ventasU = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
   const saldoIni = []; const saldoFin = []; { let prev = ini2028; MESES.forEach((_, m) => { const ini = prev; const fin = ini + disp[m] - ventasU[m]; saldoIni.push(ini); saldoFin.push(fin); prev = fin }) }
   const RT = (arr) => arr.reduce((a, b) => a + b, 0)
@@ -1815,7 +1829,7 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp }) {
     <div>
       <div className="toolbar" style={{ marginBottom: 8, gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <label>Tiempo de tránsito de {marca} <span className="unit">(entre XFD y disponible)</span></label>
-        <select className="fillin" value={temp[`TR|${marca}`] ?? '0'} onChange={(e) => setTemp((t) => ({ ...t, [`TR|${marca}`]: e.target.value }))} style={{ minWidth: 120 }}><option value="0">Sin tránsito</option><option value="1">30 días</option><option value="2">60 días</option><option value="3">90 días</option></select>
+        <select className="fillin" value={temp[`TR|${marca}`] ?? '0'} onChange={(e) => setTemp((t) => ({ ...t, [`TR|${marca}`]: e.target.value }))} style={{ minWidth: 120, background: '#fdf3c9', border: '1.5px solid #e3cf78', fontWeight: 700 }}><option value="0">Sin tránsito</option><option value="1">30 días</option><option value="2">60 días</option><option value="3">90 días</option></select>
         <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>VER:</span>
         {[['ud', 'Unidades'], ['$', 'Plata'], ['ambas', 'Ambas']].map(([k, lbl]) => <button key={k} className={'seg' + (vista === k ? ' active' : '')} onClick={() => setVista(k)}>{lbl}</button>)}
         <div className="spacer"></div>
@@ -1826,10 +1840,10 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp }) {
       <div className="tablewrap"><table className="vfix gridcols"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '84px' }} /></colgroup>
         <thead>
           <tr><th className="l">Concepto</th>{MESES.map((m, i) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Total</th></tr>
-          <tr><th className="l" style={{ fontWeight: 600, color: 'var(--muted)' }}>Temporada de compra</th>{MESES.map((_, i) => { const lbl = i === 0 ? 'SS28' : i === 6 ? 'FW28' : i === 10 ? 'SS29' : ''; const c = i < 6 ? '#0e7490' : i < 10 ? '#b45309' : '#7c3aed'; return <th key={i} style={{ fontWeight: 800, color: c }}>{lbl}</th> })}<th></th></tr>
+          <tr><th className="l" style={{ fontWeight: 600, color: 'var(--muted)' }}>Temporada de compra</th>{MESES.map((_, i) => { const lbl = i === 0 ? 'SS28' : i === 6 ? 'FW28' : i === 10 ? 'SS29' : ''; return <th key={i} style={{ fontWeight: 800, color: '#b45309' }}>{lbl}</th> })}<th></th></tr>
         </thead>
         <tbody>
-          <tr><td className="l">Compras a comprar · <b>XFD</b> <span className="fill-badge" style={{ marginLeft: 4 }}>✏️</span></td>{MESES.map((_, m) => <td key={m} className="cell"><input value={temp[cpKey(m)] ?? ''} onChange={(e) => setCP(m, e.target.value)} inputMode="decimal" style={{ width: '100%' }} /></td>)}<td className="tot">{vista === '$' ? fmt(RT(money(xfd))) : fmt(RT(xfd))}</td></tr>
+          <tr><td className="l">Compras a comprar · <b>XFD</b> <span className="unit">(unidades)</span> <span className="fill-badge" style={{ marginLeft: 4 }}>✏️</span></td>{MESES.map((_, m) => <td key={m} className="cell"><input value={temp[cpKey(m)] ?? ''} onChange={(e) => setCP(m, e.target.value)} inputMode="decimal" style={{ width: '100%' }} /></td>)}<td className="tot">{vista === '$' ? fmt(RT(money(xfd))) : fmt(RT(xfd))}</td></tr>
           <tr className="catrow"><td className="l">Compras · disponible <span className="unit">(XFD + tránsito)</span></td>{MESES.map((_, m) => <td key={m} className="tot">{cCell(disp, m)}</td>)}<td className="tot">{cTot(disp)}</td></tr>
           <tr className="secrow"><td colSpan={14}>Flujo de inventario 2028 (todas las temporadas)</td></tr>
           <tr><td className="l sub2">Inventario inicial del mes</td>{MESES.map((_, m) => <td key={m} className="tot">{cCell(saldoIni, m)}</td>)}<td className="tot"></td></tr>
@@ -2148,30 +2162,32 @@ function LogisticaBlock({ r, empresa, usuario, oneSbu, marca, noHeader }) {
 /* ===== SBU WORKSPACE: dentro de una SBU salen las secciones (roles) con sus marcas ===== */
 /* ===== Panel de equipo: quién participa en la empresa, su avatar, rol, qué llena y qué consulta ===== */
 const TEAM_FILL = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director']
-function TeamPanel({ empresa }) {
+function TeamPanel({ empresa, sbuName }) {
   const [open, setOpen] = useState(false)
   const [colabs, setColabs] = useState([])
   const [avatars, setAvatars] = useState({})
   useEffect(() => {
     (async () => {
-      try { const j = await gReadTab('Cap_Colaboradores'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '', acceso: String(row[4] || '').split(';').filter(Boolean), todas: upper(row[5]) === 'TODAS' }) }); setColabs(out) } else setColabs([]) } catch { }
+      try { const j = await gReadTab('Cap_Colaboradores'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '', acceso: String(row[4] || '').split(';').filter(Boolean), todas: upper(row[5]) === 'TODAS', sbu: row[6] || '' }) }); setColabs(out) } else setColabs([]) } catch { }
       try { const a = await gLoadAvatars(); setAvatars(a || {}) } catch { }
     })()
   }, [empresa])
+  // Filtra por la SBU actual: se muestran los de esta SBU + los generales (sin SBU: Finanzas/Gerencia, o marcados "Todas").
+  const visibles = colabs.filter((c) => !c.sbu || upper(c.sbu) === 'TODAS' || upper(c.sbu) === upper(sbuName || ''))
   return (
-    <div style={{ marginBottom: 10 }}>
-      <button className="btn" onClick={() => setOpen((o) => !o)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>👥 Equipo de {empresa} <span style={{ fontSize: 11 }}>{open ? '▲' : '▼'}</span></button>
-      {open && <div className="panel" style={{ marginTop: 8 }}>
-        <div className="sub">Quién participa en <b>{empresa}</b>: su avatar, rol, qué <b style={{ color: '#15803d' }}>llena</b> y qué <b style={{ color: '#0e7490' }}>consulta</b>. Se define en Configuración → Colaboradores.</div>
+    <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+      <button className="btn" onClick={() => setOpen((o) => !o)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>👥 Equipo de {sbuName || empresa} <span style={{ fontSize: 11 }}>{open ? '▲' : '▼'}</span></button>
+      {open && <div className="panel" style={{ marginTop: 8, width: '100%' }}>
+        <div className="sub">Quién participa en <b>{sbuName || empresa}</b>: su avatar, rol, qué <b style={{ color: '#15803d' }}>llena</b> y qué <b style={{ color: '#0e7490' }}>consulta</b>. Se define en Configuración → Colaboradores (con su SBU).</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-          {colabs.length === 0 && <div className="note warn" style={{ margin: 0 }}>Aún no hay colaboradores cargados para {empresa}.</div>}
-          {colabs.map((c, i) => {
+          {visibles.length === 0 && <div className="note warn" style={{ margin: 0 }}>Aún no hay colaboradores asignados a {sbuName || empresa}.</div>}
+          {visibles.map((c, i) => {
             const av = (avatars[(c.email || '').toLowerCase()] || {}).avatar || '👤'
             const llena = c.acceso.filter((x) => TEAM_FILL.includes(x))
             const consulta = c.acceso.filter((x) => !TEAM_FILL.includes(x))
             return (
               <div key={i} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: '10px 13px', minWidth: 230, maxWidth: 300, background: '#fff' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><span style={{ fontSize: 28, lineHeight: 1 }}>{av}</span><div><div style={{ fontWeight: 800 }}>{c.nombre || '(sin nombre)'}</div><div className="unit">{c.rol || '—'}{c.todas ? ' · ve todas las empresas' : ''}</div></div></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><span style={{ fontSize: 28, lineHeight: 1 }}>{av}</span><div><div style={{ fontWeight: 800 }}>{c.nombre || '(sin nombre)'}</div><div className="unit">{c.rol || '—'}{c.sbu ? ' · ' + c.sbu : ''}{c.todas ? ' · ve todas las empresas' : ''}</div></div></div>
                 <div style={{ marginTop: 8, fontSize: 12.5 }}><b style={{ color: '#15803d' }}>Llena:</b> {llena.length ? llena.join(', ') : '—'}</div>
                 <div style={{ fontSize: 12.5, marginTop: 2 }}><b style={{ color: '#0e7490' }}>Consulta:</b> {(consulta.length ? consulta.join(', ') + ' · ' : '')}Gerencia (solo lectura)</div>
               </div>
@@ -2221,7 +2237,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
         </div>
       </aside>
       <div className="cmz-main" style={{ '--accent': acc, borderTop: '4px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
-        <TeamPanel empresa={empresa} />
+        <TeamPanel empresa={empresa} sbuName={sbuName} />
         {marca === '__TOTAL__'
           ? (<>
             <div style={{ marginBottom: 6 }}>
@@ -3060,7 +3076,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
   const [savingC, setSavingC] = useState(false)
   const [msgC, setMsgC] = useState(null)
   useEffect(() => {
-    (async () => { try { const j = await gReadTab('Cap_Colaboradores'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '', acceso: String(row[4] || '').split(';').filter(Boolean), todas: upper(row[5]) === 'TODAS' }) }); setColabs(out) } else setColabs([]) } catch { } })()
+    (async () => { try { const j = await gReadTab('Cap_Colaboradores'); if (j && j.ok && j.values) { const out = []; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; out.push({ nombre: row[1] || '', rol: row[2] || '', email: row[3] || '', acceso: String(row[4] || '').split(';').filter(Boolean), todas: upper(row[5]) === 'TODAS', sbu: row[6] || '' }) }); setColabs(out) } else setColabs([]) } catch { } })()
   }, [empresa])
   function toggleAcceso(i, op) { setColabs(colabs.map((x, j) => j === i ? { ...x, acceso: (x.acceso || []).includes(op) ? x.acceso.filter((a) => a !== op) : [...(x.acceso || []), op] } : x)) }
   const [adminsTxt, setAdminsTxt] = useState('')
@@ -3074,7 +3090,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
   }
   async function guardarColabs() {
     setSavingC(true); setMsgC(null)
-    const rows = colabs.filter((c) => String(c.email).trim() || String(c.nombre).trim()).map((c) => ({ rubro: c.nombre, sbu: c.rol, marca: c.email, meses: [(c.acceso || []).join(';'), c.todas ? 'TODAS' : ''] }))
+    const rows = colabs.filter((c) => String(c.email).trim() || String(c.nombre).trim()).map((c) => ({ rubro: c.nombre, sbu: c.rol, marca: c.email, meses: [(c.acceso || []).join(';'), c.todas ? 'TODAS' : '', c.sbu || ''] }))
     await postToTab('Cap_Colaboradores', empresa, '', 'Config', rows, setMsgC)
     setSavingC(false)
   }
@@ -3178,14 +3194,15 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
         <div className="sub">Quién llena cada parte del ABP en esta empresa. Al entrar, a cada persona le sale <b>{empresa}</b> por defecto. Marca <b>"Ve todas las empresas"</b> para quien deba cambiar entre empresas (los administradores siempre las ven todas).</div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th className="l">Nombre del colaborador</th><th className="l">Email</th><th>Rol</th><th className="l">Acceso a pestañas</th><th>Ve todas las empresas</th><th></th></tr></thead>
+            <thead><tr><th className="l">Nombre del colaborador</th><th className="l">Email</th><th>Rol</th><th>SBU</th><th className="l">Acceso a pestañas</th><th>Ve todas las empresas</th><th></th></tr></thead>
             <tbody>
-              {colabs.length === 0 && <tr><td className="l" colSpan={6}>Agrega colaboradores con el botón de arriba.</td></tr>}
+              {colabs.length === 0 && <tr><td className="l" colSpan={7}>Agrega colaboradores con el botón de arriba.</td></tr>}
               {colabs.map((c, i) => (
                 <tr key={i}>
                   <td className="l"><input style={{ width: '95%', padding: '6px' }} value={c.nombre} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x))} placeholder="Nombre" /></td>
                   <td className="l"><input style={{ width: '95%', padding: '6px' }} value={c.email} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} placeholder="correo@empresa.com" /></td>
                   <td><select value={c.rol} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, rol: e.target.value } : x))}>{ROLES.map((r) => <option key={r.id}>{r.label}</option>)}</select></td>
+                  <td><select value={c.sbu || ''} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, sbu: e.target.value } : x))}><option value="">Todas / General</option>{['SBU 1', 'SBU 2', 'SBU 3', 'Retail'].map((s) => <option key={s}>{s}</option>)}</select></td>
                   <td className="l"><div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>{ACCESO_OPCIONES.map((op) => { const on = (c.acceso || []).includes(op); return <span key={op} onClick={() => toggleAcceso(i, op)} style={{ cursor: 'pointer', fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 12, background: on ? 'var(--odoo)' : '#eceef1', color: on ? '#fff' : '#5a6068' }}>{op}</span> })}</div></td>
                   <td><input type="checkbox" checked={!!c.todas} onChange={(e) => setColabs(colabs.map((x, j) => j === i ? { ...x, todas: e.target.checked } : x))} /></td>
                   <td><button className="btn" onClick={() => setColabs(colabs.filter((_, j) => j !== i))}>✕</button></td>
