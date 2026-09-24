@@ -22,7 +22,7 @@ export function SyncBar() {
   }, [])
   return <button onClick={refrescar} title="Trae los últimos cambios que guardó tu equipo (recarga la página)" style={{ position: 'fixed', left: 18, bottom: 20, zIndex: 9998, background: '#fff', border: '1px solid #cbd5e1', borderRadius: 22, padding: '9px 15px', fontWeight: 700, fontSize: 13, color: '#0e7490', boxShadow: '0 4px 14px rgba(0,0,0,.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7 }}>🔄 Actualizar</button>
 }
-import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
+import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -90,7 +90,7 @@ const ROLES = [
   { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'INVENTARIO · PRECIOS · MARGEN', u: '$', productoall: true }, VJ] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
-  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'GASTOS ADMIN', gadmin: true }] },
+  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'GASTOS ADMIN', gadmin: true }, { k: 'APROBACIONES', aprob: true }] },
   { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'COMISIONES', comis: true }, { k: 'CATEGORIAS', cat: true }] },
 ]
 const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
@@ -411,10 +411,6 @@ export default function App() {
             {puede('Finanzas') && <button className="app" onClick={() => setRoleId('finanzas')}>
               <span className="appicon" style={{ background: '#2e7d32' }}>💰</span>
               <span className="applabel">Finanzas</span>
-            </button>}
-            {(puede('Finanzas') || esAdmin) && <button className="app" onClick={() => setRoleId('aprobaciones')}>
-              <span className="appicon" style={{ background: '#15803d' }}>✅</span>
-              <span className="applabel">Aprobaciones</span>
             </button>}
             {esAdmin && <button className="app" onClick={() => setRoleId('gerencia')}>
               <span className="appicon" style={{ background: '#1f2d3d' }}>📈</span>
@@ -1278,7 +1274,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                 const terminos = CF_TERMINOS.filter((t) => t !== 'Intercompañía')
                 const conDatos = terminos.filter((t) => CF_MESES.some((_, mi) => Math.abs(termM(t, mi)) > 0.5))
                 return <Fragment2>
-                  <tr><td className="l" style={{ color: '#b45309', whiteSpace: 'normal', lineHeight: 1.2 }}>Saldo pendiente por cobrar del 2027 (cola)</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#b45309' }}>{fmt(arrM(mi))}</td>)}<td className="tot" style={{ color: '#b45309' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + arrM(mi), 0))}</td></tr>
+                  <tr><td className="l" style={{ color: '#b45309', whiteSpace: 'normal', lineHeight: 1.2 }}>Saldo pendiente por cobrar del 2027</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#b45309' }}>{fmt(arrM(mi))}</td>)}<td className="tot" style={{ color: '#b45309' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + arrM(mi), 0))}</td></tr>
                   <tr className="secrow"><td colSpan={14}>Ventas 2028 cobradas por plazo</td></tr>
                   {(conDatos.length ? conDatos : ['Cash']).map((t) => <tr key={t}><td className="l sub2" style={{ color: '#15803d' }}>{t}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#15803d' }}>{fmt(termM(t, mi))}</td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + termM(t, mi), 0))}</td></tr>)}
                   <tr className="grandrow"><td className="l">= Cash In del mes</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot">{fmt(arrM(mi) + escM(mi))}</td>)}<td className="tot">{fmt(CF_MESES.reduce((a, _, mi) => a + arrM(mi) + escM(mi), 0))}</td></tr>
@@ -2281,6 +2277,8 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   let grand = { ...zero }
   // Consolidado P&L con las SBU lado a lado (Contribución de la SBU → Gastos Admin → Resultado Operativo)
   const sbuList = Object.entries(sbus).filter(([s]) => !soloSBU || s === soloSBU).map(([s, ms]) => ({ s, a: sbuAgg(ms) }))
+  // Energy Brands: Retail es una 4ª unidad (tiendas propias · venta intercompañía). Aún sin datos (pendiente), va en cero.
+  if (!soloSBU && empresa === 'ENERGY BRANDS') sbuList.push({ s: 'Retail', a: { unidades: 0, ventaNeta: 0, costo: 0, comisiones: 0, logistica: 0, marketing: 0, viajes: 0, margenBruto: 0, brand: 0 }, pend: true })
   const totAgg = sbuList.reduce((acc, { a }) => { Object.keys(a).forEach((k) => acc[k] = (acc[k] || 0) + a[k]); return acc }, {})
   const ventaTot = totAgg.ventaNeta || 0
   const gastosDe = (a) => ventaTot > 0 ? gadminAnual * (a.ventaNeta || 0) / ventaTot : (a === totAgg ? gadminAnual : 0)
@@ -2310,7 +2308,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
         <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno. Activa <b>🔍 Desglose</b> para ver la marca al pasar el mouse.</div>
         <div className="toolbar" style={{ marginBottom: 8 }}><button className={'seg' + (desglose ? ' active' : '')} onClick={() => setDesglose((d) => !d)}>{desglose ? '✓ ' : ''}🔍 Desglose por marca</button><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar</>)}</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
-          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s }) => <th key={s} style={{ color: sbuColor(s) }}>{s}</th>)}<th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th><th className="ya">FY2025</th><th className="ya">Δ25</th><th className="ya">FY2026</th><th className="ya">Δ26</th><th className="yb">ABP2027</th><th className="yb">Δ27</th></tr></thead>
+          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}<th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th><th className="ya">FY2025</th><th className="ya">Δ25</th><th className="ya">FY2026</th><th className="ya">Δ26</th><th className="yb">ABP2027</th><th className="yb">Δ27</th></tr></thead>
           <tbody>
             {filasG.map((f) => { const cur = f.g(totAgg); return <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}</td>{sbuList.map(({ s, a }) => <td key={s} className="tot" style={cellStyle} title={brkSBU(f, sbus[s])}>{fmt(f.g(a))}</td>)}<td className="tot" style={{ cursor: 'help' }} title={'Consolidado = suma de las SBU:\n' + sbuList.map(({ s, a }) => `${s}: ${fmt(f.g(a))}`).join('\n')}>{fmt(cur)}</td>
               <td className="tot ya">{f.fy25 != null ? fmt(f.fy25) : '—'}</td>{f.fy25 != null ? dCellG(cur, f.fy25, 'ya') : <td className="tot ya">—</td>}
@@ -2938,6 +2936,22 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
     try { await gSaveMarcas(next); setMsg({ t: 'ok', x: 'Marca agregada: ' + nm + '. Asígnala a una SBU y guarda.' }) } catch (e) { setMsg({ t: 'bad', x: 'No se pudo guardar la marca: ' + e.message }) }
   }
   function cambiarEmpresa(e) { setEmpresa(e); setAsign(seed(combos[e])); setMsg(null) }
+  async function borrarEmpresa() {
+    if (SEED_EMPRESAS.includes(empresa)) { setMsg({ t: 'warn', x: empresa + ' es una empresa base del sistema y no se puede eliminar.' }); return }
+    if (!window.confirm(`¿Eliminar la empresa "${empresa}"?\n\nSe quita de la lista y de las combinaciones de SBU. Los datos ya capturados en las hojas (ventas, cash flow, etc.) NO se borran, pero dejarán de mostrarse. Esta acción no se puede deshacer desde aquí.`)) return
+    setSaving(true); setMsg(null)
+    try {
+      await gDeleteEmpresa(empresa)
+      const restantes = empresas.filter((x) => x !== empresa)
+      setEmpresas(restantes)
+      const nc = { ...combos }; delete nc[empresa]; setCombos(nc)
+      const sig = restantes[0] || 'ENERGY BRANDS'
+      setEmpresa(sig); setAsign(seed(combos[sig]))
+      try { localStorage.setItem('abp_cfg', JSON.stringify({ empresas: restantes.filter((x) => !SEED_EMPRESAS.includes(x)), combos: nc })) } catch { }
+      setMsg({ t: 'ok', x: 'Empresa eliminada: ' + empresa + '.' })
+    } catch (e) { setMsg({ t: 'bad', x: 'No se pudo eliminar: ' + e.message }) }
+    setSaving(false)
+  }
 
   async function guardar() {
     setSaving(true); setMsg(null)
@@ -2958,6 +2972,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
         <label>Empresa</label>
         <select value={empresa} onChange={(e) => cambiarEmpresa(e.target.value)}>{empresas.map((e) => <option key={e}>{e}</option>)}</select>
         <button className="btn" onClick={nuevaEmpresa}>＋ Nueva empresa</button>
+        {!SEED_EMPRESAS.includes(empresa) && <button className="btn" onClick={borrarEmpresa} style={{ color: '#b91c1c', borderColor: '#f0c9c9' }}>🗑️ Eliminar empresa</button>}
         <button className="btn" onClick={agregarMarca}>➕ Agregar marca</button>
         {empresa === 'ENERGY BRANDS' && <button className="btn" onClick={cargarDeEBP}>⚡ Cargar de EBP</button>}
         <div className="spacer"></div>

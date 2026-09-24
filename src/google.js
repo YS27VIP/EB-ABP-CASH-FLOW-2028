@@ -203,6 +203,23 @@ export async function gSaveConfig(empresa, combos) {
   return { ok: true }
 }
 
+export async function gDeleteEmpresa(empresa) {
+  // Quita la empresa de la configuración (lista + combinaciones). No borra los datos ya capturados en las hojas Cap_*.
+  try {
+    const emps = await readValues('Config_Empresas')
+    const header = emps[0] || ['EMPRESA']
+    const kept = emps.slice(1).filter((r) => String(r[0]) !== empresa)
+    await clearValues('Config_Empresas'); await writeValues('Config_Empresas', 'A1', [header, ...kept])
+  } catch { }
+  try {
+    const all = await readValues('Config_Combinaciones')
+    const header = all[0] || ['EMPRESA', 'SBU', 'MARCA']
+    const kept = all.slice(1).filter((r) => String(r[0]) !== empresa)
+    await clearValues('Config_Combinaciones'); await writeValues('Config_Combinaciones', 'A1', [header, ...kept])
+  } catch { }
+  return { ok: true }
+}
+
 export async function gSaveRows(tab, empresa, usuario, rol, rows) {
   await ensureTab(tab, HEAD)
   const values = await readValues(tab)
