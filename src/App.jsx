@@ -1153,13 +1153,14 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                         return <td key={mi} className={'tot ' + cls} style={{ cursor: 'help' }} title={mi === 0 ? 'Saldo en banco al cierre de 2027 (semilla que pone Finanzas)' : 'Cash Inicial = Cash Final del mes anterior'}>{fmt(cell(it, mi))}</td>
                       }
                       // Cash Final: siempre calculado = Cash Inicial + Cash In − Cash Out − Costos Operativos
-                      if (it === CASH_FIN) return <td key={mi} className={'tot ' + cls} style={{ cursor: 'help', fontWeight: 700 }} title="Cash Final = Cash Inicial + Cash In − Cash Out − Costos Operativos">{fmt(cell(it, mi))}</td>
+                      if (it === CASH_FIN) return <td key={mi} className={'tot ' + cls} style={{ cursor: 'help', fontWeight: 700 }} title="Fórmula: Cash Final = Cash Inicial + Cash In − Cash Out − Costos Operativos">{fmt(cell(it, mi))}</td>
                       const cashinCalc = it === CASHIN // Cash In siempre calculado (OCT/NOV/DIC-27 de cuentas por cobrar + escalera 2028)
                       const cashoutCalc = it === CASH_OUT // Cash Out siempre calculado (pagos a proveedores)
                       const comercialCalc = esCalcComercial(it)
                       if (isTotal || esCostos || cashinCalc || cashoutCalc || comercialCalc || soloVer) {
-                        const cashinBrk = () => { const a = isTotal ? sbuMarcas.reduce((s, m) => s + arr27Total(m, mi), 0) : arr27Total(marca, mi); const e = isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[mi], 0) : getCobros(marca).total[mi]; return `Cobros del mes → Saldo pendiente 2027: ${fmt(a) || '0'} + Ventas 2028: ${fmt(e) || '0'} = ${fmt(a + e) || '0'}` }
-                        const tit = it === CASHIN ? cashinBrk() : (brk(it, mi) || (it === CASH_OUT ? 'Pagos a proveedores (compras × término de pago)' : (it === VENTAS_NETAS ? 'Unidades × AUP (Comercial)' : it === COMPRAS_FD ? 'Compras × AUC (Producto)' : (it === INV_INI || it === INV_FIN) ? 'Inventario (Producto) × AUC' : undefined)))
+                        const cashinBrk = () => { const a = isTotal ? sbuMarcas.reduce((s, m) => s + arr27Total(m, mi), 0) : arr27Total(marca, mi); const e = isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[mi], 0) : getCobros(marca).total[mi]; return `Fórmula: Cash In = Saldo pendiente por cobrar 2027 + Ventas 2028 cobradas (por plazo)\nDatos de origen: Saldo pendiente 2027 = ${fmt(a) || '0'} · Ventas 2028 = ${fmt(e) || '0'} · Total = ${fmt(a + e) || '0'}` }
+                        const brkNum = brk(it, mi)
+                        const tit = it === CASHIN ? cashinBrk() : ((it === CASH_OUT ? 'Fórmula: Cash Out = Compras 2028 × término de pago de la marca' : it === VENTAS_NETAS ? 'Fórmula: Ventas Netas = Unidades × AUP efectivo del mes' : it === COMPRAS_FD ? 'Fórmula: Compras = Unidades compradas × AUC' : (it === INV_INI || it === INV_FIN) ? 'Fórmula: Inventario × AUC' : '') + (brkNum ? (it === CASH_OUT || it === VENTAS_NETAS || it === COMPRAS_FD || it === INV_INI || it === INV_FIN ? '\nDatos de origen: ' : '') + brkNum : '') || undefined)
                         const v = cell(it, mi)
                         return <td key={mi} className={'tot ' + cls} style={{ ...(isTotal && desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : {}), color: colFila }} title={tit}>{Math.abs(v) > 0.5 ? signo : ''}{fmt(v)}</td>
                       }
@@ -1184,7 +1185,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                         {fila}
                         {openCostos && CF_COSTOS.map((sub) => {
                           const fuente = sub === 'Gastos administrativos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de todo el equipo' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)'
-                          const sceldas = CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={brk(sub, mi) || fuente}>{fmt(cellRaw(sub, mi))}</td>)
+                          const sceldas = CF_MESES.map((_, mi) => { const bn = brk(sub, mi); return <td key={mi} className="tot yb" style={desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={'Origen: ' + fuente + (bn ? '\nDatos de origen: ' + bn : '')}>{fmt(cellRaw(sub, mi))}</td> })
                           return <tr key={sub}><td className="l sub2">{sub} {ESP(fuente)}</td>{sceldas}<td className="tot">{fmt(subTot(sub))}</td></tr>
                         })}
                       </Fragment2>
@@ -2422,8 +2423,11 @@ function HoldingScreen({ empresas, sbusFor }) {
         <div className="toolbar" style={{ marginBottom: 8 }}>
           <span style={{ fontWeight: 800, fontSize: 15 }}>🔎 Detalle por empresa</span>
           {empresas.map((e) => <button key={e} className={'seg' + (detEmp === e ? ' active' : '')} onClick={() => setDetEmp(e)} style={detEmp === e ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : {}}>{e}</button>)}
+          <button className={'seg' + (detEmp === '__ALL__' ? ' active' : '')} onClick={() => setDetEmp('__ALL__')} style={detEmp === '__ALL__' ? { background: '#1f2d3d', borderColor: '#1f2d3d', color: '#fff' } : {}}>▣ TODOS</button>
         </div>
-        {detEmp && <GerenciaScreen key={detEmp} empresa={detEmp} sbus={sbusFor(detEmp)} />}
+        {detEmp === '__ALL__'
+          ? empresas.map((e) => <div key={e} style={{ marginBottom: 18 }}><div style={{ fontWeight: 800, fontSize: 15, color: '#7c3aed', margin: '4px 0 8px' }}>🏢 {e}</div><GerenciaScreen key={e} empresa={e} sbus={sbusFor(e)} /></div>)
+          : detEmp && <GerenciaScreen key={detEmp} empresa={detEmp} sbus={sbusFor(detEmp)} />}
       </div>
     </>
   )
