@@ -1958,6 +1958,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
   }
   const scell = (k, w = 72) => <td key={k} className="cell"><input value={snap[k] ?? ''} onChange={(e) => sset(k, e.target.value)} inputMode="decimal" style={{ width: w }} /></td>
   const money = (v) => v ? v.toFixed(1) : ''
+  const mpct = (aup, auc) => aup > 0 ? ((aup - auc) / aup * 100).toFixed(1) + '%' : '' // margen % = (AUP − AUC) / AUP
   const repartir = (s) => {
     const tot = compraSeason(s)
     const pesos = cats.map((c) => { const o = catList.find((x) => x.cat === c); return o ? num(o.peso) : 0 })
@@ -1975,23 +1976,23 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
         <h3>Inventario, costo y precio por temporada y categoría — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
         <div className="sub" style={{ marginBottom: 6 }}>Por cada <b>temporada</b> (añada) y <b>categoría</b>: cuántas <b>unidades</b>, su <b>AUC</b> (costo) y su <b>AUP</b> (precio). Para las temporadas <b>anteriores</b> las unidades son el <b>saldo on-hand</b> (se escriben aquí); para <b>SS28/FW28/SS29</b> las unidades son <b>solo lectura</b> — vienen de las compras que capturas en el <b>Paso 4</b>, repartidas por el peso de la categoría (aquí solo pones sus precios AUC/AUP). Las categorías vienen de lo que definió el Director.</div>
         <div className="tablewrap"><table style={{ width: 'auto' }}>
-          <thead><tr><th className="l">Categoría / Temporada</th><th style={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Unidades<br /><span className="unit" style={{ fontWeight: 400 }}>saldo / compra proy.</span></th><th>AUC ($)</th><th>AUP ($)</th><th>Margen ($)</th></tr></thead>
+          <thead><tr><th className="l">Categoría / Temporada</th><th style={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Unidades<br /><span className="unit" style={{ fontWeight: 400 }}>saldo / compra proy.</span></th><th>AUC ($)</th><th>AUP ($)</th><th>Margen ($)</th><th>Margen %</th></tr></thead>
           <tbody>
             {cats.map((c) => (
               <Fragment2 key={c}>
                 <tr className="secrow"><td colSpan={5}>{c} <span className="unit" style={{ fontWeight: 400 }}>· total {fmt(invCat(c))} ud (todas las temporadas)</span></td></tr>
-                {SEASONS.map((s) => { const buy = BUY_SEASONS.includes(s); return <tr key={c + '|' + s}><td className="l sub2">{s} <span className="unit" style={{ fontSize: 10 }}>{buy ? '(compra 2028)' : '(saldo anterior)'}</span></td>{buy ? <td className="tot" style={{ background: '#f4f6f8', color: '#64748b' }} title="Estas unidades vienen de las compras que captura Producto en el Paso 4 (repartidas por el peso de la categoría). No se editan aquí; solo se ponen los precios AUC/AUP.">{fmt(invSC(s, c))}</td> : scell(kINV(s, c))}{scell(kAUC(s, c))}{scell(kAUP(s, c))}<td className="tot">{money(aupSC(s, c) - aucSC(s, c))}</td></tr> })}
-                <tr className="catrow"><td className="l">Subtotal {c} <span className="unit" style={{ fontWeight: 400 }}>(ponderado)</span></td><td className="tot">{fmt(invCat(c))}</td><td className="tot">{money(aucPondCat(c))}</td><td className="tot">{money(aupPondCat(c))}</td><td className="tot">{money(aupPondCat(c) - aucPondCat(c))}</td></tr>
+                {SEASONS.map((s) => { const buy = BUY_SEASONS.includes(s); return <tr key={c + '|' + s}><td className="l sub2">{s} <span className="unit" style={{ fontSize: 10 }}>{buy ? '(compra 2028)' : '(saldo anterior)'}</span></td>{buy ? <td className="tot" style={{ background: '#f4f6f8', color: '#64748b' }} title="Estas unidades vienen de las compras que captura Producto en el Paso 4 (repartidas por el peso de la categoría). No se editan aquí; solo se ponen los precios AUC/AUP.">{fmt(invSC(s, c))}</td> : scell(kINV(s, c))}{scell(kAUC(s, c))}{scell(kAUP(s, c))}<td className="tot">{money(aupSC(s, c) - aucSC(s, c))}</td><td className="tot">{mpct(aupSC(s, c), aucSC(s, c))}</td></tr> })}
+                <tr className="catrow"><td className="l">Subtotal {c} <span className="unit" style={{ fontWeight: 400 }}>(ponderado)</span></td><td className="tot">{fmt(invCat(c))}</td><td className="tot">{money(aucPondCat(c))}</td><td className="tot">{money(aupPondCat(c))}</td><td className="tot">{money(aupPondCat(c) - aucPondCat(c))}</td><td className="tot">{mpct(aupPondCat(c), aucPondCat(c))}</td></tr>
               </Fragment2>
             ))}
           </tbody>
         </table></div>
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 13.5, margin: '16px 0 6px' }}>Total por temporada <span className="unit" style={{ fontWeight: 400 }}>(suma de todas las categorías · solo lectura)</span></div>
         <div className="tablewrap"><table style={{ width: 'auto' }}>
-          <thead><tr><th className="l">Temporada</th><th>Unidades</th><th>AUC ($)</th><th>AUP ($)</th><th>Margen ($)</th></tr></thead>
+          <thead><tr><th className="l">Temporada</th><th>Unidades</th><th>AUC ($)</th><th>AUP ($)</th><th>Margen ($)</th><th>Margen %</th></tr></thead>
           <tbody>
-            {SEASONS.map((s) => { const buy = BUY_SEASONS.includes(s); return <tr key={s}><td className="l">{s} <span className="unit" style={{ fontSize: 10 }}>{buy ? '(compra 2028)' : '(saldo anterior)'}</span></td><td className="tot">{fmt(invSeason(s))}</td><td className="tot">{money(seasonAUC(s))}</td><td className="tot">{money(seasonAUP(s))}</td><td className="tot">{money(seasonAUP(s) - seasonAUC(s))}</td></tr> })}
-            <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="tot">{fmt(invTot)}</td><td className="tot">{money(aucPondMarca)}</td><td className="tot">{money(aupPondMarca)}</td><td className="tot">{money(aupPondMarca - aucPondMarca)}</td></tr>
+            {SEASONS.map((s) => { const buy = BUY_SEASONS.includes(s); return <tr key={s}><td className="l">{s} <span className="unit" style={{ fontSize: 10 }}>{buy ? '(compra 2028)' : '(saldo anterior)'}</span></td><td className="tot">{fmt(invSeason(s))}</td><td className="tot">{money(seasonAUC(s))}</td><td className="tot">{money(seasonAUP(s))}</td><td className="tot">{money(seasonAUP(s) - seasonAUC(s))}</td><td className="tot">{mpct(seasonAUP(s), seasonAUC(s))}</td></tr> })}
+            <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="tot">{fmt(invTot)}</td><td className="tot">{money(aucPondMarca)}</td><td className="tot">{money(aupPondMarca)}</td><td className="tot">{money(aupPondMarca - aucPondMarca)}</td><td className="tot">{mpct(aupPondMarca, aucPondMarca)}</td></tr>
           </tbody>
         </table></div>
       </div>}
