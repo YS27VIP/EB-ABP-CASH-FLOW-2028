@@ -46,7 +46,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
+import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -2928,7 +2928,7 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
       <div className="sub">Total de viajes del equipo por cada marca de la SBU, con el total de la SBU al final.</div>
       <div className="tablewrap">
         <table>
-          <thead><tr><th className="l">Marca</th>{rolesV.map((r) => <th key={r.id}>{r.label}</th>)}<th>Total marca 2028</th><th className="ya">Ref viajes 2025</th><th className="ya">Ref viajes 2026</th></tr></thead>
+          <thead><tr><th className="l">Marca</th>{rolesV.map((r) => <th key={r.id}>{r.label}</th>)}<th>Total marca 2028</th><th className="ya">Viajes 2025</th><th className="ya">Viajes 2026</th></tr></thead>
           <tbody>
             {(marcasSBU || []).map((m) => { const cols = rolesV.map((r) => anual(r.tab, m)); const t = cols.reduce((s, v) => s + v, 0); return <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{cols.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td><td className="tot ya">{fmt(refMar(m, 2025))}</td><td className="tot ya">{fmt(refMar(m, 2026))}</td></tr> })}
             <tr className="grandrow"><td className="l">Total {sbuName}{Q('Consolidado = suma de los viajes de cada marca:\n' + (marcasSBU || []).map((m) => `${m}: ${fmt(rolesV.reduce((a, r) => a + anual(r.tab, m), 0))}`).join('\n'))}</td>{rolesV.map((r) => <td key={r.id} className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + anual(r.tab, m), 0))}</td>)}<td className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + rolesV.reduce((a, r) => a + anual(r.tab, m), 0), 0))}</td><td className="tot ya">{fmt(refSbu(sbuName, 2025))}</td><td className="tot ya">{fmt(refSbu(sbuName, 2026))}</td></tr>
@@ -2947,8 +2947,12 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
 /* ===== RESUMEN POR MARCA: Marketing / Unidades·Venta·Costo·Margen (vista TOTAL SBU) ===== */
 function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
   const [P, setP] = useState(null)
+  const [mkref, setMkref] = useState(null) // marketing de referencia (EBP) 2025/2026
   const [colapsadas, setColapsadas] = useState({}) // marcas con su detalle de categorías oculto
   const toggleCat = (m) => setColapsadas((c) => ({ ...c, [m]: !c[m] }))
+  useEffect(() => { let x = false; (async () => { try { const v = await gMkRef(); if (!x) setMkref(v) } catch { } })(); return () => { x = true } }, [empresa])
+  const mkRefM = (m, y) => (((mkref || {}).marca || {})[upper(m)] || {})[y] || 0
+  const mkRefS = (sb, y) => (((mkref || {}).sbu || {})[upper(sb)] || {})[y] || 0
   useEffect(() => {
     (async () => {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
@@ -2975,10 +2979,10 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
         <div className="tablewrap">
           <table className="vfix">
             <colgroup><col style={{ width: '160px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '90px' }} /></colgroup>
-            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">Marketing 2025</th><th className="ya">Marketing 2026</th></tr></thead>
             <tbody>
-              {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td></tr>)}
-              <tr className="grandrow"><td className="l">Total {sbuName}{Q('Consolidado = suma del marketing de cada marca:\n' + filas.map((f) => `${f.m}: ${fmt(f.tot)}`).join('\n'))}</td>{totMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(gt)}</td></tr>
+              {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td><td className="tot ya">{fmt(mkRefM(f.m, 2025))}</td><td className="tot ya">{fmt(mkRefM(f.m, 2026))}</td></tr>)}
+              <tr className="grandrow"><td className="l">Total {sbuName}{Q('Consolidado = suma del marketing de cada marca:\n' + filas.map((f) => `${f.m}: ${fmt(f.tot)}`).join('\n'))}</td>{totMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(gt)}</td><td className="tot ya">{fmt(mkRefS(sbuName, 2025))}</td><td className="tot ya">{fmt(mkRefS(sbuName, 2026))}</td></tr>
             </tbody>
           </table>
         </div>

@@ -89,13 +89,14 @@ async function readValuesFrom(sheetId, tab) {
     const j = await r.json(); return j.values || []
   } catch { return [] }
 }
-// Viajes de referencia (EBP): 2026 de la pestaña "VIAJES", 2025 de "OTROS 2025" (RUBRO=VIAJES). Total por marca y por SBU.
-let _viajesCache = null, _viajesAt = 0
-export async function gViajesRef() {
-  if (_viajesCache && Date.now() - _viajesAt < 60000) return _viajesCache
+// Referencia del EBP por rubro (ej. VIAJES, MK): 2026 de su pestaña + 2025 de "OTROS 2025". Total por marca y por SBU.
+const _refCache = {}
+async function _ebpRef(tab2026, rubroMatch) {
+  const ck = tab2026 + '|' + rubroMatch
+  if (_refCache[ck] && Date.now() - _refCache[ck].at < 60000) return _refCache[ck].val
   const out = { marca: {}, sbu: {} }
   const add = (bucket, key, year, val) => { const o = bucket[key] || (bucket[key] = {}); o[year] = (o[year] || 0) + val }
-  for (const tab of ['VIAJES', 'OTROS 2025']) {
+  for (const tab of [tab2026, 'OTROS 2025']) {
     let rows = []
     for (let i = 0; i < 3; i++) { rows = await readValuesFrom(EBP_SHEET_ID, tab); if (rows && rows.length) break; await new Promise((r) => setTimeout(r, 400 * (i + 1))) }
     if (!rows || !rows.length) continue
@@ -107,7 +108,7 @@ export async function gViajesRef() {
     const iT = idx(['TIPO']), iR = idx(['RUBRO']), iS = idx(['SBU', 'SBU ARCH']), iM = idx(['MARCA', 'BRAND']), iF = idx(['FECHA ARREGLADA', 'FECHA', 'MES']), iV = idx(['VALOR EN DOLARES', 'DOLARES', 'VALOR'])
     for (let r = hr + 1; r < rows.length; r++) {
       const row = rows[r]
-      if (String(row[iR] || '').toUpperCase().indexOf('VIAJES') < 0) continue
+      if (String(row[iR] || '').toUpperCase().indexOf(rubroMatch) < 0) continue
       if (String(row[iT] || '').toUpperCase() === 'TAHO') continue
       const f = String(row[iF] || '').toLowerCase().replace(/\s/g, '-').split('-'); const yy = f[f.length - 1]
       let year = yy && yy.length >= 2 ? (yy.length === 4 ? parseInt(yy, 10) : 2000 + parseInt(yy, 10)) : null
@@ -118,8 +119,10 @@ export async function gViajesRef() {
       if (sbu) add(out.sbu, sbu, year, val)
     }
   }
-  _viajesCache = out; _viajesAt = Date.now(); return out
+  _refCache[ck] = { val: out, at: Date.now() }; return out
 }
+export const gViajesRef = () => _ebpRef('VIAJES', 'VIAJES')
+export const gMkRef = () => _ebpRef('MK', 'MK')
 
 let _histCache = null, _histAt = 0, _histPromise = null
 async function _buildHistorico() {
