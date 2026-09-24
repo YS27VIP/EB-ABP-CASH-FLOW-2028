@@ -110,7 +110,7 @@ const VIAJES_GROUPS = [{ g: 'VIAJES', items: [
 const VJ = { k: 'VIAJES', u: '$', detalle: VIAJES_GROUPS, extrasKey: 'viajes_extras' }
 
 const ROLES = [
-  { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#0891b2', tab: 'Cap_Ventas',    rubros: [{ k: 'UNIDADES', u: 'ud', proyeccion: true }, VJ] },
+  { id: 'ventas',    label: 'Ventas',    icon: '📈', color: '#0891b2', tab: 'Cap_Ventas',    rubros: [{ k: 'UNIDADES', disp: 'UNIDADES Y VENTA NETA', u: 'ud', proyeccion: true }, VJ] },
   { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'INVENTARIO · PRECIOS · MARGEN', u: '$', productoall: true }, VJ] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
@@ -617,7 +617,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) 
       {rubros.length > 1 && <div className="toolbar" style={{ marginBottom: 12, gap: 8, alignItems: 'center' }}>
         <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--muted)' }}>VER:</span>
         <select value={idx} onChange={(e) => { setTab(Number(e.target.value)); setMsg(null) }} style={{ fontWeight: 700, padding: '8px 12px', borderRadius: 8, border: '1.5px solid var(--accent, #0e7490)', color: 'var(--accent, #0e7490)', background: '#fff', minWidth: 200 }}>
-          {rubros.map((r, i) => <option key={r.k} value={i}>{r.k}</option>)}
+          {rubros.map((r, i) => <option key={r.k} value={i}>{r.disp || r.k}</option>)}
         </select>
       </div>}
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
@@ -3787,7 +3787,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>Venta Neta 2028 por categoría y mes — {marca}{M$} <span className="unit">(dinero $)</span></h3>
-            <div className="sub">Venta Neta = <b>cada mes</b> se valoriza con el <b>AUP de ese mes</b> (unidades del mes × AUP mensual de la categoría, que captura <b>Producto por categoría</b>). Ese cálculo mensual es el real; el Total es la suma de los meses. No mezcla temporadas: la evolución del AUP por antigüedad de inventario está en <b>Producto → AUP/AUC por temporada</b>.</div>
+            <div className="sub"><b>Venta Neta del mes = unidades del mes × AUP efectivo de ese mes</b> (por categoría). El <b>AUP lo define Producto por categoría y temporada</b> — no depende del cliente (el cliente solo define cuántas unidades y en qué categorías). Como cada mes se vende una <b>mezcla de temporadas</b> (Paso 2), el AUP efectivo del mes es el <b>promedio ponderado</b> de las temporadas que rotan ese mes. El Total del año es la suma de los meses (no un promedio anual único).</div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
@@ -3810,17 +3810,25 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           <div>Stock disponible de temporadas anteriores de <b>{marca}</b>: <b style={{ fontSize: 15 }}>{fmt(stockViejo(marca))} ud</b>. <span className="unit">Tenlo en cuenta al proyectar: tu venta 2028 debería incluir mover este stock viejo; lo que exceda será compra nueva. (Referencia — lo captura Producto.)</span></div>
         </div>
         <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: junto al % verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)) y la <b>Σ</b> de lo que llevas repartido. Luego, en las <b>celdas amarillas de 2028</b> (que arrancan vacías), tú decides <b>en qué meses</b> vender esas unidades. Cuando la Σ cuadra con el objetivo aparece <b style={{ color: '#15803d' }}>✓</b>; si no, sale en <b style={{ color: '#b45309' }}>ámbar ⚠</b> para que ajustes. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente. Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
-        <div className="toolbar" style={{ margin: '4px 0 12px', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 200 }} />
-          {buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}
-          <div className="spacer"></div>
-          <label>Agregar cliente</label>
-          <select value="" onChange={(e) => { if (e.target.value) agregarCliente(e.target.value) }} style={{ minWidth: 210 }}>
-            <option value="">Elegir de la base…</option>
-            {baseCli.filter((c) => !clientes.some((x) => upper(x) === upper(c))).map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <input className="fillin" value={nuevoCli} onChange={(e) => setNuevoCli(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') agregarCliente(nuevoCli) }} placeholder="…o escribe uno nuevo" style={{ minWidth: 170, background: '#fff' }} />
-          <button className="btn primary" onClick={() => agregarCliente(nuevoCli)}>➕ Agregar</button>
+        <div style={{ margin: '4px 0 12px' }}>
+          <div className="toolbar" style={{ marginBottom: 10 }}>
+            <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 200 }} />
+            {buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 620 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <label style={{ width: 210, flex: '0 0 210px', fontWeight: 700, color: 'var(--muted)', fontSize: 12 }}>AGREGAR CLIENTE EXISTENTE</label>
+              <select value="" onChange={(e) => { if (e.target.value) agregarCliente(e.target.value) }} style={{ flex: 1, minWidth: 200 }}>
+                <option value="">Elegir de la base…</option>
+                {baseCli.filter((c) => !clientes.some((x) => upper(x) === upper(c))).map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <label style={{ width: 210, flex: '0 0 210px', fontWeight: 700, color: 'var(--muted)', fontSize: 12 }}>AGREGAR CLIENTE NUEVO</label>
+              <input className="fillin" value={nuevoCli} onChange={(e) => setNuevoCli(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') agregarCliente(nuevoCli) }} placeholder="Escribe el nombre…" style={{ flex: 1, minWidth: 170, background: '#fff' }} />
+              <button className="btn primary" onClick={() => agregarCliente(nuevoCli)}>➕ Agregar</button>
+            </div>
+          </div>
         </div>
         <div ref={topScRef} onScroll={() => { if (botScRef.current) botScRef.current.scrollLeft = topScRef.current.scrollLeft }} className="tablewrap" style={{ maxHeight: 'none', overflowY: 'hidden', border: 'none', borderRadius: 0, marginBottom: 2 }}><div style={{ width: 1228, height: 1 }} /></div>
         <div className="tablewrap" ref={botScRef} onScroll={() => { if (topScRef.current) topScRef.current.scrollLeft = botScRef.current.scrollLeft }}>
