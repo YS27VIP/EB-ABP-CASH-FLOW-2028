@@ -47,6 +47,9 @@ thead th{position:sticky;top:0;background:#faf7f9;color:var(--muted);font-size:1
 tbody tr:hover{background:#f7f4f6}
 tfoot td{font-weight:800;border-top:2px solid var(--odoo);background:#faf7f9}
 .tablewrap{overflow:auto;max-height:64vh;border:1px solid var(--line);border-radius:10px;scrollbar-width:auto}
+/* Líneas verticales para separar meses y facilitar la lectura columna a columna */
+.gridcols th,.gridcols td{border-right:1px solid #eef1f4}
+.gridcols th.l,.gridcols td.l{border-right:2px solid #e2e6ea}
 /* Barra de desplazamiento SIEMPRE visible (macOS/Chrome la ocultan por defecto) */
 .tablewrap::-webkit-scrollbar,.cmz-main::-webkit-scrollbar{height:13px;width:13px;-webkit-appearance:none}
 .tablewrap::-webkit-scrollbar-thumb,.cmz-main::-webkit-scrollbar-thumb{background:#9aa3ad;border-radius:7px;border:3px solid #fff}
