@@ -3810,12 +3810,12 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           <div>Stock disponible de temporadas anteriores de <b>{marca}</b>: <b style={{ fontSize: 15 }}>{fmt(stockViejo(marca))} ud</b>. <span className="unit">Tenlo en cuenta al proyectar: tu venta 2028 debería incluir mover este stock viejo; lo que exceda será compra nueva. (Referencia — lo captura Producto.)</span></div>
         </div>
         <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: junto al % verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)) y la <b>Σ</b> de lo que llevas repartido. Luego, en las <b>celdas amarillas de 2028</b> (que arrancan vacías), tú decides <b>en qué meses</b> vender esas unidades. Cuando la Σ cuadra con el objetivo aparece <b style={{ color: '#15803d' }}>✓</b>; si no, sale en <b style={{ color: '#b45309' }}>ámbar ⚠</b> para que ajustes. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente. Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
-        <div style={{ margin: '4px 0 12px' }}>
-          <div className="toolbar" style={{ marginBottom: 10 }}>
-            <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 200 }} />
+        <div style={{ display: 'flex', gap: 28, margin: '4px 0 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ order: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />
             {buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 620 }}>
+          <div style={{ order: 1, display: 'flex', flexDirection: 'column', gap: 8, flex: '1 1 560px', maxWidth: 620 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <label style={{ width: 210, flex: '0 0 210px', fontWeight: 700, color: 'var(--muted)', fontSize: 12 }}>AGREGAR CLIENTE EXISTENTE</label>
               <select value="" onChange={(e) => { if (e.target.value) agregarCliente(e.target.value) }} style={{ flex: 1, minWidth: 200 }}>
