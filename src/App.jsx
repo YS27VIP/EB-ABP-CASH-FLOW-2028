@@ -1441,14 +1441,14 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
               </table>
             </div>}
             <div className="tablewrap">
-              <table className="vfix"><colgroup><col style={{ width: '240px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+              <table className="vfix"><colgroup><col style={{ width: '285px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
                 <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
                   <tr><td className="l sub2">Costo de venta ($) <span className="unit">(base)</span></td>{cvBase.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cvBase))}</td></tr>
                   <tr className="catrow"><td className="l">Costo logístico de la venta<span className="unit">{pl('PCT_LOGVENTA')}</span></td>{cLog.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cLog))}</td></tr>
                   <tr><td className="l sub2">Compras / movimiento ($) <span className="unit">(base)</span></td>{cmpBase.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cmpBase))}</td></tr>
-                  <tr className="catrow"><td className="l">Costo de movimiento de muestras<span className="unit">{pl('PCT_MUESTRAS')}</span></td>{cMue.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cMue))}</td></tr>
-                  <tr className="grandrow" style={{ background: '#eef6ff' }}><td className="l">Subtotal para Cash Flow <span className="unit">(venta + muestras)</span></td>{paraCF.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(paraCF))}</td></tr>
+                  <tr className="catrow"><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Costo de movimiento de muestras<span className="unit">{pl('PCT_MUESTRAS')}</span></td>{cMue.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cMue))}</td></tr>
+                  <tr className="grandrow" style={{ background: '#eef6ff' }}><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Subtotal para Cash Flow <span className="unit">(venta + muestras)</span></td>{paraCF.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(paraCF))}</td></tr>
                   <tr><td className="l sub2">Valor saldo inventario ($) <span className="unit">(base)</span></td>{svBase.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(svBase))}</td></tr>
                   <tr className="catrow"><td className="l">Costo mantenimiento de stock<span className="unit">{pl('PCT_MANT')}</span></td>{cMant.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cMant))}</td></tr>
                   <tr className="grandrow"><td className="l">= Costo logístico TOTAL</td>{cTot.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cTot))}</td></tr>
