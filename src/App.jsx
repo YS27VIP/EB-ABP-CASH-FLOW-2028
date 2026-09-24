@@ -1868,6 +1868,10 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
   const cats = catList.map((c) => c.cat)
   // Matriz temporada × categoría: inventario disponible (ud), AUC y AUP por celda
   const kINV = (s, c) => `INV|${marca}|${s}|${c}`, kAUC = (s, c) => `PAUC|${marca}|${s}|${c}`, kAUP = (s, c) => `PAUP|${marca}|${s}|${c}`
+  // Compra proyectada 2028 por temporada (viene del Paso 4 · CP por mes) + repartir por categoría (peso del Director)
+  const compraSeason = (s) => MESES.reduce((a, _, m) => a + num(temp[`CP|${marca}|${s}|${m}`]), 0)
+  const shareCat = (c) => { const den = catList.reduce((a, o) => a + num(o.peso), 0); const o = catList.find((x) => x.cat === c); const p = o ? num(o.peso) : 0; return den > 0 ? p / den : (catList.length ? 1 / catList.length : 0) }
+  const compraCat = (s, c) => Math.round(compraSeason(s) * shareCat(c))
   // Para SS28/FW28/SS29 las unidades vienen de las compras del Paso 4 (repartidas por peso); para temporadas anteriores, del saldo capturado en la matriz.
   const invSC = (s, c) => BUY_SEASONS.includes(s) ? compraCat(s, c) : sg(kINV(s, c)), aucSC = (s, c) => sg(kAUC(s, c)), aupSC = (s, c) => sg(kAUP(s, c))
   // Ponderado 2028 por categoría (a través de todas las temporadas, ponderado por inventario disponible)
@@ -1920,10 +1924,6 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
   }
   const scell = (k, w = 72) => <td key={k} className="cell"><input value={snap[k] ?? ''} onChange={(e) => sset(k, e.target.value)} inputMode="decimal" style={{ width: w }} /></td>
   const money = (v) => v ? v.toFixed(1) : ''
-  // Compra proyectada 2028 por temporada (viene del Paso 4 · CP por mes) + repartir por categoría (peso del Director)
-  const compraSeason = (s) => MESES.reduce((a, _, m) => a + num(temp[`CP|${marca}|${s}|${m}`]), 0)
-  const shareCat = (c) => { const den = catList.reduce((a, o) => a + num(o.peso), 0); const o = catList.find((x) => x.cat === c); const p = o ? num(o.peso) : 0; return den > 0 ? p / den : (catList.length ? 1 / catList.length : 0) }
-  const compraCat = (s, c) => Math.round(compraSeason(s) * shareCat(c))
   const repartir = (s) => {
     const tot = compraSeason(s)
     const pesos = cats.map((c) => { const o = catList.find((x) => x.cat === c); return o ? num(o.peso) : 0 })
