@@ -89,6 +89,38 @@ async function readValuesFrom(sheetId, tab) {
     const j = await r.json(); return j.values || []
   } catch { return [] }
 }
+// Viajes de referencia (EBP): 2026 de la pestaña "VIAJES", 2025 de "OTROS 2025" (RUBRO=VIAJES). Total por marca y por SBU.
+let _viajesCache = null, _viajesAt = 0
+export async function gViajesRef() {
+  if (_viajesCache && Date.now() - _viajesAt < 60000) return _viajesCache
+  const out = { marca: {}, sbu: {} }
+  const add = (bucket, key, year, val) => { const o = bucket[key] || (bucket[key] = {}); o[year] = (o[year] || 0) + val }
+  for (const tab of ['VIAJES', 'OTROS 2025']) {
+    let rows = []
+    for (let i = 0; i < 3; i++) { rows = await readValuesFrom(EBP_SHEET_ID, tab); if (rows && rows.length) break; await new Promise((r) => setTimeout(r, 400 * (i + 1))) }
+    if (!rows || !rows.length) continue
+    let hr = -1
+    for (let i = 0; i < Math.min(rows.length, 10); i++) { const c = rows[i].map((x) => String(x || '').trim().toUpperCase()); if (c.includes('RUBRO') && (c.includes('MARCA') || c.includes('BRAND'))) { hr = i; break } }
+    if (hr < 0) continue
+    const H = rows[hr].map((x) => String(x || '').trim().toUpperCase())
+    const idx = (cands) => { for (const c of cands) { const k = H.indexOf(c); if (k >= 0) return k } return -1 }
+    const iT = idx(['TIPO']), iR = idx(['RUBRO']), iS = idx(['SBU', 'SBU ARCH']), iM = idx(['MARCA', 'BRAND']), iF = idx(['FECHA ARREGLADA', 'FECHA', 'MES']), iV = idx(['VALOR EN DOLARES', 'DOLARES', 'VALOR'])
+    for (let r = hr + 1; r < rows.length; r++) {
+      const row = rows[r]
+      if (String(row[iR] || '').toUpperCase().indexOf('VIAJES') < 0) continue
+      if (String(row[iT] || '').toUpperCase() === 'TAHO') continue
+      const f = String(row[iF] || '').toLowerCase().replace(/\s/g, '-').split('-'); const yy = f[f.length - 1]
+      let year = yy && yy.length >= 2 ? (yy.length === 4 ? parseInt(yy, 10) : 2000 + parseInt(yy, 10)) : null
+      if (!year || isNaN(year)) continue
+      const val = Number(String(row[iV] || '').replace(/[^0-9.\-]/g, '')) || 0
+      const mar = String(row[iM] || '').trim().toUpperCase(), sbu = String(row[iS] || '').trim().toUpperCase()
+      if (mar && mar !== 'ADMINISTRACION') add(out.marca, mar, year, val)
+      if (sbu) add(out.sbu, sbu, year, val)
+    }
+  }
+  _viajesCache = out; _viajesAt = Date.now(); return out
+}
+
 let _histCache = null, _histAt = 0, _histPromise = null
 async function _buildHistorico() {
   const out = [HIST_HEAD]
