@@ -937,7 +937,6 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [openCostos, setOpenCostos] = useState(false)
   const [openVentas, setOpenVentas] = useState(false)
   const [vistaCC, setVistaCC] = useState('todo') // Venta/cobro/saldo por cliente: qué mostrar
-  const [desglose, setDesglose] = useState(false)
   const [buscar, setBuscar] = useState('')
   const matchCli = (cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0
   const buscador = <div className="toolbar" style={{ marginBottom: 10 }}><input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />{buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}</div>
@@ -1119,7 +1118,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const cashCalc = buildCash((mi) => cell(CASHIN, mi), (mi) => cell(CASH_OUT, mi) + cell(CF_COSTOS_PARENT, mi), isTotal ? sbuMarcas.reduce((s, m) => s + bancoIni(m), 0) : bancoIni(marca))
   const cashCalcMarca = (mca) => buildCash((mi) => cellMarca(mca, CASHIN, mi), (mi) => cellMarca(mca, CASH_OUT, mi) + cellMarca(mca, CF_COSTOS_PARENT, mi), bancoIni(mca))
   // Texto "ALTRA: 1,234 · HOKA: 567" para el tooltip del total (solo si el desglose está activo).
-  const brk = (concepto, mi) => (isTotal && desglose) ? sbuMarcas.map((m) => ({ m, v: cellMarca(m, concepto, mi) })).filter((x) => Math.abs(x.v) > 0.5).map((x) => `${x.m}: ${fmt(x.v)}`).join(' · ') || 'Sin datos por marca' : undefined
+  const brk = (concepto, mi) => isTotal ? (sbuMarcas.map((m) => ({ m, v: cellMarca(m, concepto, mi) })).filter((x) => Math.abs(x.v) > 0.5).map((x) => `${x.m}: ${fmt(x.v)}`).join(' · ') || 'Sin datos por marca') : undefined
   const subTot = (sub) => CF_MESES.reduce((a, _, mi) => a + cellRaw(sub, mi), 0)
   const rowTot = (concepto) => CF_MESES.reduce((a, _, mi) => a + cell(concepto, mi), 0)
 
@@ -1156,7 +1155,6 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           </optgroup>))}
         </select></>}
         {isTotal && !fixedMarca && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbuLbl}</button>}
-        {isTotal && <button className={'seg' + (desglose ? ' active' : '')} onClick={() => setDesglose((d) => !d)} title="Pásate sobre un total para ver cuánto pone cada marca">{desglose ? '✓ ' : ''}🔍 Desglose por marca</button>}
         <div className="spacer"></div>
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map(() => 0)])))); exportXlsx(aoa, `${role.tab}_CASHFLOW_Plantilla.xlsx`) }}>📄 Plantilla</button>
         {!soloVer && <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>}
@@ -1199,7 +1197,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                         const brkNum = brk(it, mi)
                         const tit = it === CASHIN ? cashinBrk() : ((it === CASH_OUT ? 'Fórmula: Cash Out = Compras 2028 × término de pago de la marca' : it === VENTAS_NETAS ? 'Fórmula: Ventas Netas = Unidades × AUP efectivo del mes' : it === COMPRAS_FD ? 'Fórmula: Compras = Unidades compradas × AUC' : (it === INV_INI || it === INV_FIN) ? 'Fórmula: Inventario × AUC' : '') + (brkNum ? (it === CASH_OUT || it === VENTAS_NETAS || it === COMPRAS_FD || it === INV_INI || it === INV_FIN ? '\nDatos de origen: ' : '') + brkNum : '') || undefined)
                         const v = cell(it, mi)
-                        return <td key={mi} className={'tot ' + cls} style={{ ...(isTotal && desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : {}), color: colFila }} title={tit}>{Math.abs(v) > 0.5 ? signo : ''}{fmt(v)}</td>
+                        return <td key={mi} className={'tot ' + cls} style={{ ...(isTotal ? { cursor: 'help' } : {}), color: colFila }} title={tit}>{Math.abs(v) > 0.5 ? signo : ''}{fmt(v)}</td>
                       }
                       const k = key(marca, it, mi)
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
@@ -1222,7 +1220,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                         {fila}
                         {openCostos && CF_COSTOS.map((sub) => {
                           const fuente = sub === 'Gastos administrativos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de todo el equipo' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)'
-                          const sceldas = CF_MESES.map((_, mi) => { const bn = brk(sub, mi); return <td key={mi} className="tot yb" style={desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined} title={'Origen: ' + fuente + (bn ? '\nDatos de origen: ' + bn : '')}>{fmt(cellRaw(sub, mi))}</td> })
+                          const sceldas = CF_MESES.map((_, mi) => { const bn = brk(sub, mi); return <td key={mi} className="tot yb" style={{ cursor: 'help' }} title={'Origen: ' + fuente + (bn ? '\nDatos de origen: ' + bn : '')}>{fmt(cellRaw(sub, mi))}</td> })
                           return <tr key={sub}><td className="l sub2">{sub} {ESP(fuente)}</td>{sceldas}<td className="tot">{fmt(subTot(sub))}</td></tr>
                         })}
                       </Fragment2>
@@ -2272,6 +2270,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
               {puedeDir && <button className={'seg' + (totTabEf === 'log' ? ' active' : '')} onClick={() => setTotTab('log')} style={totTabEf === 'log' ? { background: col, borderColor: col, color: '#fff' } : {}}>🚚 Logística</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'mk' ? ' active' : '')} onClick={() => setTotTab('mk')} style={totTabEf === 'mk' ? { background: col, borderColor: col, color: '#fff' } : {}}>📣 Marketing</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'viajes' ? ' active' : '')} onClick={() => setTotTab('viajes')} style={totTabEf === 'viajes' ? { background: col, borderColor: col, color: '#fff' } : {}}>🧳 Viajes</button>}
+              {puedeDir && <><div style={{ flex: 1 }}></div><SbuResultDownload empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} /></>}
             </div>
             {!puedeDir && !pu('Finanzas')
               ? <div className="note warn">No tienes acceso al consolidado de esta SBU. Entra a tu área (Ventas/Producto/Logística/Marketing) eligiendo una marca en el panel de la izquierda.</div>
@@ -2393,7 +2392,6 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   const [cats, setCats] = useState({})
   const [mk, setMk] = useState([]); const [log, setLog] = useState([]); const [dir, setDir] = useState([])
   const [hist, setHist] = useState([]); const [plan, setPlan] = useState({})
-  const [desglose, setDesglose] = useState(false)
   const [cfSbu, setCfSbu] = useState(() => Object.keys(sbus)[0] || '')
   const [cargando, setCargando] = useState(true)
   useEffect(() => {
@@ -2495,15 +2493,15 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   ]
   const dpctG = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
   const dCellG = (cur, ref, cls) => { const d = dpctG(cur, ref); return <td className={'tot ' + cls + ' ' + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700 }}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
-  // Lupa: desglose por marca de un concepto dentro de una SBU
-  const brkSBU = (f, ms) => desglose ? (ms || []).map((m) => ({ m, v: f.g(fullCalc(m)) })).filter((x) => Math.abs(x.v) > 0.5).map((x) => `${x.m}: ${fmt(x.v)}`).join(' · ') || 'Sin datos' : undefined
-  const cellStyle = desglose ? { cursor: 'help', textDecoration: 'underline dotted' } : undefined
+  // Desglose por marca de un concepto dentro de una SBU (siempre en el tooltip al pasar el mouse)
+  const brkSBU = (f, ms) => (ms || []).map((m) => ({ m, v: f.g(fullCalc(m)) })).filter((x) => Math.abs(x.v) > 0.5).map((x) => `${x.m}: ${fmt(x.v)}`).join(' · ') || 'Sin datos'
+  const cellStyle = { cursor: 'help' }
   return (
     <>
       {!soloSBU && !cargando && <div className="panel">
         <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
-        <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno. Activa <b>🔍 Desglose</b> para ver la marca al pasar el mouse.</div>
-        <div className="toolbar" style={{ marginBottom: 8 }}><button className={'seg' + (desglose ? ' active' : '')} onClick={() => setDesglose((d) => !d)}>{desglose ? '✓ ' : ''}🔍 Desglose por marca</button><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar</>)}</button></div>
+        <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno. Pasa el mouse sobre un total para ver el <b>detalle por marca</b>.</div>
+        <div className="toolbar" style={{ marginBottom: 8 }}><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar</>)}</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}<th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th><th className="ya">FY2025</th><th className="ya">Δ25</th><th className="ya">FY2026</th><th className="ya">Δ26</th><th className="yb">ABP2027</th><th className="yb">Δ27</th></tr></thead>
           <tbody>
@@ -2717,10 +2715,69 @@ function BrandContribution({ empresa, marca }) {
   )
 }
 
+/* ===== Botón de descarga a nivel SBU: presentación con los RESULTADOS de la SBU (no incluye capturas/inputs) ===== */
+function SbuResultDownload({ empresa, sbuName, marcasSBU }) {
+  const [ppt, setPpt] = useState(false)
+  const [P, setP] = useState(null)
+  useEffect(() => {
+    (async () => {
+      const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
+      const [ven, prod, cap, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
+      const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+      setP({ ven, prod, cats, mk, log, dir })
+    })()
+  }, [empresa, sbuName])
+  const gadminAnual = (() => { try { const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } return cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { return 0 } })()
+  const calc = (mca) => {
+    if (!P) return { unidades: 0, ventaNeta: 0, costo: 0, logistica: 0, marketing: 0, viajes: 0, margenBruto: 0, brand: 0 }
+    const sumTab = (rows, filt) => { let s = 0; rows.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
+    const esVi = (rub) => rub.toUpperCase().startsWith('VIAJES')
+    const catNames = (P.cats[mca] || []).map((c) => c.cat)
+    const r = realAupAuc(empresa, mca, P.ven, P.prod, catNames)
+    const unidades = r.totalUnits.reduce((a, b) => a + b, 0), ventaNeta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0)
+    const logistica = sumTab(P.log), marketing = sumTab(P.mk)
+    const viajes = [P.ven, P.prod, P.mk, P.log, P.dir].reduce((t, rows) => t + sumTab(rows, esVi), 0)
+    const margenBruto = ventaNeta - costo - logistica, brand = margenBruto - marketing - viajes
+    return { unidades, ventaNeta, costo, logistica, marketing, viajes, margenBruto, brand }
+  }
+  async function descargar() {
+    setPpt(true)
+    try { await loadPptx() } catch { alert('No se pudo cargar el generador de PowerPoint. Revisa tu conexión.'); setPpt(false); return }
+    try {
+      const M$f = (v) => '$' + Math.round(v || 0).toLocaleString('en-US'); const UD = (v) => Math.round(v || 0).toLocaleString('en-US')
+      const TEAL = '0E7490', DARK = '134E4A'
+      const cols = (marcasSBU || []).map((m) => ({ m, v: calc(m) }))
+      const tot = cols.reduce((a, { v }) => { Object.keys(v).forEach((k) => a[k] = (a[k] || 0) + v[k]); return a }, {})
+      const pptx = new window.PptxGenJS(); pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 }); pptx.layout = 'W'
+      let s = pptx.addSlide(); s.background = { color: 'F7FAFB' }
+      s.addText('ABP 2028', { x: 0.7, y: 2.3, w: 12, h: 1.1, fontSize: 54, bold: true, color: TEAL })
+      s.addText('Resultados de la SBU — ' + sbuName + ' · ' + empresa, { x: 0.7, y: 3.5, w: 12, h: 0.6, fontSize: 22, color: DARK })
+      s.addText(new Date().toLocaleDateString('es'), { x: 0.7, y: 6.7, w: 12, h: 0.4, fontSize: 12, color: '888888' })
+      const filasP = [['Unidades', (v) => UD(v.unidades)], ['Venta Neta', (v) => M$f(v.ventaNeta)], ['(−) Costo', (v) => M$f(v.costo)], ['(−) Logística', (v) => M$f(v.logistica)], ['= Margen Bruto', (v) => M$f(v.margenBruto)], ['(−) Marketing', (v) => M$f(v.marketing)], ['(−) Viajes', (v) => M$f(v.viajes)], ['= Contribución', (v) => M$f(v.brand)]]
+      const head = [{ text: 'Concepto', options: { bold: true, color: 'FFFFFF', fill: TEAL } }, ...cols.map((c) => ({ text: c.m, options: { bold: true, color: 'FFFFFF', fill: TEAL, align: 'right' } })), { text: 'TOTAL', options: { bold: true, color: 'FFFFFF', fill: DARK, align: 'right' } }]
+      const rows = [head]; filasP.forEach(([lbl, f]) => { const stg = lbl.startsWith('=') || lbl === 'Venta Neta'; rows.push([{ text: lbl, options: { bold: stg } }, ...cols.map((c) => ({ text: f(c.v), options: { align: 'right' } })), { text: f(tot), options: { align: 'right', bold: true } }]) })
+      const sl = pptx.addSlide(); sl.addText('Contribución de la SBU — ' + sbuName, { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 26, bold: true, color: TEAL })
+      sl.addTable(rows, { x: 0.5, y: 1.1, w: 12.3, fontSize: 12, border: { type: 'solid', pt: 0.5, color: 'D7DDE3' }, valign: 'middle' })
+      // Unid · Venta · Costo · Margen por marca
+      const u2 = pptx.addSlide(); u2.addText('Unidades · Venta · Costo · Margen — ' + sbuName, { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 24, bold: true, color: TEAL })
+      const uh = [{ text: 'Marca', options: { bold: true, color: 'FFFFFF', fill: TEAL } }, ...['Unidades', 'Venta', 'Costo', 'Margen', 'Margen %'].map((h) => ({ text: h, options: { bold: true, color: 'FFFFFF', fill: TEAL, align: 'right' } }))]
+      const ur = [uh]; cols.forEach(({ m, v }) => { const mg = v.ventaNeta - v.costo; ur.push([{ text: m }, { text: UD(v.unidades), options: { align: 'right' } }, { text: M$f(v.ventaNeta), options: { align: 'right' } }, { text: M$f(v.costo), options: { align: 'right' } }, { text: M$f(mg), options: { align: 'right' } }, { text: (v.ventaNeta > 0 ? (mg / v.ventaNeta * 100).toFixed(1) : '0') + '%', options: { align: 'right' } }]) })
+      const mgT = tot.ventaNeta - tot.costo; ur.push([{ text: 'TOTAL', options: { bold: true, fill: 'EEF6F8' } }, { text: UD(tot.unidades), options: { align: 'right', bold: true } }, { text: M$f(tot.ventaNeta), options: { align: 'right', bold: true } }, { text: M$f(tot.costo), options: { align: 'right', bold: true } }, { text: M$f(mgT), options: { align: 'right', bold: true } }, { text: (tot.ventaNeta > 0 ? (mgT / tot.ventaNeta * 100).toFixed(1) : '0') + '%', options: { align: 'right', bold: true } }])
+      u2.addTable(ur, { x: 0.5, y: 1.1, w: 12.3, fontSize: 12, border: { type: 'solid', pt: 0.5, color: 'D7DDE3' }, valign: 'middle' })
+      // Resultado operativo
+      const f2 = pptx.addSlide(); f2.addText('Resultado operativo — ' + sbuName, { x: 0.7, y: 1.4, w: 12, h: 0.8, fontSize: 28, bold: true, color: TEAL })
+      const rr = [[{ text: 'Concepto', options: { bold: true, color: 'FFFFFF', fill: TEAL } }, { text: '2028', options: { bold: true, color: 'FFFFFF', fill: TEAL, align: 'right' } }], [{ text: 'Contribución de la SBU' }, { text: M$f(tot.brand), options: { align: 'right' } }], [{ text: '(−) Gastos administrativos' }, { text: M$f(gadminAnual), options: { align: 'right' } }], [{ text: '= Resultado operativo', options: { bold: true } }, { text: M$f((tot.brand || 0) - gadminAnual), options: { align: 'right', bold: true } }]]
+      f2.addTable(rr, { x: 2.5, y: 2.6, w: 8, fontSize: 16, border: { type: 'solid', pt: 0.5, color: 'D7DDE3' }, valign: 'middle', rowH: 0.5 })
+      await pptx.writeFile({ fileName: `ABP_2028_${empresa}_${sbuName}.pptx`.replace(/\s+/g, '_') })
+    } catch (e) { alert('No se pudo generar la presentación: ' + e.message) }
+    setPpt(false)
+  }
+  return <button className="btn primary" disabled={ppt || !P} onClick={descargar} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }} title="Descarga los resultados de la SBU (contribución, margen, resultado operativo). No incluye las capturas/insumos.">{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar resultados</>)}</button>
+}
+
 /* ===== CONTRIBUCIÓN DE LA SBU por SBU: todas las marcas lado a lado + comparación FY2026/FY2025 ===== */
 function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   const [P, setP] = useState(null)
-  const [ppt, setPpt] = useState(false)
   useEffect(() => {
     (async () => {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
@@ -2779,38 +2836,9 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   const dpct = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
   const dCell = (cur, ref, strong) => { const d = dpct(cur, ref); return <td className={'tot ' + (strong ? '' : '') + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700 }}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
 
-  async function descargarPptx() {
-    setPpt(true)
-    try { await loadPptx() } catch { alert('No se pudo cargar el generador de PowerPoint. Revisa tu conexión.'); setPpt(false); return }
-    try {
-      const M$f = (v) => '$' + Math.round(v || 0).toLocaleString('en-US')
-      const TEAL = '0E7490', DARK = '134E4A'
-      const pptx = new window.PptxGenJS(); pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 }); pptx.layout = 'W'
-      let s = pptx.addSlide(); s.background = { color: 'F7FAFB' }
-      s.addText('ABP 2028', { x: 0.7, y: 2.3, w: 12, h: 1.1, fontSize: 54, bold: true, color: TEAL })
-      s.addText('Contribución — ' + sbuName + ' · ' + empresa, { x: 0.7, y: 3.5, w: 12, h: 0.6, fontSize: 22, color: DARK })
-      s.addText(new Date().toLocaleDateString('es'), { x: 0.7, y: 6.7, w: 12, h: 0.4, fontSize: 12, color: '888888' })
-      const filasP = [['Unidades', (v) => Math.round(v.unidades || 0).toLocaleString('en-US')], ['Venta Neta', (v) => M$f(v.ventaNeta)], ['(−) Costo', (v) => M$f(v.costo)], ['(−) Logística', (v) => M$f(v.logistica)], ['= Margen Bruto', (v) => M$f(v.margenBruto)], ['(−) Marketing', (v) => M$f(v.marketing)], ['(−) Viajes', (v) => M$f(v.viajes)], ['= Contribución', (v) => M$f(v.brand)]]
-      const head = [{ text: 'Concepto', options: { bold: true, color: 'FFFFFF', fill: TEAL } }, ...cols.map((c) => ({ text: c.m, options: { bold: true, color: 'FFFFFF', fill: TEAL, align: 'right' } })), { text: 'TOTAL', options: { bold: true, color: 'FFFFFF', fill: DARK, align: 'right' } }]
-      const rows = [head]; filasP.forEach(([lbl, f]) => { const st = lbl.startsWith('=') || lbl === 'Venta Neta'; rows.push([{ text: lbl, options: { bold: st } }, ...cols.map((c) => ({ text: f(c.v), options: { align: 'right' } })), { text: f(tot), options: { align: 'right', bold: true } }]) })
-      const sl = pptx.addSlide(); sl.addText('Contribución — ' + sbuName, { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 26, bold: true, color: TEAL })
-      sl.addTable(rows, { x: 0.5, y: 1.1, w: 12.3, fontSize: 12, border: { type: 'solid', pt: 0.5, color: 'D7DDE3' }, valign: 'middle' })
-      const f2 = pptx.addSlide(); f2.addText('Resultado operativo — ' + sbuName, { x: 0.7, y: 1.4, w: 12, h: 0.8, fontSize: 28, bold: true, color: TEAL })
-      const rr = [[{ text: 'Concepto', options: { bold: true, color: 'FFFFFF', fill: TEAL } }, { text: '2028', options: { bold: true, color: 'FFFFFF', fill: TEAL, align: 'right' } }], [{ text: 'Contribución de la BU' }, { text: M$f(tot.brand), options: { align: 'right' } }], [{ text: '(−) Gastos administrativos' }, { text: M$f(gadminAnual), options: { align: 'right' } }], [{ text: '= Resultado operativo', options: { bold: true } }, { text: M$f((tot.brand || 0) - gadminAnual), options: { align: 'right', bold: true } }]]
-      f2.addTable(rr, { x: 2.5, y: 2.6, w: 8, fontSize: 16, border: { type: 'solid', pt: 0.5, color: 'D7DDE3' }, valign: 'middle', rowH: 0.5 })
-      await pptx.writeFile({ fileName: `ABP_2028_${empresa}_${sbuName}.pptx`.replace(/\s+/g, '_') })
-    } catch (e) { alert('No se pudo generar la presentación: ' + e.message) }
-    setPpt(false)
-  }
-
   return (
     <div className="panel">
-      <div className="toolbar" style={{ marginBottom: 8, alignItems: 'center' }}>
-        <h3 style={{ color: sbuColor(sbuName), margin: 0 }}>Contribución de la SBU — {sbuName}{M$} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
-        <div className="spacer"></div>
-        <button className="btn primary" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar</>)}</button>
-      </div>
-      <div className="sub">P&amp;L de cada marca lado a lado. Las columnas <b>FY2026</b>, <b>FY2025</b> y <b>ABP 2027</b> (hoja PLAN del EBP) traen el valor y la <b>variación %</b> del total 2028 vs cada uno (en Venta, Costo y Margen). Los <b>Gastos administrativos</b> son de toda la empresa; al restarlos queda el <b>Resultado Operativo</b>.</div>
+      <h3 style={{ color: sbuColor(sbuName) }}>Contribución de la SBU — {sbuName}{M$} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
       <div className="tablewrap">
         <table className="vfix" style={{ width: 'auto', minWidth: 520 }}>
           <thead><tr><th className="l">Concepto</th>{cols.map(({ m }) => <th key={m} style={{ color: marcaColor(m) }}>{m}</th>)}<th>TOTAL 2028{Q('Consolidado: cada fila de esta columna es la suma de las marcas de la SBU (las columnas de la izquierda).')}</th><th className="ya">FY2025</th><th className="ya">Δ vs 25</th><th className="ya">FY2026</th><th className="ya">Δ vs 26</th><th className="yb">ABP 2027</th><th className="yb">Δ vs ABP27</th></tr></thead>
