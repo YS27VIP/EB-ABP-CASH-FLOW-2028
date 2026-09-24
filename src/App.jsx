@@ -3714,8 +3714,10 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
     setSaving(false)
   }
   const catList = cats[marca] || []
-  // ¿El Director activó categorías para esta marca? (lo define en su pestaña; por defecto sí si hay categorías)
-  const usarCat = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] !== false } catch { return true } })() && catList.length > 0
+  // ¿El Director activó categorías para esta marca? (lo define en su pestaña; por defecto sí)
+  const catsToggle = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] !== false } catch { return true } })()
+  const usarCat = catsToggle && catList.length > 0
+  const catMsg = catsToggle ? 'Aún no hay categorías definidas para ' + marca + ' (las define el Director en su pestaña Categorías y guarda). Mientras tanto, solo se ve el total por mes.' : 'Categorías desactivadas por el Director: solo el total por mes.'
   // Participación de categorías por cliente (check). Sin marcar = participa en todas.
   const partOf = (cli) => { const k = cli + '|' + marca; return catPart[k] === undefined ? catList.map((c) => c.cat) : catPart[k] }
   const toggleCat = (cli, cat) => { const cur = partOf(cli); const nx = cur.includes(cat) ? cur.filter((x) => x !== cat) : [...cur, cat]; setCatPart({ ...catPart, [cli + '|' + marca]: nx }) }
@@ -3765,14 +3767,14 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
       <div className="panel">
         <h3>Unidades 2028 por categoría y mes — {marca}{UD} <span className="unit">(unidades)</span></h3>
-        <div className="sub">{usarCat ? 'Las unidades de cada cliente se reparten por categoría según el % que el Director definió por cliente. El Peso % es ponderado: unidades de la categoría ÷ unidades totales de la marca (no un valor fijo).' : 'Categorías desactivadas por el Director: solo el total por mes.'}</div>
+        <div className="sub">{usarCat ? 'Las unidades de cada cliente se reparten por categoría según el % que el Director definió por cliente. El Peso % es ponderado: unidades de la categoría ÷ unidades totales de la marca (no un valor fijo).' : catMsg}</div>
         <div className="tablewrap">
           <table className="vfix">
             <colgroup><col style={{ width: '270px' }} /><col style={{ width: '66px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
             <thead><tr><th className="l">Categoría</th><th style={{ whiteSpace: 'normal', lineHeight: 1.1 }}>Peso<br />pond. %</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
               <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="tot" title="La marca siempre suma 100%: es la suma del peso ponderado de todas sus categorías." style={{ cursor: 'help' }}>{totMarcaSel > 0 ? '100.0%' : '—'}</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
-              {!usarCat && <tr><td className="l" colSpan={15}>Categorías desactivadas para {marca}.</td></tr>}
+              {!usarCat && <tr><td className="l" colSpan={15} style={{ color: 'var(--muted)' }}>{catsToggle ? `Aún no hay categorías definidas para ${marca} (las define el Director).` : `Categorías desactivadas por el Director para ${marca}.`}</td></tr>}
               {usarCat && catList.map((c, i) => { const row = MESES.map((_, mi) => uCatMes(c.cat, mi)); const t = row.reduce((a, b) => a + b, 0); const pw = totMarcaSel > 0 ? (t / totMarcaSel * 100) : 0; return <tr key={i}><td className="l">{c.cat}</td><td className="tot" title={`Peso ponderado = unidades de ${c.cat} (${fmt(t)}) ÷ unidades totales de ${marca} (${fmt(totMarcaSel)}) = ${pw.toFixed(1)}%. Las unidades por categoría salen del % que el Director puso por cliente.`} style={{ cursor: 'help' }}>{pw.toFixed(1)}%</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
             </tbody>
           </table>
