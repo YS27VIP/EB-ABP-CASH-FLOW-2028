@@ -1365,11 +1365,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         const corpPago = MESES.map((_, m) => listaM.reduce((a, mca) => a + corpPagoMes(mca)[m], 0))
         return (
           <div className="panel">
-            <h3>{role.label} — Término de pago a la marca {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(Cash Out)</span></h3>
+            <h3>{role.label} — Condiciones comerciales con la marca {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(Cash Out)</span></h3>
             <div className="sub">La <b>compra 2028</b> (unidades de Comercial × AUC) genera un <b>pago</b> según el <b>término de pago de la marca</b> a su proveedor (Cash = mismo mes · 30d = +1 · 60 = +2 …). {hayCorp && <>Además, HOKA/UGG pagan una <b>comisión corporativa</b> de <b>$/ud sobre las compras</b>. </>}Todo esto alimenta el <b>Cash Out</b>.</div>
             {!isTotal && <div className="toolbar" style={{ marginBottom: 8, gap: 14, flexWrap: 'wrap' }}>
               <span><label>Término de pago de {marca} <span className="unit">(a proveedor)</span> </label>
-              {soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{data[`PTERM|${marca}`] || '—'}</span> : <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>}</span>
+              {soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{data[`PTERM|${marca}`] || '—'}</span> : <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.filter((t) => t !== 'Intercompañía').map((t) => <option key={t}>{t}</option>)}</select>}</span>
               {esCorpMarca(marca) && <span><label>Comisión corporativa <span className="unit">($/ud sobre compras)</span> </label>{soloVer ? <span className="empchip" style={{ background: '#eef1f4', color: '#475569' }}>{data[`CORP|${marca}`] || '—'} $/ud</span> : <input className="fillin" value={data[`CORP|${marca}`] ?? ''} onChange={(e) => set(`CORP|${marca}`, e.target.value)} inputMode="decimal" placeholder="$/ud" style={{ width: 70 }} />}</span>}
             </div>}
             {isTotal && <div className="tablewrap" style={{ marginBottom: 12, maxWidth: 520 }}>
