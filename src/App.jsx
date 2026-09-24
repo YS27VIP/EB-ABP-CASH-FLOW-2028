@@ -1472,7 +1472,8 @@ function inventarioCalc(data, marca) {
   // La compra se captura por fecha XFD; queda DISPONIBLE en inventario `tránsito` meses después (default 0 = igual que antes).
   const tr = Math.max(0, Math.round(num(data[`TR|${marca}`])))
   const flujos = {}
-  SEASONS.forEach((s) => { const arr = []; let saldo = g(II(s)); for (let m = 0; m < 12; m++) { const ini = saldo; const comp = (m - tr >= 0 ? g(CP(s, m - tr)) : 0); const disp = ini + comp; const rot = g(RT(s, m)) / 100; const sal = disp * rot; const fin = disp - sal; arr.push({ ini, comp, sal, fin }); saldo = fin } flujos[s] = arr })
+  // Unidades SIEMPRE enteras: no se venden zapatillas partidas. Las salidas se redondean y el saldo queda entero mes a mes.
+  SEASONS.forEach((s) => { const arr = []; let saldo = Math.round(g(II(s))); for (let m = 0; m < 12; m++) { const ini = saldo; const comp = Math.round(m - tr >= 0 ? g(CP(s, m - tr)) : 0); const disp = ini + comp; const rot = g(RT(s, m)) / 100; const sal = Math.min(disp, Math.round(disp * rot)); const fin = disp - sal; arr.push({ ini, comp, sal, fin }); saldo = fin } flujos[s] = arr })
   const saldoUnits = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].fin, 0))
   const salidasUnits = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].sal, 0))
   return { flujos, saldoUnits, salidasUnits }
@@ -1885,8 +1886,17 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
   const kINV = (s, c) => `INV|${marca}|${s}|${c}`, kAUC = (s, c) => `PAUC|${marca}|${s}|${c}`, kAUP = (s, c) => `PAUP|${marca}|${s}|${c}`
   // Compra proyectada 2028 por temporada (viene del Paso 4 · CP por mes) + repartir por categoría (peso del Director)
   const compraSeason = (s) => MESES.reduce((a, _, m) => a + num(temp[`CP|${marca}|${s}|${m}`]), 0)
-  const shareCat = (c) => { const den = catList.reduce((a, o) => a + num(o.peso), 0); const o = catList.find((x) => x.cat === c); const p = o ? num(o.peso) : 0; return den > 0 ? p / den : (catList.length ? 1 / catList.length : 0) }
-  const compraCat = (s, c) => Math.round(compraSeason(s) * shareCat(c))
+  // Reparte la compra de la temporada entre categorías por su peso, con redondeo de MAYOR RESTO
+  // para que las unidades enteras por categoría sumen EXACTAMENTE la compra (sin perder/ganar 1 por redondeo).
+  const compraDist = (s) => {
+    const total = Math.round(compraSeason(s))
+    const den = catList.reduce((a, o) => a + num(o.peso), 0)
+    const rows = catList.map((o) => { const exact = den > 0 ? total * num(o.peso) / den : (catList.length ? total / catList.length : 0); return { cat: o.cat, u: Math.floor(exact), rem: exact - Math.floor(exact) } })
+    let left = total - rows.reduce((a, r) => a + r.u, 0)
+    ;[...rows].sort((a, b) => b.rem - a.rem).forEach((r) => { if (left > 0) { r.u++; left-- } })
+    const map = {}; rows.forEach((r) => { map[r.cat] = r.u }); return map
+  }
+  const compraCat = (s, c) => compraDist(s)[c] || 0
   // Para SS28/FW28/SS29 las unidades vienen de las compras del Paso 4 (repartidas por peso); para temporadas anteriores, del saldo capturado en la matriz.
   const invSC = (s, c) => BUY_SEASONS.includes(s) ? compraCat(s, c) : sg(kINV(s, c)), aucSC = (s, c) => sg(kAUC(s, c)), aupSC = (s, c) => sg(kAUP(s, c))
   // Ponderado 2028 por categoría (a través de todas las temporadas, ponderado por inventario disponible)
