@@ -1516,7 +1516,9 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
   // Venta proyectada (unidades del vendedor): es el TOTAL a vender del mes. Producto solo reparte de qué temporada sale.
   const ventaProyMes = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
   const { flujos, saldoUnits, salidasUnits } = inventarioCalc(data, marca, ventaProyMes)
-  const mixSumMes = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(data[K.RT(s, m)]), 0)) // suma del % de mezcla por mes (debe ser 100)
+  // Temporadas ACTIVAS: solo las que tienen inventario (saldo inicial o compras). Las vacías no se muestran ni piden %.
+  const activas = SEASONS.filter((s) => num(data[K.II(s)]) > 0 || MESES.some((_, m) => num(data[K.CP(s, m)]) > 0))
+  const mixSumMes = MESES.map((_, m) => activas.reduce((a, s) => a + num(data[K.RT(s, m)]), 0)) // suma del % de mezcla por mes (solo temporadas activas; debe ser 100)
 
   if (mode === 'flow') {
     return (
@@ -1527,7 +1529,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
           <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
             <thead><tr><th className="l">Temporada</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Fin año</th></tr></thead>
             <tbody>
-              {SEASONS.map((s) => <tr key={s}><td className="l">{s}</td>{flujos[s].map((x, i) => <td key={i} className="tot">{fmt(x.fin)}</td>)}<td className="tot">{fmt(flujos[s][11].fin)}</td></tr>)}
+              {activas.map((s) => <tr key={s}><td className="l">{s}</td>{flujos[s].map((x, i) => <td key={i} className="tot">{fmt(x.fin)}</td>)}<td className="tot">{fmt(flujos[s][11].fin)}</td></tr>)}
               <tr className="grandrow"><td className="l">Saldo total (ud)</td>{saldoUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(saldoUnits[11])}</td></tr>
             </tbody>
           </table>
@@ -1537,7 +1539,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
           <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
             <thead><tr><th className="l">Temporada · AUC</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Fin año</th></tr></thead>
             <tbody>
-              {SEASONS.map((s) => { const a = saucSeason(s); return <tr key={s}><td className="l">{s} · ${fmt(a)}</td>{flujos[s].map((x, i) => <td key={i} className="tot">{fmt(x.fin * a)}</td>)}<td className="tot">{fmt(flujos[s][11].fin * a)}</td></tr> })}
+              {activas.map((s) => { const a = saucSeason(s); return <tr key={s}><td className="l">{s} · ${fmt(a)}</td>{flujos[s].map((x, i) => <td key={i} className="tot">{fmt(x.fin * a)}</td>)}<td className="tot">{fmt(flujos[s][11].fin * a)}</td></tr> })}
               <tr className="grandrow"><td className="l">Valor total ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(SEASONS.reduce((acc, s) => acc + flujos[s][m].fin * saucSeason(s), 0))}</td>)}<td className="tot">{fmt(SEASONS.reduce((acc, s) => acc + flujos[s][11].fin * saucSeason(s), 0))}</td></tr>
             </tbody>
           </table>
@@ -1584,7 +1586,8 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
             <tr><td className="l sub2" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Suma de la mezcla % <span className="unit">(debe ser 100%)</span></td><td></td>{MESES.map((_, m) => { const hay = ventaProyMes[m] > 0.5; const sm = mixSumMes[m]; const ok = Math.abs(sm - 100) < 1; return <td key={m} className="tot" style={{ fontWeight: 800, color: !hay ? 'var(--muted)' : ok ? 'var(--ok)' : 'var(--bad)' }} title={!hay ? 'Sin venta este mes' : ok ? 'La mezcla suma 100% ✓' : 'La mezcla NO suma 100% — ajusta los %'}>{!hay ? '—' : sm.toFixed(0) + '%'}{hay && (ok ? ' ✓' : ' ⚠')}</td> })}<td></td></tr>
             <tr className="grandrow"><td className="l">Salidas totales (ud)</td><td></td>{salidasUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
             <tr className="grandrow"><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Faltante por stock (ud) <span className="unit" style={{ fontWeight: 400 }}>(venta − salidas; si sale rojo, falta inventario)</span></td><td></td>{MESES.map((_, m) => { const d = ventaProyMes[m] - salidasUnits[m]; const bad = d > 0.5; return <td key={m} className="tot" style={{ fontWeight: 800, color: bad ? 'var(--bad)' : 'var(--ok)' }} title={bad ? 'No hay suficiente inventario para cubrir la venta con la mezcla elegida: compra más o cambia el mix' : 'La venta se cubre completa ✓'}>{fmt(d)}</td> })}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0) - salidasUnits.reduce((a, b) => a + b, 0))}</td></tr>
-            {SEASONS.map((s) => { const f = flujos[s]; const buy = BUY_SEASONS.includes(s); return (
+            {activas.length === 0 && <tr><td className="l" colSpan={15} style={{ color: 'var(--muted)' }}>Aún no hay temporadas con inventario. Carga el saldo inicial (Paso 1) o las compras 2028 (Paso 4) y aquí aparecerán las temporadas para repartir la venta.</td></tr>}
+            {activas.map((s) => { const f = flujos[s]; const buy = BUY_SEASONS.includes(s); return (
               <Fragment2 key={s}>
                 <tr className="secrow"><td colSpan={15}>{s}{buy ? ' · compra 2028' : ' · inventario inicial'}{iiAuto ? <span className="unit" style={{ fontWeight: 400 }}> · inicial <b style={{ color: '#a0522d' }}>{fmt(num(data[K.II(s)]))}</b> ud <span style={{ fontSize: 9, opacity: 0.75 }}>(de la matriz de arriba)</span></span> : ''}</td></tr>
                 {buy && !iiAuto && <tr><td className="l sub2">+ Compras</td><td></td>{MESES.map((_, m) => { const k = K.CP(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(rowTot(f, 'comp'))}</td></tr>}
