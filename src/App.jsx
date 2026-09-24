@@ -1878,7 +1878,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
   const showMatriz = render === 'all' || render === 'matriz'
   const showEvol = render === 'all' || render === 'evolucion'
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
-  const [ventasRows, setVentasRows] = useState([])
+  const [ventasRows, setVentasRows] = useState([]); const [catBuscar, setCatBuscar] = useState('')
   useEffect(() => {
     try { setTempInt(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
     ;(async () => {
@@ -1997,14 +1997,15 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
       </div>}
 
       {showEvol && <div className="panel">
-        <h3>Evolución mensual del AUP / AUC — {marca}{M$} <span className="unit">(consecuencia de la rotación)</span></h3>
-        <div className="sub" style={{ marginBottom: 6 }}>Según cómo <b>rota el inventario</b>, cada mes se vende una mezcla distinta de temporadas → el AUP y AUC <b>cambian mes a mes</b>. Ej.: si FW26 (barata) se agota en junio y en julio entra SS28 (más cara), el salto se ve aquí. <b>Estos valores mensuales por categoría son los que usa el resto del app</b> (Ventas, Contribución, Cash Flow). Se guardan junto con los precios.</div>
-        {!MESES.some((_, m) => unitsMes(m) > 0.5) && <div className="note warn" style={{ marginBottom: 10 }}>Sale <b>vacía</b> porque aún no hay <b>salidas de inventario</b>. Ya pusiste las unidades arriba; ahora falta el <b>% de rotación</b> en el bloque de rotación (Paso 2). El % se aplica sobre las unidades disponibles y define qué se vende cada mes.</div>}
+        <h3>Evolución mensual del AUP / AUC — {marca}{M$} <span className="unit">(consecuencia de la mezcla)</span></h3>
+        <div className="sub" style={{ marginBottom: 6 }}>Según la <b>mezcla por temporada</b>, cada mes se vende una mezcla distinta de temporadas → el AUP y AUC <b>cambian mes a mes</b>. Ej.: si en junio se vende FW26 a AUC $46 y en julio entra SS28 a AUC $60, el AUC del mes sube de $46 a $60; y si un mes se vende mitad de cada una, el AUC efectivo es ~$53. <b>Estos valores mensuales por categoría son los que usa el resto del app</b> (Ventas, Contribución, Cash Flow).</div>
+        {!MESES.some((_, m) => unitsMes(m) > 0.5) && <div className="note warn" style={{ marginBottom: 10 }}>Sale <b>vacía</b> porque aún no hay <b>salidas de inventario</b>. Ya pusiste las unidades arriba; ahora falta el <b>% de mezcla</b> en el bloque de Mezcla por temporada (Paso 2). El % reparte la venta del mes por temporada y define qué se vende cada mes.</div>}
+        {cats.length > 1 && <div className="toolbar" style={{ marginBottom: 8 }}><input value={catBuscar} onChange={(e) => setCatBuscar(e.target.value)} placeholder="🔍 Buscar categoría…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />{catBuscar && <button className="btn" onClick={() => setCatBuscar('')}>✕ limpiar</button>}</div>}
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-          <thead><tr><th className="l">Efectivo mensual (según rotación)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total / prom.</th></tr></thead>
+          <thead><tr><th className="l">Efectivo mensual (según mezcla)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total / prom.</th></tr></thead>
           <tbody>
             <tr><td className="l sub2">Unidades vendidas</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(unitsMes(m))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, m) => a + unitsMes(m), 0))}</td></tr>
-            {cats.map((c) => (
+            {cats.filter((c) => !catBuscar.trim() || upper(c).indexOf(upper(catBuscar)) >= 0).map((c) => (
               <Fragment2 key={c}>
                 <tr className="secrow"><td colSpan={14}>{c}</td></tr>
                 <tr className="catrow"><td className="l">AUP efectivo {c} {Q('Párate sobre cada mes para ver de qué temporadas se compone.')}</td>{MESES.map((_, m) => <td key={m} className="tot" title={compo(c, m, true)} style={{ cursor: 'help' }}>{money(aupCatMes(c, m))}</td>)}<td></td></tr>
