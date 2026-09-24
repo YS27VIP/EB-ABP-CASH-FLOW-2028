@@ -1029,11 +1029,17 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const comisTotalMes = (mca) => comisionCalc(mca, comisData, ventaNetaMes(mca)).total
 
   // Compras 2028 (de Comercial) → pago según el término de pago de la marca (a proveedor). Parte del Cash Out.
-  const comprasUdMes = (mca) => MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(temp[`CP|${mca}|${s}|${m}`]), 0))
+  // Compras: se capturan por fecha XFD; la DISPONIBLE = XFD corrida `tránsito` meses (por marca; default 0).
+  const transitOf = (mca) => Math.max(0, Math.round(num(temp[`TR|${mca}`])))
+  const comprasUdMes = (mca) => MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(temp[`CP|${mca}|${s}|${m}`]), 0)) // XFD (unidades)
+  const comprasUdDisp = (mca) => { const x = comprasUdMes(mca), t = transitOf(mca); return MESES.map((_, m) => (m - t >= 0 ? x[m - t] : 0)) } // disponible (unidades)
   const aucMes = (mca) => { const a = Array(12).fill(0); producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca) || upper(r[1]) !== 'AUC') return; for (let j = 0; j < 12; j++) a[j] = num(r[4 + j]) }); return a }
-  const comprasUsdMes = (mca) => { const u = comprasUdMes(mca), c = aucMes(mca); return MESES.map((_, m) => u[m] * c[m]) }
-  const pagosMarca = (mca) => { const compras = comprasUsdMes(mca); const plazo = CF_PLAZO_MESES[data[`PTERM|${mca}`]] ?? 0; return { compras, pagos: MESES.map((_, m) => (m >= plazo ? compras[m - plazo] : 0)), plazo } }
-  const corpPagoMes = (mca) => comisionCorpMes(mca, data, comprasUdMes(mca)) // comisión corporativa (HOKA/UGG): $/ud × compras, es un pago (Cash Out)
+  const comprasUsdMes = (mca) => { const u = comprasUdMes(mca), c = aucMes(mca); return MESES.map((_, m) => u[m] * c[m]) } // XFD ($)
+  const comprasUsdDisp = (mca) => { const u = comprasUdDisp(mca), c = aucMes(mca); return MESES.map((_, m) => u[m] * c[m]) } // disponible ($)
+  const pagoBaseOf = (mca) => (data[`PBASE|${mca}`] === 'DISP' ? 'DISP' : 'XFD') // base del pago al proveedor (default XFD)
+  const comprasPagoUsd = (mca) => pagoBaseOf(mca) === 'DISP' ? comprasUsdDisp(mca) : comprasUsdMes(mca)
+  const pagosMarca = (mca) => { const compras = comprasPagoUsd(mca); const plazo = CF_PLAZO_MESES[data[`PTERM|${mca}`]] ?? 0; return { compras, pagos: MESES.map((_, m) => (m >= plazo ? compras[m - plazo] : 0)), plazo } }
+  const corpPagoMes = (mca) => comisionCorpMes(mca, data, comprasUdMes(mca)) // comisión corporativa (HOKA/UGG): $/ud × compras XFD, es un pago (Cash Out)
 
   // Escalera de cobros: Ventas Netas 2028 = Unidades 2028 (Cap_Ventas) × AUP (Cap_Producto), cobradas según el plazo del cliente.
   const unidades2028 = (mca) => { const out = {}; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli) return; const arr = out[cli] || (out[cli] = Array(12).fill(0)); for (let j = 0; j < 12; j++) arr[j] += num(r[4 + j]) }); return out }
@@ -1068,7 +1074,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const invFinUsd = (mca) => { const { saldoUnits } = inventarioCalc(temp, mca); const auc = aucMes(mca); return MESES.map((_, m) => saldoUnits[m] * (auc[m] || 0)) }
   const invIniUsd = (mca) => { const { saldoUnits } = inventarioCalc(temp, mca); const auc = aucMes(mca); const kk = invKeys(mca); const opening = SEASONS.reduce((a, s) => a + num(temp[kk.II(s)]), 0); return MESES.map((_, m) => (m === 0 ? opening : saldoUnits[m - 1]) * (auc[m] || 0)) }
   const VENTAS_NETAS = 'Ventas Netas', COMPRAS_FD = 'Compras (Fecha disponible)', INV_INI = 'Inventario Inicial', INV_FIN = 'Inventario Final'
-  const CALC_PSI = { [VENTAS_NETAS]: ventaNetaMes, [COMPRAS_FD]: comprasUsdMes, [INV_INI]: invIniUsd, [INV_FIN]: invFinUsd }
+  const CALC_PSI = { [VENTAS_NETAS]: ventaNetaMes, [COMPRAS_FD]: comprasUsdDisp, [INV_INI]: invIniUsd, [INV_FIN]: invFinUsd }
   const esCalcComercial = (it) => !!CALC_PSI[it]
   const cell = (concepto, mi) => {
     if (concepto === CASH_INI) return cashCalc.ini[mi]
@@ -1358,25 +1364,30 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       {(() => {
         const SP = '#fde8cf' // color "término de la marca (pago a proveedor)"
         const listaM = isTotal ? sbuMarcas : [marca]
-        const compras = MESES.map((_, m) => listaM.reduce((a, mca) => a + comprasUsdMes(mca)[m], 0))
+        const comprasX = MESES.map((_, m) => listaM.reduce((a, mca) => a + comprasUsdMes(mca)[m], 0)) // XFD
+        const comprasD = MESES.map((_, m) => listaM.reduce((a, mca) => a + comprasUsdDisp(mca)[m], 0)) // disponible
+        const compras = comprasX
         const pagos = MESES.map((_, m) => listaM.reduce((a, mca) => a + pagosMarca(mca).pagos[m], 0))
+        const baseLbl = !isTotal ? (pagoBaseOf(marca) === 'DISP' ? 'fecha disponible' : 'fecha XFD') : 'según cada marca'
         const hayCorp = listaM.some((mca) => esCorpMarca(mca))
         const corpUnid = MESES.map((_, m) => listaM.reduce((a, mca) => a + (esCorpMarca(mca) ? comprasUdMes(mca)[m] : 0), 0))
         const corpPago = MESES.map((_, m) => listaM.reduce((a, mca) => a + corpPagoMes(mca)[m], 0))
         return (
           <div className="panel">
             <h3>{role.label} — Condiciones comerciales con la marca {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(Cash Out)</span></h3>
-            <div className="sub">La <b>compra 2028</b> (unidades de Comercial × AUC) genera un <b>pago</b> según el <b>término de pago de la marca</b> a su proveedor (Cash = mismo mes · 30d = +1 · 60 = +2 …). {hayCorp && <>Además, HOKA/UGG pagan una <b>comisión corporativa</b> de <b>$/ud sobre las compras</b>. </>}Todo esto alimenta el <b>Cash Out</b>.</div>
+            <div className="sub">La <b>compra 2028</b> se coloca por <b>fecha XFD</b>; la <b>disponible</b> = XFD + tránsito (se define en Producto · Paso 5). El <b>pago al proveedor</b> se calcula sobre la base que elijas (<b>XFD por defecto</b>) según el <b>término de pago de la marca</b> (Cash = mismo mes · 30d = +1 · 60 = +2 …). {hayCorp && <>Además, HOKA/UGG pagan una <b>comisión corporativa</b> de <b>$/ud sobre las compras</b>. </>}Todo alimenta el <b>Cash Out</b>.</div>
             {!isTotal && <div className="toolbar" style={{ marginBottom: 8, gap: 14, flexWrap: 'wrap' }}>
               <span><label>Término de pago de {marca} <span className="unit">(a proveedor)</span> </label>
               {soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{data[`PTERM|${marca}`] || '—'}</span> : <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.filter((t) => t !== 'Intercompañía').map((t) => <option key={t}>{t}</option>)}</select>}</span>
+              <span><label>Pago según <span className="unit">(fecha base)</span> </label>{soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{pagoBaseOf(marca) === 'DISP' ? 'Fecha disponible' : 'Fecha XFD'}</span> : <select value={data[`PBASE|${marca}`] || 'XFD'} onChange={(e) => set(`PBASE|${marca}`, e.target.value)} style={{ background: SP }}><option value="XFD">Fecha XFD</option><option value="DISP">Fecha disponible</option></select>}</span>
+              <span className="unit" style={{ alignSelf: 'center' }}>Tránsito de {marca}: <b>{transitOf(marca)}</b> mes(es) {ESP('El tiempo de tránsito se define en Producto · Paso 5. La compra se coloca por XFD y queda disponible ese número de meses después.')}</span>
               {esCorpMarca(marca) && <span><label>Comisión corporativa <span className="unit">($/ud sobre compras)</span> </label>{soloVer ? <span className="empchip" style={{ background: '#eef1f4', color: '#475569' }}>{data[`CORP|${marca}`] || '—'} $/ud</span> : <input className="fillin" value={data[`CORP|${marca}`] ?? ''} onChange={(e) => set(`CORP|${marca}`, e.target.value)} inputMode="decimal" placeholder="$/ud" style={{ width: 70 }} />}</span>}
             </div>}
             {isTotal && <div className="tablewrap" style={{ marginBottom: 12, maxWidth: 520 }}>
               <table style={{ width: 'auto' }}>
-                <thead><tr><th className="l">Marca</th><th>Término de pago a proveedor {ESP('Espejo: refleja el término que se capturó al entrar a cada marca. No se edita aquí.')}</th></tr></thead>
+                <thead><tr><th className="l">Marca</th><th>Término de pago {ESP('Espejo: refleja el término que se capturó al entrar a cada marca. No se edita aquí.')}</th><th>Base del pago</th><th>Tránsito</th></tr></thead>
                 <tbody>
-                  {listaM.map((mca) => <tr key={mca}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td><span className="empchip" style={{ background: '#eef1f4', color: '#475569', marginLeft: 0, border: '1px solid #dbe1e8' }}>{data[`PTERM|${mca}`] || '—'}</span></td></tr>)}
+                  {listaM.map((mca) => <tr key={mca}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td><span className="empchip" style={{ background: '#eef1f4', color: '#475569', marginLeft: 0, border: '1px solid #dbe1e8' }}>{data[`PTERM|${mca}`] || '—'}</span></td><td><span className="empchip" style={{ background: '#eef1f4', color: '#475569', marginLeft: 0, border: '1px solid #dbe1e8' }}>{pagoBaseOf(mca) === 'DISP' ? 'Disponible' : 'XFD'}</span></td><td className="tot">{transitOf(mca)} mes(es)</td></tr>)}
                 </tbody>
               </table>
               <div className="sub" style={{ marginTop: 6 }}>🪞 <b>Espejo</b> (solo lectura): refleja el término que cada marca cargó a su proveedor; define <b>cuándo</b> la compra se convierte en pago (Cash Out). Se edita entrando a cada marca.</div>
@@ -1385,8 +1396,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
               <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
                 <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
-                  <tr><td className="l">Compra 2028 ($ · fecha disponible)</td>{compras.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(compras.reduce((a, b) => a + b, 0))}</td></tr>
-                  <tr className="catrow"><td className="l">Pago a proveedor (según término)</td>{pagos.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(pagos.reduce((a, b) => a + b, 0))}</td></tr>
+                  <tr><td className="l">Compra 2028 ($ · fecha XFD)</td>{comprasX.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(comprasX.reduce((a, b) => a + b, 0))}</td></tr>
+                  <tr><td className="l sub2">Compra 2028 ($ · fecha disponible) <span className="unit">(XFD + tránsito)</span></td>{comprasD.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(comprasD.reduce((a, b) => a + b, 0))}</td></tr>
+                  <tr className="catrow"><td className="l">Pago a proveedor <span className="unit">(según término · base {baseLbl})</span></td>{pagos.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(pagos.reduce((a, b) => a + b, 0))}</td></tr>
                   {hayCorp && <>
                     <tr><td className="l sub2">Compra en unidades <span className="unit">(HOKA/UGG)</span></td>{corpUnid.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(corpUnid.reduce((a, b) => a + b, 0))}</td></tr>
                     <tr className="catrow"><td className="l">Pago comisión corporativa <span className="unit">($/ud × compras)</span></td>{corpPago.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(corpPago.reduce((a, b) => a + b, 0))}</td></tr>
@@ -1451,8 +1463,10 @@ function invKeys(marca) {
 function inventarioCalc(data, marca) {
   const g = (k) => num(data[k])
   const { II, CP, RT } = invKeys(marca)
+  // La compra se captura por fecha XFD; queda DISPONIBLE en inventario `tránsito` meses después (default 0 = igual que antes).
+  const tr = Math.max(0, Math.round(num(data[`TR|${marca}`])))
   const flujos = {}
-  SEASONS.forEach((s) => { const arr = []; let saldo = g(II(s)); for (let m = 0; m < 12; m++) { const ini = saldo; const comp = g(CP(s, m)); const disp = ini + comp; const rot = g(RT(s, m)) / 100; const sal = disp * rot; const fin = disp - sal; arr.push({ ini, comp, sal, fin }); saldo = fin } flujos[s] = arr })
+  SEASONS.forEach((s) => { const arr = []; let saldo = g(II(s)); for (let m = 0; m < 12; m++) { const ini = saldo; const comp = (m - tr >= 0 ? g(CP(s, m - tr)) : 0); const disp = ini + comp; const rot = g(RT(s, m)) / 100; const sal = disp * rot; const fin = disp - sal; arr.push({ ini, comp, sal, fin }); saldo = fin } flujos[s] = arr })
   const saldoUnits = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].fin, 0))
   const salidasUnits = MESES.map((_, m) => SEASONS.reduce((a, s) => a + flujos[s][m].sal, 0))
   return { flujos, saldoUnits, salidasUnits }
@@ -1737,7 +1751,7 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
   }, [precios, marca])
   return (
     <>
-      <div className="note ok" style={{ marginBottom: 8 }}>Producto en un solo lugar y en orden: <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Rotación (% por mes) — el saldo inicial se toma solo del paso 1 · <b>3)</b> Evolución mensual del AUP/AUC (consecuencia) · <b>4)</b> Resumen. Guarda inventario/precios y la rotación con sus botones.</div>
+      <div className="note ok" style={{ marginBottom: 8 }}>Producto en un solo lugar y en orden: <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Rotación (% por mes) — el saldo inicial se toma solo del paso 1 · <b>3)</b> Evolución mensual del AUP/AUC (consecuencia) · <b>4)</b> Resumen · <b>5)</b> Compras por fecha XFD y disponible. Guarda cada paso con sus botones.</div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 1 · Inventario, costo y precio por temporada y categoría</div>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="matriz" />
@@ -1750,11 +1764,44 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 3 · Evolución mensual del AUP/AUC (consecuencia)</div>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="evolucion" />
       </div>
-      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14 }}>
+      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 4 · Resumen de inventario</div>
         <ResumenInventario marca={marca} tempState={temp} />
       </div>
+      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14 }}>
+        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 5 · Compras por fecha XFD y disponible</div>
+        <ComprasXFDStep empresa={empresa} marca={marca} temp={temp} setTemp={setTemp} />
+      </div>
     </>
+  )
+}
+
+/* ===== Paso 5: compras por fecha XFD (captura de Paso 2) y disponible (= XFD + tránsito por marca) ===== */
+function ComprasXFDStep({ empresa, marca, temp, setTemp }) {
+  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  const tr = Math.max(0, Math.round(num(temp[`TR|${marca}`])))
+  const xfd = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(temp[`CP|${marca}|${s}|${m}`]), 0))
+  const disp = MESES.map((_, m) => (m - tr >= 0 ? xfd[m - tr] : 0))
+  const RT = (arr) => arr.reduce((a, b) => a + b, 0)
+  function guardar() { setSaving(true); try { saveEstado(empresa, 'temp', temp); setMsg({ t: 'ok', x: 'Guardado (tiempo de tránsito).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  return (
+    <div>
+      <div className="toolbar" style={{ marginBottom: 8, gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <label>Tiempo de tránsito de {marca} <span className="unit">(meses entre XFD y disponible)</span></label>
+        <input className="fillin" value={temp[`TR|${marca}`] ?? ''} onChange={(e) => setTemp((t) => ({ ...t, [`TR|${marca}`]: e.target.value }))} inputMode="numeric" placeholder="0" style={{ width: 70, textAlign: 'center' }} />
+        <div className="spacer"></div>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+      </div>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="sub">Las compras se colocan por <b>fecha XFD</b> (cuando salen de fábrica; se capturan en el Paso 2). La <b>disponible</b> = XFD corrida <b>{tr}</b> mes(es) de tránsito — cuando llega y entra al inventario. Con tránsito 0 ambas coinciden.</div>
+      <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+        <thead><tr><th className="l">Compras (unidades)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+        <tbody>
+          <tr><td className="l">Compras · fecha XFD</td>{xfd.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(xfd))}</td></tr>
+          <tr className="catrow"><td className="l">Compras · fecha disponible <span className="unit">(XFD + tránsito)</span></td>{disp.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(disp))}</td></tr>
+        </tbody>
+      </table></div>
+    </div>
   )
 }
 
