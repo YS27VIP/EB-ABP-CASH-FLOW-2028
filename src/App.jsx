@@ -229,7 +229,7 @@ export default function App() {
   const [empresas, setEmpresas] = useState(SEED_EMPRESAS)
   const [empresa, setEmpresa] = useState(() => { try { return sessionStorage.getItem('abp_nav_emp') || 'ENERGY BRANDS' } catch { return 'ENERGY BRANDS' } })
   const [combos, setCombos] = useState({})
-  const [roleId, setRoleId] = useState(() => { try { const v = sessionStorage.getItem('abp_nav_role'); return v || null } catch { return null } })
+  const [roleId, setRoleId] = useState(() => { try { const v = sessionStorage.getItem('abp_nav_role'); const ts = Number(sessionStorage.getItem('abp_nav_ts') || 0); return (v && Date.now() - ts < 10 * 60 * 1000) ? v : null } catch { return null } }) // tras 10 min de inactividad, vuelve al menú
   const [connError, setConnError] = useState(false)
   const [authed, setAuthed] = useState(isSignedIn())
   const [estadoReady, setEstadoReady] = useState(false)
@@ -237,7 +237,15 @@ export default function App() {
   useEffect(() => { try { document.documentElement.style.setProperty('--avatar', avatar ? '"' + avatar + ' "' : '') } catch { } }, [avatar])
   const elegirAvatar = (a) => { setAvatar(a); try { localStorage.setItem('abp_avatar', a) } catch { } }
   // Recuerda dónde estás (sección + empresa) SOLO en esta pestaña, para que "Actualizar" recargue sin sacarte al menú.
-  useEffect(() => { try { if (roleId) sessionStorage.setItem('abp_nav_role', roleId); else sessionStorage.removeItem('abp_nav_role') } catch { } }, [roleId])
+  useEffect(() => { try { if (roleId) { sessionStorage.setItem('abp_nav_role', roleId); sessionStorage.setItem('abp_nav_ts', String(Date.now())) } else sessionStorage.removeItem('abp_nav_role') } catch { } }, [roleId])
+  // Mantiene "viva" la ubicación mientras trabajas (refresca la marca de tiempo con la actividad, máx. cada 20 s).
+  useEffect(() => {
+    if (!roleId) return
+    let last = 0
+    const bump = () => { const n = Date.now(); if (n - last > 20000) { last = n; try { sessionStorage.setItem('abp_nav_ts', String(n)) } catch { } } }
+    window.addEventListener('mousedown', bump, true); window.addEventListener('keydown', bump, true)
+    return () => { window.removeEventListener('mousedown', bump, true); window.removeEventListener('keydown', bump, true) }
+  }, [roleId])
   useEffect(() => { try { sessionStorage.setItem('abp_nav_emp', empresa) } catch { } }, [empresa])
 
   useEffect(() => {
@@ -1393,12 +1401,12 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
               <div className="sub" style={{ marginTop: 6 }}>🪞 <b>Espejo</b> (solo lectura): refleja el término que cada marca cargó a su proveedor; define <b>cuándo</b> la compra se convierte en pago (Cash Out). Se edita entrando a cada marca.</div>
             </div>}
             <div className="tablewrap">
-              <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+              <table className="vfix"><colgroup><col style={{ width: '265px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
                 <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
-                  <tr><td className="l">Compra 2028 ($ · fecha XFD)</td>{comprasX.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(comprasX.reduce((a, b) => a + b, 0))}</td></tr>
-                  <tr><td className="l sub2">Compra 2028 ($ · fecha disponible) <span className="unit">(XFD + tránsito)</span></td>{comprasD.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(comprasD.reduce((a, b) => a + b, 0))}</td></tr>
-                  <tr className="catrow"><td className="l">Pago a proveedor <span className="unit">(según término · base {baseLbl})</span></td>{pagos.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(pagos.reduce((a, b) => a + b, 0))}</td></tr>
+                  <tr><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Compra 2028 ($ · fecha XFD)</td>{comprasX.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(comprasX.reduce((a, b) => a + b, 0))}</td></tr>
+                  <tr><td className="l sub2" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Compra 2028 ($ · fecha disponible) <span className="unit">(XFD + tránsito)</span></td>{comprasD.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(comprasD.reduce((a, b) => a + b, 0))}</td></tr>
+                  <tr className="catrow"><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Pago a proveedor <span className="unit">(según término · base {baseLbl})</span></td>{pagos.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(pagos.reduce((a, b) => a + b, 0))}</td></tr>
                   {hayCorp && <>
                     <tr><td className="l sub2">Compra en unidades <span className="unit">(HOKA/UGG)</span></td>{corpUnid.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(corpUnid.reduce((a, b) => a + b, 0))}</td></tr>
                     <tr className="catrow"><td className="l">Pago comisión corporativa <span className="unit">($/ud × compras)</span></td>{corpPago.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(corpPago.reduce((a, b) => a + b, 0))}</td></tr>
