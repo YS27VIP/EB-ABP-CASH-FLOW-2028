@@ -1386,11 +1386,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>{role.label} — Condiciones comerciales con la marca {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(Cash Out)</span></h3>
-            <div className="sub">La <b>compra 2028</b> se coloca por <b>fecha XFD</b>; la <b>disponible</b> = XFD + tránsito (se define en Producto · Paso 5). El <b>pago al proveedor</b> se calcula sobre la base que elijas (<b>XFD por defecto</b>) según el <b>término de pago de la marca</b> (Cash = mismo mes · 30d = +1 · 60 = +2 …). {hayCorp && <>Además, HOKA/UGG pagan una <b>comisión corporativa</b> de <b>$/ud sobre las compras</b>. </>}Todo alimenta el <b>Cash Out</b>.</div>
+            <div className="sub">La <b>compra 2028</b> se coloca por <b>fecha XFD</b>; la <b>disponible</b> = XFD + tránsito (se define en Producto · Paso 3). El <b>pago al proveedor</b> se calcula sobre la base que elijas (<b>XFD por defecto</b>) según el <b>término de pago de la marca</b> (Cash = mismo mes · 30d = +1 · 60 = +2 …). {hayCorp && <>Además, HOKA/UGG pagan una <b>comisión corporativa</b> de <b>$/ud sobre las compras</b>. </>}Todo alimenta el <b>Cash Out</b>.</div>
             {!isTotal && <div className="toolbar" style={{ marginBottom: 8, gap: 14, flexWrap: 'wrap' }}>
               <span><label>Término de pago de {marca} <span className="unit">(a proveedor)</span> </label>
               {soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{data[`PTERM|${marca}`] || '—'}</span> : <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.filter((t) => t !== 'Intercompañía').map((t) => <option key={t}>{t}</option>)}</select>}</span>
-              <span className="unit" style={{ alignSelf: 'center' }}>Pago sobre <b>fecha XFD</b> · Tránsito de {marca}: <b>{transitOf(marca)}</b> mes(es) {ESP('El pago al proveedor se calcula siempre sobre la compra por fecha XFD. El tiempo de tránsito se define en Producto · Paso 5 (solo afecta la fecha disponible del inventario).')}</span>
+              <span className="unit" style={{ alignSelf: 'center' }}>Pago sobre <b>fecha XFD</b> · Tránsito de {marca}: <b>{transitOf(marca)}</b> mes(es) {ESP('El pago al proveedor se calcula siempre sobre la compra por fecha XFD. El tiempo de tránsito se define en Producto · Paso 3 (solo afecta la fecha disponible del inventario).')}</span>
               {esCorpMarca(marca) && <span><label>Comisión corporativa <span className="unit">($/ud sobre compras)</span> </label>{soloVer ? <span className="empchip" style={{ background: '#eef1f4', color: '#475569' }}>{data[`CORP|${marca}`] || '—'} $/ud</span> : <input className="fillin" value={data[`CORP|${marca}`] ?? ''} onChange={(e) => set(`CORP|${marca}`, e.target.value)} inputMode="decimal" placeholder="$/ud" style={{ width: 70 }} />}</span>}
             </div>}
             {isTotal && <div className="tablewrap" style={{ marginBottom: 12, maxWidth: 520 }}>
@@ -1594,7 +1594,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
             <tr><td className="l sub2" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Venta del mes (ud) <span className="unit">(la manda el vendedor)</span></td><td></td>{ventaProyMes.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0))}</td></tr>
             <tr className="grandrow"><td className="l">Asignado del mes (ud) <span className="unit" style={{ fontWeight: 400 }}>(suma de las temporadas)</span></td><td></td>{asignMes.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(asignMes.reduce((a, b) => a + b, 0))}</td></tr>
             <tr className="grandrow"><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Por asignar (ud) <span className="unit" style={{ fontWeight: 400 }}>(venta − asignado; ✓ verde solo si cuadra exacto)</span></td><td></td>{MESES.map((_, m) => { const hay = ventaProyMes[m] > 0.5; const d = ventaProyMes[m] - asignMes[m]; const exacto = Math.abs(d) < 0.5; const sobra = d < -0.5; return <td key={m} className="tot" style={{ fontWeight: 800, color: !hay ? 'var(--muted)' : exacto ? 'var(--ok)' : 'var(--bad)' }} title={!hay ? 'Sin venta este mes' : exacto ? 'La venta del mes está cubierta exacto ✓' : sobra ? `Te pasaste: asignaste ${fmt(-d)} ud MÁS de lo que el vendedor va a vender este mes (${fmt(ventaProyMes[m])}). Baja la rotación.` : `Faltan ${fmt(d)} ud por asignar para cubrir la venta del mes.`}>{!hay ? '—' : fmt(d)}{hay && (exacto ? ' ✓' : ' ⚠')}</td> })}<td className="tot">{fmt(ventaProyMes.reduce((a, b) => a + b, 0) - asignMes.reduce((a, b) => a + b, 0))}</td></tr>
-            {activas.length === 0 && <tr><td className="l" colSpan={15} style={{ color: 'var(--muted)' }}>Aún no hay temporadas con inventario. Carga el saldo inicial (Paso 1) o las compras 2028 (Paso 4) y aquí aparecerán las temporadas para repartir la venta.</td></tr>}
+            {activas.length === 0 && <tr><td className="l" colSpan={15} style={{ color: 'var(--muted)' }}>Aún no hay temporadas con inventario. Carga el saldo inicial (Paso 1) o las compras 2028 (Paso 3) y aquí aparecerán las temporadas para repartir la venta.</td></tr>}
             {activas.map((s) => { const f = flujos[s]; const buy = BUY_SEASONS.includes(s); const ini0 = num(data[K.II(s)]); const disponible = ini0 + rowTot(f, 'comp'); const asignado = rowTot(f, 'sal'); const restante = f[11].fin; return (
               <Fragment2 key={s}>
                 {buy && !iiAuto && <tr><td className="l sub2"><b style={{ color: '#0e7490' }}>{s}</b> · + Compras 2028</td><td></td>{MESES.map((_, m) => { const k = K.CP(s, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(rowTot(f, 'comp'))}</td></tr>}
@@ -1780,7 +1780,7 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
   }, [precios, marca])
   return (
     <>
-      <div className="note ok" style={{ marginBottom: 8 }}>Producto en un solo lugar y en orden: <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Combinación de temporadas (unidades por mes) — el saldo inicial se toma solo del paso 1 · <b>3)</b> Evolución mensual del AUP/AUC (consecuencia) · <b>4)</b> Compras 2028 y disponibilidad (SS28/FW28) · <b>5)</b> Resumen. Guarda cada paso con sus botones.</div>
+      <div className="note ok" style={{ marginBottom: 8 }}>Producto en un solo lugar y en orden: <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Combinación de temporadas (unidades por mes) — el saldo inicial se toma solo del paso 1 · <b>3)</b> Compras 2028 y disponibilidad (SS28/FW28) · <b>4)</b> Evolución mensual del AUP/AUC (consecuencia) · <b>5)</b> Resumen. Guarda cada paso con sus botones.</div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 1 · Inventario, costo y precio por temporada y categoría</div>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="matriz" />
@@ -1790,12 +1790,12 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
         <TemporadaForm empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" tempState={temp} setTempState={setTemp} sinResumen iiAuto />
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
-        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 3 · Evolución mensual del AUP/AUC (consecuencia)</div>
-        <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="evolucion" />
+        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 3 · Compras 2028 y disponibilidad (SS28 / FW28)</div>
+        <ComprasXFDStep empresa={empresa} marca={marca} temp={temp} setTemp={setTemp} precios={precios} />
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
-        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 4 · Compras 2028 y disponibilidad (SS28 / FW28)</div>
-        <ComprasXFDStep empresa={empresa} marca={marca} temp={temp} setTemp={setTemp} precios={precios} />
+        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 4 · Evolución mensual del AUP/AUC (consecuencia)</div>
+        <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="evolucion" />
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14 }}>
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 5 · Resumen de inventario</div>
