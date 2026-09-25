@@ -7,6 +7,7 @@ export function SyncBar() {
   const refrescar = () => {
     if (ABP_DIRTY.on && !window.confirm('Tienes cambios SIN GUARDAR. Si actualizas ahora se perderán. ¿Quieres actualizar de todas formas?')) return
     ABP_DIRTY.on = false
+    try { sessionStorage.setItem('abp_nav_ts', String(Date.now())) } catch { } // "Actualizar" es acción explícita: te deja donde estás, no te saca al menú
     window.location.reload()
   }
   useEffect(() => {
@@ -227,26 +228,31 @@ function realAupAuc(empresa, marca, ventasRows, prodRows, catNames) {
 export default function App() {
   const [usuario, setUsuario] = useState('')
   const [empresas, setEmpresas] = useState(SEED_EMPRESAS)
-  const [empresa, setEmpresa] = useState(() => { try { return sessionStorage.getItem('abp_nav_emp') || 'ENERGY BRANDS' } catch { return 'ENERGY BRANDS' } })
+  const [empresa, setEmpresa] = useState(() => { try { return localStorage.getItem('abp_nav_emp') || 'ENERGY BRANDS' } catch { return 'ENERGY BRANDS' } })
   const [combos, setCombos] = useState({})
-  const [roleId, setRoleId] = useState(() => { try { const v = sessionStorage.getItem('abp_nav_role'); const ts = Number(sessionStorage.getItem('abp_nav_ts') || 0); return (v && Date.now() - ts < 10 * 60 * 1000) ? v : null } catch { return null } }) // tras 10 min de inactividad, vuelve al menú
+  const [roleId, setRoleId] = useState(() => { try { const v = localStorage.getItem('abp_nav_role'); const ts = Number(localStorage.getItem('abp_nav_ts') || 0); return (v && Date.now() - ts < 8 * 60 * 60 * 1000) ? v : null } catch { return null } }) // tras 8 horas de inactividad, vuelve al menú
+  const firstNav = useRef(true) // evita borrar la ubicación guardada en el primer render
   const [connError, setConnError] = useState(false)
   const [authed, setAuthed] = useState(isSignedIn())
   const [estadoReady, setEstadoReady] = useState(false)
   const [avatar, setAvatar] = useState(() => { try { return localStorage.getItem('abp_avatar') || '' } catch { return '' } })
   useEffect(() => { try { document.documentElement.style.setProperty('--avatar', avatar ? '"' + avatar + ' "' : '') } catch { } }, [avatar])
   const elegirAvatar = (a) => { setAvatar(a); try { localStorage.setItem('abp_avatar', a) } catch { } try { const em = getEmail(); if (em) gSaveAvatar(em, a, getName() || '').catch(() => { }) } catch { } }
-  // Recuerda dónde estás (sección + empresa) SOLO en esta pestaña, para que "Actualizar" recargue sin sacarte al menú.
-  useEffect(() => { try { if (roleId) { sessionStorage.setItem('abp_nav_role', roleId); sessionStorage.setItem('abp_nav_ts', String(Date.now())) } else sessionStorage.removeItem('abp_nav_role') } catch { } }, [roleId])
+  // Recuerda dónde estás (sección + empresa) para que "Actualizar" recargue sin sacarte al menú.
+  // En el PRIMER render no tocamos nada (así no se borra la ubicación guardada mientras carga la sesión).
+  useEffect(() => {
+    if (firstNav.current) { firstNav.current = false; return }
+    try { if (roleId) { localStorage.setItem('abp_nav_role', roleId); localStorage.setItem('abp_nav_ts', String(Date.now())) } else localStorage.removeItem('abp_nav_role') } catch { }
+  }, [roleId])
   // Mantiene "viva" la ubicación mientras trabajas (refresca la marca de tiempo con la actividad, máx. cada 20 s).
   useEffect(() => {
     if (!roleId) return
     let last = 0
-    const bump = () => { const n = Date.now(); if (n - last > 20000) { last = n; try { sessionStorage.setItem('abp_nav_ts', String(n)) } catch { } } }
+    const bump = () => { const n = Date.now(); if (n - last > 20000) { last = n; try { localStorage.setItem('abp_nav_ts', String(n)) } catch { } } }
     window.addEventListener('mousedown', bump, true); window.addEventListener('keydown', bump, true)
     return () => { window.removeEventListener('mousedown', bump, true); window.removeEventListener('keydown', bump, true) }
   }, [roleId])
-  useEffect(() => { try { sessionStorage.setItem('abp_nav_emp', empresa) } catch { } }, [empresa])
+  useEffect(() => { try { localStorage.setItem('abp_nav_emp', empresa) } catch { } }, [empresa])
 
   useEffect(() => {
     initAuth()
