@@ -3636,6 +3636,9 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   // Clientes agregados a mano (por marca) + sus unidades 2028 manuales (clientes sin histórico 2026)
   const [addCli, setAddCli] = useState(() => { try { return JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}') } catch { return {} } })
   const [manual, setManual] = useState(() => { try { return JSON.parse(localStorage.getItem('ventas_manual_' + empresa) || '{}') } catch { return {} } })
+  // Limpieza automática: elimina valores basura (negativos o no numéricos) que hayan quedado en el navegador
+  // de versiones/pruebas viejas. Solo se conservan unidades > 0 (lo realmente capturado).
+  useEffect(() => { setManual((prev) => { const next = {}; let changed = false; Object.keys(prev).forEach((k) => { const n = num(prev[k]); if (n > 0) next[k] = prev[k]; else changed = true }); return changed ? next : prev }) }, [empresa])
   // Stock de temporadas anteriores (referencia para el vendedor): inventario inicial de las temporadas viejas (de Producto).
   const [tempInv, setTempInv] = useState(() => { try { return JSON.parse(localStorage.getItem('temp_' + empresa) || '{}') } catch { return {} } })
   useEffect(() => { try { setTempInv(JSON.parse(localStorage.getItem('temp_' + empresa) || '{}')) } catch { } }, [empresa])
@@ -3701,7 +3704,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const mKey = (cli, mi) => marca + '|' + cli + '|' + mi
   // 2028 = el % de crecimiento define el TOTAL objetivo (sobre 2026). Los meses arrancan VACÍOS:
   // el vendedor decide cómo repartir ese total por mes (celdas amarillas). Debe completarlo.
-  const u28 = (cli, mi) => { const cur = manual[mKey(cli, mi)]; return (cur === undefined || cur === '') ? 0 : Math.round(num(cur)) }
+  const u28 = (cli, mi) => { const cur = manual[mKey(cli, mi)]; return (cur === undefined || cur === '') ? 0 : Math.max(0, Math.round(num(cur))) }
   const objetivo28 = (cli) => esNuevo(cli) ? null : Math.round(MESES.reduce((a, _, mi) => a + u26(cli, mi), 0) * (1 + g(cli) / 100))
   const setG = (cli, val) => setGrowth({ ...growth, [cli + '|' + marca]: val })
   const setMan = (cli, mi, val) => setManual({ ...manual, [mKey(cli, mi)]: val })
@@ -3893,7 +3896,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                   </tr>
                   <tr className="proy2028">
                     <td className="yl proyl">2028</td>
-                    {MESES.map((_, mi) => <td key={mi} className="cell"><input value={manual[mKey(cli, mi)] ?? ''} onChange={(e) => setMan(cli, mi, e.target.value)} inputMode="decimal" placeholder="0" /></td>)}
+                    {MESES.map((_, mi) => { const raw = manual[mKey(cli, mi)]; const show = (raw == null || raw === '' || num(raw) < 0) ? '' : raw; return <td key={mi} className="cell"><input value={show} onChange={(e) => setMan(cli, mi, e.target.value)} inputMode="decimal" placeholder="0" /></td> })}
                     <td className="tot" style={desc ? { background: '#fdf1e0', color: '#b45309' } : undefined} title={desc ? `El % de crecimiento da un objetivo de ${fmt(obj)} ud, pero tu reparto por mes suma ${fmt(t28(cli))} (diferencia ${(t28(cli) - obj) >= 0 ? '+' : ''}${fmt(t28(cli) - obj)}). Ajusta los meses para cuadrar.` : `Objetivo por %: ${fmt(obj == null ? t28(cli) : obj)} ud`}>{fmt(t28(cli))}{desc ? ' ⚠' : ''}</td>
                     <td className="tot">{totMarcaSel ? (t28(cli) / totMarcaSel * 100).toFixed(1) + '%' : '—'}</td>
                   </tr>
