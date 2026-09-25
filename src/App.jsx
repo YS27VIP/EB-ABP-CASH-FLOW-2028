@@ -3675,7 +3675,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
             rows.forEach((r) => {
               if (upper(r[0]) !== upper(empresa)) return
               const cli = String(r[1] || '').trim(), mar = r[3]; if (!cli || !mar) return
-              for (let mi = 0; mi < 12; mi++) { const k = mar + '|' + cli + '|' + mi; if (next[k] === undefined || next[k] === '') { const v = num(r[4 + mi]); if (v) next[k] = String(v) } }
+              for (let mi = 0; mi < 12; mi++) { const k = mar + '|' + cli + '|' + mi; if (next[k] === undefined || next[k] === '') { const v = num(r[4 + mi]); if (v > 0) next[k] = String(v) } }
             })
             return next
           })
