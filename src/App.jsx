@@ -1048,7 +1048,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const corpPagoMes = (mca) => comisionCorpMes(mca, data, comprasUdMes(mca)) // comisión corporativa (HOKA/UGG): $/ud × compras XFD, es un pago (Cash Out)
 
   // Escalera de cobros: Ventas Netas 2028 = Unidades 2028 (Cap_Ventas) × AUP (Cap_Producto), cobradas según el plazo del cliente.
-  const unidades2028 = (mca) => { const out = {}; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli) return; const arr = out[cli] || (out[cli] = Array(12).fill(0)); for (let j = 0; j < 12; j++) arr[j] += num(r[4 + j]) }); return out }
+  const unidades2028 = (mca) => { const out = {}; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli) return; const arr = out[cli] || (out[cli] = Array(12).fill(0)); for (let j = 0; j < 12; j++) arr[j] += Math.max(0, num(r[4 + j])) }); return out }
   // AUP ponderado por marca = Σ (peso_categoría × AUP_categoría). El AUP se captura por categoría (Producto).
   // AUP promedio de la marca con la mezcla real por categoría (unidades × % por cliente)
   const aupMarca = (mca) => realAupAuc(empresa, mca, ventas, producto, (cats[mca] || []).map((c) => c.cat)).aupW
@@ -1466,7 +1466,8 @@ function invKeys(marca) {
 }
 // Venta (unidades) por mes de una marca, desde las filas de Cap_Ventas (excluye VIAJES).
 function ventaMarcaMes(rows, empresa, marca) {
-  return MESES.map((_, m) => { let s = 0; (rows || []).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
+  // Las unidades de venta nunca son negativas: Math.max(0,…) ignora cualquier valor basura.
+  return MESES.map((_, m) => { let s = 0; (rows || []).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += Math.max(0, num(r[4 + m])) }); return s })
 }
 // Modelo: el VENDEDOR manda el total del mes; Producto escribe DIRECTO las UNIDADES a rotar de cada temporada (RT).
 // Salidas[temporada][mes] = unidades escritas, topadas por lo disponible (nunca se vende más de lo que hay en stock).
@@ -1515,7 +1516,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
   function guardar() { setSaving(true); try { saveEstado(empresa, 'temp', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (inventario).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
   // Venta proyectada (unidades del vendedor): es el TOTAL a vender del mes. Producto solo reparte de qué temporada sale.
-  const ventaProyMes = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
+  const ventaProyMes = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += Math.max(0, num(r[4 + m])) }); return s })
   const { flujos, saldoUnits, salidasUnits } = inventarioCalc(data, marca, ventaProyMes)
   // Temporadas ACTIVAS: las temporadas de COMPRA 2028 (SS28/FW28) salen SIEMPRE —son las que se están comprando—
   // más cualquier temporada anterior que tenga saldo inicial o compras. Las de inventario vacías no se muestran.
@@ -3009,7 +3010,7 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
   const mpct = (v) => v.venta > 0 ? (v.margen / v.venta * 100) : null
 
   // Por cliente y marca: unidades 2028 (Cap_Ventas) vs 2026 (histórico EBP) + crecimiento; los clientes nuevos también salen
-  const uni2028 = (mca) => { const o = {}; P.ven.forEach((r) => { if (!inM(r, mca)) return; const cli = String(r[1] || '').trim(); if (!cli) return; let s = 0; for (let j = 0; j < 12; j++) s += num(r[4 + j]); o[cli] = (o[cli] || 0) + s }); return o }
+  const uni2028 = (mca) => { const o = {}; P.ven.forEach((r) => { if (!inM(r, mca)) return; const cli = String(r[1] || '').trim(); if (!cli) return; let s = 0; for (let j = 0; j < 12; j++) s += Math.max(0, num(r[4 + j])); o[cli] = (o[cli] || 0) + s }); return o }
   const uni2026 = (mca) => { const o = {}; (P.hist || []).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca) || String(r[1]) !== '2026') return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; const cli = String(r[8] || '').trim(); if (!cli) return; o[cli] = (o[cli] || 0) + num(r[7]) }); return o }
   const cliRows = marcas.map((mca) => {
     const u28 = uni2028(mca), u26 = uni2026(mca)
