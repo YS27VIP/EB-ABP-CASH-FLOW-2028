@@ -3627,6 +3627,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [hist, setHist] = useState([])
   const [cats, setCats] = useState({})
   const [producto, setProducto] = useState([])
+  const [venSheet, setVenSheet] = useState([]) // filas guardadas en Cap_Ventas (respaldo del plan 2028)
   const [growth, setGrowth] = useState(() => { try { return JSON.parse(localStorage.getItem('ventas_growth_' + empresa) || '{}') } catch { return {} } })
   const [catPart, setCatPart] = useState(() => { try { return JSON.parse(localStorage.getItem('catpart_' + empresa) || '{}') } catch { return {} } })
   useEffect(() => { try { localStorage.setItem('catpart_' + empresa, JSON.stringify(catPart)) } catch { } }, [catPart, empresa])
@@ -3659,6 +3660,23 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
       try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Categorias'); if (j2 && j2.ok && j2.values) { const out = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
       try { const j3 = await gReadTab('Cap_Producto'); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
+      // Recupera el plan 2028 guardado en la hoja: rellena SOLO las celdas que estén vacías en el navegador
+      // (así lo guardado reaparece tras un refresh y Ventas queda consistente con lo que ve Producto).
+      try {
+        const jv = await gReadTab('Cap_Ventas')
+        if (jv && jv.ok && jv.values) {
+          const rows = jv.values.slice(1); setVenSheet(rows)
+          setManual((prev) => {
+            const next = { ...prev }
+            rows.forEach((r) => {
+              if (upper(r[0]) !== upper(empresa)) return
+              const cli = String(r[1] || '').trim(), mar = r[3]; if (!cli || !mar) return
+              for (let mi = 0; mi < 12; mi++) { const k = mar + '|' + cli + '|' + mi; if (next[k] === undefined || next[k] === '') { const v = num(r[4 + mi]); if (v) next[k] = String(v) } }
+            })
+            return next
+          })
+        }
+      } catch { }
     })()
   }, [empresa])
   // AUP por categoría (Producto): { categoría: [12] }
@@ -3671,7 +3689,11 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const histClientes = [...(cliByMarca[marca] || [])].sort((a, b) => (u2026[b + '|' + marca] || []).reduce((s, v) => s + v, 0) - (u2026[a + '|' + marca] || []).reduce((s, v) => s + v, 0))
   const histSet = new Set(histClientes.map((c) => upper(c)))
   const addedFor = (addCli[marca] || []).filter((c) => !histSet.has(upper(c)))
-  const clientes = [...histClientes, ...addedFor]
+  // Clientes que ya tienen plan 2028 guardado en la hoja pero no están en histórico ni agregados: también deben salir.
+  const venCli = [...new Set(venSheet.filter((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(marca)).map((r) => String(r[1] || '').trim()).filter(Boolean))]
+  const yaEn = new Set([...histClientes, ...addedFor].map((c) => upper(c)))
+  const desdeHoja = venCli.filter((c) => !yaEn.has(upper(c)))
+  const clientes = [...histClientes, ...addedFor, ...desdeHoja]
   const esNuevo = (cli) => !histSet.has(upper(cli)) // sin histórico 2026 → unidades 2028 manuales
   const g = (cli) => num(growth[cli + '|' + marca])
   const u26 = (cli, mi) => (u2026[cli + '|' + marca] || [])[mi] || 0
