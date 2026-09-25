@@ -56,7 +56,7 @@ async function _api(path, opts = {}) {
   return r.json()
 }
 const A1 = (t) => "'" + String(t).replace(/'/g, "''") + "'"
-async function readValues(tab) { try { const j = await _api('/values/' + encodeURIComponent(A1(tab))); return j.values || [] } catch { return [] } }
+async function readValues(tab) { try { const j = await _api('/values/' + encodeURIComponent(A1(tab)) + '?valueRenderOption=UNFORMATTED_VALUE'); return j.values || [] } catch { return [] } }
 async function writeValues(tab, a1, values, raw) { return _api('/values/' + encodeURIComponent(A1(tab) + '!' + a1) + '?valueInputOption=' + (raw ? 'RAW' : 'USER_ENTERED'), { method: 'PUT', body: JSON.stringify({ values }) }) }
 async function appendValues(tab, values, raw) { return _api('/values/' + encodeURIComponent(A1(tab) + '!A1') + ':append?valueInputOption=' + (raw ? 'RAW' : 'USER_ENTERED') + '&insertDataOption=INSERT_ROWS', { method: 'POST', body: JSON.stringify({ values }) }) }
 async function clearValues(tab) { return _api('/values/' + encodeURIComponent(A1(tab)) + ':clear', { method: 'POST', body: '{}' }) }
