@@ -1575,7 +1575,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
               <div className="kpi"><div className="k">Saldo que queda (fin año)</div><div className="v">{fmt(T.queda)}</div><div className="s">sin rotar</div></div>
             </div>
             <div className="tablewrap"><table>
-              <thead><tr><th className="l">Temporada</th><th>Inicial</th><th>Compras</th><th>Disponible</th><th>A vender</th><th>Queda (fin año)</th></tr></thead>
+              <thead><tr><th className="l">Temporada</th><th>Inicial</th><th>Compras</th><th>Disponible</th><th>Venta</th><th>Saldo (fin año)</th></tr></thead>
               <tbody>
                 {res.map((r) => { const buy = BUY_SEASONS.includes(r.s); return <tr key={r.s}><td className="l">{r.s}</td><td className="tot">{fmt(r.ini)}</td>{buy ? <td className="tot">{fmt(r.comp)}</td> : <td className="tot" style={{ background: '#eef1f4', color: '#9aa3ad' }} title="Solo SS28/FW28 (compras 2028) pueden tener compras; las temporadas anteriores son saldo, no se compran">—</td>}<td className="tot">{fmt(r.disp)}</td><td className="tot">{fmt(r.vend)}</td><td className="tot">{fmt(r.queda)}</td></tr> })}
                 <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(T.ini)}</td><td className="tot">{fmt(T.comp)}</td><td className="tot">{fmt(T.disp)}</td><td className="tot">{fmt(T.vend)}</td><td className="tot">{fmt(T.queda)}</td></tr>
@@ -1753,7 +1753,7 @@ function ResumenInventario({ marca, tempState, precios, empresa }) {
         <div className="kpi"><div className="k">Saldo que queda (fin año)</div><div className="v">{vista === '$' ? '$' + fmt(T.$queda) : fmt(T.queda)}</div><div className="s">sin rotar</div></div>
       </div>
       <div className="tablewrap"><table>
-        <thead><tr><th className="l">Temporada</th><th>Inicial</th><th>Compras</th><th>Disponible</th><th>A vender</th><th>Queda (fin año)</th></tr></thead>
+        <thead><tr><th className="l">Temporada</th><th>Inicial</th><th>Compras</th><th>Disponible</th><th>Venta</th><th>Saldo (fin año)</th></tr></thead>
         <tbody>
           {res.map((r) => { const buy = BUY_SEASONS.includes(r.s); return <tr key={r.s}><td className="l">{r.s}</td><td className="tot">{C(r.ini, r.ini * r.auc)}</td>{buy ? <td className="tot">{C(r.comp, r.comp * r.auc)}</td> : <td className="tot" style={{ background: '#eef1f4', color: '#9aa3ad' }} title="Solo SS28/FW28/SS29 (compras 2028) pueden tener compras; las temporadas anteriores son saldo, no se compran">—</td>}<td className="tot">{C(r.disp, r.disp * r.auc)}</td><td className="tot">{C(r.vend, r.vend * r.auc)}</td><td className="tot">{C(r.queda, r.queda * r.auc)}</td></tr> })}
           <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{C(T.ini, T.$ini)}</td><td className="tot">{C(T.comp, T.$comp)}</td><td className="tot">{C(T.disp, T.$disp)}</td><td className="tot">{C(T.vend, T.$vend)}</td><td className="tot">{C(T.queda, T.$queda)}</td></tr>
@@ -3740,6 +3740,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const tot26Marca = mes26.reduce((a, b) => a + b, 0)
   const tot25Marca = mes25.reduce((a, b) => a + b, 0)
   const crecMarca = tot26Marca ? (totMarcaSel - tot26Marca) / tot26Marca * 100 : 0
+  const crec25Marca = tot25Marca ? (totMarcaSel - tot25Marca) / tot25Marca * 100 : 0
 
   async function guardar() {
     setSaving(true); setMsg(null)
@@ -3913,7 +3914,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                 </Fragment2>
               ) })}
               {clientes.length > 0 && <>
-                <tr className="grandrow"><td className="l" rowSpan={3}>TOTAL {marca}</td><td rowSpan={3}>{tot26Marca ? (crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1) + '%' : '—'}</td><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></tr>
+                <tr className="grandrow"><td className="l" rowSpan={3}>TOTAL {marca}</td><td rowSpan={3} style={{ fontSize: 10.5, lineHeight: 1.35, whiteSpace: 'nowrap' }} title="Crecimiento del total 2028 frente a cada año histórico">{(tot26Marca || tot25Marca) ? <>{tot26Marca ? <div>vs 2026: <b style={{ color: crecMarca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1)}%</b></div> : null}{tot25Marca ? <div>vs 2025: <b style={{ color: crec25Marca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crec25Marca >= 0 ? '+' : '') + crec25Marca.toFixed(1)}%</b></div> : null}</> : '—'}</td><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></tr>
                 <tr className="grandrow"><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>
                 <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td><td className="tot">100%</td></tr>
               </>}
