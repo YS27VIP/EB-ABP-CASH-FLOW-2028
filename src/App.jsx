@@ -2254,12 +2254,6 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   const col = sbuColor(sbuName)
   const acc = marca === '__TOTAL__' ? col : marcaColor(marca)
   const totTabEf = (['brand', 'viajes', 'mk', 'ucvm', 'log', 'mivista'].includes(totTab) && !puedeDir) ? 'cash' : (totTab === 'cash' && !pu('Finanzas')) ? 'brand' : totTab
-  // "Mi vista": el director elige qué bloques ver, apilados. Se guarda por persona y SBU.
-  const misVistaKey = `abp_vista_${getEmail()}_${sbuName}`
-  const [misBloques, setMisBloques] = useState(() => { try { const v = JSON.parse(localStorage.getItem(misVistaKey) || 'null'); return Array.isArray(v) ? v : ['brand', 'ucvm'] } catch { return ['brand', 'ucvm'] } })
-  const toggleBloque = (id) => setMisBloques((prev) => { const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]; try { localStorage.setItem(misVistaKey, JSON.stringify(next)) } catch { } return next })
-  const BLOQUES = [{ id: 'brand', icon: '📊', label: 'Contribución de la SBU', ok: puedeDir }, { id: 'ucvm', icon: '📦', label: 'Unid · Venta · Costo · Margen', ok: puedeDir }, { id: 'log', icon: '🚚', label: 'Logística', ok: puedeDir }, { id: 'mk', icon: '📣', label: 'Marketing', ok: puedeDir }, { id: 'viajes', icon: '🧳', label: 'Viajes', ok: puedeDir }, { id: 'cash', icon: '💵', label: 'Cash Flow', ok: pu('Finanzas') }].filter((b) => b.ok)
-  const renderBloque = (id) => { if (id === 'brand') return <BrandContribSBU empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />; if (id === 'ucvm') return <ResumenMarcas empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} vista="ucvm" />; if (id === 'log') return <LogisticaResumen empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />; if (id === 'mk') return <ResumenMarcas empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} vista="mk" />; if (id === 'viajes') return <ViajesEquipo empresa={empresa} marca="__TOTAL__" sbuName={sbuName} marcasSBU={marcasSBU} modo="total" />; if (id === 'cash') return <CashFlowForm key={'cftot' + sbuName} role={cashRole} rubro={cashRubro} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={`TOTAL::${sbuName}`} />; return null }
 
   if (isRetail) {
     return <div className="panel"><h3 style={{ color: sbuColor('Retail') }}>Retail — tiendas propias</h3><div className="note warn">Retail le compra internamente a las SBU (venta intercompañía). Para activarlo necesito el <b>precio de transferencia</b> (margen fijo, % sobre costo o AUP interno). En cuanto lo definamos, aquí verás la captura y el consolidado de Retail. 🏬</div></div>
@@ -2287,23 +2281,13 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
               {puedeDir && <button className={'seg' + (totTabEf === 'log' ? ' active' : '')} onClick={() => setTotTab('log')} style={totTabEf === 'log' ? { background: col, borderColor: col, color: '#fff' } : {}}>🚚 Logística</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'mk' ? ' active' : '')} onClick={() => setTotTab('mk')} style={totTabEf === 'mk' ? { background: col, borderColor: col, color: '#fff' } : {}}>📣 Marketing</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'viajes' ? ' active' : '')} onClick={() => setTotTab('viajes')} style={totTabEf === 'viajes' ? { background: col, borderColor: col, color: '#fff' } : {}}>🧳 Viajes</button>}
-              {puedeDir && <button className={'seg' + (totTabEf === 'mivista' ? ' active' : '')} onClick={() => setTotTab('mivista')} style={totTabEf === 'mivista' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>🎛️ Mi vista</button>}
+              {puedeDir && <button className={'seg' + (totTabEf === 'mivista' ? ' active' : '')} onClick={() => setTotTab('mivista')} style={totTabEf === 'mivista' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>📊 Comparador</button>}
               {puedeDir && <><div style={{ flex: 1 }}></div><SbuResultDownload empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} /></>}
             </div>
             {!puedeDir && !pu('Finanzas')
               ? <div className="note warn">No tienes acceso al consolidado de esta SBU. Entra a tu área (Ventas/Producto/Logística/Marketing) eligiendo una marca en el panel de la izquierda.</div>
               : totTabEf === 'mivista'
-              ? (<>
-                  <div className="panel" style={{ marginBottom: 16 }}>
-                    <h3 style={{ margin: '0 0 6px' }}>🎛️ Mi vista — {sbuName} <span className="unit">(elige qué quieres ver)</span></h3>
-                    <div className="sub">Marca los bloques que quieres ver en tu tablero. Se guardan solo para ti y aparecen apilados abajo.</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {BLOQUES.map((b) => { const on = misBloques.includes(b.id); return <label key={b.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 20, border: '1.5px solid ' + (on ? col : 'var(--line)'), background: on ? col : '#fff', color: on ? '#fff' : 'var(--txt)', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}><input type="checkbox" checked={on} onChange={() => toggleBloque(b.id)} style={{ accentColor: col }} />{b.icon} {b.label}</label> })}
-                    </div>
-                  </div>
-                  {misBloques.filter((id) => BLOQUES.some((b) => b.id === id)).map((id) => <div key={id} style={{ marginBottom: 22 }}>{renderBloque(id)}</div>)}
-                  {misBloques.filter((id) => BLOQUES.some((b) => b.id === id)).length === 0 && <div className="note warn">Aún no has elegido bloques. Marca arriba lo que quieres ver y aparecerá aquí.</div>}
-                </>)
+              ? <ComparadorMarcas empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />
               : totTabEf === 'cash'
               ? <CashFlowForm key={'cftot' + sbuName} role={cashRole} rubro={cashRubro} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={`TOTAL::${sbuName}`} />
               : totTabEf === 'viajes'
@@ -2972,6 +2956,47 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
 }
 
 /* ===== RESUMEN POR MARCA: Marketing / Unidades·Venta·Costo·Margen (vista TOTAL SBU) ===== */
+/* ===== COMPARADOR DE MARCAS: KPIs de todas las marcas de la SBU lado a lado (vista consolidada del director) ===== */
+function ComparadorMarcas({ empresa, sbuName, marcasSBU }) {
+  const [P, setP] = useState(null)
+  useEffect(() => {
+    (async () => {
+      const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
+      const [ven, prod, cap] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias')])
+      let hist = []; try { const jh = await gHistorico(); if (jh && jh.ok && jh.values) hist = jh.values.slice(1) } catch { }
+      const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3]; if (!mar || !c) return; (cats[mar] = cats[mar] || []).push(c) })
+      setP({ ven, prod, cats, hist })
+    })()
+  }, [empresa])
+  const col = sbuColor(sbuName)
+  if (!P) return <div className="panel"><h3 style={{ color: col }}>📊 Comparador de marcas — {sbuName}</h3><div className="sub">Cargando…</div></div>
+  const marcas = marcasSBU || []
+  const u26tot = (mca) => { let s = 0; (P.hist || []).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca) || String(r[1]) !== '2026') return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; s += num(r[7]) }); return s }
+  const filas = marcas.map((m) => {
+    const r = realAupAuc(empresa, m, P.ven, P.prod, (P.cats[m] || []))
+    const unidades = r.totalUnits.reduce((a, b) => a + b, 0), venta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0)
+    const margen = venta - costo, u26 = u26tot(m)
+    return { m, unidades, venta, costo, margen, aup: unidades ? venta / unidades : 0, mpct: venta ? margen / venta * 100 : null, u26, crec: u26 > 0 ? (unidades - u26) / u26 * 100 : null, nuevo: u26 === 0 && unidades > 0 }
+  })
+  const T = filas.reduce((a, f) => ({ unidades: a.unidades + f.unidades, venta: a.venta + f.venta, costo: a.costo + f.costo, margen: a.margen + f.margen, u26: a.u26 + f.u26 }), { unidades: 0, venta: 0, costo: 0, margen: 0, u26: 0 })
+  const share = (v) => T.venta > 0 ? (v / T.venta * 100) : 0
+  const crecTot = T.u26 > 0 ? (T.unidades - T.u26) / T.u26 * 100 : null
+  const pct = (x) => x == null ? '—' : (x >= 0 ? '+' : '') + x.toFixed(1) + '%'
+  return (
+    <div className="panel">
+      <h3 style={{ color: col }}>📊 Comparador de marcas — {sbuName} <span className="unit">(lado a lado · 2028)</span></h3>
+      <div className="sub">Las marcas de la SBU comparadas en los indicadores clave: volumen, venta, precio promedio (AUP), rentabilidad y crecimiento vs 2026. Consolida en una sola vista lo que está repartido en las demás pestañas.</div>
+      <div className="tablewrap"><table>
+        <thead><tr><th className="l">Marca</th><th>Unidades</th><th>Venta Neta</th><th>% de la SBU</th><th>AUP prom.</th><th>Margen $</th><th>Margen %</th><th>Crec. vs 2026</th></tr></thead>
+        <tbody>
+          {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td><td className="tot">{fmt(f.unidades)}</td><td className="tot">${fmt(f.venta)}</td><td className="tot">{share(f.venta).toFixed(1)}%</td><td className="tot" title="Precio promedio = Venta Neta ÷ Unidades">${fmt(f.aup)}</td><td className="tot">${fmt(f.margen)}</td><td className="tot" style={{ fontWeight: 700 }}>{f.mpct == null ? '—' : f.mpct.toFixed(1) + '%'}</td><td className={'tot ' + (f.crec == null ? '' : f.crec >= 0 ? 'pos' : 'neg')} title={f.nuevo ? 'Marca nueva (sin histórico 2026)' : (f.u26 ? `2028 ${fmt(f.unidades)} ud vs 2026 ${fmt(f.u26)} ud` : '')}>{f.nuevo ? '🆕 nuevo' : pct(f.crec)}</td></tr>)}
+          <tr className="grandrow"><td className="l">TOTAL {sbuName}</td><td className="tot">{fmt(T.unidades)}</td><td className="tot">${fmt(T.venta)}</td><td className="tot">100%</td><td className="tot">${fmt(T.unidades ? T.venta / T.unidades : 0)}</td><td className="tot">${fmt(T.margen)}</td><td className="tot">{T.venta ? (T.margen / T.venta * 100).toFixed(1) + '%' : '—'}</td><td className={'tot ' + (crecTot == null ? '' : crecTot >= 0 ? 'pos' : 'neg')}>{pct(crecTot)}</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  )
+}
+
 function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
   const [P, setP] = useState(null)
   const [mkref, setMkref] = useState(null) // marketing de referencia (EBP) 2025/2026
