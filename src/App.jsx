@@ -2253,7 +2253,13 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   const role = SECS.find((r) => r.id === secId)
   const col = sbuColor(sbuName)
   const acc = marca === '__TOTAL__' ? col : marcaColor(marca)
-  const totTabEf = (['brand', 'viajes', 'mk', 'ucvm', 'log'].includes(totTab) && !puedeDir) ? 'cash' : (totTab === 'cash' && !pu('Finanzas')) ? 'brand' : totTab
+  const totTabEf = (['brand', 'viajes', 'mk', 'ucvm', 'log', 'mivista'].includes(totTab) && !puedeDir) ? 'cash' : (totTab === 'cash' && !pu('Finanzas')) ? 'brand' : totTab
+  // "Mi vista": el director elige qué bloques ver, apilados. Se guarda por persona y SBU.
+  const misVistaKey = `abp_vista_${getEmail()}_${sbuName}`
+  const [misBloques, setMisBloques] = useState(() => { try { const v = JSON.parse(localStorage.getItem(misVistaKey) || 'null'); return Array.isArray(v) ? v : ['brand', 'ucvm'] } catch { return ['brand', 'ucvm'] } })
+  const toggleBloque = (id) => setMisBloques((prev) => { const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]; try { localStorage.setItem(misVistaKey, JSON.stringify(next)) } catch { } return next })
+  const BLOQUES = [{ id: 'brand', icon: '📊', label: 'Contribución de la SBU', ok: puedeDir }, { id: 'ucvm', icon: '📦', label: 'Unid · Venta · Costo · Margen', ok: puedeDir }, { id: 'log', icon: '🚚', label: 'Logística', ok: puedeDir }, { id: 'mk', icon: '📣', label: 'Marketing', ok: puedeDir }, { id: 'viajes', icon: '🧳', label: 'Viajes', ok: puedeDir }, { id: 'cash', icon: '💵', label: 'Cash Flow', ok: pu('Finanzas') }].filter((b) => b.ok)
+  const renderBloque = (id) => { if (id === 'brand') return <BrandContribSBU empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />; if (id === 'ucvm') return <ResumenMarcas empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} vista="ucvm" />; if (id === 'log') return <LogisticaResumen empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />; if (id === 'mk') return <ResumenMarcas empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} vista="mk" />; if (id === 'viajes') return <ViajesEquipo empresa={empresa} marca="__TOTAL__" sbuName={sbuName} marcasSBU={marcasSBU} modo="total" />; if (id === 'cash') return <CashFlowForm key={'cftot' + sbuName} role={cashRole} rubro={cashRubro} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={`TOTAL::${sbuName}`} />; return null }
 
   if (isRetail) {
     return <div className="panel"><h3 style={{ color: sbuColor('Retail') }}>Retail — tiendas propias</h3><div className="note warn">Retail le compra internamente a las SBU (venta intercompañía). Para activarlo necesito el <b>precio de transferencia</b> (margen fijo, % sobre costo o AUP interno). En cuanto lo definamos, aquí verás la captura y el consolidado de Retail. 🏬</div></div>
@@ -2281,10 +2287,23 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
               {puedeDir && <button className={'seg' + (totTabEf === 'log' ? ' active' : '')} onClick={() => setTotTab('log')} style={totTabEf === 'log' ? { background: col, borderColor: col, color: '#fff' } : {}}>🚚 Logística</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'mk' ? ' active' : '')} onClick={() => setTotTab('mk')} style={totTabEf === 'mk' ? { background: col, borderColor: col, color: '#fff' } : {}}>📣 Marketing</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'viajes' ? ' active' : '')} onClick={() => setTotTab('viajes')} style={totTabEf === 'viajes' ? { background: col, borderColor: col, color: '#fff' } : {}}>🧳 Viajes</button>}
+              {puedeDir && <button className={'seg' + (totTabEf === 'mivista' ? ' active' : '')} onClick={() => setTotTab('mivista')} style={totTabEf === 'mivista' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>🎛️ Mi vista</button>}
               {puedeDir && <><div style={{ flex: 1 }}></div><SbuResultDownload empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} /></>}
             </div>
             {!puedeDir && !pu('Finanzas')
               ? <div className="note warn">No tienes acceso al consolidado de esta SBU. Entra a tu área (Ventas/Producto/Logística/Marketing) eligiendo una marca en el panel de la izquierda.</div>
+              : totTabEf === 'mivista'
+              ? (<>
+                  <div className="panel" style={{ marginBottom: 16 }}>
+                    <h3 style={{ margin: '0 0 6px' }}>🎛️ Mi vista — {sbuName} <span className="unit">(elige qué quieres ver)</span></h3>
+                    <div className="sub">Marca los bloques que quieres ver en tu tablero. Se guardan solo para ti y aparecen apilados abajo.</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {BLOQUES.map((b) => { const on = misBloques.includes(b.id); return <label key={b.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 20, border: '1.5px solid ' + (on ? col : 'var(--line)'), background: on ? col : '#fff', color: on ? '#fff' : 'var(--txt)', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}><input type="checkbox" checked={on} onChange={() => toggleBloque(b.id)} style={{ accentColor: col }} />{b.icon} {b.label}</label> })}
+                    </div>
+                  </div>
+                  {misBloques.filter((id) => BLOQUES.some((b) => b.id === id)).map((id) => <div key={id} style={{ marginBottom: 22 }}>{renderBloque(id)}</div>)}
+                  {misBloques.filter((id) => BLOQUES.some((b) => b.id === id)).length === 0 && <div className="note warn">Aún no has elegido bloques. Marca arriba lo que quieres ver y aparecerá aquí.</div>}
+                </>)
               : totTabEf === 'cash'
               ? <CashFlowForm key={'cftot' + sbuName} role={cashRole} rubro={cashRubro} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={`TOTAL::${sbuName}`} />
               : totTabEf === 'viajes'
