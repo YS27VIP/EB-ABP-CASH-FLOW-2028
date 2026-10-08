@@ -2818,6 +2818,18 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   const col = sbuColor(sbuName)
   const acc = marca === '__TOTAL__' ? col : marcaColor(marca)
   const totTabEf = (['brand', 'viajes', 'mk', 'ucvm', 'log', 'mivista', 'avance'].includes(totTab) && !puedeDir) ? 'cash' : (totTab === 'cash' && !pu('Finanzas')) ? 'brand' : totTab
+  // Indicador de avance por marca (✅ completo / ⚠️ falta algo) en la barra lateral.
+  const [stVen, setStVen] = useState([]); const [stProd, setStProd] = useState([])
+  const stLog = (() => { try { return JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { return {} } })()
+  useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setStVen(j.values.slice(1)) } catch { } try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setStProd(j2.values.slice(1)) } catch { } })() }, [empresa])
+  const marcaStatus = (m) => {
+    const vOk = stVen.some((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m) && MESES.some((_, i) => num(r[4 + i]) > 0))
+    const pAup = stProd.some((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m) && String(r[1] || '').toUpperCase().indexOf('AUP') === 0 && MESES.some((_, i) => num(r[4 + i]) > 0))
+    const pAuc = stProd.some((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m) && String(r[1] || '').toUpperCase().indexOf('AUC') === 0 && MESES.some((_, i) => num(r[4 + i]) > 0))
+    const lOk = num(stLog[`${m}|PCT_LOGVENTA`]) > 0
+    const miss = []; if (!vOk) miss.push('Ventas'); if (!pAup) miss.push('Producto · AUP'); if (!pAuc) miss.push('Producto · AUC'); if (!lOk) miss.push('Logística · %')
+    return { ok: miss.length === 0, miss }
+  }
 
   if (isRetail) {
     return <div className="panel"><h3 style={{ color: sbuColor('Retail') }}>Retail — tiendas propias</h3><div className="note warn">Retail le compra internamente a las SBU (venta intercompañía). Para activarlo necesito el <b>precio de transferencia</b> (margen fijo, % sobre costo o AUP interno). En cuanto lo definamos, aquí verás la captura y el consolidado de Retail. 🏬</div></div>
@@ -2828,7 +2840,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
         <div className="cmz-sbu">
           <div className="cmz-sbu-h" style={{ color: col, borderLeft: '4px solid ' + col, paddingLeft: 8 }}>{sbuName}</div>
           <button className={'cmz-marca' + (marca === '__TOTAL__' ? ' active' : '')} onClick={() => setMarca('__TOTAL__')} style={marca === '__TOTAL__' ? { background: col, color: '#fff' } : {}}>▣ TOTAL SBU</button>
-          {marcasSBU.map((m) => { const c = marcaColor(m); const on = m === marca; return <button key={m} className={'cmz-marca' + (on ? ' active' : '')} onClick={() => setMarca(m)} style={on ? { background: c, color: '#fff' } : {}}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: c, marginRight: 8, verticalAlign: 'middle' }}></span>{m}</button> })}
+          {marcasSBU.map((m) => { const c = marcaColor(m); const on = m === marca; const st = marcaStatus(m); return <button key={m} className={'cmz-marca' + (on ? ' active' : '')} onClick={() => setMarca(m)} style={on ? { background: c, color: '#fff' } : {}}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: c, marginRight: 8, verticalAlign: 'middle' }}></span>{m}<span style={{ float: 'right' }} title={st.ok ? 'Completo: Ventas, Producto (AUP/AUC) y Logística' : 'Falta por llenar: ' + st.miss.join(', ')}>{st.ok ? '✅' : '⚠️'}</span></button> })}
         </div>
       </aside>
       <div className="cmz-main" style={{ '--accent': acc, borderTop: '4px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
