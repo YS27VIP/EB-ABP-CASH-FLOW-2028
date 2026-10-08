@@ -2058,7 +2058,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <h3>Costos logísticos — {marca}{M$}{aprobLog ? <span className="empchip" style={{ marginLeft: 8, background: 'var(--ok)', fontSize: 11.5 }}>✓ Aprobado por Finanzas</span> : <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Logística" />}</h3>
-      <div className="sub">Cada costo es un <b>grupo de dos filas</b>: la fila <b>base</b> (el número de origen) y la fila <b>«= …»</b> (el costo que suma al total), ambas del <b>mismo color</b>. Los grupos se separan con una línea muy tenue. <b style={{ color: '#1d4ed8' }}>Azul</b> = costo logístico de la venta · <b style={{ color: '#0f766e' }}>Verde</b> = muestras · <b style={{ color: '#b45309' }}>Ámbar</b> = mantenimiento (pendiente por CBM). Pasa el cursor por cualquier número para ver de dónde sale.</div>
+      <div className="sub">Cada costo es un <b>grupo de dos filas</b>: la fila <b>base</b> (el número de origen) y la fila <b>«= …»</b> (el costo que suma al total), ambas del <b>mismo color</b>. Los grupos se separan con una línea muy tenue. <b style={{ color: '#1d4ed8' }}>Azul</b> = costo logístico de la venta · <b style={{ color: '#0f766e' }}>Verde</b> = muestras · <b style={{ color: '#b45309' }}>Ámbar</b> = mantenimiento (pendiente por CBM). Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
       <div className="tablewrap"><table className="vfix logcost-tbl"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
@@ -2898,7 +2898,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
               {puedeDir && <button className={'seg' + (totTabEf === 'mk' ? ' active' : '')} onClick={() => setTotTab('mk')} style={totTabEf === 'mk' ? { background: col, borderColor: col, color: '#fff' } : {}}>📣 Marketing</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'viajes' ? ' active' : '')} onClick={() => setTotTab('viajes')} style={totTabEf === 'viajes' ? { background: col, borderColor: col, color: '#fff' } : {}}>🧳 Viajes</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'mivista' ? ' active' : '')} onClick={() => setTotTab('mivista')} style={totTabEf === 'mivista' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>📊 Comparador</button>}
-              {puedeDir && <button className={'seg' + (totTabEf === 'avance' ? ' active' : '')} onClick={() => setTotTab('avance')} style={totTabEf === 'avance' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>✅ Avance</button>}
+              {puedeDir && <button className={'seg' + (totTabEf === 'avance' ? ' active' : '')} onClick={() => setTotTab('avance')} style={totTabEf === 'avance' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>✅ Progreso</button>}
               {puedeDir && <><div style={{ flex: 1 }}></div><SbuResultDownload empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} /></>}
             </div>
             {!puedeDir && !pu('Finanzas')
@@ -3620,11 +3620,11 @@ function AvanceSBU({ empresa, sbuName, marcasSBU }) {
     ['Marketing', '📣', (m) => mk.some((r) => inM(r, m) && !String(r[1] || '').toUpperCase().startsWith('VIAJES') && anyMes(r))],
     ['Pago prov.', '💵', (m) => !!cf[`PTERM|${m}`]],
   ]
-  if (load) return <div className="panel"><h3 style={{ color: col }}>✅ Avance — {sbuName}</h3><div className="sub">⏳ Cargando el avance…</div></div>
+  if (load) return <div className="panel"><h3 style={{ color: col }}>✅ Progreso — {sbuName}</h3><div className="sub">⏳ Cargando el progreso…</div></div>
   const pct = (m) => Math.round(SECTIONS.filter(([, , fn]) => fn(m)).length / SECTIONS.length * 100)
   return (
     <div className="panel">
-      <h3 style={{ color: col }}>✅ Avance de llenado — {sbuName} <span className="unit">(qué falta por marca · 2028)</span></h3>
+      <h3 style={{ color: col }}>✅ Progreso de llenado — {sbuName} <span className="unit">(qué falta por marca · 2028)</span></h3>
       <div className="sub">Monitorea qué secciones <b>llenables</b> están completas (<b style={{ color: '#15803d' }}>✓</b>) o pendientes (<b style={{ color: '#b45309' }}>•</b>) por marca. Pasa el cursor sobre el % para ver qué falta.</div>
       <div className="tablewrap"><table>
         <thead><tr><th className="l">Marca</th>{SECTIONS.map(([n, ic]) => <th key={n} title={n}>{ic}<br /><span className="unit" style={{ fontSize: 9.5 }}>{n}</span></th>)}<th>% completo</th></tr></thead>
@@ -4545,11 +4545,11 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar marca'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      {usarCat && <div className="note ok" style={{ marginBottom: 14 }}>Las <b>categorías por cliente</b> (y su % + referencia FW26/SS26) ahora las llena el <b>Director</b> en su pestaña <b>Categorías</b>. Aquí solo se usan para repartir las unidades.</div>}
+      {usarCat && <div className="note ok" style={{ marginBottom: 14 }}>Las <b>categorías por cliente</b> (y su % + referencia FW26/SS26) ahora las llena el <b>Director</b> en su pestaña <b>Categorías</b>.</div>}
 
       <div className="panel">
         <h3>Unidades 2028 por categoría y mes — {marca}{UD} <span className="unit">(unidades)</span></h3>
-        <div className="sub">{usarCat ? 'Las unidades de cada cliente se reparten por categoría según el % que el Director definió por cliente. El Peso % es ponderado: unidades de la categoría ÷ unidades totales de la marca (no un valor fijo).' : catMsg}</div>
+        <div className="sub">{usarCat ? 'Las unidades de cada cliente se distribuyen entre las categorías usando el % que el Director definió para ese cliente. La columna Peso % muestra cuánto pesa cada categoría en la marca: unidades de la categoría ÷ unidades totales de la marca.' : catMsg}</div>
         <div className="tablewrap">
           <table className="vfix">
             <colgroup><col style={{ width: '270px' }} /><col style={{ width: '66px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
@@ -4572,7 +4572,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>Venta Neta 2028 por categoría y mes — {marca}{M$} <span className="unit">(dinero $)</span></h3>
-            <div className="sub"><b>Venta Neta del mes = unidades del mes × AUP efectivo de ese mes</b> (por categoría). El <b>AUP lo define Producto por categoría y temporada</b> — no depende del cliente (el cliente solo define cuántas unidades y en qué categorías). Como cada mes se vende una <b>mezcla de temporadas</b> (Paso 2), el AUP efectivo del mes es el <b>promedio ponderado</b> de las temporadas que rotan ese mes. El Total del año es la suma de los meses (no un promedio anual único). <span className="unit">Pasa el cursor por cualquier número para ver de dónde sale.</span></div>
+            <div className="sub"><b>Venta Neta del mes = unidades del mes × AUP efectivo de ese mes</b> (por categoría). El <b>AUP lo define Producto por categoría y temporada</b> — no depende del cliente (el cliente solo define cuántas unidades y en qué categorías). Como cada mes se vende una <b>mezcla de temporadas</b> (Paso 2), el AUP efectivo del mes es el <b>promedio ponderado</b> de las temporadas que rotan ese mes. El Total del año es la suma de los meses (no un promedio anual único). <span className="unit">Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</span></div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
@@ -4631,7 +4631,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           {/* MARGEN $ */}
           <div className="panel">
             <h3>Margen 2028 por categoría y mes — {marca}{M$} <span className="unit">($ dinero)</span></h3>
-            <div className="sub"><b>Margen del mes = Venta Neta − Costo</b> (por categoría). El Total del año es la suma de los meses. <span className="unit">Pasa el cursor por cualquier número para ver de dónde sale.</span></div>
+            <div className="sub"><b>Margen del mes = Venta Neta − Costo</b> (por categoría). El Total del año es la suma de los meses. <span className="unit">Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</span></div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
