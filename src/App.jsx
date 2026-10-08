@@ -1514,6 +1514,39 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           </div>
         )
       })()}
+
+      {(() => {
+        const flow2028 = (mca) => {
+          const comp = Array(12).fill(0), sal = Array(12).fill(0), fin = Array(12).fill(0)
+          try { const inv = inventarioCalc(temp, mca, ventaMarcaMes(ventas, empresa, mca)); BUY_SEASONS.forEach((s) => { const f = inv.flujos[s]; for (let m = 0; m < 12; m++) { comp[m] += f[m].comp; sal[m] += f[m].sal; fin[m] += f[m].fin } }) } catch { }
+          return { comp, sal, fin }
+        }
+        const marcasFlow = isTotal ? sbuMarcas : [marca]
+        const agg = { comp: Array(12).fill(0), sal: Array(12).fill(0), fin: Array(12).fill(0) }
+        marcasFlow.forEach((mca) => { const f = flow2028(mca); for (let m = 0; m < 12; m++) { agg.comp[m] += f.comp[m]; agg.sal[m] += f.sal[m]; agg.fin[m] += f.fin[m] } })
+        const RT = (a) => a.reduce((x, y) => x + y, 0)
+        const totComp = RT(agg.comp), totSal = RT(agg.sal), stockFin = agg.fin[11]
+        const pctAsig = totComp ? (totSal / totComp * 100) : 0
+        return (
+          <div className="panel">
+            <h3>🪞 Compras 2028: asignado a cliente vs. stock {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`} <span className="unit">(unidades · consulta, solo lectura)</span></h3>
+            <div className="sub">De las <b>compras 2028</b>, cuánto ya está <b>asignado a un cliente</b> (vendido) y cuánto <b>queda en stock</b>, mes a mes. (Las muestras no entran aquí.)</div>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', margin: '6px 0 14px' }}>
+              <div className="kpi"><div className="k">Comprado 2028</div><div className="v">{fmt(totComp)}</div><div className="s">unidades</div></div>
+              <div className="kpi"><div className="k">Asignado a cliente</div><div className="v" style={{ color: '#15803d' }}>{fmt(totSal)}</div><div className="s">{fmt(pctAsig)}% de lo comprado</div></div>
+              <div className="kpi"><div className="k">En stock (fin de año)</div><div className="v" style={{ color: '#b45309' }}>{fmt(stockFin)}</div><div className="s">sin asignar</div></div>
+            </div>
+            <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+              <tbody>
+                <tr><td className="l">Compras del mes (ud)</td>{agg.comp.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totComp)}</td></tr>
+                <tr><td className="l" style={{ color: '#15803d' }}>Asignado a cliente (ud)</td>{agg.sal.map((v, m) => <td key={m} className="tot" style={{ color: '#15803d' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(totSal)}</td></tr>
+                <tr className="grandrow"><td className="l" style={{ color: '#b45309' }}>Stock al fin del mes (ud)</td>{agg.fin.map((v, m) => <td key={m} className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(stockFin)}</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        )
+      })()}
     </>
   )
 }
