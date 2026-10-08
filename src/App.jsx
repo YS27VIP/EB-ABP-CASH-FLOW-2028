@@ -490,6 +490,10 @@ export default function App() {
               <span className="appicon" style={{ background: '#b45309' }}>🚚</span>
               <span className="applabel">Logística</span>
             </button>}
+            {(puede('Finanzas') || esAdmin) && <button className="app" onClick={() => setRoleId('reporte')}>
+              <span className="appicon" style={{ background: '#0e7490' }}>📊</span>
+              <span className="applabel">Reporte</span>
+            </button>}
             {esAdmin && <button className="app" onClick={() => setRoleId('gerencia')}>
               <span className="appicon" style={{ background: '#1f2d3d' }}>📈</span>
               <span className="applabel">Gerencia</span>
@@ -582,6 +586,17 @@ export default function App() {
           <span className="rolechip" style={{ background: '#b45309' }}>🚚 Logística</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
         {estadoReady ? <main><LogisticaHome key={empresa} empresa={empresa} sbus={sbus} /></main> : cargandoMain}
+      </>
+    )
+  }
+
+  if (roleId === 'reporte') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#0e7490' }}>📊 Reporte</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        {estadoReady ? <main><ReporteScreen key={empresa} empresa={empresa} sbus={sbus} /></main> : cargandoMain}
       </>
     )
   }
@@ -1730,6 +1745,77 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
             <tr className="grandrow"><td className="l">Saldo total inventario</td><td></td>{saldoUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(saldoUnits[11])}</td></tr>
           </tbody>
         </table></div>
+      </div>
+    </>
+  )
+}
+
+/* ===== REPORTE (menú): términos de pago de clientes de TODAS las SBU + gráfica por plazo ===== */
+function ReporteScreen({ empresa, sbus }) {
+  const [hist, setHist] = useState([])
+  const [cf, setCf] = useState(() => { try { return JSON.parse(localStorage.getItem(`cf_${empresa}`) || '{}') } catch { return {} } })
+  const [load, setLoad] = useState(true)
+  useEffect(() => { (async () => { try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { } try { setCf(JSON.parse(localStorage.getItem(`cf_${empresa}`) || '{}')) } catch { } setLoad(false) })() }, [empresa])
+  const addcli = (() => { try { return JSON.parse(localStorage.getItem(`addcli_${empresa}`) || '{}') } catch { return {} } })()
+  const histAll = (() => { const s = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) s.add(upper(cli)) }); return s })()
+  const esNew = (cli) => !histAll.has(upper(cli))
+  const clientesDe = (mca) => { const set = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) set.add(cli) }); (addcli[mca] || []).forEach((c) => { if (c) set.add(c) }); return [...set].sort((a, b) => a.localeCompare(b)) }
+  const term = (mca, cli) => cf[`TERM|${mca}|${cli}`] || ''
+  const BUCKETS = ['Cash', '30 días', '60 días', '90 días', '120 días', '150 días', '180 días', 'Intercompañía']
+  const BCOL = { 'Cash': '#0f766e', '30 días': '#2563eb', '60 días': '#7c3aed', '90 días': '#b45309', '120 días': '#be185d', '150 días': '#9a6a1a', '180 días': '#b91c1c', 'Intercompañía': '#64748b', 'Sin plazo': '#cbd5e1' }
+  // Agrega todas las asignaciones (marca × cliente) por plazo
+  const rows = []; const counts = {}; BUCKETS.forEach((b) => counts[b] = 0); counts['Sin plazo'] = 0
+  Object.entries(sbus).forEach(([sbu, marcas]) => marcas.forEach((mca) => clientesDe(mca).forEach((cli) => {
+    const t = term(mca, cli); const key = BUCKETS.includes(t) ? t : 'Sin plazo'; counts[key]++
+    rows.push({ sbu, mca, cli, t: t || '—', nuevo: esNew(cli) })
+  })))
+  const totalAsign = rows.length
+  const maxCount = Math.max(1, ...Object.values(counts))
+  const [fTerm, setFTerm] = useState('')
+  const [buscar, setBuscar] = useState('')
+  const visibles = rows.filter((r) => (!fTerm || (fTerm === 'Sin plazo' ? r.t === '—' : r.t === fTerm)) && (!buscar.trim() || upper(r.cli).indexOf(upper(buscar)) >= 0))
+  if (load) return <div className="panel"><div className="sub">⏳ Cargando el reporte…</div></div>
+  return (
+    <>
+      <div className="panel">
+        <h3>📊 Términos de pago de clientes — {empresa} <span className="unit">(todas las SBU · ventas 2028)</span></h3>
+        <div className="sub">Cómo quedó el <b>plazo de cobro</b> de cada cliente (viene de Salesforce; los <b>nuevos</b> los define el Director). La gráfica cuenta cuántas asignaciones <b>cliente × marca</b> hay en cada plazo. Total: <b>{fmt(totalAsign)}</b>.</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '10px 0 4px' }}>
+          {[...BUCKETS, 'Sin plazo'].map((b) => { const c = counts[b]; const pct = totalAsign ? (c / totalAsign * 100) : 0; return (
+            <div key={b} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', opacity: fTerm && fTerm !== b ? 0.45 : 1 }} onClick={() => setFTerm(fTerm === b ? '' : b)} title="Clic para filtrar la tabla">
+              <div style={{ width: 110, flex: '0 0 110px', fontSize: 12.5, fontWeight: 700, textAlign: 'right', color: BCOL[b] }}>{b}</div>
+              <div style={{ flex: 1, background: '#f1f4f7', borderRadius: 6, height: 22, position: 'relative' }}>
+                <div style={{ width: Math.max(2, c / maxCount * 100) + '%', background: BCOL[b], height: '100%', borderRadius: 6 }}></div>
+              </div>
+              <div style={{ width: 90, flex: '0 0 90px', fontSize: 12.5 }}><b>{c}</b> <span className="unit">({pct.toFixed(0)}%)</span></div>
+            </div>
+          ) })}
+        </div>
+        {fTerm && <div className="sub" style={{ marginTop: 6 }}>Filtrando: <b>{fTerm}</b> · <button className="btn" style={{ padding: '2px 8px' }} onClick={() => setFTerm('')}>✕ quitar filtro</button></div>}
+      </div>
+      <div className="panel">
+        <div className="toolbar" style={{ marginBottom: 8 }}>
+          <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />
+          {buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}
+          <div className="spacer"></div>
+          <span className="unit">{visibles.length} de {totalAsign}</span>
+        </div>
+        <div className="tablewrap" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          <table>
+            <thead><tr><th className="l">SBU</th><th className="l">Marca</th><th className="l">Cliente</th><th>Plazo</th></tr></thead>
+            <tbody>
+              {visibles.length === 0 && <tr><td className="l" colSpan={4}>Sin clientes para el filtro.</td></tr>}
+              {visibles.map((r, i) => (
+                <tr key={i} style={r.nuevo ? { background: '#eff6ff' } : undefined}>
+                  <td className="l" style={{ color: sbuColor(r.sbu), fontWeight: 600 }}>{r.sbu}</td>
+                  <td className="l"><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(r.mca), marginRight: 6 }}></span>{r.mca}</td>
+                  <td className="l">{r.cli}{r.nuevo && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, color: '#0e7490', border: '1px solid #0e7490', borderRadius: 4, padding: '1px 5px' }} title="Cliente nuevo (sin histórico ni plazo de SF)">Nuevo</span>}</td>
+                  <td className="tot" style={{ fontWeight: 700, color: BCOL[BUCKETS.includes(r.t) ? r.t : 'Sin plazo'] }}>{r.t}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   )
