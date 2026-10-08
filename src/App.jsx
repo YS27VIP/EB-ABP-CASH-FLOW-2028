@@ -951,7 +951,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar todo'}</button>
       </div>
       <div className="panel">
-        <h3>{rubro.k} sobre la venta — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(👁️ venta viene de Comercial)</span></h3>
+        <h3>{rubro.k} sobre la venta — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(venta viene de Comercial)</span></h3>
         <div className="sub">Cuánto pesa <b>{rubro.k}</b> sobre la <b>venta neta</b> (Unidades×AUP de Comercial), por mes y en total.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
           <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -963,7 +963,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         </table></div>
       </div>
       <div className="panel">
-        <h3>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>👁️ solo lectura</span> : <Responsable empresa={empresa} seccion="Finanzas" />}</h3>
+        <h3>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>solo lectura</span> : <Responsable empresa={empresa} seccion="Finanzas" />}</h3>
         <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : 'Captura por rubro y mes. Los rubros son iguales para todas las marcas.'} Total: <b>${fmt(totalGeneral)}</b></div>
         <div className="tablewrap">
           <table>
@@ -1247,7 +1247,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map(() => 0)])))); exportXlsx(aoa, `${role.tab}_CASHFLOW_Plantilla.xlsx`) }}>📄 Plantilla</button>
         {!soloVer && <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>}
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
-        {soloVer && <span className="note ok" style={{ margin: 0, padding: '6px 12px' }}>👁️ Solo lectura — esto lo llena Finanzas{esDirector ? ' · tú solo defines el plazo de los clientes nuevos (celdas amarillas)' : ''}</span>}
+        {soloVer && <span className="note ok" style={{ margin: 0, padding: '6px 12px' }}>Solo lectura — esto lo llena Finanzas{esDirector ? ' · tú solo defines el plazo de los clientes nuevos (celdas amarillas)' : ''}</span>}
         {(!soloVer || esDirector) && <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : (esDirector ? '💾 Guardar plazos' : '💾 Guardar')}</button>}
       </div>
       <div className="panel">
@@ -1705,10 +1705,11 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
   const asignMes = salidasUnits // unidades ya asignadas (rotadas) por mes, sumando todas las temporadas (topadas por stock)
 
   if (mode === 'flow') {
+    const m2 = (v) => v ? v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''
     return (
       <div className="panel">
-        <h3>Saldo de inventario por temporada — {marca}{UD} <span className="unit">(unidades · 👁️ del tracking de Producto)</span></h3>
-        <div className="sub">Lo que va quedando sin rotar de cada temporada, mes a mes, <b>en unidades</b>. Alimenta el costo de mantenimiento. El valor en dinero está en la tabla de abajo.</div>
+        <h3>Saldo de inventario por temporada — {marca}{UD} <span className="unit">(unidades · del tracking de Producto)</span></h3>
+        <div className="sub">Saldo sin rotar por cada temporada.</div>
         <div className="tablewrap">
           <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
             <thead><tr><th className="l">Temporada</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Fin año</th></tr></thead>
@@ -1723,8 +1724,8 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
           <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
             <thead><tr><th className="l">Temporada · AUC</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Fin año</th></tr></thead>
             <tbody>
-              {activas.map((s) => { const a = saucSeason(s); return <tr key={s}><td className="l">{s} · ${fmt(a)}</td>{flujos[s].map((x, i) => <td key={i} className="tot">{fmt(x.fin * a)}</td>)}<td className="tot">{fmt(flujos[s][11].fin * a)}</td></tr> })}
-              <tr className="grandrow"><td className="l">Valor total ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(SEASONS.reduce((acc, s) => acc + flujos[s][m].fin * saucSeason(s), 0))}</td>)}<td className="tot">{fmt(SEASONS.reduce((acc, s) => acc + flujos[s][11].fin * saucSeason(s), 0))}</td></tr>
+              {activas.map((s) => { const a = saucSeason(s); return <tr key={s}><td className="l">{s} · ${m2(a)}</td>{flujos[s].map((x, i) => <td key={i} className="tot">{m2(x.fin * a)}</td>)}<td className="tot">{m2(flujos[s][11].fin * a)}</td></tr> })}
+              <tr className="grandrow"><td className="l">Valor total ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{m2(SEASONS.reduce((acc, s) => acc + flujos[s][m].fin * saucSeason(s), 0))}</td>)}<td className="tot">{m2(SEASONS.reduce((acc, s) => acc + flujos[s][11].fin * saucSeason(s), 0))}</td></tr>
             </tbody>
           </table>
         </div>
@@ -1742,7 +1743,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
         const T = res.reduce((a, r) => ({ ini: a.ini + r.ini, comp: a.comp + r.comp, disp: a.disp + r.disp, vend: a.vend + r.vend, queda: a.queda + r.queda }), { ini: 0, comp: 0, disp: 0, vend: 0, queda: 0 })
         return (
           <div className="panel">
-            <h3>Resumen de inventario — {marca} <span className="unit">(👁️ cálculo)</span></h3>
+            <h3>Resumen de inventario — {marca} <span className="unit">(cálculo automático)</span></h3>
             <div className="sub">De un vistazo: lo que <b>tienes disponible</b> (inicial + compras), lo que <b>vas a vender</b> (salidas) y lo que <b>te queda</b> a fin de año, por temporada y en total.</div>
             <div className="kpis" style={{ marginBottom: 12 }}>
               <div className="kpi"><div className="k">Inventario disponible</div><div className="v">{fmt(T.disp)}</div><div className="s">inicial {fmt(T.ini)} + compras {fmt(T.comp)}</div></div>
@@ -2108,7 +2109,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
 
       <div style={{ marginTop: 24 }}>
         <h3>Volumen por categoría — {marca} <span className="unit">(CBM)</span> {ESP('Categoría y tipo de producto son espejo del Director; solo el CBM lo llena Logística.')}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Logística" /></h3>
-        <div className="sub">Las <b>categorías</b> y su <b>tipo de producto</b> vienen de lo que definió el Director (solo lectura, espejo). Aquí Logística escribe el <b>CBM</b> (metros cúbicos) de cada categoría, para dimensionar el volumen de envío y almacenaje.</div>
+        <div className="sub">Las <b>categorías</b> y su <b>tipo de producto</b> vienen de lo que definió el Director. Aquí Logística escribe el <b>CBM</b> (metros cúbicos) de cada categoría, para dimensionar el volumen de envío y almacenaje.</div>
         {catList.length === 0
           ? <div className="note warn">Aún no hay categorías para {marca}. El Director las define en su pestaña <b>Categorías</b>; cuando las guarde, aquí aparecerán para ponerles el CBM.</div>
           : <div className="tablewrap"><table style={{ width: 'auto' }}>
@@ -2160,7 +2161,6 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       })()}
 
       <div className="toolbar" style={{ marginTop: 18, alignItems: 'center' }}>
-        <span className="unit">Guarda el % logístico, el CBM por categoría y los ratios $/ud de muestras en el Google Sheet.</span>
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
@@ -2298,7 +2298,7 @@ function ResumenInventario({ marca, tempState, precios, empresa }) {
   return (
     <div className="panel">
       <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
-        <h3 style={{ margin: 0 }}>Resumen de inventario — {marca} <span className="unit">(👁️ cálculo)</span></h3>
+        <h3 style={{ margin: 0 }}>Resumen de inventario — {marca} {vista === 'ud' ? <span style={{ color: '#1d4ed8', fontWeight: 800 }}>· Unidades</span> : vista === '$' ? <span style={{ color: '#15803d', fontWeight: 800 }}>· Plata</span> : <><span style={{ color: '#1d4ed8', fontWeight: 800 }}>· Unidades</span> <span style={{ color: '#15803d', fontWeight: 800 }}>+ Plata</span></>} <span className="unit">(cálculo automático)</span></h3>
         <div className="spacer"></div>
         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>VER:</span>
         {[['ud', 'Unidades'], ['$', 'Plata'], ['ambas', 'Ambas']].map(([k, lbl]) => <button key={k} className={'seg' + (vista === k ? ' active' : '')} onClick={() => setVista(k)}>{lbl}</button>)}
