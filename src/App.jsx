@@ -1775,6 +1775,31 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
           </div>
         )
       })()}
+
+      {(() => {
+        const r = realAupAuc('TAHO', marca, ventas, producto, catList)
+        const vn = r.ventaMes || Array(12).fill(0)
+        const tot = vn.reduce((a, b) => a + b, 0)
+        return (
+          <div style={{ marginTop: 24 }}>
+            <h3>Ventas netas TAHO — {marca} <span className="unit">($ · espejo, solo lectura)</span></h3>
+            <div className="sub">Espejo de las <b>ventas netas por mes</b> de la empresa <b>TAHO</b> para {marca} (unidades × AUP). Se llena cuando TAHO carga su plan; sirve de referencia para el impacto logístico intercompañía.</div>
+            <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+              <tbody>
+                <tr className="grandrow"><td className="l">Ventas netas TAHO ($)</td>{vn.map((v, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(tot)}</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        )
+      })()}
+
+      <div className="toolbar" style={{ marginTop: 18, alignItems: 'center' }}>
+        <span className="unit">Guarda el % logístico, el CBM por categoría y los ratios $/ud de muestras en el Google Sheet.</span>
+        <div className="spacer"></div>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+      </div>
+      {msg && <div className={'note ' + msg.t} style={{ marginTop: 8 }}>{msg.x}</div>}
     </div>
   )
 }
