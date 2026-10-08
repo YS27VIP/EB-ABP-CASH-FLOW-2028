@@ -1709,10 +1709,10 @@ function LogisticaHome({ empresa, sbus }) {
         <table>
           <thead><tr>
             <th className="l">SBU / Marca</th>
-            <th>% ABP 2028</th><th>Costo log. venta $</th>
+            <th>% ABP 2028</th><th>Costo log. venta $<br /><span className="unit">2028</span></th>
             <th style={{ background: '#fff8e1' }}>ABP 2026</th><th style={{ background: '#fff8e1' }}>ABP 2027</th>
             <th>Real 2026 $</th><th>Real 2026 %</th>
-            <th>Muestras $</th><th>Total log. $</th>
+            <th>Muestras $<br /><span className="unit">2028</span></th><th>Total log. $<br /><span className="unit">2028</span></th>
           </tr></thead>
           <tbody>
             {Object.entries(sbus).map(([sbu, marcas]) => {
@@ -1800,6 +1800,10 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const aprobLog = (() => { try { return !!JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')[`LOGISTICA|${marca}`] } catch { return false } })()
   const pctInput = (k) => <input className={aprobLog ? '' : 'fillin'} value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" style={aprobLog ? { width: 60, textAlign: 'center', background: '#e6f4ea', border: '1px solid #bfe3c9', borderRadius: 6, padding: '6px 8px' } : { width: 60, textAlign: 'center' }} />
   const ratioInput = (k) => <input className={aprobLog ? '' : 'fillin'} value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="$/ud" style={aprobLog ? { width: 68, textAlign: 'center', background: '#e6f4ea', border: '1px solid #bfe3c9', borderRadius: 6, padding: '6px 8px' } : { width: 68, textAlign: 'center' }} />
+  // Referencia del costo logístico de la venta (va dentro del sub-bloque azul, sutil)
+  const MUr = upper(marca); const abpRef = logRef[MUr] || {}; const r26r = (real26.marca || {})[MUr] || { log: 0, vn: 0 }
+  const r26pctr = r26r.vn ? (r26r.log / r26r.vn * 100) : 0
+  const spacer = <tr style={{ height: 12 }}><td colSpan={14} style={{ border: 'none', padding: 0 }}></td></tr>
 
   return (
     <div className="panel">
@@ -1810,21 +1814,6 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <h3>Costos logísticos — {marca}{M$}{aprobLog ? <span className="empchip" style={{ marginLeft: 8, background: 'var(--ok)', fontSize: 11.5 }}>✓ Aprobado por Finanzas</span> : <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Logística" />}</h3>
-      {(() => {
-        const MU = upper(marca); const abpRef = logRef[MU] || {}; const r26 = (real26.marca || {})[MU] || { log: 0, vn: 0 }
-        const r26pct = r26.vn ? (r26.log / r26.vn * 100) : 0; const abp28pct = g(kLog)
-        return (
-          <div style={{ background: '#fffdf2', border: '1px solid #f0e6b8', borderRadius: 10, padding: '10px 14px', marginBottom: 14 }}>
-            <b style={{ color: '#8a6d1a' }}>📦 Referencia — Costo logístico de la venta</b> <span className="unit">(para que no se pierda de vista al definir tu %)</span>
-            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, fontSize: 13, alignItems: 'center' }}>
-              <span>Tu <b>ABP 2028</b>: <b style={{ color: '#1d4ed8' }}>{fmt(abp28pct)}%</b> · <b>${fmt(rowTot(costoLog))}</b></span>
-              <span style={{ background: '#fff3bf', padding: '3px 9px', borderRadius: 6 }}>ABP 2026: <b>{fmt(abpRef.pct2026)}%</b></span>
-              <span style={{ background: '#fff3bf', padding: '3px 9px', borderRadius: 6 }}>ABP 2027: <b>{fmt(abpRef.pct2027)}%</b></span>
-              <span>Real acum. 2026: <b>${fmt(r26.log)}</b> <span className="unit">({fmt(r26pct)}% s/ventas netas)</span></span>
-            </div>
-          </div>
-        )
-      })()}
       <div className="sub">Cada costo es un <b>grupo de dos filas</b>: la fila <b>base</b> (el número de origen) y la fila <b>«= …»</b> (el costo que suma al total), ambas del <b>mismo color</b>. Los grupos se separan con una línea muy tenue. <b style={{ color: '#1d4ed8' }}>Azul</b> = costo logístico de la venta · <b style={{ color: '#0f766e' }}>Verde</b> = muestras · <b style={{ color: '#b45309' }}>Ámbar</b> = mantenimiento (pendiente por CBM). Pasa el cursor por cualquier número para ver de dónde sale.</div>
       <div className="tablewrap"><table className="vfix logcost-tbl"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -1832,13 +1821,16 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
           {/* ① LOGÍSTICO DE LA VENTA — azul */}
           <tr><td className="l" style={{ color: '#6b8fd6', paddingLeft: 18 }} title="Costo de venta = Σ (unidades de cada categoría × AUC de la categoría). Es el espejo de lo que calcula Ventas; Logística solo lo lee.">Costo de venta ($) <span className="unit">base 🪞</span></td>{costoVenta.map((v, m) => <td key={m} className="tot" style={{ color: '#6b8fd6' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#6b8fd6' }}>{fmt(rowTot(costoVenta))}</td></tr>
           <tr><td className="l" style={{ color: '#1d4ed8', fontWeight: 800, paddingLeft: 18 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>= Costo logístico de la venta <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(</span>{pctInput(kLog)}<span style={{ color: 'var(--muted)', fontWeight: 400 }}>% × costo de venta)</span></span></td>{costoLog.map((v, m) => <td key={m} className="tot" style={{ color: '#1d4ed8', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: ${fmt(g(kLog))}% × $${fmt(costoVenta[m])} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(rowTot(costoLog))}</td></tr>
+          <tr><td colSpan={14} style={{ border: 'none', padding: '0 0 2px 18px', textAlign: 'left' }}><span className="unit" style={{ fontSize: 11.5 }}>Referencia: ABP 2026 <b style={{ color: '#8a6d1a' }}>{fmt(abpRef.pct2026)}%</b> · ABP 2027 <b style={{ color: '#8a6d1a' }}>{fmt(abpRef.pct2027)}%</b> · Real acum. 2026 <b>${fmt(r26r.log)}</b> ({fmt(r26pctr)}% s/ventas netas)</span></td></tr>
+          {spacer}
 
           {/* ② MUESTRAS — verde */}
-          <tr><td className="l" style={{ color: '#4e9a92', paddingLeft: 18, borderTop: '1px solid #f4f6f9' }} title="Compras / movimiento del mes valorizado a AUC.">Compras / movimiento ($) <span className="unit">base</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #f4f6f9' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #f4f6f9' }}>{fmt(rowTot(comprasUsd))}</td></tr>
+          <tr><td className="l" style={{ color: '#4e9a92', paddingLeft: 18 }} title="Compras / movimiento del mes valorizado a AUC.">Compras / movimiento ($) <span className="unit">base</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: '#4e9a92' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#4e9a92' }}>{fmt(rowTot(comprasUsd))}</td></tr>
           <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingLeft: 18 }} title={`= unidades de muestras × ratio $/ud (Preventa $${fmt(g(kMueRatePV))}/ud · Seating $${fmt(g(kMueRateSE))}/ud)`}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot" style={{ color: '#0f766e', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: Preventa ${fmt(mUnit('PV', m))} ud × $${fmt(g(kMueRatePV))} + Seating ${fmt(mUnit('SE', m))} ud × $${fmt(g(kMueRateSE))} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
+          {spacer}
 
           {/* ③ MANTENIMIENTO — ámbar (pendiente CBM) */}
-          <tr><td className="l" style={{ color: '#c99a5b', paddingLeft: 18, borderTop: '1px solid #f4f6f9' }} title="Valor del saldo = saldo de cada temporada × AUC de esa temporada.">Valor saldo inventario ($) <span className="unit">base</span></td>{saldoValue.map((v, m) => <td key={m} className="tot" style={{ color: '#c99a5b', borderTop: '1px solid #f4f6f9' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#c99a5b', borderTop: '1px solid #f4f6f9' }}>{fmt(rowTot(saldoValue))}</td></tr>
+          <tr><td className="l" style={{ color: '#c99a5b', paddingLeft: 18 }} title="Valor del saldo = saldo de cada temporada × AUC de esa temporada.">Valor saldo inventario ($) <span className="unit">base</span></td>{saldoValue.map((v, m) => <td key={m} className="tot" style={{ color: '#c99a5b' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#c99a5b' }}>{fmt(rowTot(saldoValue))}</td></tr>
           <tr><td className="l" style={{ color: '#b45309', fontStyle: 'italic', paddingLeft: 18 }} title="Pendiente: el costo de mantenimiento se calculará a partir del CBM (volumen) que captura Logística abajo, no por %.">= Costo mantenimiento de stock <span className="unit" style={{ fontStyle: 'normal' }}>(pendiente por CBM)</span></td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: '#d9bf8e' }}>—</td>)}<td className="tot" style={{ color: '#d9bf8e' }}>—</td></tr>
 
           <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL costos logísticos</td>{total.map((v, m) => <td key={m} className="tot" style={{ cursor: 'help' }} title={`${MESES[m].toUpperCase()}: logístico $${fmt(costoLog[m])} + muestras $${fmt(costoMue[m])} = $${fmt(v)} (mantenimiento pendiente por CBM)`}>{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(total))}</td></tr>
