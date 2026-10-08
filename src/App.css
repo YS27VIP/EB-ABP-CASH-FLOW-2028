@@ -115,7 +115,7 @@ table.vfix td.l,table.vfix th.l{overflow:hidden;text-overflow:ellipsis;white-spa
 table.logcost-tbl td{border-bottom-color:#f6f8fb}
 table.logcost-tbl tr.grandrow td{border-bottom-color:var(--line)}
 /* Cursor de bombillo (💡) al pasar sobre un número con detalle; si el navegador no lo pinta, cae a 'help'. */
-.help-bulb{cursor:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><text y='15' font-size='15'>💡</text></svg>") 2 15, help}
+.help-bulb{cursor:url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2720%27%20height%3D%2720%27%3E%3Ctext%20y%3D%2715%27%20font-size%3D%2715%27%3E%F0%9F%92%A1%3C/text%3E%3C/svg%3E") 2 15, pointer}
 /* Banda de sub-bloque en la tabla de costos logísticos */
 table.logcost-tbl tr.cost-band td{background:#f4f7fb;font-weight:800;font-size:11.5px;letter-spacing:.3px;text-align:left;padding-top:7px;padding-bottom:7px}
 

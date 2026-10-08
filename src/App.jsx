@@ -186,10 +186,11 @@ const upper = (s) => String(s == null ? '' : s).trim().toUpperCase()
 const mesIdx = (v) => { const d = new Date(v); return isNaN(d.getTime()) ? -1 : d.getUTCMonth() }
 const M$ = <span className="moneytag" title="Valores en dinero ($)">$</span> // icono discreto de dinero
 const UD = <span className="unittag" title="Valores en unidades (ud)"># </span> // icono discreto de unidades
-// Marcador discreto (ⓘ gris) para campos CONSOLIDADOS (suma de partes): al pasar el mouse muestra de qué se compone
-const Q = (t) => <span title={t} style={{ cursor: 'help', marginLeft: 5, fontSize: 10.5, fontWeight: 700, color: '#94a3b8', border: '1px solid #cbd5e1', borderRadius: '50%', display: 'inline-block', width: 15, height: 15, lineHeight: '14px', textAlign: 'center', verticalAlign: 'middle' }}>i</span>
+// Marcador discreto (💡) para campos CONSOLIDADOS (suma de partes): al pasar el mouse muestra de qué se compone
+const BULB_CURSOR = 'url("data:image/svg+xml;utf8,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><text y='15' font-size='15'>💡</text></svg>") + '") 2 15, pointer'
+const Q = (t) => <span title={t} style={{ cursor: BULB_CURSOR, marginLeft: 5, fontSize: 12, display: 'inline-block', verticalAlign: 'middle', lineHeight: 1 }}>💡</span>
 // 🪞 para vistas ESPEJO (solo lectura, el dato se llena/edita en otro lado): tooltip dice de dónde viene
-const ESP = (t) => <span className="unit" title={t} style={{ cursor: 'help', marginLeft: 6, fontSize: 12 }}>🪞</span>
+const ESP = (t) => <span className="unit" title={t} style={{ cursor: BULB_CURSOR, marginLeft: 6, fontSize: 12 }}>🪞</span>
 // Leyenda azul reutilizable: va en cada bloque cuyos números muestran el origen del cálculo al pasar el cursor.
 const HOVERTIP = <div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
 
@@ -1284,10 +1285,10 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       // Cash Inicial: enero-28 es la SEMILLA = saldo en banco al cierre de dic-27 (editable); el resto = Cash Final del mes anterior (calc)
                       if (it === CASH_INI) {
                         if (mi === 0 && !isTotal && !soloVer) { const k = key(marca, CASH_INI, 0); return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" title="Saldo en banco al cierre de 2027 (arranque de enero-28)" /></td> }
-                        return <td key={mi} className={'tot ' + cls} style={{ cursor: 'help' }} title={mi === 0 ? 'Saldo en banco al cierre de 2027 (semilla que pone Finanzas)' : 'Cash Inicial = Cash Final del mes anterior'}>{fmt(cell(it, mi))}</td>
+                        return <td key={mi} className={'tot ' + cls} style={{ cursor: BULB_CURSOR }} title={mi === 0 ? 'Saldo en banco al cierre de 2027 (semilla que pone Finanzas)' : 'Cash Inicial = Cash Final del mes anterior'}>{fmt(cell(it, mi))}</td>
                       }
                       // Cash Final: siempre calculado = Cash Inicial + Cash In − Cash Out − Costos Operativos
-                      if (it === CASH_FIN) return <td key={mi} className={'tot ' + cls} style={{ cursor: 'help', fontWeight: 700 }} title="Fórmula: Cash Final = Cash Inicial + Cash In + Otros ingresos − Cash Out − Costos Operativos − Costos Financieros − Otros gastos">{fmt(cell(it, mi))}</td>
+                      if (it === CASH_FIN) return <td key={mi} className={'tot ' + cls} style={{ cursor: BULB_CURSOR, fontWeight: 700 }} title="Fórmula: Cash Final = Cash Inicial + Cash In + Otros ingresos − Cash Out − Costos Operativos − Costos Financieros − Otros gastos">{fmt(cell(it, mi))}</td>
                       const cashinCalc = it === CASHIN // Cash In siempre calculado (OCT/NOV/DIC-27 de cuentas por cobrar + escalera 2028)
                       const cashoutCalc = it === CASH_OUT // Cash Out siempre calculado (pagos a proveedores)
                       const comercialCalc = esCalcComercial(it)
@@ -1297,7 +1298,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                         const brkNum = brk(it, mi)
                         const tit = it === CASHIN ? cashinBrk() : ((it === CASH_OUT ? 'Fórmula: Cash Out = Compras 2028 × término de pago de la marca' : it === VENTAS_NETAS ? 'Fórmula: Ventas Netas = Unidades × AUP efectivo del mes' : it === COMPRAS_FD ? 'Fórmula: Compras = Unidades compradas × AUC' : (it === INV_INI || it === INV_FIN) ? 'Fórmula: Inventario × AUC' : '') + (brkNum ? (it === CASH_OUT || it === VENTAS_NETAS || it === COMPRAS_FD || it === INV_INI || it === INV_FIN ? '\nDatos de origen: ' : '') + brkNum : '') || undefined)
                         const v = cell(it, mi)
-                        return <td key={mi} className={'tot ' + cls} style={{ ...(isTotal ? { cursor: 'help' } : {}), color: colFila }} title={tit}>{Math.abs(v) > 0.5 ? signo : ''}{fmt(v)}</td>
+                        return <td key={mi} className={'tot ' + cls} style={{ ...(isTotal ? { cursor: BULB_CURSOR } : {}), color: colFila }} title={tit}>{Math.abs(v) > 0.5 ? signo : ''}{fmt(v)}</td>
                       }
                       const k = key(marca, it, mi)
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
@@ -1336,7 +1337,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                         {fila}
                         {openCostos && CF_COSTOS.map((sub) => {
                           const fuente = sub === 'Gastos administrativos directos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Gastos administrativos generales' ? 'pendiente: gastos administrativos generales (corporativos, prorrateados por venta)' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de todo el equipo' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)'
-                          const sceldas = CF_MESES.map((_, mi) => { const bn = brk(sub, mi); return <td key={mi} className="tot yb" style={{ cursor: 'help' }} title={'Origen: ' + fuente + (bn ? '\nDatos de origen: ' + bn : '')}>{fmt(cellRaw(sub, mi))}</td> })
+                          const sceldas = CF_MESES.map((_, mi) => { const bn = brk(sub, mi); return <td key={mi} className="tot yb" style={{ cursor: BULB_CURSOR }} title={'Origen: ' + fuente + (bn ? '\nDatos de origen: ' + bn : '')}>{fmt(cellRaw(sub, mi))}</td> })
                           return <tr key={sub}><td className="l sub2">{sub} {ESP(fuente)}</td>{sceldas}<td className="tot">{fmt(subTot(sub))}</td></tr>
                         })}
                       </Fragment2>
@@ -1431,9 +1432,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                 const terminos = CF_TERMINOS.filter((t) => t !== 'Intercompañía')
                 const conDatos = terminos.filter((t) => CF_MESES.some((_, mi) => Math.abs(termM(t, mi)) > 0.5))
                 return <Fragment2>
-                  <tr><td className="l" style={{ color: '#b45309', whiteSpace: 'normal', lineHeight: 1.2 }}>Saldo pendiente por cobrar del 2027</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#b45309', cursor: 'help' }} title={`Fórmula: lo que quedó por cobrar del 2027, colocado por Finanzas en el mes que entra\nDatos de origen: saldo 2027 que entra en ${CF_M2028[mi]} = ${fmt(arrM(mi)) || '0'}`}>{fmt(arrM(mi))}</td>)}<td className="tot" style={{ color: '#b45309' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + arrM(mi), 0))}</td></tr>
+                  <tr><td className="l" style={{ color: '#b45309', whiteSpace: 'normal', lineHeight: 1.2 }}>Saldo pendiente por cobrar del 2027</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#b45309', cursor: BULB_CURSOR }} title={`Fórmula: lo que quedó por cobrar del 2027, colocado por Finanzas en el mes que entra\nDatos de origen: saldo 2027 que entra en ${CF_M2028[mi]} = ${fmt(arrM(mi)) || '0'}`}>{fmt(arrM(mi))}</td>)}<td className="tot" style={{ color: '#b45309' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + arrM(mi), 0))}</td></tr>
                   <tr className="secrow"><td colSpan={14}>Ventas 2028 cobradas por plazo</td></tr>
-                  {(conDatos.length ? conDatos : ['Cash']).map((t) => { const P = CF_PLAZO_MESES[t] ?? 0; return <tr key={t}><td className="l sub2" style={{ color: '#15803d' }}>{t}</td>{CF_MESES.map((_, mi) => { const src = mi - P; const srcLbl = src >= 0 ? CF_M2028[src] : '—'; const tip = P === 0 ? `Fórmula: término ${t} = la venta externa se cobra el mismo mes\nDatos de origen: venta externa de ${CF_M2028[mi]} (clientes a ${t}) = ${fmt(termM(t, mi)) || '0'}` : `Fórmula: término ${t} = la venta externa de ${srcLbl} se cobra ${P} mes(es) después (en ${CF_M2028[mi]})\nDatos de origen: venta externa de ${srcLbl} (clientes a ${t}) = ${fmt(termM(t, mi)) || '0'}`; return <td key={mi} className="tot yb" style={{ color: '#15803d', cursor: 'help' }} title={tip}>{fmt(termM(t, mi))}</td> })}<td className="tot" style={{ color: '#15803d' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + termM(t, mi), 0))}</td></tr> })}
+                  {(conDatos.length ? conDatos : ['Cash']).map((t) => { const P = CF_PLAZO_MESES[t] ?? 0; return <tr key={t}><td className="l sub2" style={{ color: '#15803d' }}>{t}</td>{CF_MESES.map((_, mi) => { const src = mi - P; const srcLbl = src >= 0 ? CF_M2028[src] : '—'; const tip = P === 0 ? `Fórmula: término ${t} = la venta externa se cobra el mismo mes\nDatos de origen: venta externa de ${CF_M2028[mi]} (clientes a ${t}) = ${fmt(termM(t, mi)) || '0'}` : `Fórmula: término ${t} = la venta externa de ${srcLbl} se cobra ${P} mes(es) después (en ${CF_M2028[mi]})\nDatos de origen: venta externa de ${srcLbl} (clientes a ${t}) = ${fmt(termM(t, mi)) || '0'}`; return <td key={mi} className="tot yb" style={{ color: '#15803d', cursor: BULB_CURSOR }} title={tip}>{fmt(termM(t, mi))}</td> })}<td className="tot" style={{ color: '#15803d' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + termM(t, mi), 0))}</td></tr> })}
                   <tr className="grandrow"><td className="l">= Cash In del mes</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot help-bulb" title={`Fórmula: Cash In = Saldo pendiente 2027 + Ventas 2028 cobradas por plazo\nDatos de origen: Saldo 2027 = ${fmt(arrM(mi)) || '0'} · Ventas 2028 = ${fmt(escM(mi)) || '0'} · Total = ${fmt(arrM(mi) + escM(mi)) || '0'}`}>{fmt(arrM(mi) + escM(mi))}</td>)}<td className="tot">{fmt(CF_MESES.reduce((a, _, mi) => a + arrM(mi) + escM(mi), 0))}</td></tr>
                 </Fragment2>
               })()}
@@ -1586,25 +1587,39 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       })()}
 
       {(() => {
-        const flow2028 = (mca) => {
-          const comp = Array(12).fill(0), sal = Array(12).fill(0), fin = Array(12).fill(0)
-          try { const inv = inventarioCalc(temp, mca, ventaMarcaMes(ventas, empresa, mca)); BUY_SEASONS.forEach((s) => { const f = inv.flujos[s]; for (let m = 0; m < 12; m++) { comp[m] += f[m].comp; sal[m] += f[m].sal; fin[m] += f[m].fin } }) } catch { }
-          return { comp, sal, fin }
-        }
+        // Solo temporadas de COMPRA 2028 (SS28 / FW28 / SS29): no entra el saldo de temporadas anteriores.
+        // AUC fijo de cada temporada 2028 (el de Producto para esa temporada), SIN ponderar por la mezcla del mes.
+        const catsDe = (mca) => { const k = Object.keys(cats || {}).find((x) => upper(x) === upper(mca)); return k ? cats[k] : [] }
+        const aucT = (mca, s) => { let n = 0, d = 0; catsDe(mca).forEach(({ cat, peso }) => { const a = num((precios || {})[`PAUC|${mca}|${s}|${cat}`]); const w = (num(peso) || 0) + 0.0001; if (a > 0) { n += a * w; d += w } }); return d ? n / d : 0 }
+        const Z = () => Array(12).fill(0)
+        const agg = { comp: Z(), sal: Z(), fin: Z(), compD: Z(), salD: Z(), finD: Z() }
+        const det = { comp: MESES.map(() => []), sal: MESES.map(() => []), fin: MESES.map(() => []) } // desglose por temporada para el 💡
         const marcasFlow = isTotal ? sbuMarcas : [marca]
-        const agg = { comp: Array(12).fill(0), sal: Array(12).fill(0), fin: Array(12).fill(0) }
-        marcasFlow.forEach((mca) => { const f = flow2028(mca); for (let m = 0; m < 12; m++) { agg.comp[m] += f.comp[m]; agg.sal[m] += f.sal[m]; agg.fin[m] += f.fin[m] } })
+        marcasFlow.forEach((mca) => {
+          let inv = null; try { inv = inventarioCalc(temp, mca, ventaMarcaMes(ventas, empresa, mca)) } catch { }
+          if (!inv) return
+          BUY_SEASONS.forEach((s) => { const f = inv.flujos[s]; const a = aucT(mca, s); for (let m = 0; m < 12; m++) {
+            agg.comp[m] += f[m].comp; agg.sal[m] += f[m].sal; agg.fin[m] += f[m].fin
+            agg.compD[m] += f[m].comp * a; agg.salD[m] += f[m].sal * a; agg.finD[m] += f[m].fin * a
+            const et = (isTotal ? mca + ' ' : '') + s
+            if (f[m].comp) det.comp[m].push(`${et}: ${fmt(f[m].comp)} ud × $${fmt(a)} = $${fmt(f[m].comp * a)}`)
+            if (f[m].sal) det.sal[m].push(`${et}: ${fmt(f[m].sal)} ud × $${fmt(a)} = $${fmt(f[m].sal * a)}`)
+            if (f[m].fin) det.fin[m].push(`${et}: ${fmt(f[m].fin)} ud × $${fmt(a)} = $${fmt(f[m].fin * a)}`)
+          } })
+        })
         const RT = (a) => a.reduce((x, y) => x + y, 0)
         const totComp = RT(agg.comp), totSal = RT(agg.sal), stockFin = agg.fin[11]
+        const totCompD = RT(agg.compD), totSalD = RT(agg.salD), stockFinD = agg.finD[11]
+        const tipD = (k, m, lbl) => `${lbl} · ${MESES[m].toUpperCase()} = unidades × AUC de su temporada 2028 (sin ponderar)\n${det[k][m].join('\n') || '(sin movimiento)'}`
         const pctAsig = totComp ? (totSal / totComp * 100) : 0
         return (
           <div className="panel">
             <h3>🪞 Compras 2028: asignado a cliente vs. stock {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`} <span className="unit">(unidades · consulta, solo lectura)</span></h3>
-            <div className="sub">De las <b>compras 2028</b>, cuánto ya está <b>asignado a un cliente</b> (vendido) y cuánto <b>queda en stock</b>, mes a mes. (Las muestras no entran aquí.)</div>
+            <div className="sub">De las <b>compras 2028</b>, cuánto ya está <b>asignado a un cliente</b> (vendido) y cuánto <b>queda en stock</b>, mes a mes. Solo cuenta lo de las <b>temporadas de compra 2028</b> (SS28, FW28, SS29), no el stock de temporadas anteriores. El valor en <b>$</b> usa el <b>AUC de cada temporada 2028</b>, sin ponderar. (Las muestras no entran aquí.)</div>{HOVERTIP}
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', margin: '6px 0 14px' }}>
-              <div className="kpi"><div className="k">Comprado 2028</div><div className="v">{fmt(totComp)}</div><div className="s">unidades</div></div>
-              <div className="kpi"><div className="k">Asignado a cliente</div><div className="v" style={{ color: '#15803d' }}>{fmt(totSal)}</div><div className="s">{fmt(pctAsig)}% de lo comprado</div></div>
-              <div className="kpi"><div className="k">En stock (fin de año)</div><div className="v" style={{ color: '#b45309' }}>{fmt(stockFin)}</div><div className="s">sin asignar</div></div>
+              <div className="kpi"><div className="k">Comprado 2028</div><div className="v">{fmt(totComp)}</div><div className="s">unidades · ${fmt(totCompD)}</div></div>
+              <div className="kpi"><div className="k">Asignado a cliente</div><div className="v" style={{ color: '#15803d' }}>{fmt(totSal)}</div><div className="s">{fmt(pctAsig)}% de lo comprado · ${fmt(totSalD)}</div></div>
+              <div className="kpi"><div className="k">En stock (fin de año)</div><div className="v" style={{ color: '#b45309' }}>{fmt(stockFin)}</div><div className="s">sin asignar · ${fmt(stockFinD)}</div></div>
             </div>
             <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
               <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -1612,6 +1627,10 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                 <tr><td className="l">Compras del mes (ud)</td>{agg.comp.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totComp)}</td></tr>
                 <tr><td className="l" style={{ color: '#15803d' }}>Asignado a cliente (ud)</td>{agg.sal.map((v, m) => <td key={m} className="tot" style={{ color: '#15803d' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(totSal)}</td></tr>
                 <tr className="grandrow"><td className="l" style={{ color: '#b45309' }}>Stock al fin del mes (ud)</td>{agg.fin.map((v, m) => <td key={m} className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(stockFin)}</td></tr>
+                <tr><td className="l" colSpan={14} style={{ fontWeight: 800, color: '#017e84', paddingTop: 10 }}>Valorizado en $ <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= unidades × AUC de su temporada 2028 (sin ponderar)</span></td></tr>
+                <tr><td className="l">Compras del mes ($)</td>{agg.compD.map((v, m) => <td key={m} className="tot help-bulb" title={tipD('comp', m, 'Compras')}>{fmt(v)}</td>)}<td className="tot">{fmt(totCompD)}</td></tr>
+                <tr><td className="l" style={{ color: '#15803d' }}>Asignado a cliente ($)</td>{agg.salD.map((v, m) => <td key={m} className="tot help-bulb" style={{ color: '#15803d' }} title={tipD('sal', m, 'Asignado a cliente')}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(totSalD)}</td></tr>
+                <tr className="grandrow"><td className="l" style={{ color: '#b45309' }}>Stock al fin del mes ($)</td>{agg.finD.map((v, m) => <td key={m} className="tot help-bulb" style={{ color: '#b45309', fontWeight: 800 }} title={tipD('fin', m, 'Stock al fin del mes')}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(stockFinD)}</td></tr>
               </tbody>
             </table></div>
           </div>
@@ -1837,7 +1856,7 @@ function ReporteScreen({ empresa, sbus }) {
               {pieData.length === 0 && <div className="sub">Aún no hay clientes con plazo capturado.</div>}
               {pieData.map(({ mca, cnt, tot }) => (
                 <div key={mca} style={{ width: 150, textAlign: 'center' }}>
-                  <div title={[...BUCKETS, 'Sin plazo'].filter((b) => cnt[b] > 0).map((b) => `${b}: ${cnt[b]} (${(cnt[b] / tot * 100).toFixed(0)}%)`).join('\n')} style={{ cursor: 'help', display: 'inline-block' }}>{pieSVG(cnt, tot, 120)}</div>
+                  <div title={[...BUCKETS, 'Sin plazo'].filter((b) => cnt[b] > 0).map((b) => `${b}: ${cnt[b]} (${(cnt[b] / tot * 100).toFixed(0)}%)`).join('\n')} style={{ cursor: BULB_CURSOR, display: 'inline-block' }}>{pieSVG(cnt, tot, 120)}</div>
                   <div style={{ fontWeight: 700, fontSize: 12.5, marginTop: 4 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(mca), marginRight: 5 }}></span>{mca}</div>
                   <div className="unit">{tot} cliente(s)</div>
                 </div>
@@ -2068,14 +2087,14 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
           {/* ① LOGÍSTICO DE LA VENTA — azul */}
           <tr className="cost-band"><td colSpan={14} style={{ color: '#1d4ed8' }}>① Costo logístico de la venta</td></tr>
           <tr><td className="l" style={{ color: '#6b8fd6', paddingLeft: 18 }} title="Costo de venta = Σ (unidades de cada categoría × AUC de la categoría). Es el espejo de lo que calcula Ventas; Logística solo lo lee.">Costo de venta ($) <span className="unit">base 🪞</span></td>{costoVenta.map((v, m) => <td key={m} className="tot" style={{ color: '#6b8fd6' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#6b8fd6' }}>{fmt(rowTot(costoVenta))}</td></tr>
-          <tr><td className="l" style={{ color: '#1d4ed8', fontWeight: 800, paddingLeft: 18 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>= Costo logístico de la venta <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(</span>{pctInput(kLog)}<span style={{ color: 'var(--muted)', fontWeight: 400 }}>% × costo de venta)</span></span></td>{costoLog.map((v, m) => <td key={m} className="tot" style={{ color: '#1d4ed8', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: ${fmt(g(kLog))}% × $${fmt(costoVenta[m])} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(rowTot(costoLog))}</td></tr>
+          <tr><td className="l" style={{ color: '#1d4ed8', fontWeight: 800, paddingLeft: 18 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>= Costo logístico de la venta <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(</span>{pctInput(kLog)}<span style={{ color: 'var(--muted)', fontWeight: 400 }}>% × costo de venta)</span></span></td>{costoLog.map((v, m) => <td key={m} className="tot" style={{ color: '#1d4ed8', fontWeight: 800, cursor: BULB_CURSOR }} title={`${MESES[m].toUpperCase()}: ${fmt(g(kLog))}% × $${fmt(costoVenta[m])} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(rowTot(costoLog))}</td></tr>
           <tr><td colSpan={14} style={{ border: 'none', padding: '0 0 2px 18px', textAlign: 'left' }}><span className="unit" style={{ fontSize: 11.5 }}>Referencia: ABP 2026 <b style={{ color: '#8a6d1a' }}>{fmt(abpRef.pct2026)}%</b> · ABP 2027 <b style={{ color: '#8a6d1a' }}>{fmt(abpRef.pct2027)}%</b> · Real acum. 2026 <b>${fmt(r26r.log)}</b> ({fmt(r26pctr)}% s/ventas netas)</span></td></tr>
           {spacer}
 
           {/* ② MUESTRAS — verde */}
           <tr className="cost-band"><td colSpan={14} style={{ color: '#0f766e' }}>② Costo de muestras</td></tr>
           <tr><td className="l" style={{ color: '#4e9a92', paddingLeft: 18 }} title="Compras / movimiento del mes valorizado a AUC.">Compras / movimiento ($) <span className="unit">base</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: '#4e9a92' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#4e9a92' }}>{fmt(rowTot(comprasUsd))}</td></tr>
-          <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingLeft: 18 }} title={`= unidades de muestras × ratio $/ud (Preventa $${fmt(g(kMueRatePV))}/ud · Seating $${fmt(g(kMueRateSE))}/ud)`}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot" style={{ color: '#0f766e', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: Preventa ${fmt(mUnit('PV', m))} ud × $${fmt(g(kMueRatePV))} + Seating ${fmt(mUnit('SE', m))} ud × $${fmt(g(kMueRateSE))} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
+          <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingLeft: 18 }} title={`= unidades de muestras × ratio $/ud (Preventa $${fmt(g(kMueRatePV))}/ud · Seating $${fmt(g(kMueRateSE))}/ud)`}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot" style={{ color: '#0f766e', fontWeight: 800, cursor: BULB_CURSOR }} title={`${MESES[m].toUpperCase()}: Preventa ${fmt(mUnit('PV', m))} ud × $${fmt(g(kMueRatePV))} + Seating ${fmt(mUnit('SE', m))} ud × $${fmt(g(kMueRateSE))} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
           {spacer}
 
           {/* ③ MANTENIMIENTO — ámbar (pendiente CBM) */}
@@ -2555,7 +2574,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
 
       {showEvol && <div className="panel">
         <h3>Evolución mensual del AUP / AUC — {marca}{M$} <span className="unit">(consecuencia de la combinación)</span></h3>
-        <div className="sub" style={{ marginBottom: 6 }}>Según la <b>combinación de temporadas</b>, cada mes se vende una combinación distinta de temporadas → el AUP y AUC <b>cambian mes a mes</b>. Ej.: si en junio se vende FW26 a AUC $46 y en julio entra SS28 a AUC $60, el AUC del mes sube de $46 a $60; y si un mes se vende mitad de cada una, el AUC efectivo es ~$53. <b>Estos valores mensuales por categoría son los que usa el resto del app</b> (Ventas, Contribución, Cash Flow).</div>
+        <div className="sub" style={{ marginBottom: 6 }}>Según la <b>combinación de temporadas</b>, cada mes se vende una combinación distinta de temporadas → el AUP y AUC <b>cambian mes a mes</b>. Ej.: si en junio se vende FW26 a AUC $46 y en julio entra SS28 a AUC $60, el AUC del mes sube de $46 a $60; y si un mes se vende mitad de cada una, el AUC efectivo es ~$53.</div>
         {HOVERTIP}
         {!MESES.some((_, m) => unitsMes(m) > 0.5) && <div className="note warn" style={{ marginBottom: 10 }}>Sale <b>vacía</b> porque aún no hay <b>salidas de inventario</b>. Ya pusiste las unidades arriba; ahora falta escribir las <b>unidades a rotar</b> por temporada en el bloque de Combinación de temporadas (Paso 2). Eso define qué se vende cada mes.</div>}
         {cats.length > 1 && <div className="toolbar" style={{ marginBottom: 8 }}><input value={catBuscar} onChange={(e) => setCatBuscar(e.target.value)} placeholder="🔍 Buscar categoría…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />{catBuscar && <button className="btn" onClick={() => setCatBuscar('')}>✕ limpiar</button>}</div>}
@@ -2566,8 +2585,8 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
             {cats.filter((c) => !catBuscar.trim() || upper(c).indexOf(upper(catBuscar)) >= 0).map((c) => (
               <Fragment2 key={c}>
                 <tr className="secrow"><td colSpan={14}>{c}</td></tr>
-                <tr className="catrow"><td className="l">AUP efectivo {c} {Q('Párate sobre cada mes para ver de qué temporadas se compone.')}</td>{MESES.map((_, m) => <td key={m} className="tot" title={compo(c, m, true)} style={{ cursor: 'help' }}>{money(aupCatMes(c, m))}</td>)}<td></td></tr>
-                <tr className="catrow"><td className="l">AUC efectivo {c} {Q('Párate sobre cada mes para ver de qué temporadas se compone.')}</td>{MESES.map((_, m) => <td key={m} className="tot" title={compo(c, m, false)} style={{ cursor: 'help' }}>{money(aucCatMes(c, m))}</td>)}<td></td></tr>
+                <tr className="catrow"><td className="l">AUP efectivo {c} {Q('Párate sobre cada mes para ver de qué temporadas se compone.')}</td>{MESES.map((_, m) => <td key={m} className="tot" title={compo(c, m, true)} style={{ cursor: BULB_CURSOR }}>{money(aupCatMes(c, m))}</td>)}<td></td></tr>
+                <tr className="catrow"><td className="l">AUC efectivo {c} {Q('Párate sobre cada mes para ver de qué temporadas se compone.')}</td>{MESES.map((_, m) => <td key={m} className="tot" title={compo(c, m, false)} style={{ cursor: BULB_CURSOR }}>{money(aucCatMes(c, m))}</td>)}<td></td></tr>
               </Fragment2>
             ))}
             <tr className="secrow"><td colSpan={14}>TOTAL {marca}</td></tr>
@@ -2891,7 +2910,13 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
         </div>
       </aside>
       <div className="cmz-main" style={{ '--accent': acc, borderTop: '4px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
-        <TeamPanel empresa={empresa} sbuName={sbuName} />
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+          {marca !== '__TOTAL__' && (secId === 'ventas' || (secId === 'comercial' && (comSub === 'all' || comSub === 'ventas') && comercialRoles.some((r) => r.id === 'ventas'))) &&
+            <div className="note" style={{ margin: 0, padding: '7px 12px', display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff8e1', border: '1px solid #f0e0a8' }}>
+              <span style={{ fontSize: 18 }}>✍️</span><span><b style={{ color: '#8a6d1a' }}>¡Tu turno!</b> Completa las <b style={{ background: '#fff3bf', padding: '1px 6px', borderRadius: 4 }}>celdas amarillas</b>.</span>
+            </div>}
+          <div style={{ flex: 1 }}><TeamPanel empresa={empresa} sbuName={sbuName} /></div>
+        </div>
         {marca === '__TOTAL__'
           ? (<>
             <div style={{ marginBottom: 6 }}>
@@ -3137,10 +3162,10 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
     { k: '🎯 = Resultado Operativo', g: (a) => (a.brand || 0) - gastosDe(a) - otrosDe(a), strong: true },
   ]
   const dpctG = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
-  const dCellG = (cur, ref, cls) => { const d = dpctG(cur, ref); return <td className={'tot ' + cls + ' ' + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700, cursor: 'help' }} title={d == null ? 'Sin referencia para comparar' : `Variación % = (2028 − referencia) ÷ referencia\n2028 = ${fmt(cur)} vs referencia = ${fmt(ref)} → ${(d >= 0 ? '+' : '') + d.toFixed(0)}% (el 2028 está ${d >= 0 ? 'por encima' : 'por debajo'} de ese año)`}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
+  const dCellG = (cur, ref, cls) => { const d = dpctG(cur, ref); return <td className={'tot ' + cls + ' ' + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700, cursor: BULB_CURSOR }} title={d == null ? 'Sin referencia para comparar' : `Variación % = (2028 − referencia) ÷ referencia\n2028 = ${fmt(cur)} vs referencia = ${fmt(ref)} → ${(d >= 0 ? '+' : '') + d.toFixed(0)}% (el 2028 está ${d >= 0 ? 'por encima' : 'por debajo'} de ese año)`}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
   // Desglose por marca de un concepto dentro de una SBU (siempre en el tooltip al pasar el mouse)
   const brkSBU = (f, ms) => (ms || []).map((m) => ({ m, v: f.g(fullCalc(m)) })).filter((x) => Math.abs(x.v) > 0.5).map((x) => `${x.m}: ${fmt(x.v)}`).join(' · ') || 'Sin datos'
-  const cellStyle = { cursor: 'help' }
+  const cellStyle = { cursor: BULB_CURSOR }
   return (
     <>
       {!soloSBU && !cargando && <div className="panel">
@@ -3325,7 +3350,7 @@ function BrandContribution({ empresa, marca }) {
   const o27 = P.plan[upper(marca)] || {}
   const abpVenta = o27.venta || 0, abpCosto = o27.costo || 0, abpMargen = abpVenta - abpCosto
   const dpct = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
-  const dCell = (cur, ref, cls) => { const d = dpct(cur, ref); return <td className={'tot ' + (cls || '') + ' ' + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700, cursor: 'help' }} title={d == null ? 'Sin referencia para comparar' : `Variación % = (2028 − referencia) ÷ referencia\n2028 = ${fmt(cur)} vs referencia = ${fmt(ref)} → ${(d >= 0 ? '+' : '') + d.toFixed(0)}% (el 2028 está ${d >= 0 ? 'por encima' : 'por debajo'} de ese año)`}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
+  const dCell = (cur, ref, cls) => { const d = dpct(cur, ref); return <td className={'tot ' + (cls || '') + ' ' + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700, cursor: BULB_CURSOR }} title={d == null ? 'Sin referencia para comparar' : `Variación % = (2028 − referencia) ÷ referencia\n2028 = ${fmt(cur)} vs referencia = ${fmt(ref)} → ${(d >= 0 ? '+' : '') + d.toFixed(0)}% (el 2028 está ${d >= 0 ? 'por encima' : 'por debajo'} de ese año)`}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
 
   // fyObj = {fy25, fy26, abp27} (o null si esa fila no tiene comparación histórica)
   const fila = (lbl, val, strong, fyObj) => (
@@ -3491,7 +3516,7 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
     { k: '🎯 = RESULTADO OPERATIVO', get: () => 0, totVal: (tot.brand || 0) - gadminAnual, strong: true },
   ]
   const dpct = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
-  const dCell = (cur, ref, strong) => { const d = dpct(cur, ref); return <td className={'tot ' + (strong ? '' : '') + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700, cursor: 'help' }} title={d == null ? 'Sin referencia para comparar' : `Variación % = (2028 − referencia) ÷ referencia\n2028 = ${fmt(cur)} vs referencia = ${fmt(ref)} → ${(d >= 0 ? '+' : '') + d.toFixed(0)}% (el 2028 está ${d >= 0 ? 'por encima' : 'por debajo'} de ese año)`}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
+  const dCell = (cur, ref, strong) => { const d = dpct(cur, ref); return <td className={'tot ' + (strong ? '' : '') + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700, cursor: BULB_CURSOR }} title={d == null ? 'Sin referencia para comparar' : `Variación % = (2028 − referencia) ÷ referencia\n2028 = ${fmt(cur)} vs referencia = ${fmt(ref)} → ${(d >= 0 ? '+' : '') + d.toFixed(0)}% (el 2028 está ${d >= 0 ? 'por encima' : 'por debajo'} de ese año)`}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
 
   return (
     <div className="panel">
@@ -3641,7 +3666,7 @@ function AvanceSBU({ empresa, sbuName, marcasSBU }) {
             <tr key={m}>
               <td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>
               {SECTIONS.map(([n, , fn]) => { const ok = fn(m); return <td key={n} className="tot" style={{ color: ok ? '#15803d' : '#d9a441', fontWeight: 800, fontSize: 15 }} title={ok ? n + ': completo' : n + ': pendiente'}>{ok ? '✓' : '•'}</td> })}
-              <td className="tot" style={{ fontWeight: 800, color: p === 100 ? '#15803d' : p >= 50 ? '#b45309' : '#b91c1c', cursor: 'help' }} title={falta.length ? 'Falta: ' + falta.join(', ') : 'Todo completo 🎉'}>{p}%</td>
+              <td className="tot" style={{ fontWeight: 800, color: p === 100 ? '#15803d' : p >= 50 ? '#b45309' : '#b91c1c', cursor: BULB_CURSOR }} title={falta.length ? 'Falta: ' + falta.join(', ') : 'Todo completo 🎉'}>{p}%</td>
             </tr>
           ) })}
           <tr className="grandrow"><td className="l">Promedio SBU</td>{SECTIONS.map(([n, , fn]) => { const c = marcas.filter((m) => fn(m)).length; return <td key={n} className="tot" title={`${c} de ${marcas.length} marcas`}>{c}/{marcas.length}</td> })}<td className="tot">{marcas.length ? Math.round(marcas.reduce((a, m) => a + pct(m), 0) / marcas.length) : 0}%</td></tr>
@@ -4564,9 +4589,9 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
             <colgroup><col style={{ width: '270px' }} /><col style={{ width: '66px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
             <thead><tr><th className="l">Categoría</th><th style={{ whiteSpace: 'normal', lineHeight: 1.1 }}>Peso<br />pond. %</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
-              <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="tot" title="La marca siempre suma 100%: es la suma del peso ponderado de todas sus categorías." style={{ cursor: 'help' }}>{totMarcaSel > 0 ? '100.0%' : '—'}</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
+              <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="tot" title="La marca siempre suma 100%: es la suma del peso ponderado de todas sus categorías." style={{ cursor: BULB_CURSOR }}>{totMarcaSel > 0 ? '100.0%' : '—'}</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
               {!usarCat && <tr><td className="l" colSpan={15} style={{ color: 'var(--muted)' }}>{catsToggle ? `Aún no hay categorías definidas para ${marca} (las define el Director).` : `Categorías desactivadas por el Director para ${marca}.`}</td></tr>}
-              {usarCat && catList.map((c, i) => { const row = MESES.map((_, mi) => uCatMes(c.cat, mi)); const t = row.reduce((a, b) => a + b, 0); const pw = totMarcaSel > 0 ? (t / totMarcaSel * 100) : 0; return <tr key={i}><td className="l">{c.cat}</td><td className="tot" title={`Peso ponderado = unidades de ${c.cat} (${fmt(t)}) ÷ unidades totales de ${marca} (${fmt(totMarcaSel)}) = ${pw.toFixed(1)}%. Las unidades por categoría salen del % que el Director puso por cliente.`} style={{ cursor: 'help' }}>{pw.toFixed(1)}%</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
+              {usarCat && catList.map((c, i) => { const row = MESES.map((_, mi) => uCatMes(c.cat, mi)); const t = row.reduce((a, b) => a + b, 0); const pw = totMarcaSel > 0 ? (t / totMarcaSel * 100) : 0; return <tr key={i}><td className="l">{c.cat}</td><td className="tot" title={`Peso ponderado = unidades de ${c.cat} (${fmt(t)}) ÷ unidades totales de ${marca} (${fmt(totMarcaSel)}) = ${pw.toFixed(1)}%. Las unidades por categoría salen del % que el Director puso por cliente.`} style={{ cursor: BULB_CURSOR }}>{pw.toFixed(1)}%</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
             </tbody>
           </table>
         </div>
@@ -4662,10 +4687,10 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                 <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
                   <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingTop: 6 }} colSpan={14}>① Margen bruto % <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= Margen ÷ Venta de la categoría</span></td></tr>
-                  <tr className="grandrow"><td className="l" style={{ color: '#0f766e' }}>TOTAL {marca}</td>{mgMes.map((v, i) => <td key={i} className="tot" style={{ color: '#0f766e', fontWeight: 700, cursor: 'help' }} title={`${MESES[i].toUpperCase()}: margen $${fmt(v)} ÷ venta $${fmt(vnMes[i])} = ${pct(v, vnMes[i]).toFixed(1)}%`}>{vnMes[i] ? pct(v, vnMes[i]).toFixed(1) + '%' : '—'}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 700 }}>{vnTot ? pct(mgTot, vnTot).toFixed(1) + '%' : '—'}</td></tr>
+                  <tr className="grandrow"><td className="l" style={{ color: '#0f766e' }}>TOTAL {marca}</td>{mgMes.map((v, i) => <td key={i} className="tot" style={{ color: '#0f766e', fontWeight: 700, cursor: BULB_CURSOR }} title={`${MESES[i].toUpperCase()}: margen $${fmt(v)} ÷ venta $${fmt(vnMes[i])} = ${pct(v, vnMes[i]).toFixed(1)}%`}>{vnMes[i] ? pct(v, vnMes[i]).toFixed(1) + '%' : '—'}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 700 }}>{vnTot ? pct(mgTot, vnTot).toFixed(1) + '%' : '—'}</td></tr>
                   {catList.map((c, i) => { const vnRt = vnCatTot(c.cat), mgRt = mgCatTot(c.cat); return <tr key={i}><td className="l">{c.cat}</td>{MESES.map((_, mi) => { const m = mgCat(c.cat, mi), v = vnCat(c.cat, mi); return <td key={mi} className="tot help-bulb" title={`${c.cat} · ${MESES[mi].toUpperCase()}: margen $${fmt(m)} ÷ venta $${fmt(v)} = ${pct(m, v).toFixed(1)}%`}>{v > 0.5 ? pct(m, v).toFixed(1) + '%' : '—'}</td> })}<td className="tot">{vnRt ? pct(mgRt, vnRt).toFixed(1) + '%' : '—'}</td></tr> })}
                   <tr><td className="l" style={{ color: '#1d4ed8', fontWeight: 800, borderTop: '1px solid #f4f6f9', paddingTop: 6 }} colSpan={14}>② Peso del margen en la venta <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= Margen $ ÷ Venta total de la marca</span></td></tr>
-                  <tr className="grandrow"><td className="l" style={{ color: '#1d4ed8' }}>TOTAL {marca}</td>{mgMes.map((v, i) => <td key={i} className="tot" style={{ color: '#1d4ed8', fontWeight: 700, cursor: 'help' }} title={`${MESES[i].toUpperCase()}: margen $${fmt(v)} ÷ venta total marca $${fmt(vnMes[i])} = ${pct(v, vnMes[i]).toFixed(1)}%`}>{vnMes[i] ? pct(v, vnMes[i]).toFixed(1) + '%' : '—'}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{vnTot ? pct(mgTot, vnTot).toFixed(1) + '%' : '—'}</td></tr>
+                  <tr className="grandrow"><td className="l" style={{ color: '#1d4ed8' }}>TOTAL {marca}</td>{mgMes.map((v, i) => <td key={i} className="tot" style={{ color: '#1d4ed8', fontWeight: 700, cursor: BULB_CURSOR }} title={`${MESES[i].toUpperCase()}: margen $${fmt(v)} ÷ venta total marca $${fmt(vnMes[i])} = ${pct(v, vnMes[i]).toFixed(1)}%`}>{vnMes[i] ? pct(v, vnMes[i]).toFixed(1) + '%' : '—'}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{vnTot ? pct(mgTot, vnTot).toFixed(1) + '%' : '—'}</td></tr>
                   {catList.map((c, i) => { const mgRt = mgCatTot(c.cat); return <tr key={i}><td className="l">{c.cat}</td>{MESES.map((_, mi) => { const m = mgCat(c.cat, mi); return <td key={mi} className="tot help-bulb" title={`${c.cat} · ${MESES[mi].toUpperCase()}: margen $${fmt(m)} ÷ venta total marca $${fmt(vnMes[mi])} = ${pct(m, vnMes[mi]).toFixed(1)}%`}>{vnMes[mi] ? pct(m, vnMes[mi]).toFixed(1) + '%' : '—'}</td> })}<td className="tot">{vnTot ? pct(mgRt, vnTot).toFixed(1) + '%' : '—'}</td></tr> })}
                 </tbody>
               </table>
@@ -4680,10 +4705,6 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           <h3 style={{ margin: 0 }}>Ventas · Unidades 2028 — {marca}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Ventas" /></h3>
           <div className="spacer"></div>
           <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
-        </div>
-        <div className="note" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 11, background: '#fff8e1', border: '1px solid #f0e0a8' }}>
-          <span style={{ fontSize: 24 }}>✍️</span>
-          <div><b style={{ color: '#8a6d1a' }}>¡Tu turno!</b> Completa las <b style={{ background: '#fff3bf', padding: '1px 6px', borderRadius: 4 }}>celdas amarillas de 2028</b> — ahí decides en qué meses vender. Pon el <b>% de crecimiento</b> por cliente y luego reparte las unidades mes a mes. 🎯</div>
         </div>
         <div className="note ok" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 20 }}>📦</span>
