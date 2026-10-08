@@ -1676,13 +1676,16 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const comprasUsd = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(tData[`CP|${marca}|${s}|${m}`]), 0) * auc[m])
   // Valor del saldo = saldo de cada temporada × el AUC de esa temporada (lo que costó al comprarlo)
   const saldoValue = MESES.map((_, m) => SEASONS.reduce((a, s) => a + inv.flujos[s][m].fin * seasonAUCfrom(precios, marca, s), 0))
-  const kLog = `${marca}|PCT_LOGVENTA`, kMue = `${marca}|PCT_MUESTRAS`, kMant = `${marca}|PCT_MANT`
+  const kLog = `${marca}|PCT_LOGVENTA`, kMant = `${marca}|PCT_MANT`
+  // % de muestras AHORA por línea (lo pone Logística en el espejo de muestras abajo): Preventa y Seating.
+  const kMuePV = `${marca}|MUEPCT|PV`, kMueSE = `${marca}|MUEPCT|SE`
+  const muePctTot = g(kMuePV) + g(kMueSE)
   const costoLog = MESES.map((_, m) => costoVenta[m] * g(kLog) / 100)
-  const costoMue = MESES.map((_, m) => comprasUsd[m] * g(kMue) / 100)
+  const costoMue = MESES.map((_, m) => comprasUsd[m] * muePctTot / 100)
   // Mantenimiento: PENDIENTE — se calculará por CBM (volumen), no por %. Por ahora no suma al total.
   const total = MESES.map((_, m) => costoLog[m] + costoMue[m])
   const rowTot = (arr) => arr.reduce((a, b) => a + b, 0)
-  function guardar() { setSaving(true); try { saveEstado(empresa, 'logcost', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (costos logísticos).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function guardar() { setSaving(true); try { const merged = { ...data, [`${marca}|PCT_MUESTRAS`]: String(muePctTot) }; setData(merged); saveEstado(empresa, 'logcost', merged); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (costos logísticos).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   const aprobLog = (() => { try { return !!JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')[`LOGISTICA|${marca}`] } catch { return false } })()
   const pctInput = (k) => <input className={aprobLog ? '' : 'fillin'} value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" style={aprobLog ? { width: 60, textAlign: 'center', background: '#e6f4ea', border: '1px solid #bfe3c9', borderRadius: 6, padding: '6px 8px' } : { width: 60, textAlign: 'center' }} />
 
@@ -1691,7 +1694,6 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
         <span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span>
         <label>% logístico venta</label>{pctInput(kLog)}
-        <label>% muestras</label>{pctInput(kMue)}
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
@@ -1707,7 +1709,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
 
           {/* ② MUESTRAS — verde */}
           <tr><td className="l" style={{ color: '#4e9a92', paddingLeft: 18, borderTop: '1px solid #f4f6f9' }} title="Compras / movimiento del mes valorizado a AUC.">Compras / movimiento ($) <span className="unit">base</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #f4f6f9' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #f4f6f9' }}>{fmt(rowTot(comprasUsd))}</td></tr>
-          <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingLeft: 18 }} title={`= ${fmt(g(kMue))}% × compras del mes`}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot" style={{ color: '#0f766e', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: ${fmt(g(kMue))}% × $${fmt(comprasUsd[m])} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
+          <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingLeft: 18 }} title={`= ${fmt(muePctTot)}% (Preventa ${fmt(g(kMuePV))}% + Seating ${fmt(g(kMueSE))}%) × compras del mes`}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot" style={{ color: '#0f766e', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: ${fmt(muePctTot)}% × $${fmt(comprasUsd[m])} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
 
           {/* ③ MANTENIMIENTO — ámbar (pendiente CBM) */}
           <tr><td className="l" style={{ color: '#c99a5b', paddingLeft: 18, borderTop: '1px solid #f4f6f9' }} title="Valor del saldo = saldo de cada temporada × AUC de esa temporada.">Valor saldo inventario ($) <span className="unit">base</span></td>{saldoValue.map((v, m) => <td key={m} className="tot" style={{ color: '#c99a5b', borderTop: '1px solid #f4f6f9' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#c99a5b', borderTop: '1px solid #f4f6f9' }}>{fmt(rowTot(saldoValue))}</td></tr>
@@ -1738,13 +1740,13 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
         return (
           <div style={{ marginTop: 24 }}>
             <h3>Muestras a comprar — {marca} <span className="unit">(unidades · espejo)</span></h3>
-            <div className="sub">Las muestras (en <b>unidades</b>) las define el <b>Director</b> (solo lectura, espejo). Logística las usa para <b>estimar el costo</b> de las muestras.</div>
-            <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+            <div className="sub">Las <b>unidades</b> las define el <b>Director</b> (espejo, solo lectura). <b>Logística</b> pone el <b>% s/compras</b> de cada línea (Preventa y Seating); la suma de esos % es la que alimenta el <b>Costo de muestras</b> de arriba (<span style={{ color: '#0f766e', fontWeight: 700 }}>= {fmt(muePctTot)}% × compras</span>).</div>
+            <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} /><col style={{ width: '100px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+              <thead><tr><th className="l">Concepto</th><th>% s/compras</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
               <tbody>
-                <tr><td className="l" style={{ color: 'var(--muted)' }}>Muestras Preventa (ud)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('PV', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('PV'))}</td></tr>
-                <tr><td className="l" style={{ color: 'var(--muted)' }}>Seating samples (ud)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('SE', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('SE'))}</td></tr>
-                <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL muestras (ud)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mMes(mi))}</td>)}<td className="tot">{fmt(granTot)}</td></tr>
+                <tr><td className="l" style={{ color: 'var(--muted)' }}>Muestras Preventa (ud)</td><td className="cell" style={{ textAlign: 'center' }}>{pctInput(kMuePV)}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('PV', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('PV'))}</td></tr>
+                <tr><td className="l" style={{ color: 'var(--muted)' }}>Seating samples (ud)</td><td className="cell" style={{ textAlign: 'center' }}>{pctInput(kMueSE)}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('SE', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('SE'))}</td></tr>
+                <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL muestras (ud)</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(muePctTot)}%</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mMes(mi))}</td>)}<td className="tot">{fmt(granTot)}</td></tr>
               </tbody>
             </table></div>
           </div>
