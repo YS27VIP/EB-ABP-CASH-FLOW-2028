@@ -1669,15 +1669,16 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const g = (k) => num(data[k]); const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   const auc = MESES.map((_, m) => { let v = 0; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca) || upper(r[1]) !== 'AUC') return; v = num(r[4 + m]) }); return v })
   const ventaUnits = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
-  const costoVenta = MESES.map((_, m) => ventaUnits[m] * auc[m])
+  // Costo de venta = ESPEJO de Ventas: Σ(unidades de la categoría × AUC de la categoría) — mismo ponderado por categoría que ve Ventas. Logística solo lo lee.
+  const costoVenta = realAupAuc(empresa, marca, ventas, producto, catList).costoMes
   const comprasUsd = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(tData[`CP|${marca}|${s}|${m}`]), 0) * auc[m])
   // Valor del saldo = saldo de cada temporada × el AUC de esa temporada (lo que costó al comprarlo)
   const saldoValue = MESES.map((_, m) => SEASONS.reduce((a, s) => a + inv.flujos[s][m].fin * seasonAUCfrom(precios, marca, s), 0))
   const kLog = `${marca}|PCT_LOGVENTA`, kMue = `${marca}|PCT_MUESTRAS`, kMant = `${marca}|PCT_MANT`
   const costoLog = MESES.map((_, m) => costoVenta[m] * g(kLog) / 100)
   const costoMue = MESES.map((_, m) => comprasUsd[m] * g(kMue) / 100)
-  const mant = MESES.map((_, m) => saldoValue[m] * g(kMant) / 100)
-  const total = MESES.map((_, m) => costoLog[m] + costoMue[m] + mant[m])
+  // Mantenimiento: PENDIENTE — se calculará por CBM (volumen), no por %. Por ahora no suma al total.
+  const total = MESES.map((_, m) => costoLog[m] + costoMue[m])
   const rowTot = (arr) => arr.reduce((a, b) => a + b, 0)
   function guardar() { setSaving(true); try { saveEstado(empresa, 'logcost', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (costos logísticos).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   const aprobLog = (() => { try { return !!JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')[`LOGISTICA|${marca}`] } catch { return false } })()
@@ -1689,7 +1690,6 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
         <span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span>
         <label>% logístico venta</label>{pctInput(kLog)}
         <label>% muestras</label>{pctInput(kMue)}
-        <label>% mantenimiento</label>{pctInput(kMant)}
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
@@ -1699,12 +1699,18 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
-          <tr style={{ borderTop: '2px solid #cdd7e0' }}><td className="l sub2">Costo de venta ($) <span className="unit">(base)</span></td>{costoVenta.map((v, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(rowTot(costoVenta))}</td></tr>
-          <tr className="catrow" style={{ background: '#eaf1fa', fontWeight: 800 }}><td className="l" style={{ color: '#2f5c8f' }}>= Costo logístico de la venta <span className="unit" style={{ fontWeight: 400 }}>(× {fmt(g(kLog))}%)</span></td>{costoLog.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(costoLog))}</td></tr>
-          <tr style={{ borderTop: '2px solid #cdd7e0' }}><td className="l sub2">Compras / movimiento ($) <span className="unit">(base)</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(rowTot(comprasUsd))}</td></tr>
-          <tr className="catrow" style={{ background: '#eaf1fa', fontWeight: 800 }}><td className="l" style={{ color: '#2f5c8f' }}>= Costo de muestras <span className="unit" style={{ fontWeight: 400 }}>(× {fmt(g(kMue))}%)</span></td>{costoMue.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(costoMue))}</td></tr>
-          <tr style={{ borderTop: '2px solid #cdd7e0' }}><td className="l sub2">Valor saldo inventario ($) <span className="unit">(base)</span></td>{saldoValue.map((v, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(rowTot(saldoValue))}</td></tr>
-          <tr className="catrow" style={{ background: '#eaf1fa', fontWeight: 800 }}><td className="l" style={{ color: '#2f5c8f' }}>= Costo mantenimiento de stock <span className="unit" style={{ fontWeight: 400 }}>(× {fmt(g(kMant))}%)</span></td>{mant.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(mant))}</td></tr>
+          <tr className="secrow"><td colSpan={14} style={{ color: '#2f5c8f' }}>① COSTO LOGÍSTICO DE LA VENTA <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= {fmt(g(kLog))}% × costo de venta</span></td></tr>
+          <tr><td className="l sub2">Costo de venta ($) <span className="unit">(base)</span></td>{costoVenta.map((v, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(rowTot(costoVenta))}</td></tr>
+          <tr style={{ background: '#eaf1fa', fontWeight: 800 }}><td className="l" style={{ color: '#2f5c8f' }}>= Costo logístico de la venta</td>{costoLog.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(costoLog))}</td></tr>
+
+          <tr className="secrow"><td colSpan={14} style={{ color: '#2f5c8f' }}>② COSTO DE MUESTRAS <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= {fmt(g(kMue))}% × compras</span></td></tr>
+          <tr><td className="l sub2">Compras / movimiento ($) <span className="unit">(base)</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(rowTot(comprasUsd))}</td></tr>
+          <tr style={{ background: '#eaf1fa', fontWeight: 800 }}><td className="l" style={{ color: '#2f5c8f' }}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(costoMue))}</td></tr>
+
+          <tr className="secrow"><td colSpan={14} style={{ color: '#8a6d1a' }}>③ COSTO DE MANTENIMIENTO DE STOCK <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>(pendiente: se calculará por CBM, no por %)</span></td></tr>
+          <tr><td className="l sub2">Valor saldo inventario ($) <span className="unit">(base)</span></td>{saldoValue.map((v, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(rowTot(saldoValue))}</td></tr>
+          <tr style={{ background: '#fdf7e3' }}><td className="l" style={{ color: '#8a6d1a', fontStyle: 'italic' }}>= Costo mantenimiento de stock <span className="unit" style={{ fontStyle: 'normal' }}>(pendiente por CBM)</span></td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: '#b9a86a' }}>—</td>)}<td className="tot" style={{ color: '#b9a86a' }}>—</td></tr>
+
           <tr className="grandrow" style={{ borderTop: '3px solid #3b6ea5' }}><td className="l">TOTAL costos logísticos</td>{total.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(total))}</td></tr>
         </tbody>
       </table></div>
@@ -3836,6 +3842,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   }, [empresa])
   // AUP por categoría (Producto): { categoría: [12] }
   const aupPorCat = (mca) => { const out = {}; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') !== 0) return; out[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])) }); return out }
+  const aucPorCat = (mca) => { const out = {}; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUC · ') === 0) out[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])); else if (upper(rub) === 'AUC') { const base = MESES.map((_, j) => num(r[4 + j])); (cats[mca] || []).forEach(({ cat }) => { if (!out[cat]) out[cat] = base }) } }); return out }
   useEffect(() => { try { localStorage.setItem('ventas_growth_' + empresa, JSON.stringify(growth)) } catch { } }, [growth, empresa])
 
   const u2026 = {}, u2025 = {}, cliByMarca = {}
@@ -3984,6 +3991,59 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
               </table>
             </div>
             {Object.keys(aup).length === 0 && <div className="sub" style={{ marginTop: 8 }}>Si sale en cero, Producto aún no ha capturado el AUP de las categorías de {marca}.</div>}
+          </div>
+        )
+      })()}
+
+      {usarCat && (() => {
+        const auc = aucPorCat(marca)
+        const coCat = (cat, mi) => uCatMes(cat, mi) * ((auc[cat] || [])[mi] || 0)
+        const coMes = MESES.map((_, mi) => catList.reduce((a, c) => a + coCat(c.cat, mi), 0))
+        const coTot = coMes.reduce((a, b) => a + b, 0)
+        return (
+          <div className="panel">
+            <h3>Costo 2028 por categoría y mes — {marca}{M$} <span className="unit">(dinero $)</span></h3>
+            <div className="sub"><b>Costo del mes = unidades del mes × AUC efectivo de ese mes</b> (por categoría). El <b>AUC lo define Producto por categoría y temporada</b>, igual que el AUP. Como cada mes se vende una <b>mezcla de temporadas</b> (Paso 2), el AUC efectivo del mes es el <b>promedio ponderado</b> de las temporadas que rotan ese mes. El Total del año es la suma de los meses.</div>
+            <div className="tablewrap">
+              <table className="vfix">
+                <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+                <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+                <tbody>
+                  <tr className="grandrow"><td className="l">TOTAL {marca}</td>{coMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(coTot)}</td></tr>
+                  {catList.map((c, i) => { const row = MESES.map((_, mi) => coCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); return <tr key={i}><td className="l">{c.cat}</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
+                </tbody>
+              </table>
+            </div>
+            {Object.keys(auc).length === 0 && <div className="sub" style={{ marginTop: 8 }}>Si sale en cero, Producto aún no ha capturado el AUC de las categorías de {marca}.</div>}
+          </div>
+        )
+      })()}
+
+      {usarCat && (() => {
+        const aup = aupPorCat(marca), auc = aucPorCat(marca)
+        const vnCat = (cat, mi) => uCatMes(cat, mi) * ((aup[cat] || [])[mi] || 0)
+        const coCat = (cat, mi) => uCatMes(cat, mi) * ((auc[cat] || [])[mi] || 0)
+        const mgCat = (cat, mi) => vnCat(cat, mi) - coCat(cat, mi)
+        const vnMes = MESES.map((_, mi) => catList.reduce((a, c) => a + vnCat(c.cat, mi), 0))
+        const mgMes = MESES.map((_, mi) => catList.reduce((a, c) => a + mgCat(c.cat, mi), 0))
+        const mgTot = mgMes.reduce((a, b) => a + b, 0)
+        const vnTot = vnMes.reduce((a, b) => a + b, 0)
+        const pct = (mg, vn) => vn ? (mg / vn * 100) : 0
+        return (
+          <div className="panel">
+            <h3>Margen 2028 por categoría y mes — {marca}{M$} <span className="unit">(margen $ y %)</span></h3>
+            <div className="sub"><b>Margen del mes = Venta Neta − Costo</b> (por categoría). El <b>% de margen = Margen ÷ Venta Neta</b>. La fila <b>TOTAL</b> muestra en azul el <b>% de margen</b> de cada mes. El Total del año es la suma de los meses.</div>
+            <div className="tablewrap">
+              <table className="vfix">
+                <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+                <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+                <tbody>
+                  <tr className="grandrow"><td className="l">TOTAL {marca} <span className="unit">($)</span></td>{mgMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(mgTot)}</td></tr>
+                  <tr style={{ background: '#eef4fb' }}><td className="l" style={{ color: '#1d4ed8', fontWeight: 700 }}>% Margen {marca}</td>{mgMes.map((v, i) => <td key={i} className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{vnMes[i] ? pct(v, vnMes[i]).toFixed(1) + '%' : '—'}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{vnTot ? pct(mgTot, vnTot).toFixed(1) + '%' : '—'}</td></tr>
+                  {catList.map((c, i) => { const row = MESES.map((_, mi) => mgCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); const vnR = MESES.map((_, mi) => vnCat(c.cat, mi)); const vnRt = vnR.reduce((s, x) => s + x, 0); return <tr key={i}><td className="l">{c.cat} <span className="unit" title="% de margen de la categoría en el año" style={{ color: '#1d4ed8' }}>{vnRt ? pct(rt, vnRt).toFixed(1) + '%' : ''}</span></td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )
       })()}
