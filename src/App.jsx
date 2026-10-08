@@ -1703,42 +1703,54 @@ function LogisticaHome({ empresa, sbus }) {
   const tot = { logVenta: 0, mue: 0, total: 0, real: 0 }
   return (
     <div className="panel">
-      <h3>Impacto logístico — {empresa}{M$} <span className="unit">(por SBU y marca · 2028)</span></h3>
-      <div className="sub">El <b>impacto logístico</b> de cada marca: costo logístico de la venta (tu <b>% ABP 2028</b> × costo de venta) + muestras. Para el <b>costo logístico de la venta</b> ves la referencia: <b style={{ color: '#8a6d1a' }}>ABP 2026 y 2027</b> (amarillo, de tus archivos) y el <b>Real acum. 2026</b> del EBP. Haz clic en una marca (✏️) para llenar su logística.</div>
+      <h3>🪞 Impacto logístico — {empresa}{M$} <span className="unit">(por SBU y marca · 2028 · espejo, solo lectura)</span></h3>
+      <div className="sub">Aquí <b>no se llena nada</b>: es un <b>espejo</b>. Los <b>3 tipos de gasto logístico 2028</b> (costo logístico de la venta, muestras y mantenimiento) vienen de lo que se llena en <b>Logística</b> por marca; <b style={{ color: '#8a6d1a' }}>ABP 2026 y 2027</b> (amarillo) vienen de los archivos que subiste y el <b>Real acum. 2026</b> del EBP. Haz clic en una marca para abrir su ficha y llenarla.</div>
       <div className="tablewrap">
         <table>
-          <thead><tr>
-            <th className="l">SBU / Marca</th>
-            <th>% ABP 2028</th><th>Costo log. venta $<br /><span className="unit">2028</span></th>
-            <th style={{ background: '#fff8e1' }}>ABP 2026</th><th style={{ background: '#fff8e1' }}>ABP 2027</th>
-            <th>Real 2026 $</th><th>Real 2026 %</th>
-            <th>Muestras $<br /><span className="unit">2028</span></th><th>Total log. $<br /><span className="unit">2028</span></th>
-          </tr></thead>
+          <thead>
+            <tr>
+              <th className="l" rowSpan={2}>SBU / Marca</th>
+              <th colSpan={5} style={{ background: '#eef4fb', color: '#1d4ed8' }}>Gasto logístico 2028 ($) — lo llena Logística</th>
+              <th colSpan={4} style={{ background: '#fffdf2', color: '#8a6d1a' }}>Referencia · costo logístico de la venta</th>
+            </tr>
+            <tr>
+              <th style={{ background: '#eef4fb' }}>Costo log. venta %</th>
+              <th style={{ background: '#eef4fb' }}>Costo log. venta $</th>
+              <th style={{ background: '#eef4fb' }}>Muestras $</th>
+              <th style={{ background: '#eef4fb' }}>Mantenim. $</th>
+              <th style={{ background: '#eef4fb' }}>Total $</th>
+              <th style={{ background: '#fff8e1' }}>ABP 2026</th>
+              <th style={{ background: '#fff8e1' }}>ABP 2027</th>
+              <th style={{ background: '#fffdf2' }}>Real 2026 $</th>
+              <th style={{ background: '#fffdf2' }}>Real 2026 %</th>
+            </tr>
+          </thead>
           <tbody>
             {Object.entries(sbus).map(([sbu, marcas]) => {
               const st = { logVenta: 0, mue: 0, total: 0, real: 0 }
               const rows = marcas.map((m) => { const c = calc(m); st.logVenta += c.logVenta; st.mue += c.mue; st.total += c.total; st.real += c.real; tot.logVenta += c.logVenta; tot.mue += c.mue; tot.total += c.total; tot.real += c.real; return { m, c } })
               return (
                 <Fragment2 key={sbu}>
-                  <tr className="sburow"><td className="l" style={{ color: sbuColor(sbu), fontWeight: 800 }} colSpan={9}>{sbu}</td></tr>
+                  <tr className="sburow"><td className="l" style={{ color: sbuColor(sbu), fontWeight: 800 }} colSpan={10}>{sbu}</td></tr>
                   {rows.map(({ m, c }) => (
                     <tr key={m}>
-                      <td className="l" style={{ cursor: 'pointer' }} onClick={() => setDetMarca(m)} title="Abrir para llenar"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m} <span className="unit">✏️</span></td>
+                      <td className="l" style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#cdd7e0' }} onClick={() => setDetMarca(m)} title="Abrir su ficha de Logística para llenar"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>
                       <td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{c.pct ? fmt(c.pct) + '%' : '—'}</td>
                       <td className="tot">{c.logVenta ? money(c.logVenta) : '—'}</td>
+                      <td className="tot">{c.mue ? money(c.mue) : '—'}</td>
+                      <td className="tot" style={{ color: 'var(--muted)' }} title="Pendiente: se calculará por CBM">—</td>
+                      <td className="tot" style={{ fontWeight: 700 }}>{c.total ? money(c.total) : '—'}</td>
                       <td className="tot" style={{ background: '#fffdf2' }}>{c.abp26 != null ? fmt(c.abp26) + '%' : '—'}</td>
                       <td className="tot" style={{ background: '#fffdf2' }}>{c.abp27 != null ? fmt(c.abp27) + '%' : '—'}</td>
-                      <td className="tot">{c.real ? money(c.real) : '—'}</td>
-                      <td className="tot">{c.realpct ? fmt(c.realpct) + '%' : '—'}</td>
-                      <td className="tot">{c.mue ? money(c.mue) : '—'}</td>
-                      <td className="tot" style={{ fontWeight: 700 }}>{c.total ? money(c.total) : '—'}</td>
+                      <td className="tot" style={{ background: '#fffdf2' }}>{c.real ? money(c.real) : '—'}</td>
+                      <td className="tot" style={{ background: '#fffdf2' }}>{c.realpct ? fmt(c.realpct) + '%' : '—'}</td>
                     </tr>
                   ))}
-                  <tr style={{ background: '#f4f7fa' }}><td className="l" style={{ fontWeight: 700 }}>Subtotal {sbu}</td><td className="tot"></td><td className="tot" style={{ fontWeight: 700 }}>{money(st.logVenta)}</td><td className="tot" style={{ background: '#fffdf2' }}></td><td className="tot" style={{ background: '#fffdf2' }}></td><td className="tot" style={{ fontWeight: 700 }}>{money(st.real)}</td><td className="tot"></td><td className="tot" style={{ fontWeight: 700 }}>{money(st.mue)}</td><td className="tot" style={{ fontWeight: 800 }}>{money(st.total)}</td></tr>
+                  <tr style={{ background: '#f4f7fa' }}><td className="l" style={{ fontWeight: 700 }}>Subtotal {sbu}</td><td className="tot"></td><td className="tot" style={{ fontWeight: 700 }}>{money(st.logVenta)}</td><td className="tot" style={{ fontWeight: 700 }}>{money(st.mue)}</td><td className="tot">—</td><td className="tot" style={{ fontWeight: 800 }}>{money(st.total)}</td><td className="tot" style={{ background: '#fffdf2' }}></td><td className="tot" style={{ background: '#fffdf2' }}></td><td className="tot" style={{ background: '#fffdf2', fontWeight: 700 }}>{money(st.real)}</td><td className="tot" style={{ background: '#fffdf2' }}></td></tr>
                 </Fragment2>
               )
             })}
-            <tr className="grandrow"><td className="l">TOTAL {empresa}</td><td className="tot"></td><td className="tot">{money(tot.logVenta)}</td><td className="tot" style={{ background: '#fff8e1' }}></td><td className="tot" style={{ background: '#fff8e1' }}></td><td className="tot">{money(tot.real)}</td><td className="tot"></td><td className="tot">{money(tot.mue)}</td><td className="tot">{money(tot.total)}</td></tr>
+            <tr className="grandrow"><td className="l">TOTAL {empresa}</td><td className="tot"></td><td className="tot">{money(tot.logVenta)}</td><td className="tot">{money(tot.mue)}</td><td className="tot">—</td><td className="tot">{money(tot.total)}</td><td className="tot" style={{ background: '#fff8e1' }}></td><td className="tot" style={{ background: '#fff8e1' }}></td><td className="tot" style={{ background: '#fffdf2' }}>{money(tot.real)}</td><td className="tot" style={{ background: '#fffdf2' }}></td></tr>
           </tbody>
         </table>
       </div>
