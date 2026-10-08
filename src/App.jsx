@@ -2567,9 +2567,13 @@ function AprobacionesForm({ empresa, sbus }) {
   const marcas = marcasDe(sbus)
   const [logd, setLogd] = useState({})
   const [cf, setCf] = useState({})
+  const [hist, setHist] = useState([]); const [ven, setVen] = useState([])
   const [aprob, setAprob] = useState(() => { try { return JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}') } catch { return {} } })
   const [msg, setMsg] = useState(null)
-  useEffect(() => { try { setLogd(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setCf(JSON.parse(localStorage.getItem(`cf_${empresa}`) || '{}')) } catch { } try { setAprob(JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')) } catch { } }, [empresa])
+  useEffect(() => { try { setLogd(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setCf(JSON.parse(localStorage.getItem(`cf_${empresa}`) || '{}')) } catch { } try { setAprob(JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')) } catch { } (async () => { try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { } try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVen(jv.values.slice(1)) } catch { } })() }, [empresa])
+  const histAll = (() => { const s = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) s.add(upper(cli)) }); return s })()
+  const esNew = (cli) => !histAll.has(upper(cli))
+  const clientesDe = (mca) => { const out = new Set(); ven.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli || cli.toUpperCase().startsWith('VIAJES')) return; let s = 0; for (let i = 0; i < 12; i++) s += Math.max(0, num(r[4 + i])); if (s > 0) out.add(cli) }); return [...out].sort((a, b) => a.localeCompare(b)) }
   const g = (k) => num(logd[k])
   const isAprob = (mca) => !!aprob[`LOGISTICA|${mca}`]
   const toggle = (mca) => { const next = { ...aprob, [`LOGISTICA|${mca}`]: !isAprob(mca) }; setAprob(next); saveEstado(empresa, 'aprob', next); setMsg({ t: 'ok', x: (next[`LOGISTICA|${mca}`] ? 'Aprobado' : 'Aprobación quitada') + ' · ' + mca + '. Se refleja en Logística.' }) }
@@ -2611,6 +2615,23 @@ function AprobacionesForm({ empresa, sbus }) {
               <td><button className={'btn' + (ap ? '' : ' primary')} disabled={!pt && !ap} onClick={() => toggleC(m)}>{ap ? '↺ Quitar aprobación' : '✓ Aprobar'}</button></td>
             </tr>
           ) })}
+        </tbody>
+      </table></div>
+
+      <h3 style={{ marginTop: 22 }}>Clientes y su plazo de cobro <span className="unit">(para revisión · los nuevos marcados)</span></h3>
+      <div className="sub">Todos los clientes que participan en la compra 2028 y el <b>plazo de cobro</b> que tienen. Los <b style={{ color: '#f97316' }}>nuevos</b> (sin histórico) los definió el Director; el resto viene de Salesforce.</div>
+      <div className="tablewrap" style={{ maxHeight: '55vh', overflowY: 'auto' }}><table style={{ width: 'auto' }}>
+        <thead><tr><th className="l">Marca</th><th className="l">Cliente</th><th>Plazo</th></tr></thead>
+        <tbody>
+          {(() => { const filas = []; marcas.forEach(({ marca: m }) => clientesDe(m).forEach((cli) => filas.push({ m, cli, nuevo: esNew(cli), t: cf[`TERM|${m}|${cli}`] }))); return filas.length === 0
+            ? <tr><td className="l" colSpan={3}>Aún no hay clientes con compra 2028 capturada.</td></tr>
+            : filas.map((f, i) => (
+              <tr key={i} style={f.nuevo ? { background: '#fff7ed' } : undefined}>
+                <td className="l"><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(f.m), marginRight: 6 }}></span>{f.m}</td>
+                <td className="l">{f.cli}{f.nuevo && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 800, color: '#fff', background: '#f97316', borderRadius: 5, padding: '2px 7px', letterSpacing: '.3px' }}>NUEVO</span>}</td>
+                <td className="tot" style={{ fontWeight: 700, color: f.t ? '#0b5566' : '#b45309' }}>{f.t || '— sin definir'}{!f.nuevo && f.t ? <span className="unit"> (SF)</span> : null}</td>
+              </tr>
+            )) })()}
         </tbody>
       </table></div>
     </div>
