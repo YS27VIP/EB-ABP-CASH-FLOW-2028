@@ -1616,6 +1616,8 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const [ventas, setVentas] = useState([])
   const [producto, setProducto] = useState([])
   const [precios, setPrecios] = useState({})
+  const [catList, setCatList] = useState([]) // categorías de la marca (espejo del Director)
+  const [catTipo, setCatTipo] = useState({}) // tipo de producto por categoría (clasificación del Director)
   const stKey = `logcost_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false)
@@ -1623,9 +1625,11 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   useEffect(() => {
     try { setTData(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
     try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { }
+    try { setCatTipo(JSON.parse(localStorage.getItem(`cattipo_${empresa}`) || '{}')) } catch { }
     ;(async () => {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
+      try { const j3 = await gReadTab('Cap_Categorias'); if (j3 && j3.ok && j3.values) { const o = []; j3.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) o.push(r[1]) }); setCatList(o) } } catch { }
     })()
   }, [empresa, marca])
   const inv = inventarioCalc(tData, marca, ventaMarcaMes(ventas, empresa, marca))
@@ -1671,6 +1675,19 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
           <tr className="grandrow"><td className="l">TOTAL costos logísticos</td>{total.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(total))}</td></tr>
         </tbody>
       </table></div>
+
+      <div style={{ marginTop: 24 }}>
+        <h3>Volumen por categoría — {marca} <span className="unit">(CBM)</span> <span className="fill-badge">✏️ para llenar</span></h3>
+        <div className="sub">Las <b>categorías</b> y su <b>tipo de producto</b> vienen de lo que definió el Director (solo lectura, espejo). Aquí Logística escribe el <b>CBM</b> (metros cúbicos) de cada categoría, para dimensionar el volumen de envío y almacenaje.</div>
+        {catList.length === 0
+          ? <div className="note warn">Aún no hay categorías para {marca}. El Director las define en su pestaña <b>Categorías</b>; cuando las guarde, aquí aparecerán para ponerles el CBM.</div>
+          : <div className="tablewrap"><table style={{ width: 'auto' }}>
+            <thead><tr><th className="l">Categoría</th><th className="l">Tipo de producto</th><th>CBM</th></tr></thead>
+            <tbody>
+              {catList.map((c) => { const k = `${marca}|CBM|${c}`; const tipo = catTipo[`${marca}|${c}`]; return <tr key={c}><td className="l">{c}</td><td className="l">{tipo ? tipo : <span className="unit">(sin tipo definido)</span>}</td><td className="cell"><input className="fillin" value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="CBM" style={{ width: 100, textAlign: 'center' }} /></td></tr> })}
+            </tbody>
+          </table></div>}
+      </div>
     </div>
   )
 }
