@@ -111,6 +111,9 @@ tr.sep td{height:12px;background:transparent;border:none}
 /* Tablas de Ventas con columnas fijas para que los meses coincidan entre bloques */
 table.vfix{table-layout:fixed;width:1168px}
 table.vfix td.l,table.vfix th.l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Costos logísticos: líneas internas entre filas casi invisibles (la separación la da el color de letra por grupo). */
+table.logcost-tbl td{border-bottom-color:#f6f8fb}
+table.logcost-tbl tr.grandrow td{border-bottom-color:var(--line)}
 
 /* Proyección de Ventas 2026 vs 2028 */
 td.ref{color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}

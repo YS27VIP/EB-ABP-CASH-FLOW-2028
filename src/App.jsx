@@ -482,6 +482,10 @@ export default function App() {
               <span className="appicon" style={{ background: '#2e7d32' }}>💰</span>
               <span className="applabel">Finanzas</span>
             </button>}
+            {(puede('Logística') || esAdmin) && <button className="app" onClick={() => setRoleId('logistica')}>
+              <span className="appicon" style={{ background: '#b45309' }}>🚚</span>
+              <span className="applabel">Logística</span>
+            </button>}
             {esAdmin && <button className="app" onClick={() => setRoleId('gerencia')}>
               <span className="appicon" style={{ background: '#1f2d3d' }}>📈</span>
               <span className="applabel">Gerencia</span>
@@ -563,6 +567,17 @@ export default function App() {
           <span className="rolechip" style={{ background: '#2e7d32' }}>💰 Finanzas</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
         {estadoReady ? <main><FinanzasWorkspace key={empresa} empresa={empresa} usuario={usuario} sbus={sbus} /></main> : cargandoMain}
+      </>
+    )
+  }
+
+  if (roleId === 'logistica') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#b45309' }}>🚚 Logística</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        {estadoReady ? <main><LogisticaHome key={empresa} empresa={empresa} sbus={sbus} /></main> : cargandoMain}
       </>
     )
   }
@@ -1642,6 +1657,96 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
   )
 }
 
+/* ===== LOGÍSTICA (menú): detalle consolidado por SBU y marca + referencia ABP y real 2026 del EBP ===== */
+function LogisticaHome({ empresa, sbus }) {
+  const [ventas, setVentas] = useState([]); const [producto, setProducto] = useState([])
+  const [cats, setCats] = useState({}) // marca -> [catNames]
+  const [logcost, setLogcost] = useState(() => { try { return JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { return {} } })
+  const [logRef, setLogRef] = useState({}); const [real26, setReal26] = useState({ marca: {}, sbu: {} })
+  const [load, setLoad] = useState(true)
+  const [detMarca, setDetMarca] = useState(null) // marca abierta en detalle (llenado)
+  useEffect(() => {
+    (async () => {
+      try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
+      try { const j = await gReadTab('Cap_Producto'); if (j && j.ok && j.values) setProducto(j.values.slice(1)) } catch { }
+      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const o = {}; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const c = r[1], mar = r[3]; if (!mar || !c) return; (o[mar] = o[mar] || []).push(c) }); setCats(o) } } catch { }
+      try { const jr = await gLoadLogRef(); if (jr && jr.ok) setLogRef(jr.val) } catch { }
+      try { const j26 = await gLogRef2026(); if (j26 && j26.ok) setReal26(j26.val) } catch { }
+      try { setLogcost(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { }
+      setLoad(false)
+    })()
+  }, [empresa])
+  const g = (k) => num(logcost[k])
+  const calc = (marca) => {
+    const catNames = cats[marca] || []
+    const r = realAupAuc(empresa, marca, ventas, producto, catNames)
+    const costoVentaTot = r.costoMes.reduce((a, b) => a + b, 0)
+    const ventaNetaTot = r.ventaMes.reduce((a, b) => a + b, 0)
+    const pct = g(`${marca}|PCT_LOGVENTA`)
+    const logVenta = costoVentaTot * pct / 100
+    const mue = MESES.reduce((a, _, m) => a + g(`${marca}|MUECOST|${m}`), 0)
+    const MU = upper(marca); const ref = logRef[MU] || {}; const r26 = (real26.marca || {})[MU] || { log: 0, vn: 0 }
+    return { pct, logVenta, ventaNetaTot, mue, total: logVenta + mue, abp26: ref.pct2026, abp27: ref.pct2027, real: r26.log, realpct: r26.vn ? (r26.log / r26.vn * 100) : 0 }
+  }
+  const money = (v) => '$' + Math.round(v).toLocaleString('en-US')
+  if (load) return <div className="panel"><div className="sub">⏳ Cargando el detalle logístico…</div></div>
+  if (detMarca) {
+    return (<>
+      <div className="toolbar" style={{ marginBottom: 10 }}>
+        <button className="btn" onClick={() => setDetMarca(null)}>← Volver al consolidado</button>
+        <span className="unit" style={{ marginLeft: 8 }}>Llenando la logística de <b>{detMarca}</b>.</span>
+      </div>
+      <CostosLogisticos key={empresa + '|' + detMarca} empresa={empresa} fixedMarca={detMarca} sbus={sbus} />
+    </>)
+  }
+  // Fila de totales por grupo
+  const tot = { logVenta: 0, mue: 0, total: 0, real: 0 }
+  return (
+    <div className="panel">
+      <h3>Impacto logístico — {empresa}{M$} <span className="unit">(por SBU y marca · 2028)</span></h3>
+      <div className="sub">El <b>impacto logístico</b> de cada marca: costo logístico de la venta (tu <b>% ABP 2028</b> × costo de venta) + muestras. Para el <b>costo logístico de la venta</b> ves la referencia: <b style={{ color: '#8a6d1a' }}>ABP 2026 y 2027</b> (amarillo, de tus archivos) y el <b>Real acum. 2026</b> del EBP. Haz clic en una marca (✏️) para llenar su logística.</div>
+      <div className="tablewrap">
+        <table>
+          <thead><tr>
+            <th className="l">SBU / Marca</th>
+            <th>% ABP 2028</th><th>Costo log. venta $</th>
+            <th style={{ background: '#fff8e1' }}>ABP 2026</th><th style={{ background: '#fff8e1' }}>ABP 2027</th>
+            <th>Real 2026 $</th><th>Real 2026 %</th>
+            <th>Muestras $</th><th>Total log. $</th>
+          </tr></thead>
+          <tbody>
+            {Object.entries(sbus).map(([sbu, marcas]) => {
+              const st = { logVenta: 0, mue: 0, total: 0, real: 0 }
+              const rows = marcas.map((m) => { const c = calc(m); st.logVenta += c.logVenta; st.mue += c.mue; st.total += c.total; st.real += c.real; tot.logVenta += c.logVenta; tot.mue += c.mue; tot.total += c.total; tot.real += c.real; return { m, c } })
+              return (
+                <Fragment2 key={sbu}>
+                  <tr className="sburow"><td className="l" style={{ color: sbuColor(sbu), fontWeight: 800 }} colSpan={9}>{sbu}</td></tr>
+                  {rows.map(({ m, c }) => (
+                    <tr key={m}>
+                      <td className="l" style={{ cursor: 'pointer' }} onClick={() => setDetMarca(m)} title="Abrir para llenar"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m} <span className="unit">✏️</span></td>
+                      <td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{c.pct ? fmt(c.pct) + '%' : '—'}</td>
+                      <td className="tot">{c.logVenta ? money(c.logVenta) : '—'}</td>
+                      <td className="tot" style={{ background: '#fffdf2' }}>{c.abp26 != null ? fmt(c.abp26) + '%' : '—'}</td>
+                      <td className="tot" style={{ background: '#fffdf2' }}>{c.abp27 != null ? fmt(c.abp27) + '%' : '—'}</td>
+                      <td className="tot">{c.real ? money(c.real) : '—'}</td>
+                      <td className="tot">{c.realpct ? fmt(c.realpct) + '%' : '—'}</td>
+                      <td className="tot">{c.mue ? money(c.mue) : '—'}</td>
+                      <td className="tot" style={{ fontWeight: 700 }}>{c.total ? money(c.total) : '—'}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ background: '#f4f7fa' }}><td className="l" style={{ fontWeight: 700 }}>Subtotal {sbu}</td><td className="tot"></td><td className="tot" style={{ fontWeight: 700 }}>{money(st.logVenta)}</td><td className="tot" style={{ background: '#fffdf2' }}></td><td className="tot" style={{ background: '#fffdf2' }}></td><td className="tot" style={{ fontWeight: 700 }}>{money(st.real)}</td><td className="tot"></td><td className="tot" style={{ fontWeight: 700 }}>{money(st.mue)}</td><td className="tot" style={{ fontWeight: 800 }}>{money(st.total)}</td></tr>
+                </Fragment2>
+              )
+            })}
+            <tr className="grandrow"><td className="l">TOTAL {empresa}</td><td className="tot"></td><td className="tot">{money(tot.logVenta)}</td><td className="tot" style={{ background: '#fff8e1' }}></td><td className="tot" style={{ background: '#fff8e1' }}></td><td className="tot">{money(tot.real)}</td><td className="tot"></td><td className="tot">{money(tot.mue)}</td><td className="tot">{money(tot.total)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="sub" style={{ marginTop: 10 }}>Nota: el % ABP 2028 es sobre el <b>costo de venta</b>; el Real 2026 % es sobre <b>ventas netas</b> (bases distintas, por eso se muestran los dos como referencia).</div>
+    </div>
+  )
+}
+
 /* ===== COSTOS LOGÍSTICOS: % sobre costo de venta, movimiento de muestras y saldo de inventario ===== */
 function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const marca = fixedMarca || marcasDe(sbus)[0]?.marca
@@ -1700,7 +1805,6 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
     <div className="panel">
       <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
         <span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span>
-        <label>% logístico venta</label>{pctInput(kLog)}
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
@@ -1722,12 +1826,12 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
         )
       })()}
       <div className="sub">Cada costo es un <b>grupo de dos filas</b>: la fila <b>base</b> (el número de origen) y la fila <b>«= …»</b> (el costo que suma al total), ambas del <b>mismo color</b>. Los grupos se separan con una línea muy tenue. <b style={{ color: '#1d4ed8' }}>Azul</b> = costo logístico de la venta · <b style={{ color: '#0f766e' }}>Verde</b> = muestras · <b style={{ color: '#b45309' }}>Ámbar</b> = mantenimiento (pendiente por CBM). Pasa el cursor por cualquier número para ver de dónde sale.</div>
-      <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+      <div className="tablewrap"><table className="vfix logcost-tbl"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
           {/* ① LOGÍSTICO DE LA VENTA — azul */}
-          <tr><td className="l" style={{ color: '#6b8fd6', paddingLeft: 18 }} title="Costo de venta = Σ (unidades de cada categoría × AUC de la categoría). Es el espejo de lo que calcula Ventas; Logística solo lo lee.">Costo de venta ($) <span className="unit">base</span></td>{costoVenta.map((v, m) => <td key={m} className="tot" style={{ color: '#6b8fd6' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#6b8fd6' }}>{fmt(rowTot(costoVenta))}</td></tr>
-          <tr><td className="l" style={{ color: '#1d4ed8', fontWeight: 800, paddingLeft: 18 }} title={`= ${fmt(g(kLog))}% × costo de venta del mes`}>= Costo logístico de la venta</td>{costoLog.map((v, m) => <td key={m} className="tot" style={{ color: '#1d4ed8', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: ${fmt(g(kLog))}% × $${fmt(costoVenta[m])} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(rowTot(costoLog))}</td></tr>
+          <tr><td className="l" style={{ color: '#6b8fd6', paddingLeft: 18 }} title="Costo de venta = Σ (unidades de cada categoría × AUC de la categoría). Es el espejo de lo que calcula Ventas; Logística solo lo lee.">Costo de venta ($) <span className="unit">base 🪞</span></td>{costoVenta.map((v, m) => <td key={m} className="tot" style={{ color: '#6b8fd6' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#6b8fd6' }}>{fmt(rowTot(costoVenta))}</td></tr>
+          <tr><td className="l" style={{ color: '#1d4ed8', fontWeight: 800, paddingLeft: 18 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>= Costo logístico de la venta <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(</span>{pctInput(kLog)}<span style={{ color: 'var(--muted)', fontWeight: 400 }}>% × costo de venta)</span></span></td>{costoLog.map((v, m) => <td key={m} className="tot" style={{ color: '#1d4ed8', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: ${fmt(g(kLog))}% × $${fmt(costoVenta[m])} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(rowTot(costoLog))}</td></tr>
 
           {/* ② MUESTRAS — verde */}
           <tr><td className="l" style={{ color: '#4e9a92', paddingLeft: 18, borderTop: '1px solid #f4f6f9' }} title="Compras / movimiento del mes valorizado a AUC.">Compras / movimiento ($) <span className="unit">base</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #f4f6f9' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #f4f6f9' }}>{fmt(rowTot(comprasUsd))}</td></tr>
@@ -1742,7 +1846,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       </table></div>
 
       <div style={{ marginTop: 24 }}>
-        <h3>Volumen por categoría — {marca} <span className="unit">(CBM)</span> <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Logística" /></h3>
+        <h3>Volumen por categoría — {marca} <span className="unit">(CBM)</span> {ESP('Categoría y tipo de producto son espejo del Director; solo el CBM lo llena Logística.')}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Logística" /></h3>
         <div className="sub">Las <b>categorías</b> y su <b>tipo de producto</b> vienen de lo que definió el Director (solo lectura, espejo). Aquí Logística escribe el <b>CBM</b> (metros cúbicos) de cada categoría, para dimensionar el volumen de envío y almacenaje.</div>
         {catList.length === 0
           ? <div className="note warn">Aún no hay categorías para {marca}. El Director las define en su pestaña <b>Categorías</b>; cuando las guarde, aquí aparecerán para ponerles el CBM.</div>
@@ -1761,7 +1865,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
         const granTot = MESES.reduce((a, _, mi) => a + mMes(mi), 0)
         return (
           <div style={{ marginTop: 24 }}>
-            <h3>Muestras a comprar — {marca} <span className="unit">(unidades · espejo)</span></h3>
+            <h3>🪞 Muestras a comprar — {marca} <span className="unit">(unidades · espejo del Director)</span></h3>
             <div className="sub">Las <b>unidades</b> las define el <b>Director</b> (espejo, solo lectura). <b>Logística</b> pone el <b>ratio $/unidad</b> de cada línea (Preventa y Seating). El <b>Costo de muestras</b> = unidades × $/ud, y ese total alimenta el bloque verde de arriba.</div>
             <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} /><col style={{ width: '100px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
               <thead><tr><th className="l">Concepto</th><th>$ / unidad</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -1782,7 +1886,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
         const tot = vn.reduce((a, b) => a + b, 0)
         return (
           <div style={{ marginTop: 24 }}>
-            <h3>Ventas netas TAHO — {marca} <span className="unit">($ · espejo, solo lectura)</span></h3>
+            <h3>🪞 Ventas netas TAHO — {marca} <span className="unit">($ · espejo, solo lectura)</span></h3>
             <div className="sub">Espejo de las <b>ventas netas por mes</b> de la empresa <b>TAHO</b> para {marca} (unidades × AUP). Se llena cuando TAHO carga su plan; sirve de referencia para el impacto logístico intercompañía.</div>
             <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
               <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -1851,7 +1955,7 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
         </tbody>
       </table></div>
 
-      <h3 style={{ marginTop: 22 }}>Valorización en $ — {marca} <span className="unit">(unidades × AUC de la temporada de compra)</span></h3>
+      <h3 style={{ marginTop: 22 }}>Valorización en $ — {marca} {ESP('La temporada de compra y el AUC son espejo de Producto; las unidades vienen de arriba.')}<span className="unit">(unidades × AUC de la temporada de compra)</span></h3>
       <div className="sub">Las muestras <b>no arrastran inventario viejo</b>: se valorizan al <b>AUC de la temporada que se compra ese mes</b> (ene–jun = SS28 · jul–oct = FW28 · nov–dic = SS29). La <b>temporada</b> y el <b>AUC</b> salen como espejo de Producto. Si el AUC sale en cero, Producto aún no capturó el PAUC de esa temporada.</div>
       <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
