@@ -224,6 +224,38 @@ function realAupAuc(empresa, marca, ventasRows, prodRows, catNames) {
   return { aupW, aucW, totalUnits, ventaMes, costoMes, unitsCat }
 }
 
+/* ===== RESPONSABLE DE UNA SECCIÓN (según Configuración → Colaboradores): avatar + nombre + ✏️ =====
+   El avatar se liga por correo: la persona elige su avatar, el admin dice qué correo es de cada rol,
+   y aquí se muestra el responsable de la sección sin importar quién esté mirando. */
+let _respCache = { empresa: null, rows: null, avatars: null, ts: 0 }
+async function _loadResp(empresa) {
+  if (_respCache.empresa === empresa && _respCache.rows && Date.now() - _respCache.ts < 60000) return _respCache
+  let rows = [], avatars = {}
+  try { const j = await gReadTab('Cap_Colaboradores'); if (j && j.ok && j.values) rows = j.values.slice(1) } catch { }
+  try { avatars = await gLoadAvatars() } catch { }
+  _respCache = { empresa, rows, avatars, ts: Date.now() }
+  return _respCache
+}
+function Responsable({ empresa, sbuName, seccion, texto = 'para llenar' }) {
+  const [info, setInfo] = useState(null)
+  useEffect(() => {
+    let x = false
+    ;(async () => {
+      const c = await _loadResp(empresa); if (x) return
+      const pers = (c.rows || []).filter((r) => upper(r[0]) === upper(empresa))
+        .map((r) => ({ nombre: String(r[1] || '').trim(), rol: String(r[2] || '').trim(), email: String(r[3] || '').trim().toLowerCase(), acceso: String(r[4] || '').split(';').filter(Boolean), sbu: String(r[6] || '').trim() }))
+        .filter((p) => (p.acceso.includes(seccion) || upper(p.rol) === upper(seccion)) && (!sbuName || !p.sbu || upper(p.sbu) === 'TODAS' || upper(p.sbu) === upper(sbuName)))
+        .map((p) => ({ nombre: p.nombre, avatar: ((c.avatars || {})[p.email] || {}).avatar || '' }))
+      const seen = new Set(); const uniq = pers.filter((p) => { const k = (p.nombre || '').toLowerCase(); if (!p.nombre || seen.has(k)) return false; seen.add(k); return true })
+      setInfo(uniq)
+    })()
+    return () => { x = true }
+  }, [empresa, sbuName, seccion])
+  const baseStyle = { display: 'inline-block', marginLeft: 8, fontSize: 11.5, fontWeight: 800, color: '#8a6d1a', background: '#fdf7e3', border: '1px solid #e6d9a8', borderRadius: 12, padding: '2px 11px', verticalAlign: 'middle', boxShadow: '0 1px 3px rgba(0,0,0,.10)' }
+  if (!info || info.length === 0) return <span style={baseStyle} title="Asígnale un responsable en Configuración → Colaboradores">✏️ {texto}</span>
+  return <span style={baseStyle} title={'Responsable(s): ' + info.map((p) => p.nombre).join(', ') + ' · definido en Configuración → Colaboradores'}>{info.map((p) => (p.avatar ? p.avatar + ' ' : '') + p.nombre).join(' · ')} · ✏️ {texto}</span>
+}
+
 /* ===== APP ===== */
 export default function App() {
   const [usuario, setUsuario] = useState('')
@@ -695,7 +727,7 @@ function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       <div className="panel">
-        <h3>{role.label} — {rubro.k} <span className="unit">({rubro.u})</span><span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>{role.label} — {rubro.k} <span className="unit">({rubro.u})</span><Responsable empresa={empresa} seccion={role.label} /></h3>
         <div className="sub">Empresa <b>{empresa}</b>. Captura por marca y mes.</div>
         <div className="toolbar" style={{ marginBottom: 12 }}>
           <label>Aplicar a todos los meses{fixedMarca ? ` — ${fixedMarca}` : ''}</label>
@@ -771,7 +803,7 @@ function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, sa
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       <div className="panel">
-        <h3>{role.label} — {rubro.k} por categoría <span className="unit">({rubro.u} · {marca})</span><span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>{role.label} — {rubro.k} por categoría <span className="unit">({rubro.u} · {marca})</span><Responsable empresa={empresa} seccion={role.label} /></h3>
         <div className="sub">Las categorías y su peso las define el Director. Captura el {rubro.k} por categoría y mes.</div>
         {catList.length === 0 ? <div className="note warn">El Director aún no definió categorías para {marca}. Pídele que las cargue en su pestaña de Categorías.</div> : (<>
           <div className="toolbar" style={{ marginBottom: 12 }}>
@@ -896,7 +928,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         </table></div>
       </div>
       <div className="panel">
-        <h3>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>👁️ solo lectura</span> : <span className="fill-badge">✏️ para llenar</span>}</h3>
+        <h3>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>👁️ solo lectura</span> : <Responsable empresa={empresa} seccion="Finanzas" />}</h3>
         <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : 'Captura por rubro y mes. Los rubros son iguales para todas las marcas.'} Total: <b>${fmt(totalGeneral)}</b></div>
         <div className="tablewrap">
           <table>
@@ -1585,7 +1617,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
         )
       })()}
       <div className="panel">
-        <h3>Combinación de temporadas — {marca} <span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>Combinación de temporadas — {marca} <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Producto" /></h3>
         <div className="sub">El <b>vendedor manda el total a vender</b> de cada mes. Aquí Producto decide <b>cuántas unidades de cada temporada</b> cubren ese total: en cada mes escribe las <b>unidades a rotar</b> por temporada (p.ej. 500 de FW25). No puedes poner más de lo que hay en stock. La fila <b>«Por asignar»</b> te dice cuánto falta para llegar a la venta del mes, y <b>«Saldo por asignar»</b> debajo de cada temporada te muestra cuánto stock te queda de esa temporada. {iiAuto ? <>El <b>inventario inicial</b> viene de la matriz de arriba.</> : <>Pon también el <b>inventario inicial</b> y las <b>compras 2028</b>.</>}</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '300px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Temporada / concepto</th><th>Inicial</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -1661,7 +1693,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      <h3>Costos logísticos — {marca}{M$}{aprobLog ? <span className="empchip" style={{ marginLeft: 8, background: 'var(--ok)', fontSize: 11.5 }}>✓ Aprobado por Finanzas</span> : <span className="fill-badge">✏️ para llenar</span>}</h3>
+      <h3>Costos logísticos — {marca}{M$}{aprobLog ? <span className="empchip" style={{ marginLeft: 8, background: 'var(--ok)', fontSize: 11.5 }}>✓ Aprobado por Finanzas</span> : <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Logística" />}</h3>
       <div className="sub">Se calculan por <b>%</b>: costo logístico de venta = % × <b>costo de venta</b> (unidades × AUC); muestras = % × <b>compras</b>; mantenimiento = % × <b>valor del saldo de inventario</b>. Los tres % se ponen arriba.</div>
       <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -1677,7 +1709,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       </table></div>
 
       <div style={{ marginTop: 24 }}>
-        <h3>Volumen por categoría — {marca} <span className="unit">(CBM)</span> <span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>Volumen por categoría — {marca} <span className="unit">(CBM)</span> <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Logística" /></h3>
         <div className="sub">Las <b>categorías</b> y su <b>tipo de producto</b> vienen de lo que definió el Director (solo lectura, espejo). Aquí Logística escribe el <b>CBM</b> (metros cúbicos) de cada categoría, para dimensionar el volumen de envío y almacenaje.</div>
         {catList.length === 0
           ? <div className="note warn">Aún no hay categorías para {marca}. El Director las define en su pestaña <b>Categorías</b>; cuando las guarde, aquí aparecerán para ponerles el CBM.</div>
@@ -1721,7 +1753,7 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
       <div className="panel">
-        <h3>Cálculo de comisiones — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>Cálculo de comisiones — {marca}{M$}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Director" /></h3>
         <div className="sub">El Director pone los <b>% mensuales</b>. La <b>venta externa</b> viene de Comercial (Unid×AUP); la <b>intercompañía</b> viene de Retail (pendiente). El <b>pago de comisión de venta externa</b> alimenta directamente la línea <b>Comisiones</b> del Cash Flow (parte de Costos Operativos).</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -2008,7 +2040,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       {showMatriz && <div className="panel">
         <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar precios'}</button></div>
-        <h3>Inventario, costo y precio por temporada y categoría — {marca}{M$}<span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>Inventario, costo y precio por temporada y categoría — {marca}{M$}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Producto" /></h3>
         <div className="sub" style={{ marginBottom: 6 }}>Por cada <b>temporada</b> (añada) y <b>categoría</b>: cuántas <b>unidades</b>, su <b>AUC</b> (costo) y su <b>AUP</b> (precio). Para las temporadas <b>anteriores</b> las unidades son el <b>saldo on-hand</b> (se escriben aquí); para <b>SS28/FW28/SS29</b> las unidades son <b>solo lectura</b> — vienen de las compras que capturas en el <b>Paso 4</b>, repartidas por el peso de la categoría (aquí solo pones sus precios AUC/AUP). Las categorías vienen de lo que definió el Director.</div>
         <div className="tablewrap"><table style={{ width: 'auto' }}>
           <thead><tr><th className="l">Categoría / Temporada</th><th style={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Unidades<br /><span className="unit" style={{ fontWeight: 400 }}>saldo / compra proy.</span></th><th>AUC ($)</th><th>AUP ($)</th><th>Margen ($)</th><th>Margen %</th></tr></thead>
@@ -2150,7 +2182,7 @@ function GastosAdminForm({ empresa }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       <div className="panel">
-        <h3>Gastos administrativos <span className="unit">(detalle · compartido por todas las SBU)</span>{M$}<span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>Gastos administrativos <span className="unit">(detalle · compartido por todas las SBU)</span>{M$}<Responsable empresa={empresa} seccion="Finanzas" /></h3>
         <div className="sub">Captura por centro de costo y mes. Con <b>Editar centros de costo</b> puedes cambiar códigos/nombres o agregar rubros; el cambio <b>aplica a todas las SBU</b>. El SUB-TOTAL alimenta la línea Gastos administrativos del Cash Flow.<br /><b>Importar desde Excel:</b> descarga la plantilla (columnas CÓD · SUB RUBRO · ENE-28…DIC-28), llénala y súbela con <b>📥 Importar Excel</b>. Se cruza por código; los rubros nuevos se agregan solos. Luego pulsa 💾 Guardar.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '270px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -3665,7 +3697,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="panel">
-        <h3>Categorías de {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>Categorías de {marca}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Director" /></h3>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '2px 0 10px', fontWeight: 600 }}><input type="checkbox" checked={usarCat} onChange={(e) => setUsarCat(e.target.checked)} /> Usar categorías para {marca} <span className="unit">(si lo desactivas, Ventas solo usa el crecimiento por cliente)</span></label>
         <div className="sub">Define los <b>nombres de las categorías</b> de la marca (ej. ROAD, TRAIL, HIKE) y clasifica cada una con su <b>tipo de producto</b> (p.ej. ROAD → CALZADO). El peso de cada categoría ya <b>no se pone aquí</b>: se define abajo por cliente.</div>
         <div className="tablewrap">
@@ -3926,7 +3958,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
       <div className="panel">
         <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
-          <h3 style={{ margin: 0 }}>Ventas · Unidades 2028 — {marca}<span className="fill-badge">✏️ para llenar</span></h3>
+          <h3 style={{ margin: 0 }}>Ventas · Unidades 2028 — {marca}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Ventas" /></h3>
           <div className="spacer"></div>
           <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
         </div>
