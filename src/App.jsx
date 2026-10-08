@@ -116,7 +116,7 @@ const ROLES = [
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
   { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, { k: 'GASTOS ADMIN', gadmin: true }, { k: 'APROBACIONES', aprob: true }] }, // Viajes de Finanzas se llena UNA sola vez (no por marca): botón en la barra lateral
-  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'COMISIONES', comis: true }, { k: 'CATEGORIAS', cat: true }, { k: 'MUESTRAS', muestras: true }] },
+  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [{ k: 'CATEGORIAS', cat: true }, VJ, { k: 'COMISIONES', comis: true }, { k: 'MUESTRAS', muestras: true }, { k: 'CASH FLOW', u: '$', cash: true }] },
 ]
 const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
 
@@ -4545,7 +4545,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar marca'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      {usarCat && <div className="note ok" style={{ marginBottom: 14 }}>Las <b>categorías por cliente</b> (y su % + referencia FW26/SS26) ahora las llena el <b>Director</b> en su pestaña <b>Categorías</b>.</div>}
+      {usarCat && <div className="note ok" style={{ marginBottom: 14 }}>Las <b>categorías por cliente</b> (y su % + referencia FW26/SS26) las llena el <b>Director</b> en su pestaña <b>Categorías</b>.</div>}
 
       <div className="panel">
         <h3>Unidades 2028 por categoría y mes — {marca}{UD} <span className="unit">(unidades)</span></h3>
