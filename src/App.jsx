@@ -3354,7 +3354,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
   function cambiarEmpresa(e) { setEmpresa(e); setAsign(seed(combos[e])); setMsg(null) }
   async function borrarEmpresa() {
     if (SEED_EMPRESAS.includes(empresa)) { setMsg({ t: 'warn', x: empresa + ' es una empresa base del sistema y no se puede eliminar.' }); return }
-    if (!window.confirm(`¿Eliminar la empresa "${empresa}"?\n\nSe quita de la lista y de las combinaciones de SBU. Los datos ya capturados en las hojas (ventas, cash flow, etc.) NO se borran, pero dejarán de mostrarse. Esta acción no se puede deshacer desde aquí.`)) return
+    if (!window.confirm(`¿Eliminar la empresa "${empresa}"?\n\nSe quita de la lista, de las combinaciones de SBU y se BORRAN todas sus filas en las hojas Cap_* (ventas, producto, categorías, cash flow, etc.) para no dejar datos huérfanos. Esta acción no se puede deshacer.`)) return
     setSaving(true); setMsg(null)
     try {
       await gDeleteEmpresa(empresa)

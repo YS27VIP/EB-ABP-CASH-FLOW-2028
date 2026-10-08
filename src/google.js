@@ -252,19 +252,24 @@ export async function gSaveAvatar(email, avatar, nombre) {
 }
 
 export async function gDeleteEmpresa(empresa) {
-  // Quita la empresa de la configuración (lista + combinaciones). No borra los datos ya capturados en las hojas Cap_*.
-  try {
-    const emps = await readValues('Config_Empresas')
-    const header = emps[0] || ['EMPRESA']
-    const kept = emps.slice(1).filter((r) => String(r[0]) !== empresa)
-    await clearValues('Config_Empresas'); await writeValues('Config_Empresas', 'A1', [header, ...kept])
-  } catch { }
-  try {
-    const all = await readValues('Config_Combinaciones')
-    const header = all[0] || ['EMPRESA', 'SBU', 'MARCA']
-    const kept = all.slice(1).filter((r) => String(r[0]) !== empresa)
-    await clearValues('Config_Combinaciones'); await writeValues('Config_Combinaciones', 'A1', [header, ...kept])
-  } catch { }
+  // Quita la empresa de la configuración (lista + combinaciones) Y purga todas sus filas
+  // capturadas en las hojas Cap_* para que no queden datos huérfanos bajo un nombre viejo.
+  const em = String(empresa).trim().toUpperCase()
+  const purgar = async (tab, headerDefault) => {
+    try {
+      const vals = await readValues(tab)
+      if (!vals || !vals.length) return
+      const header = vals[0] || headerDefault
+      const kept = vals.slice(1).filter((r) => String(r[0] || '').trim().toUpperCase() !== em)
+      if (kept.length !== vals.length - 1) { await clearValues(tab); await writeValues(tab, 'A1', [header, ...kept]) }
+    } catch { }
+  }
+  await purgar('Config_Empresas', ['EMPRESA'])
+  await purgar('Config_Combinaciones', ['EMPRESA', 'SBU', 'MARCA'])
+  // Datos capturados (col 0 = empresa): se eliminan todas sus filas.
+  for (const tab of ['Cap_Ventas', 'Cap_Producto', 'Cap_Categorias', 'Cap_Marketing', 'Cap_Logistica', 'Cap_Director', 'Cap_Estado', 'Cap_Colaboradores']) {
+    await purgar(tab)
+  }
   return { ok: true }
 }
 
