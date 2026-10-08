@@ -1651,6 +1651,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const [precios, setPrecios] = useState({})
   const [catList, setCatList] = useState([]) // categorías de la marca (espejo del Director)
   const [catTipo, setCatTipo] = useState({}) // tipo de producto por categoría (clasificación del Director)
+  const [muestras, setMuestras] = useState({}) // muestras a comprar por mes (espejo del Director)
   const stKey = `logcost_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false)
@@ -1659,6 +1660,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
     try { setTData(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { }
     try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { }
     try { setCatTipo(JSON.parse(localStorage.getItem(`cattipo_${empresa}`) || '{}')) } catch { }
+    try { setMuestras(JSON.parse(localStorage.getItem(`muestras_${empresa}`) || '{}')) } catch { }
     ;(async () => {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
@@ -1727,6 +1729,27 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
             </tbody>
           </table></div>}
       </div>
+
+      {(() => {
+        const mg = (tipo, mi) => num(muestras[`${marca}|${tipo}|${mi}`])
+        const mTot = (tipo) => MESES.reduce((a, _, mi) => a + mg(tipo, mi), 0)
+        const mMes = (mi) => mg('PV', mi) + mg('SE', mi)
+        const granTot = MESES.reduce((a, _, mi) => a + mMes(mi), 0)
+        return (
+          <div style={{ marginTop: 24 }}>
+            <h3>Muestras a comprar — {marca} <span className="unit">(unidades · espejo)</span></h3>
+            <div className="sub">Las muestras (en <b>unidades</b>) las define el <b>Director</b> (solo lectura, espejo). Logística las usa para <b>estimar el costo</b> de las muestras.</div>
+            <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+              <tbody>
+                <tr><td className="l" style={{ color: 'var(--muted)' }}>Muestras Preventa (ud)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('PV', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('PV'))}</td></tr>
+                <tr><td className="l" style={{ color: 'var(--muted)' }}>Seating samples (ud)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('SE', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('SE'))}</td></tr>
+                <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL muestras (ud)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mMes(mi))}</td>)}<td className="tot">{fmt(granTot)}</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
