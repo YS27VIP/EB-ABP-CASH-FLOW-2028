@@ -490,10 +490,6 @@ export default function App() {
               <span className="appicon" style={{ background: '#b45309' }}>🚚</span>
               <span className="applabel">Logística</span>
             </button>}
-            {(puede('Finanzas') || esAdmin) && <button className="app" onClick={() => setRoleId('reporte')}>
-              <span className="appicon" style={{ background: '#0e7490' }}>📊</span>
-              <span className="applabel">Reporte</span>
-            </button>}
             {esAdmin && <button className="app" onClick={() => setRoleId('gerencia')}>
               <span className="appicon" style={{ background: '#1f2d3d' }}>📈</span>
               <span className="applabel">Gerencia</span>
@@ -1041,6 +1037,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const sbuLbl = sbu === '__ALL__' ? 'TODAS' : sbu
   const sbuMarcas = sbu === '__ALL__' ? Object.values(sbus).flat() : (sbus[sbu] || [])
   const soloVer = !!(role && role.id === 'director') // el Director solo ve (lo llena Finanzas)
+  const esDirector = !!(role && role.id === 'director') // excepción: el plazo de los clientes NUEVOS lo define el Director (amarillo); Finanzas lo ve como espejo
 
   useEffect(() => {
     (async () => {
@@ -1390,9 +1387,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                     const tk = `TERM|${marca}|${cli}`; const inc = esIncobrable(marca, cli); const nuevo = esNew(cli)
                     return (
                       <tr key={cli} style={nuevo ? { background: '#eff6ff' } : undefined}>
-                        <td className="l" style={inc ? { color: '#b91c1c' } : undefined}>{cli}{nuevo && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, color: '#0e7490', border: '1px solid #0e7490', borderRadius: 4, padding: '1px 5px', verticalAlign: 'middle' }} title="Cliente NUEVO: sin histórico ni plazo de Salesforce. El Director define su plazo.">Nuevo</span>}{inc && <span className="unit" style={{ marginLeft: 6, color: '#b91c1c', fontWeight: 700 }}>⛔ incobrable</span>}</td>
+                        <td className="l" style={inc ? { color: '#b91c1c' } : undefined}>{cli}{nuevo && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 800, color: '#fff', background: '#f97316', borderRadius: 5, padding: '2px 7px', verticalAlign: 'middle', letterSpacing: '.3px', boxShadow: '0 1px 2px rgba(249,115,22,.4)' }} title="Cliente NUEVO: sin histórico ni plazo de Salesforce. El Director define su plazo.">NUEVO</span>}{inc && <span className="unit" style={{ marginLeft: 6, color: '#b91c1c', fontWeight: 700 }}>⛔ incobrable</span>}</td>
                         <td>{nuevo
-                          ? (soloVer ? (data[tk] || '—') : <select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)} title="Cliente nuevo: el Director define el plazo"><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>)
+                          ? (esDirector
+                            ? <select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)} title="Cliente NUEVO: tú (Director) defines el plazo" style={{ background: '#fff7e0', border: '1px solid #e6c34d', borderRadius: 6, padding: '4px 6px' }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>
+                            : <span title="Plazo del cliente nuevo: lo define el Director; aquí es espejo.">{data[tk] || '—'} {ESP('Cliente nuevo: el plazo lo define el Director. Aquí Finanzas solo lo ve.')}</span>)
                           : <span title="Plazo preseteado desde Salesforce (no editable)">{data[tk] || '—'} <span className="unit">(SF)</span></span>}</td>
                         {arrIdx.map((mi) => { const ck = arr27Key(marca, cli, mi); return <td key={mi} className={(soloVer || inc) ? 'tot' : 'cell'} style={{ ...(mi === 0 ? DIV : {}), ...(inc ? { background: '#fdecec' } : {}) }}>{inc ? <span style={{ color: '#d99a9a' }}>—</span> : soloVer ? fmt(num(data[ck])) : <input value={data[ck] ?? ''} onChange={(e) => set(ck, e.target.value)} inputMode="decimal" style={{ width: 64 }} />}</td> })}
                         <td className="tot" style={inc ? { color: '#b91c1c' } : undefined}>{inc ? '—' : fmt(arr27Cli(marca, cli))}</td>
@@ -2630,6 +2629,7 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
   return (
     <div className="comercial">
       <aside className="cmz-side">
+        <button className={'cmz-marca' + (marca === '__REPORTE__' ? ' active' : '')} onClick={() => setMarca('__REPORTE__')} style={{ marginBottom: 8, fontWeight: 800, ...(marca === '__REPORTE__' ? { background: '#0e7490', color: '#fff' } : { color: '#0e7490' }) }}>📊 Reporte</button>
         {Object.entries(sbus).map(([s, ms]) => (
           <div className="cmz-sbu" key={s}>
             <div className="cmz-sbu-h" style={{ color: sbuColor(s), borderLeft: '4px solid ' + sbuColor(s), paddingLeft: 8 }}>{s}</div>
@@ -2639,9 +2639,12 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
         ))}
       </aside>
       <div className="cmz-main" style={{ '--accent': acc, borderTop: '5px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
-        {marca && <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: acc, marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>{isTot ? `▣ TOTAL ${String(marca).slice(7)}` : `💰 ${marca}`}</span></div>}
-        {marca ? <RoleForm key={'fin' + marca} role={finRole} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={marca} />
-          : <div className="note warn">Selecciona una marca en el panel de la izquierda.</div>}
+        {marca === '__REPORTE__' ? <ReporteScreen empresa={empresa} sbus={sbus} />
+          : <>
+            {marca && <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: acc, marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>{isTot ? `▣ TOTAL ${String(marca).slice(7)}` : `💰 ${marca}`}</span></div>}
+            {marca ? <RoleForm key={'fin' + marca} role={finRole} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={marca} />
+              : <div className="note warn">Selecciona una marca en el panel de la izquierda.</div>}
+          </>}
       </div>
     </div>
   )
