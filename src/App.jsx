@@ -115,7 +115,7 @@ const ROLES = [
   { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'INVENTARIO · PRECIOS · MARGEN', u: '$', productoall: true }, VJ] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
-  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'GASTOS ADMIN', gadmin: true }, { k: 'APROBACIONES', aprob: true }] },
+  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, { k: 'GASTOS ADMIN', gadmin: true }, { k: 'APROBACIONES', aprob: true }] }, // Viajes de Finanzas se llena UNA sola vez (no por marca): botón en la barra lateral
   { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'COMISIONES', comis: true }, { k: 'CATEGORIAS', cat: true }, { k: 'MUESTRAS', muestras: true }] },
 ]
 const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
@@ -1030,7 +1030,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     } catch { return new Set() }
   })()
   const esNew = (cli) => newSet.has(upper(cli))
-  const [mkRows, setMkRows] = useState([]); const [logRows, setLogRows] = useState([]); const [dirRows, setDirRows] = useState([]) // Marketing / Logística / Director (para espejo de Costos Operativos)
+  const [mkRows, setMkRows] = useState([]); const [logRows, setLogRows] = useState([]); const [dirRows, setDirRows] = useState([]); const [finRows, setFinRows] = useState([]) // Marketing / Logística / Director / Finanzas (para espejo de Costos Operativos)
   useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } try { setLogcost(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { } try { setGadminData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) setGadminCfg(s) } catch { } }, [empresa])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
@@ -1048,6 +1048,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       try { const j5 = await gReadTab('Cap_Marketing'); if (j5 && j5.ok && j5.values) setMkRows(j5.values.slice(1)) } catch { }
       try { const j6 = await gReadTab('Cap_Logistica'); if (j6 && j6.ok && j6.values) setLogRows(j6.values.slice(1)) } catch { }
       try { const j7 = await gReadTab('Cap_Director'); if (j7 && j7.ok && j7.values) setDirRows(j7.values.slice(1)) } catch { }
+      try { const j8 = await gReadTab('Cap_Finanzas'); if (j8 && j8.ok && j8.values) setFinRows(j8.values.slice(1)) } catch { }
     })()
   }, [empresa])
   // Espejo de Costos Operativos: Marketing (equipo Marketing) y Viajes (rubros VIAJES de todas las áreas), por mes.
@@ -1055,6 +1056,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const esViajeRub = (rub) => String(rub || '').toUpperCase().startsWith('VIAJES')
   const marketingMes = (mca) => MESES.map((_, m) => mkRows.reduce((a, r) => (rowMatchCF(r, mca) && !esViajeRub(r[1])) ? a + num(r[4 + m]) : a, 0))
   const viajesMes = (mca) => MESES.map((_, m) => [ventas, producto, mkRows, logRows, dirRows].reduce((s, rows) => s + rows.reduce((a, r) => (rowMatchCF(r, mca) && esViajeRub(r[1])) ? a + num(r[4 + m]) : a, 0), 0))
+  // Viajes de Gerencia (nivel empresa): Finanzas + Admin + Procesos, guardados en Cap_Finanzas bajo marcas especiales. Solo suman en el consolidado TODAS.
+  const GVIAJES_MARCAS = ['(FINANZAS)', '(ADMIN)', '(PROCESOS)']
+  const gViajesMes = (mi) => finRows.reduce((a, r) => (upper(r[0]) === upper(empresa) && GVIAJES_MARCAS.includes(String(r[3] || '').toUpperCase()) && esViajeRub(r[1])) ? a + num(r[4 + mi]) : a, 0)
   // Costos logísticos (espejo del modelo de % que llena Logística por marca):
   //   venta = % logístico × costo de venta (unid×AUC); muestras = % × compras; mantenimiento = % × valor del saldo.
   const logUnitsVentaMes = (mca) => MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; if (esViajeRub(r[1])) return; s += num(r[4 + m]) }); return s })
@@ -1099,7 +1103,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const cellRaw = (concepto, mi) => {
     if (concepto === 'Comisiones') return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[mi], 0) : comisTotalMes(marca)[mi]
     if (concepto === 'Gastos administrativos') return isTotal ? gadminSubtot[mi] : 0 // gastos admin solo existen a TOTAL SBU
-    if (concepto === 'Viajes') return isTotal ? sbuMarcas.reduce((s, m) => s + viajesMes(m)[mi], 0) : viajesMes(marca)[mi]
+    if (concepto === 'Viajes') { const base = isTotal ? sbuMarcas.reduce((s, m) => s + viajesMes(m)[mi], 0) : viajesMes(marca)[mi]; return base + ((isTotal && sbu === '__ALL__') ? gViajesMes(mi) : 0) } // en el consolidado de EMPRESA (TODAS) se suman los viajes de Gerencia (Finanzas/Admin/Procesos)
     if (concepto === 'Marketing') return isTotal ? sbuMarcas.reduce((s, m) => s + marketingMes(m)[mi], 0) : marketingMes(marca)[mi]
     if (concepto === 'Logística') return isTotal ? sbuMarcas.reduce((s, m) => s + logisticaMes(m)[mi], 0) : logisticaMes(marca)[mi]
     return isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
@@ -1347,6 +1351,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           ? <div className="note ok" style={{ marginBottom: 12 }}>🪞 <b>Espejo (solo lectura):</b> el saldo pendiente por cobrar del 2027 lo captura <b>Finanzas por cada marca</b>. Aquí solo ves el consolidado.</div>
           : <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b><div style={{ marginTop: 6, paddingLeft: 16 }}><div><b>1.</b> Selecciona el <b>término de pago</b> de cada cliente (Cash, 30 días, 60 días, 90 días).</div><div style={{ marginTop: 4 }}><b>2.</b> Coloca las <b>cuentas por cobrar del 2027</b> en el mes en que debe efectuarse el cobro (enero a marzo).</div></div></div>}
         {buscador}
+        {(!soloVer || esDirector) && <div className="toolbar" style={{ marginBottom: 8 }}><div style={{ flex: 1 }}></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : (esDirector && soloVer ? '💾 Guardar plazos' : '💾 Guardar')}</button></div>}
         {(() => {
           const arrIdx = [0, 1, 2]; const arrLbl = CF_M2028.slice(0, 3); const DIV = { borderLeft: '3px solid var(--odoo)' }; const STK = { position: 'sticky', top: 0, zIndex: 3, background: '#f7fafb' }; const STK2 = { position: 'sticky', top: 33, zIndex: 3, background: '#f7fafb' }
           if (isTotal) {
@@ -1500,6 +1505,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                 : (soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{data[`PTERM|${marca}`] || '—'}</span> : <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.filter((t) => t !== 'Intercompañía').map((t) => <option key={t}>{t}</option>)}</select>)}</span>
               <span className="unit" style={{ alignSelf: 'center' }}>Pago sobre <b>fecha XFD</b> · Tránsito de {marca}: <b>{transitOf(marca)}</b> mes(es) {ESP('El pago al proveedor se calcula siempre sobre la compra por fecha XFD. El tiempo de tránsito se define en Producto · Paso 2 (solo afecta la fecha disponible del inventario).')}</span>
               {esCorpMarca(marca) && <span><label>Comisión corporativa <span className="unit">($/ud sobre compras)</span> </label>{soloVer ? <span className="empchip" style={{ background: '#eef1f4', color: '#475569' }}>{data[`CORP|${marca}`] || '—'} $/ud</span> : <input className="fillin" value={data[`CORP|${marca}`] ?? ''} onChange={(e) => set(`CORP|${marca}`, e.target.value)} inputMode="decimal" placeholder="$/ud" style={{ width: 70 }} />}</span>}
+              {!soloVer && <><div style={{ flex: 1 }}></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></>}
             </div>}
             {isTotal && <div className="tablewrap" style={{ marginBottom: 12, maxWidth: 520 }}>
               <table style={{ width: 'auto' }}>
@@ -1763,8 +1769,14 @@ function ReporteScreen({ empresa, sbus }) {
   useEffect(() => { (async () => { try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { } try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVentas(jv.values.slice(1)) } catch { } try { setCf(JSON.parse(localStorage.getItem(`cf_${empresa}`) || '{}')) } catch { } setLoad(false) })() }, [empresa])
   const histAll = (() => { const s = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) s.add(upper(cli)) }); return s })()
   const esNew = (cli) => !histAll.has(upper(cli))
-  // Universo = SOLO clientes que participan en la compra 2028 (con unidades > 0 en Ventas 2028).
-  const clientesDe = (mca) => { const set = new Set(); ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli || cli.toUpperCase().startsWith('VIAJES')) return; let s = 0; for (let m = 0; m < 12; m++) s += Math.max(0, num(r[4 + m])); if (s > 0) set.add(cli) }); return [...set].sort((a, b) => a.localeCompare(b)) }
+  const addcli = (() => { try { return JSON.parse(localStorage.getItem(`addcli_${empresa}`) || '{}') } catch { return {} } })()
+  // Universo = clientes que participan en la compra 2028: con unidades > 0, con plazo definido, o nuevos agregados en Ventas.
+  const clientesDe = (mca) => {
+    const set = new Set()
+    ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli || cli.toUpperCase().startsWith('VIAJES')) return; let s = 0; for (let m = 0; m < 12; m++) s += Math.max(0, num(r[4 + m])); if (s > 0 || cf[`TERM|${mca}|${cli}`]) set.add(cli) })
+    ;(addcli[mca] || []).forEach((c) => { if (c) set.add(c) }) // clientes NUEVOS agregados en Ventas (aunque aún no tengan unidades)
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }
   const term = (mca, cli) => cf[`TERM|${mca}|${cli}`] || ''
   const BUCKETS = ['Cash', '30 días', '60 días', '90 días', '120 días', '150 días', '180 días', 'Intercompañía']
   const BCOL = { 'Cash': '#0f766e', '30 días': '#2563eb', '60 días': '#7c3aed', '90 días': '#b45309', '120 días': '#be185d', '150 días': '#9a6a1a', '180 días': '#b91c1c', 'Intercompañía': '#64748b', 'Sin plazo': '#cbd5e1' }
@@ -2737,6 +2749,7 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
     <div className="comercial">
       <aside className="cmz-side">
         <div className="sub" style={{ fontSize: 11, margin: '0 0 6px', padding: '0 4px' }}>✅ completo · ⚠️ falta algo</div>
+        <button className={'cmz-marca' + (marca === '__VIAJES__' ? ' active' : '')} onClick={() => setMarca('__VIAJES__')} style={{ marginBottom: 6, fontWeight: 800, ...(marca === '__VIAJES__' ? { background: '#6b21a8', color: '#fff' } : { color: '#6b21a8' }) }}>🧳 Viajes <span className="unit" style={{ fontWeight: 400 }}>(1 vez)</span></button>
         <button className={'cmz-marca' + (marca === '__REPORTE__' ? ' active' : '')} onClick={() => setMarca('__REPORTE__')} style={{ marginBottom: 8, fontWeight: 800, ...(marca === '__REPORTE__' ? { background: '#0e7490', color: '#fff' } : { color: '#0e7490' }) }}>📊 Reporte</button>
         {Object.entries(sbus).map(([s, ms]) => (
           <div className="cmz-sbu" key={s}>
@@ -2748,6 +2761,10 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
       </aside>
       <div className="cmz-main" style={{ '--accent': acc, borderTop: '5px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
         {marca === '__REPORTE__' ? <ReporteScreen empresa={empresa} sbus={sbus} />
+          : marca === '__VIAJES__' ? <>
+            <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#6b21a8', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>🧳 Viajes de Finanzas</span><span className="unit" style={{ alignSelf: 'center' }}>Se llena una sola vez (toda la empresa), no por marca.</span></div>
+            <RoleForm key="finviajes" role={finRole} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Finanzas)" />
+          </>
           : <>
             {marca && <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: acc, marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>{isTot ? `▣ TOTAL ${String(marca).slice(7)}` : `💰 ${marca}`}</span></div>}
             {marca ? <RoleForm key={'fin' + marca} role={finRole} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={marca} />
@@ -3004,7 +3021,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   const [ventas, setVentas] = useState([])
   const [producto, setProducto] = useState([])
   const [cats, setCats] = useState({})
-  const [mk, setMk] = useState([]); const [log, setLog] = useState([]); const [dir, setDir] = useState([])
+  const [mk, setMk] = useState([]); const [log, setLog] = useState([]); const [dir, setDir] = useState([]); const [finR, setFinR] = useState([])
   const [hist, setHist] = useState([]); const [plan, setPlan] = useState({})
   const [cfSbu, setCfSbu] = useState(() => Object.keys(sbus)[0] || '')
   const [cargando, setCargando] = useState(true)
@@ -3015,7 +3032,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
       try { const j = await gReadTab('Cap_Ventas'); if (j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j = await gReadTab('Cap_Producto'); if (j.ok && j.values) setProducto(j.values.slice(1)) } catch { }
       try { const j = await gReadTab('Cap_Categorias'); if (j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
-      setMk(await g('Cap_Marketing')); setLog(await g('Cap_Logistica')); setDir(await g('Cap_Director'))
+      setMk(await g('Cap_Marketing')); setLog(await g('Cap_Logistica')); setDir(await g('Cap_Director')); setFinR(await g('Cap_Finanzas'))
       try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
       try { const jp = await gPlan2027(); if (jp && jp.map) setPlan(jp.map) } catch { }
       setCargando(false)
@@ -3135,6 +3152,17 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
           <button className={'seg' + (cfSbu === '__ALL__' ? ' active' : '')} onClick={() => setCfSbu('__ALL__')} style={cfSbu === '__ALL__' ? { background: '#1f2d3d', borderColor: '#1f2d3d', color: '#fff' } : {}}>▣ TODAS</button>
         </div>
         {cfSbu && <CashFlowForm key={'gcf' + cfSbu} role={{ label: 'Cash Flow', tab: 'Cap_Finanzas' }} rubro={{ k: 'CASH FLOW', cash: true }} usuario="" empresa={empresa} sbus={cfSbu === '__ALL__' ? sbus : { [cfSbu]: sbus[cfSbu] || [] }} fixedMarca={`TOTAL::${cfSbu}`} />}
+      </div>}
+
+      {!soloSBU && !cargando && <div className="panel" style={{ marginTop: 10 }}>
+        <h3>🧳 Viajes de Gerencia — {empresa} <span className="unit">(nivel empresa · impactan el Cash Flow ▣ TODAS)</span></h3>
+        <div className="sub">Captura los <b>viajes admin</b> y <b>viajes de procesos</b> (misma vista que cada equipo). Los <b>viajes de Finanzas</b> se llenan en Finanzas y salen como <b>espejo</b> aquí. Todos — más los de cada SBU y Retail (cuando se cree) — impactan el <b>Cash Flow ▣ TODAS</b> de arriba.</div>
+        <div style={{ fontWeight: 800, margin: '12px 0 2px', color: '#6b21a8', fontSize: 14 }}>① Viajes admin</div>
+        <RoleForm key="gvadmin" role={{ label: 'Viajes', tab: 'Cap_Finanzas' }} rubrosOverride={[VJ]} usuario="" empresa={empresa} sbus={sbus} fixedMarca="(Admin)" />
+        <div style={{ fontWeight: 800, margin: '22px 0 2px', color: '#6b21a8', fontSize: 14 }}>② Viajes de procesos</div>
+        <RoleForm key="gvproc" role={{ label: 'Viajes', tab: 'Cap_Finanzas' }} rubrosOverride={[VJ]} usuario="" empresa={empresa} sbus={sbus} fixedMarca="(Procesos)" />
+        <div style={{ fontWeight: 800, margin: '22px 0 2px', color: '#15803d', fontSize: 14 }}>③ Viajes de Finanzas <span className="unit">🪞 espejo (se llena en Finanzas → 🧳 Viajes)</span></div>
+        <RoleForm key="gvfin" role={{ label: 'Viajes', tab: 'Cap_Finanzas', id: 'director' }} rubrosOverride={[VJ]} usuario="" empresa={empresa} sbus={sbus} fixedMarca="(Finanzas)" />
       </div>}
       {soloSBU && <div className="panel">
         <h3>Resumen {soloSBU} <span className="unit">(solo lectura · 2028)</span></h3>
