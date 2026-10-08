@@ -1365,17 +1365,19 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
             <div className="tablewrap" style={{ maxHeight: '62vh', overflowY: 'auto' }}>
               <table>
                 <thead>
-                  <tr><th className="l" rowSpan={2} style={STK}>Cliente</th><th rowSpan={2} style={STK}>Plazo <span className="unit">(ventas 2028)</span></th><th colSpan={arrLbl.length + 1} style={{ ...STK, borderLeft: '3px solid var(--odoo)', background: '#faf7f9', color: 'var(--odoo)', textTransform: 'none', letterSpacing: 0 }}>📌 Saldo pendiente por cobrar del 2027 — ¿en qué mes de 2028 entra el cobro?</th></tr>
+                  <tr><th className="l" rowSpan={2} style={STK}>Cliente</th><th rowSpan={2} style={STK}>Plazo <span className="unit">(ventas 2028 · de SF; nuevos los define el Director)</span></th><th colSpan={arrLbl.length + 1} style={{ ...STK, borderLeft: '3px solid var(--odoo)', background: '#faf7f9', color: 'var(--odoo)', textTransform: 'none', letterSpacing: 0 }}>📌 Saldo pendiente por cobrar del 2027 — ¿en qué mes de 2028 entra el cobro?</th></tr>
                   <tr>{arrLbl.map((m, i) => <th key={m} style={{ ...STK2, ...(i === 0 ? DIV : {}) }}>{m}</th>)}<th style={STK2}>Total</th></tr>
                 </thead>
                 <tbody>
                   {cls.length === 0 && <tr><td className="l" colSpan={9}>No hay clientes para {marca}. Carga el Histórico o captura clientes en Ventas.</td></tr>}
                   {cls.map((cli) => {
-                    const tk = `TERM|${marca}|${cli}`; const inc = esIncobrable(marca, cli)
+                    const tk = `TERM|${marca}|${cli}`; const inc = esIncobrable(marca, cli); const nuevo = esNew(cli)
                     return (
-                      <tr key={cli}>
-                        <td className="l" style={inc ? { color: '#b91c1c' } : undefined}>{cli}{inc && <span className="unit" style={{ marginLeft: 6, color: '#b91c1c', fontWeight: 700 }}>⛔ incobrable</span>}</td>
-                        <td>{soloVer ? (data[tk] || '—') : <select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>}</td>
+                      <tr key={cli} style={nuevo ? { background: '#eff6ff' } : undefined}>
+                        <td className="l" style={inc ? { color: '#b91c1c' } : undefined}>{cli}{nuevo && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, color: '#0e7490', border: '1px solid #0e7490', borderRadius: 4, padding: '1px 5px', verticalAlign: 'middle' }} title="Cliente NUEVO: sin histórico ni plazo de Salesforce. El Director define su plazo.">Nuevo</span>}{inc && <span className="unit" style={{ marginLeft: 6, color: '#b91c1c', fontWeight: 700 }}>⛔ incobrable</span>}</td>
+                        <td>{nuevo
+                          ? (soloVer ? (data[tk] || '—') : <select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)} title="Cliente nuevo: el Director define el plazo"><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>)
+                          : <span title="Plazo preseteado desde Salesforce (no editable)">{data[tk] || '—'} <span className="unit">(SF)</span></span>}</td>
                         {arrIdx.map((mi) => { const ck = arr27Key(marca, cli, mi); return <td key={mi} className={(soloVer || inc) ? 'tot' : 'cell'} style={{ ...(mi === 0 ? DIV : {}), ...(inc ? { background: '#fdecec' } : {}) }}>{inc ? <span style={{ color: '#d99a9a' }}>—</span> : soloVer ? fmt(num(data[ck])) : <input value={data[ck] ?? ''} onChange={(e) => set(ck, e.target.value)} inputMode="decimal" style={{ width: 64 }} />}</td> })}
                         <td className="tot" style={inc ? { color: '#b91c1c' } : undefined}>{inc ? '—' : fmt(arr27Cli(marca, cli))}</td>
                       </tr>
