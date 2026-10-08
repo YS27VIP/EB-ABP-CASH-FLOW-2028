@@ -4565,7 +4565,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
       {usarCat && (() => {
         const aup = aupPorCat(marca)
-        const money = (v) => (Math.round(v * 100) / 100).toLocaleString('en-US')
+        const money = (v) => Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         const vnCat = (cat, mi) => uCatMes(cat, mi) * ((aup[cat] || [])[mi] || 0)
         const vnMes = MESES.map((_, mi) => catList.reduce((a, c) => a + vnCat(c.cat, mi), 0))
         const vnTot = vnMes.reduce((a, b) => a + b, 0)
@@ -4590,7 +4590,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
       {usarCat && (() => {
         const auc = aucPorCat(marca)
-        const money = (v) => (Math.round(v * 100) / 100).toLocaleString('en-US')
+        const money = (v) => Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         const coCat = (cat, mi) => uCatMes(cat, mi) * ((auc[cat] || [])[mi] || 0)
         const coMes = MESES.map((_, mi) => catList.reduce((a, c) => a + coCat(c.cat, mi), 0))
         const coTot = coMes.reduce((a, b) => a + b, 0)
@@ -4615,7 +4615,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
       {usarCat && (() => {
         const aup = aupPorCat(marca), auc = aucPorCat(marca)
-        const money = (v) => (Math.round(v * 100) / 100).toLocaleString('en-US')
+        const money = (v) => Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         const vnCat = (cat, mi) => uCatMes(cat, mi) * ((aup[cat] || [])[mi] || 0)
         const coCat = (cat, mi) => uCatMes(cat, mi) * ((auc[cat] || [])[mi] || 0)
         const mgCat = (cat, mi) => vnCat(cat, mi) - coCat(cat, mi)
