@@ -1168,10 +1168,10 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     if (concepto === CASH_OUT) { return isTotal ? sbuMarcas.reduce((s, m) => s + pagosMarca(m).pagos[mi] + corpPagoMes(m)[mi], 0) : pagosMarca(marca).pagos[mi] + corpPagoMes(marca)[mi] } // pagos a proveedores + comisión corporativa (HOKA/UGG)
     if (CALC_PSI[concepto]) { const fn = CALC_PSI[concepto]; return isTotal ? sbuMarcas.reduce((s, m) => s + fn(m)[mi], 0) : fn(marca)[mi] }
     if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + cellRaw(sub, mi), 0)
-    // Costos financieros / otros ingresos / otros gastos: nivel empresa, solo en la vista TOTAL (los llena Finanzas)
-    if (concepto === CF_FIN_PARENT) return isTotal ? (num(data[`FINCOST|perd|${mi}`]) - num(data[`FINCOST|gan|${mi}`])) : 0
-    if (concepto === CF_OTRO_ING) return isTotal ? num(data[`OTROS|ing|${mi}`]) : 0
-    if (concepto === CF_OTRO_GAS) return isTotal ? num(data[`OTROS|gas|${mi}`]) : 0
+    // Costos financieros / otros ingresos / otros gastos: los llena Finanzas (valores a nivel empresa, compartidos)
+    if (concepto === CF_FIN_PARENT) return num(data[`FINCOST|perd|${mi}`]) - num(data[`FINCOST|gan|${mi}`])
+    if (concepto === CF_OTRO_ING) return num(data[`OTROS|ing|${mi}`])
+    if (concepto === CF_OTRO_GAS) return num(data[`OTROS|gas|${mi}`])
     return cellRaw(concepto, mi)
   }
   // Valor de UNA marca (para el desglose del total): misma lógica que cell pero sin sumar SBU.
@@ -1380,7 +1380,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
             <div className="tablewrap" style={{ maxHeight: '62vh', overflowY: 'auto' }}>
               <table>
                 <thead>
-                  <tr><th className="l" rowSpan={2} style={STK}>Cliente</th><th rowSpan={2} style={STK}>Plazo <span className="unit">(ventas 2028 · de SF; nuevos los define el Director)</span></th><th colSpan={arrLbl.length + 1} style={{ ...STK, borderLeft: '3px solid var(--odoo)', background: '#faf7f9', color: 'var(--odoo)', textTransform: 'none', letterSpacing: 0 }}>📌 Saldo pendiente por cobrar del 2027 — ¿en qué mes de 2028 entra el cobro?</th></tr>
+                  <tr><th className="l" rowSpan={2} style={STK}>Cliente</th><th rowSpan={2} style={STK} title="Plazo de cobro (ventas 2028). Viene de Salesforce; los clientes nuevos los define el Director.">Plazo <span className="unit">(SF)</span></th><th colSpan={arrLbl.length + 1} style={{ ...STK, borderLeft: '3px solid var(--odoo)', background: '#faf7f9', color: 'var(--odoo)', textTransform: 'none', letterSpacing: 0 }}>📌 Saldo pendiente por cobrar del 2027 — ¿en qué mes de 2028 entra el cobro?</th></tr>
                   <tr>{arrLbl.map((m, i) => <th key={m} style={{ ...STK2, ...(i === 0 ? DIV : {}) }}>{m}</th>)}<th style={STK2}>Total</th></tr>
                 </thead>
                 <tbody>
