@@ -54,7 +54,7 @@ import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoa
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -116,7 +116,7 @@ const ROLES = [
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
   { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'GASTOS ADMIN', gadmin: true }, { k: 'APROBACIONES', aprob: true }] },
-  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'COMISIONES', comis: true }, { k: 'CATEGORIAS', cat: true }] },
+  { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, VJ, { k: 'COMISIONES', comis: true }, { k: 'CATEGORIAS', cat: true }, { k: 'MUESTRAS', muestras: true }] },
 ]
 const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
 
@@ -666,6 +666,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) 
         : rb.temporada ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" />
         : rb.invflow ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="flow" />
         : rb.comis ? <ComisionesForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
+        : rb.muestras ? <MuestrasForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.gadmin ? <GastosAdminForm key={rb.k} empresa={empresa} />
         : rb.aprob ? <AprobacionesForm key={rb.k} empresa={empresa} sbus={sbus} />
 
@@ -1720,6 +1721,37 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
             </tbody>
           </table></div>}
       </div>
+    </div>
+  )
+}
+
+/* ===== MUESTRAS (Director): cuántas muestras (unidades) comprar por mes ===== */
+function MuestrasForm({ empresa, sbus, fixedMarca }) {
+  const marca = fixedMarca || marcasDe(sbus)?.[0]?.marca
+  const stKey = `muestras_${empresa}`
+  const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
+  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  const k = (mi) => `${marca}|${mi}`
+  const set = (mi, v) => setData((d) => ({ ...d, [k(mi)]: v }))
+  const g = (mi) => num(data[k(mi)])
+  const total = MESES.reduce((a, _, mi) => a + g(mi), 0)
+  function guardar() { setSaving(true); try { saveEstado(empresa, 'muestras', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (muestras).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  return (
+    <div className="panel">
+      <div className="toolbar" style={{ marginBottom: 8 }}>
+        <span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span>
+        <div className="spacer"></div>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+      </div>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <h3>Muestras a comprar — {marca} <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Director" /></h3>
+      <div className="sub">Escribe por mes <b>cuántas muestras</b> (unidades) planeas comprar de {marca} en 2028. El costo de estas muestras lo calcula <b>Logística</b> (% sobre compras).</div>
+      <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+        <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+        <tbody>
+          <tr><td className="l">Muestras a comprar (ud)</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={data[k(mi)] ?? ''} onChange={(e) => set(mi, e.target.value)} inputMode="decimal" style={{ width: '100%' }} placeholder="0" /></td>)}<td className="tot">{fmt(total)}</td></tr>
+        </tbody>
+      </table></div>
     </div>
   )
 }
