@@ -125,7 +125,7 @@ const CF_M2028 = ['ene-28', 'feb-28', 'mar-28', 'abr-28', 'may-28', 'jun-28', 'j
 const CF_MESES = [...CF_M2028]
 const CF_GROUPS = [
   { g: 'PSI · Purchases-Sales-Inventory', items: ['Inventario Inicial', 'Compras (Fecha disponible)', 'Ventas Netas', 'Inventario Final'] },
-  { g: 'CASH FLOW', items: ['Cash Inicial', 'Cash In (Cobros)', 'Cash Out (Pagos)', 'Costos Operativos', 'Cash Final'] },
+  { g: 'CASH FLOW', items: ['Cash Inicial', 'Cash In (Cobros)', 'Cash Out (Pagos)', 'Costos Operativos', 'Costos Financieros', 'Otros ingresos', 'Otros gastos', 'Cash Final'] },
 ]
 const CF_TERMINOS = ['Cash', '30 días', '60 días', '90 días', '120 días', '150 días', '180 días', 'Intercompañía']
 /* Meses de desfase para la escalera de cobros según el término de pago */
@@ -133,6 +133,10 @@ const CF_PLAZO_MESES = { 'Cash': 0, '30 días': 1, '60 días': 2, '90 días': 3,
 /* Costos Operativos = suma de estos 4 sub-rubros (el usuario los llena; el total es calculado) */
 const CF_COSTOS_PARENT = 'Costos Operativos'
 const CF_COSTOS = ['Gastos administrativos', 'Logística', 'Viajes', 'Marketing', 'Comisiones']
+/* Nuevas líneas que llena Finanzas (nivel empresa, solo en la vista TOTAL), antes del Flujo neto */
+const CF_FIN_PARENT = 'Costos Financieros'
+const CF_FIN = [['perd', 'Intereses perdidos'], ['gan', 'Intereses ganados']]
+const CF_OTRO_ING = 'Otros ingresos', CF_OTRO_GAS = 'Otros gastos'
 
 /* Referencia de peso por categoría (unidades históricas) para decidir el % 2028.
    DEMO: solo ALTRA (leído de FW26 y SS26). Otras marcas se cargan luego por importación. */
@@ -152,7 +156,7 @@ function refCat(marca, cli, cat) {
 
 /* Gastos administrativos: centros de costo por defecto (código sub-rubro · nombre). Compartidos por todas las SBU. */
 const DEFAULT_GADMIN = [
-  ['101', 'SALARIO'], ['103', 'PERFORMANCE BONO'], ['104', 'CARGA SOCIAL Y PASIVO LABORAL'], ['105', 'CAPACITACIONES'], ['106', 'SELECCIÓN DE PERSONAL'], ['107', 'ATENCIONES / CLIENTES / PROVEEDORES'], ['108', 'MEMBRESÍA TARJETA DE CRÉDITO'], ['109', 'PLAN CELULAR'], ['110', 'BENEFICIOS - SEGURO DE SALUD'], ['111', 'SEGURIDAD'], ['112', 'BENEFICIO - GIFT CARD ANNUAL'], ['114', 'GASTOS DE OFICINA'], ['115', 'ALQUILER OFICINA'], ['116', 'AGUA / LUZ'], ['117', 'INTERNET'], ['118', 'TELÉFONO OFICINA'], ['119', 'CARRIER / MENSAJERÍA'], ['120', 'LIMPIEZA'], ['121', 'REPARACIONES Y MANTENIMIENTOS'], ['122', 'CAFETERÍA - INSUMOS'], ['123', 'ACARREO / TRANSFERENCIA DE INVENTARIO'], ['124', 'SEGUROS'], ['125', 'CONTABLE - MICROSOFT 365 / LICENCIAS ADOBE'], ['126', 'SALESFORCE'], ['127', 'SISTEMA DE FACTURACIÓN ELECTRÓNICA'], ['128', 'ASESORÍA LEGAL'], ['129', 'ASESORÍA CONTABLE'], ['130', 'ASESORÍA FISCALES'], ['131', 'SERVICIOS DE RRHH'], ['132', 'SERVICIOS DE IT'], ['133', 'HONORARIOS PROFESIONALES'], ['134', 'OTROS'], ['135', 'CARGOS FINANCIEROS'],
+  ['101', 'SALARIO'], ['103', 'PERFORMANCE BONO'], ['104', 'CARGA SOCIAL Y PASIVO LABORAL'], ['105', 'CAPACITACIONES'], ['106', 'SELECCIÓN DE PERSONAL'], ['107', 'ATENCIONES / CLIENTES / PROVEEDORES'], ['108', 'MEMBRESÍA TARJETA DE CRÉDITO'], ['109', 'PLAN CELULAR'], ['110', 'BENEFICIOS - SEGURO DE SALUD'], ['111', 'SEGURIDAD'], ['112', 'BENEFICIO - GIFT CARD ANNUAL'], ['114', 'GASTOS DE OFICINA'], ['115', 'ALQUILER OFICINA'], ['116', 'AGUA / LUZ'], ['117', 'INTERNET'], ['118', 'TELÉFONO OFICINA'], ['119', 'CARRIER / MENSAJERÍA'], ['120', 'LIMPIEZA'], ['121', 'REPARACIONES Y MANTENIMIENTOS'], ['122', 'CAFETERÍA - INSUMOS'], ['123', 'ACARREO / TRANSFERENCIA DE INVENTARIO'], ['124', 'SEGUROS'], ['125', 'CONTABLE - MICROSOFT 365 / LICENCIAS ADOBE'], ['126', 'SALESFORCE'], ['127', 'SISTEMA DE FACTURACIÓN ELECTRÓNICA'], ['128', 'ASESORÍA LEGAL'], ['129', 'ASESORÍA CONTABLE'], ['130', 'ASESORÍA FISCALES'], ['131', 'SERVICIOS DE RRHH'], ['132', 'SERVICIOS DE IT'], ['133', 'HONORARIOS PROFESIONALES'], ['134', 'OTROS'],
 ].map(([cod, sub]) => ({ cod, sub }))
 
 /* Comisiones: marcas con comisión corporativa por compra (XFD) */
@@ -989,6 +993,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   const [openCostos, setOpenCostos] = useState(false)
+  const [openCostosFin, setOpenCostosFin] = useState(false)
   const [openVentas, setOpenVentas] = useState(false)
   const [vistaCC, setVistaCC] = useState('todo') // Venta/cobro/saldo por cliente: qué mostrar
   const [buscar, setBuscar] = useState('')
@@ -1148,10 +1153,15 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     if (concepto === CASH_OUT) { return isTotal ? sbuMarcas.reduce((s, m) => s + pagosMarca(m).pagos[mi] + corpPagoMes(m)[mi], 0) : pagosMarca(marca).pagos[mi] + corpPagoMes(marca)[mi] } // pagos a proveedores + comisión corporativa (HOKA/UGG)
     if (CALC_PSI[concepto]) { const fn = CALC_PSI[concepto]; return isTotal ? sbuMarcas.reduce((s, m) => s + fn(m)[mi], 0) : fn(marca)[mi] }
     if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + cellRaw(sub, mi), 0)
+    // Costos financieros / otros ingresos / otros gastos: nivel empresa, solo en la vista TOTAL (los llena Finanzas)
+    if (concepto === CF_FIN_PARENT) return isTotal ? (num(data[`FINCOST|perd|${mi}`]) - num(data[`FINCOST|gan|${mi}`])) : 0
+    if (concepto === CF_OTRO_ING) return isTotal ? num(data[`OTROS|ing|${mi}`]) : 0
+    if (concepto === CF_OTRO_GAS) return isTotal ? num(data[`OTROS|gas|${mi}`]) : 0
     return cellRaw(concepto, mi)
   }
   // Valor de UNA marca (para el desglose del total): misma lógica que cell pero sin sumar SBU.
   const cellMarca = (mca, concepto, mi) => {
+    if (concepto === CF_FIN_PARENT || concepto === CF_OTRO_ING || concepto === CF_OTRO_GAS) return 0 // nivel empresa, no por marca
     if (concepto === CASH_INI) return cashCalcMarca(mca).ini[mi]
     if (concepto === CASH_FIN) return cashCalcMarca(mca).fin[mi]
     if (concepto === CASHIN) { return arr27Total(mca, mi) + getCobros(mca).total[mi] }
@@ -1169,8 +1179,10 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     for (let mi = 0; mi < CF_MESES.length; mi++) { ini[mi] = mi === 0 ? seed : fin[mi - 1]; fin[mi] = ini[mi] + inFn(mi) - outFn(mi) }
     return { ini, fin }
   }
-  const flujoNeto = (mi) => cell(CASHIN, mi) - cell(CASH_OUT, mi) - cell(CF_COSTOS_PARENT, mi)
-  const cashCalc = buildCash((mi) => cell(CASHIN, mi), (mi) => cell(CASH_OUT, mi) + cell(CF_COSTOS_PARENT, mi), isTotal ? sbuMarcas.reduce((s, m) => s + bancoIni(m), 0) : bancoIni(marca))
+  // Salida neta extra (nivel empresa): costos financieros + otros gastos − otros ingresos. Solo cuenta en la vista TOTAL.
+  const extraOut = (mi) => cell(CF_FIN_PARENT, mi) + cell(CF_OTRO_GAS, mi) - cell(CF_OTRO_ING, mi)
+  const flujoNeto = (mi) => cell(CASHIN, mi) - cell(CASH_OUT, mi) - cell(CF_COSTOS_PARENT, mi) - extraOut(mi)
+  const cashCalc = buildCash((mi) => cell(CASHIN, mi), (mi) => cell(CASH_OUT, mi) + cell(CF_COSTOS_PARENT, mi) + extraOut(mi), isTotal ? sbuMarcas.reduce((s, m) => s + bancoIni(m), 0) : bancoIni(marca))
   const cashCalcMarca = (mca) => buildCash((mi) => cellMarca(mca, CASHIN, mi), (mi) => cellMarca(mca, CASH_OUT, mi) + cellMarca(mca, CF_COSTOS_PARENT, mi), bancoIni(mca))
   // Texto "ALTRA: 1,234 · HOKA: 567" para el tooltip del total (solo si el desglose está activo).
   const brk = (concepto, mi) => isTotal ? (sbuMarcas.map((m) => ({ m, v: cellMarca(m, concepto, mi) })).filter((x) => Math.abs(x.v) > 0.5).map((x) => `${x.m}: ${fmt(x.v)}`).join(' · ') || 'Sin datos por marca') : undefined
@@ -1231,23 +1243,33 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                   <tr className="secrow"><td colSpan={14}>{gr.g}</td></tr>
                   {gr.items.map((it) => {
                     const esCostos = it === CF_COSTOS_PARENT
+                    const esCostosFin = it === CF_FIN_PARENT
+                    const esOtroIng = it === CF_OTRO_ING, esOtroGas = it === CF_OTRO_GAS
                     const esVentas = it === VENTAS_NETAS // desplegable: muestra venta externa / interna
+                    const esEntrada = it === CASHIN || esOtroIng
+                    const esSalida = it === CASH_OUT || esCostos || esCostosFin || esOtroGas
                     // Signo y color: entradas (+ verde), salidas (− rojo). El resto neutro.
-                    const signo = it === CASHIN ? '+ ' : (it === CASH_OUT || esCostos) ? '− ' : ''
-                    const colFila = it === CASHIN ? '#15803d' : (it === CASH_OUT || esCostos) ? '#b91c1c' : undefined
+                    const signo = esEntrada ? '+ ' : esSalida ? '− ' : ''
+                    const colFila = esEntrada ? '#15803d' : esSalida ? '#b91c1c' : undefined
                     const celdas = CF_MESES.map((_, mi) => {
                       const cls = 'yb'
+                      // Otros ingresos / Otros gastos: los llena Finanzas, nivel empresa, editable solo en la vista TOTAL.
+                      if (esOtroIng || esOtroGas) {
+                        const dk = esOtroIng ? `OTROS|ing|${mi}` : `OTROS|gas|${mi}`
+                        if (isTotal && !soloVer) return <td key={mi} className={'cell ' + cls}><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td>
+                        const v = cell(it, mi); return <td key={mi} className={'tot ' + cls} style={{ color: colFila }}>{Math.abs(v) > 0.5 ? signo : ''}{fmt(v)}</td>
+                      }
                       // Cash Inicial: enero-28 es la SEMILLA = saldo en banco al cierre de dic-27 (editable); el resto = Cash Final del mes anterior (calc)
                       if (it === CASH_INI) {
                         if (mi === 0 && !isTotal && !soloVer) { const k = key(marca, CASH_INI, 0); return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" title="Saldo en banco al cierre de 2027 (arranque de enero-28)" /></td> }
                         return <td key={mi} className={'tot ' + cls} style={{ cursor: 'help' }} title={mi === 0 ? 'Saldo en banco al cierre de 2027 (semilla que pone Finanzas)' : 'Cash Inicial = Cash Final del mes anterior'}>{fmt(cell(it, mi))}</td>
                       }
                       // Cash Final: siempre calculado = Cash Inicial + Cash In − Cash Out − Costos Operativos
-                      if (it === CASH_FIN) return <td key={mi} className={'tot ' + cls} style={{ cursor: 'help', fontWeight: 700 }} title="Fórmula: Cash Final = Cash Inicial + Cash In − Cash Out − Costos Operativos">{fmt(cell(it, mi))}</td>
+                      if (it === CASH_FIN) return <td key={mi} className={'tot ' + cls} style={{ cursor: 'help', fontWeight: 700 }} title="Fórmula: Cash Final = Cash Inicial + Cash In + Otros ingresos − Cash Out − Costos Operativos − Costos Financieros − Otros gastos">{fmt(cell(it, mi))}</td>
                       const cashinCalc = it === CASHIN // Cash In siempre calculado (OCT/NOV/DIC-27 de cuentas por cobrar + escalera 2028)
                       const cashoutCalc = it === CASH_OUT // Cash Out siempre calculado (pagos a proveedores)
                       const comercialCalc = esCalcComercial(it)
-                      if (isTotal || esCostos || cashinCalc || cashoutCalc || comercialCalc || soloVer) {
+                      if (isTotal || esCostos || esCostosFin || cashinCalc || cashoutCalc || comercialCalc || soloVer) {
                         const cashinBrk = () => { const a = isTotal ? sbuMarcas.reduce((s, m) => s + arr27Total(m, mi), 0) : arr27Total(marca, mi); const e = isTotal ? sbuMarcas.reduce((s, m) => s + getCobros(m).total[mi], 0) : getCobros(marca).total[mi]; return `Fórmula: Cash In = Saldo pendiente por cobrar 2027 + Ventas 2028 cobradas (por plazo)\nDatos de origen: Saldo pendiente 2027 = ${fmt(a) || '0'} · Ventas 2028 = ${fmt(e) || '0'} · Total = ${fmt(a + e) || '0'}` }
                         const brkNum = brk(it, mi)
                         const tit = it === CASHIN ? cashinBrk() : ((it === CASH_OUT ? 'Fórmula: Cash Out = Compras 2028 × término de pago de la marca' : it === VENTAS_NETAS ? 'Fórmula: Ventas Netas = Unidades × AUP efectivo del mes' : it === COMPRAS_FD ? 'Fórmula: Compras = Unidades compradas × AUC' : (it === INV_INI || it === INV_FIN) ? 'Fórmula: Inventario × AUC' : '') + (brkNum ? (it === CASH_OUT || it === VENTAS_NETAS || it === COMPRAS_FD || it === INV_INI || it === INV_FIN ? '\nDatos de origen: ' : '') + brkNum : '') || undefined)
@@ -1258,16 +1280,32 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
                     const ayudaComp = it === CASHIN ? 'Cash In (Cobros): calculado, no se escribe a mano. Suma dos cosas: (1) la COLA de las cuentas por cobrar del cierre 2027 — lo que quedó pendiente de oct/nov/dic-27 entra en su mes según el plazo del cliente (ej: octubre a 90 días → enero-28); y (2) las VENTAS 2028 cobradas por su propia escalera (Cash=mismo mes, 30d=+1, 60=+2…). La venta interna (intercompañía) es incobrable y va aparte, abajo.' : it === CASH_OUT ? 'Cash Out (Pagos): calculado, no se escribe a mano. Es la consecuencia de los pagos a proveedores: la compra 2028 × término de pago de la marca (bloque "Compras y pagos" de abajo).' : it === VENTAS_NETAS ? 'Ventas Netas TOTAL = venta interna + externa (todos los clientes) = Unidades × AUP efectivo del mes. Es la venta CONTABLE (devengada), no el cobro: por eso no coincide con el Cash In, que solo cuenta la venta externa y aplica el plazo de cada cliente.' : it === COMPRAS_FD ? 'Compras = unidades compradas × AUC (Producto). Párate sobre cada mes.' : null
-                    const exp = esCostos || esVentas; const abierto = esCostos ? openCostos : openVentas; const toggle = esCostos ? () => setOpenCostos((o) => !o) : () => setOpenVentas((o) => !o)
-                    const fila = <tr key={it} className={exp ? 'rowline ' + (abierto ? 'open' : '') : undefined} onClick={exp ? toggle : undefined} style={exp ? { cursor: 'pointer' } : undefined}><td className="l" style={{ color: colFila }}>{exp ? <span className="caret">▶</span> : null} {esVentas ? 'Ventas Netas Total' : it}{ayudaComp && Q(ayudaComp)}{exp ? <span className="unit" style={{ marginLeft: 6, color: 'var(--muted)' }}>({abierto ? 'ocultar' : 'ver'} {esVentas ? 'externa / interna' : 'detalle'})</span> : null}</td>{celdas}<td className="tot" style={{ color: colFila }}>{Math.abs(rowTot(it)) > 0.5 ? signo : ''}{fmt(Math.abs(rowTot(it)))}</td></tr>
+                    const exp = esCostos || esVentas || esCostosFin; const abierto = esCostos ? openCostos : esCostosFin ? openCostosFin : openVentas; const toggle = esCostos ? () => setOpenCostos((o) => !o) : esCostosFin ? () => setOpenCostosFin((o) => !o) : () => setOpenVentas((o) => !o)
+                    const fila = <tr key={it} className={exp ? 'rowline ' + (abierto ? 'open' : '') : undefined} onClick={exp ? toggle : undefined} style={exp ? { cursor: 'pointer' } : undefined}><td className="l" style={{ color: colFila }}>{exp ? <span className="caret">▶</span> : null} {esVentas ? 'Ventas Netas Total' : it}{ayudaComp && Q(ayudaComp)}{(esOtroIng || esOtroGas || esCostosFin) && ESP('Lo llena Finanzas (nivel empresa) en la vista TOTAL; no se reparte por marca.')}{exp ? <span className="unit" style={{ marginLeft: 6, color: 'var(--muted)' }}>({abierto ? 'ocultar' : 'ver'} {esVentas ? 'externa / interna' : 'detalle'})</span> : null}</td>{celdas}<td className="tot" style={{ color: colFila }}>{Math.abs(rowTot(it)) > 0.5 ? signo : ''}{fmt(Math.abs(rowTot(it)))}</td></tr>
                     if (it === CASH_FIN) {
                       const flujoCeldas = CF_MESES.map((_, mi) => { const cls = 'yb'; const v = flujoNeto(mi); const s = v > 0.5 ? '+ ' : v < -0.5 ? '− ' : ''; return <td key={mi} className={'tot ' + cls} style={{ color: v < -0.5 ? '#b91c1c' : v > 0.5 ? '#15803d' : undefined }}>{s}{fmt(Math.abs(v))}</td> })
                       const flujoTot = CF_MESES.reduce((a, _, mi) => a + flujoNeto(mi), 0)
-                      const flujoRow = <tr key="flujoneto" className="grandrow"><td className="l">= Flujo neto del mes <span className="unit">(cobros − pagos − costos)</span></td>{flujoCeldas}<td className="tot">{fmt(flujoTot)}</td></tr>
+                      const flujoRow = <tr key="flujoneto" className="grandrow"><td className="l">= Flujo neto del mes <span className="unit">(cobros + otros ingresos − pagos − costos oper. − financieros − otros gastos)</span></td>{flujoCeldas}<td className="tot">{fmt(flujoTot)}</td></tr>
                       return <Fragment2 key={it}>{flujoRow}{fila}</Fragment2>
                     }
                     if (esVentas) {
                       return <Fragment2 key={it}>{fila}{openVentas && [['Venta externa (base de cobros)', '#0b5566', 'ext'], ['Venta interna (incobrable · intercompañía)', '#b45309', 'int']].map(([lbl, color, pick]) => <tr key={pick}><td className="l sub2" style={{ color }}>{lbl}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color }}>{fmt(ventaSplitMemo(pick, mi))}</td>)}<td className="tot" style={{ color }}>{fmt(CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo(pick, mi), 0))}</td></tr>)}</Fragment2>
+                    }
+                    if (esCostosFin) {
+                      return (
+                        <Fragment2 key={it}>
+                          {fila}
+                          {openCostosFin && CF_FIN.map(([kk, lbl]) => {
+                            const color = kk === 'perd' ? '#b91c1c' : '#15803d'
+                            const sceldas = CF_MESES.map((_, mi) => {
+                              const dk = `FINCOST|${kk}|${mi}`
+                              if (isTotal && !soloVer) return <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td>
+                              return <td key={mi} className="tot yb" style={{ color }}>{isTotal ? fmt(num(data[dk])) : '—'}</td>
+                            })
+                            return <tr key={kk}><td className="l sub2" style={{ color }}>{lbl} <span className="unit">{kk === 'perd' ? '(pago)' : '(ingreso)'}</span></td>{sceldas}<td className="tot" style={{ color }}>{fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`FINCOST|${kk}|${mi}`]), 0))}</td></tr>
+                          })}
+                        </Fragment2>
+                      )
                     }
                     if (!esCostos) return fila
                     return (
@@ -1743,8 +1781,8 @@ function LogisticaHome({ empresa, sbus }) {
     <div className="panel">
       <h3>🪞 Impacto logístico — {empresa}{M$} <span className="unit">(por SBU y marca · 2028 · espejo, solo lectura)</span></h3>
       <div className="sub">Aquí <b>no se llena nada</b>: es un <b>espejo</b>. Los <b>3 tipos de gasto logístico 2028</b> (costo logístico de la venta, muestras y mantenimiento) vienen de lo que se llena en <b>Logística</b> por marca; <b style={{ color: '#8a6d1a' }}>ABP 2026 y 2027</b> (amarillo) vienen de los archivos que subiste y el <b>Real acum. 2026</b> del EBP. Haz clic en una marca para abrir su ficha y llenarla.</div>
-      <div className="tablewrap">
-        <table>
+      <div className="tablewrap" style={{ overflowX: 'auto' }}>
+        <table style={{ minWidth: 1180 }}>
           <thead>
             <tr>
               <th className="l" rowSpan={2}>SBU / Marca</th>
