@@ -47,7 +47,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
+import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -1652,6 +1652,8 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   const [catList, setCatList] = useState([]) // categorías de la marca (espejo del Director)
   const [catTipo, setCatTipo] = useState({}) // tipo de producto por categoría (clasificación del Director)
   const [muestras, setMuestras] = useState({}) // muestras a comprar por mes (espejo del Director)
+  const [logRef, setLogRef] = useState({}) // ABP 2026/2027 por marca (referencia, de Config_LogRef)
+  const [real26, setReal26] = useState({ marca: {}, sbu: {} }) // real acumulado 2026 del EBP
   const stKey = `logcost_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false)
@@ -1665,6 +1667,8 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
       try { const j3 = await gReadTab('Cap_Categorias'); if (j3 && j3.ok && j3.values) { const o = []; j3.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) o.push(r[1]) }); setCatList(o) } } catch { }
+      try { const jr = await gLoadLogRef(); if (jr && jr.ok) setLogRef(jr.val) } catch { }
+      try { const j26 = await gLogRef2026(); if (j26 && j26.ok) setReal26(j26.val) } catch { }
     })()
   }, [empresa, marca])
   const inv = inventarioCalc(tData, marca, ventaMarcaMes(ventas, empresa, marca))
@@ -1765,6 +1769,7 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
   const marca = fixedMarca || marcasDe(sbus)?.[0]?.marca
   const stKey = `muestras_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
+  const [logcost, setLogcost] = useState(() => { try { return JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
   const k = (tipo, mi) => `${marca}|${tipo}|${mi}`
   const set = (tipo, mi, v) => setData((d) => ({ ...d, [k(tipo, mi)]: v }))
@@ -1772,6 +1777,12 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
   const totTipo = (tipo) => MESES.reduce((a, _, mi) => a + g(tipo, mi), 0)
   const totMes = (mi) => g('PV', mi) + g('SE', mi)
   const total = MESES.reduce((a, _, mi) => a + totMes(mi), 0)
+  // Valorización $: unidades × ratio $/ud que define Logística (MUERATE). Se llena solo cuando Logística pone el ratio.
+  const rate = (tipo) => num(logcost[`${marca}|MUERATE|${tipo}`])
+  const usd = (tipo, mi) => g(tipo, mi) * rate(tipo)
+  const usdTotTipo = (tipo) => totTipo(tipo) * rate(tipo)
+  const usdMes = (mi) => usd('PV', mi) + usd('SE', mi)
+  const usdTotal = MESES.reduce((a, _, mi) => a + usdMes(mi), 0)
   function guardar() { setSaving(true); try { saveEstado(empresa, 'muestras', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (muestras).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   const inputRow = (tipo) => <>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={data[k(tipo, mi)] ?? ''} onChange={(e) => set(tipo, mi, e.target.value)} inputMode="decimal" style={{ width: '100%' }} placeholder="0" /></td>)}<td className="tot">{fmt(totTipo(tipo))}</td></>
   return (
@@ -1783,13 +1794,24 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <h3>Muestras a comprar — {marca} <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Director" /></h3>
-      <div className="sub">Escribe por mes <b>cuántas muestras</b> (unidades) planeas comprar de {marca} en 2028, divididas en dos tipos. El <b>Total</b> es la suma. El costo de estas muestras lo calcula <b>Logística</b> (% sobre compras).</div>
+      <div className="sub">Escribe por mes <b>cuántas muestras</b> (unidades) planeas comprar de {marca} en 2028, divididas en dos tipos. El <b>Total</b> es la suma. El costo en $ se calcula con el <b>ratio $/unidad</b> que define <b>Logística</b>.</div>
       <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
           <tr><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Muestras Preventa (ud) <span className="unit">(fin comercial — preventa con posibilidad de venta)</span></td>{inputRow('PV')}</tr>
           <tr><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Seating samples (ud) <span className="unit">(Marketing / seating — regalo o venta a empleados)</span></td>{inputRow('SE')}</tr>
           <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL muestras a comprar (ud)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(total)}</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3 style={{ marginTop: 22 }}>Valorización en $ — {marca} <span className="unit">(unidades × ratio $/ud de Logística)</span></h3>
+      <div className="sub">Se llena solo con el <b>ratio $/unidad</b> que pone Logística (Preventa <b>${fmt(rate('PV'))}/ud</b> · Seating <b>${fmt(rate('SE'))}/ud</b>). Si sale en cero, Logística aún no ha puesto el ratio.</div>
+      <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+        <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+        <tbody>
+          <tr><td className="l">Muestras Preventa ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(usd('PV', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(usdTotTipo('PV'))}</td></tr>
+          <tr><td className="l">Seating samples ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(usd('SE', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(usdTotTipo('SE'))}</td></tr>
+          <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0', background: '#eefaf6' }}><td className="l" style={{ color: '#0f766e' }}>TOTAL valorizado ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(usdMes(mi))}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(usdTotal)}</td></tr>
         </tbody>
       </table></div>
     </div>

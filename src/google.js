@@ -124,6 +124,55 @@ async function _ebpRef(tab2026, rubroMatch) {
 export const gViajesRef = () => _ebpRef('VIAJES', 'VIAJES')
 export const gMkRef = () => _ebpRef('MK', 'MK')
 
+// Referencia ABP del costo logístico (viene de los archivos ABP 2026_2027): % por marca (2026 y 2027) + ratio $ de muestras.
+// Columnas de Config_LogRef: EMPRESA | SBU | MARCA | PCT2026 | PCT2027 | MUERATIO
+export async function gLoadLogRef() {
+  try {
+    const vals = await readValues('Config_LogRef')
+    const out = {}
+    ;(vals || []).slice(1).forEach((r) => {
+      const m = String(r[2] || '').trim().toUpperCase(); if (!m) return
+      out[m] = { pct2026: Number(r[3]) || 0, pct2027: Number(r[4]) || 0, mue: Number(r[5]) || 0 }
+    })
+    return { ok: true, val: out }
+  } catch { return { ok: false, val: {} } }
+}
+
+// Real acumulado 2026 del costo logístico de la venta (y ventas netas para el %), por marca y por SBU, desde el EBP.
+let _logRef26 = null, _logRef26At = 0
+export async function gLogRef2026() {
+  if (_logRef26 && Date.now() - _logRef26At < 60000) return _logRef26
+  const out = { marca: {}, sbu: {} }
+  const ens = (b, k) => { if (!b[k]) b[k] = { log: 0, vn: 0 }; return b[k] }
+  let rows = []
+  for (let i = 0; i < 3; i++) { rows = await readValuesFrom(EBP_SHEET_ID, 'Evolucion SBU Data'); if (rows && rows.length) break; await new Promise((r) => setTimeout(r, 400 * (i + 1))) }
+  if (rows && rows.length) {
+    let hr = -1
+    for (let i = 0; i < Math.min(rows.length, 10); i++) { const c = rows[i].map((x) => String(x || '').trim().toUpperCase()); if (c.includes('RUBRO') && (c.includes('MARCA') || c.includes('BRAND'))) { hr = i; break } }
+    if (hr >= 0) {
+      const H = rows[hr].map((x) => String(x || '').trim().toUpperCase())
+      const idx = (cs) => { for (const c of cs) { const k = H.indexOf(c); if (k >= 0) return k } return -1 }
+      const iT = idx(['TIPO']), iR = idx(['RUBRO']), iS = idx(['SBU']), iM = idx(['MARCA', 'BRAND']), iF = idx(['FECHA ARREGLADA', 'FECHA', 'MES']), iV = idx(['VALOR EN DOLARES', 'DOLARES', 'VALOR'])
+      for (let r = hr + 1; r < rows.length; r++) {
+        const row = rows[r]
+        if (String(row[iT] || '').toUpperCase() === 'TAHO') continue
+        const rub = String(row[iR] || '').toUpperCase()
+        const isLog = rub.indexOf('COSTO LOGISTICO DE LA VENTA') >= 0
+        const isVN = rub.indexOf('VENTAS NETAS') >= 0
+        if (!isLog && !isVN) continue
+        const mm = String(row[iF] || '').toLowerCase().replace(/\s/g, '-').split('-'); const yy = mm[mm.length - 1]
+        const year = yy && yy.length >= 2 ? (yy.length === 4 ? parseInt(yy, 10) : 2000 + parseInt(yy, 10)) : null
+        if (year !== 2026) continue
+        const val = Number(String(row[iV] || '').replace(/[^0-9.\-]/g, '')) || 0
+        const mar = String(row[iM] || '').trim().toUpperCase(), sbu = String(row[iS] || '').trim().toUpperCase()
+        if (mar) { const o = ens(out.marca, mar); if (isLog) o.log += val; else o.vn += val }
+        if (sbu) { const o = ens(out.sbu, sbu); if (isLog) o.log += val; else o.vn += val }
+      }
+    }
+  }
+  _logRef26 = { ok: true, val: out }; _logRef26At = Date.now(); return _logRef26
+}
+
 let _histCache = null, _histAt = 0, _histPromise = null
 async function _buildHistorico() {
   const out = [HIST_HEAD]
