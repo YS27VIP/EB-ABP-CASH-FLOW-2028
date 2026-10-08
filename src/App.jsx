@@ -1704,11 +1704,11 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
           <tr><td className="l" style={{ color: '#1d4ed8', fontWeight: 800, paddingLeft: 18 }} title={`= ${fmt(g(kLog))}% × costo de venta del mes`}>= Costo logístico de la venta</td>{costoLog.map((v, m) => <td key={m} className="tot" style={{ color: '#1d4ed8', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: ${fmt(g(kLog))}% × $${fmt(costoVenta[m])} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(rowTot(costoLog))}</td></tr>
 
           {/* ② MUESTRAS — verde */}
-          <tr><td className="l" style={{ color: '#4e9a92', paddingLeft: 18, borderTop: '1px solid #eef1f4' }} title="Compras / movimiento del mes valorizado a AUC.">Compras / movimiento ($) <span className="unit">base</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #eef1f4' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #eef1f4' }}>{fmt(rowTot(comprasUsd))}</td></tr>
+          <tr><td className="l" style={{ color: '#4e9a92', paddingLeft: 18, borderTop: '1px solid #f4f6f9' }} title="Compras / movimiento del mes valorizado a AUC.">Compras / movimiento ($) <span className="unit">base</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #f4f6f9' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #f4f6f9' }}>{fmt(rowTot(comprasUsd))}</td></tr>
           <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingLeft: 18 }} title={`= ${fmt(g(kMue))}% × compras del mes`}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot" style={{ color: '#0f766e', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: ${fmt(g(kMue))}% × $${fmt(comprasUsd[m])} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
 
           {/* ③ MANTENIMIENTO — ámbar (pendiente CBM) */}
-          <tr><td className="l" style={{ color: '#c99a5b', paddingLeft: 18, borderTop: '1px solid #eef1f4' }} title="Valor del saldo = saldo de cada temporada × AUC de esa temporada.">Valor saldo inventario ($) <span className="unit">base</span></td>{saldoValue.map((v, m) => <td key={m} className="tot" style={{ color: '#c99a5b', borderTop: '1px solid #eef1f4' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#c99a5b', borderTop: '1px solid #eef1f4' }}>{fmt(rowTot(saldoValue))}</td></tr>
+          <tr><td className="l" style={{ color: '#c99a5b', paddingLeft: 18, borderTop: '1px solid #f4f6f9' }} title="Valor del saldo = saldo de cada temporada × AUC de esa temporada.">Valor saldo inventario ($) <span className="unit">base</span></td>{saldoValue.map((v, m) => <td key={m} className="tot" style={{ color: '#c99a5b', borderTop: '1px solid #f4f6f9' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#c99a5b', borderTop: '1px solid #f4f6f9' }}>{fmt(rowTot(saldoValue))}</td></tr>
           <tr><td className="l" style={{ color: '#b45309', fontStyle: 'italic', paddingLeft: 18 }} title="Pendiente: el costo de mantenimiento se calculará a partir del CBM (volumen) que captura Logística abajo, no por %.">= Costo mantenimiento de stock <span className="unit" style={{ fontStyle: 'normal' }}>(pendiente por CBM)</span></td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: '#d9bf8e' }}>—</td>)}<td className="tot" style={{ color: '#d9bf8e' }}>—</td></tr>
 
           <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL costos logísticos</td>{total.map((v, m) => <td key={m} className="tot" style={{ cursor: 'help' }} title={`${MESES[m].toUpperCase()}: logístico $${fmt(costoLog[m])} + muestras $${fmt(costoMue[m])} = $${fmt(v)} (mantenimiento pendiente por CBM)`}>{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(total))}</td></tr>
@@ -1737,11 +1737,14 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
   const stKey = `muestras_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
-  const k = (mi) => `${marca}|${mi}`
-  const set = (mi, v) => setData((d) => ({ ...d, [k(mi)]: v }))
-  const g = (mi) => num(data[k(mi)])
-  const total = MESES.reduce((a, _, mi) => a + g(mi), 0)
+  const k = (tipo, mi) => `${marca}|${tipo}|${mi}`
+  const set = (tipo, mi, v) => setData((d) => ({ ...d, [k(tipo, mi)]: v }))
+  const g = (tipo, mi) => num(data[k(tipo, mi)])
+  const totTipo = (tipo) => MESES.reduce((a, _, mi) => a + g(tipo, mi), 0)
+  const totMes = (mi) => g('PV', mi) + g('SE', mi)
+  const total = MESES.reduce((a, _, mi) => a + totMes(mi), 0)
   function guardar() { setSaving(true); try { saveEstado(empresa, 'muestras', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (muestras).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  const inputRow = (tipo) => <>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={data[k(tipo, mi)] ?? ''} onChange={(e) => set(tipo, mi, e.target.value)} inputMode="decimal" style={{ width: '100%' }} placeholder="0" /></td>)}<td className="tot">{fmt(totTipo(tipo))}</td></>
   return (
     <div className="panel">
       <div className="toolbar" style={{ marginBottom: 8 }}>
@@ -1751,11 +1754,13 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <h3>Muestras a comprar — {marca} <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Director" /></h3>
-      <div className="sub">Escribe por mes <b>cuántas muestras</b> (unidades) planeas comprar de {marca} en 2028. El costo de estas muestras lo calcula <b>Logística</b> (% sobre compras).</div>
-      <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+      <div className="sub">Escribe por mes <b>cuántas muestras</b> (unidades) planeas comprar de {marca} en 2028, divididas en dos tipos. El <b>Total</b> es la suma. El costo de estas muestras lo calcula <b>Logística</b> (% sobre compras).</div>
+      <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
-          <tr><td className="l">Muestras a comprar (ud)</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={data[k(mi)] ?? ''} onChange={(e) => set(mi, e.target.value)} inputMode="decimal" style={{ width: '100%' }} placeholder="0" /></td>)}<td className="tot">{fmt(total)}</td></tr>
+          <tr><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Muestras Preventa (ud) <span className="unit">(fin comercial — preventa con posibilidad de venta)</span></td>{inputRow('PV')}</tr>
+          <tr><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Seating samples (ud) <span className="unit">(Marketing / seating — regalo o venta a empleados)</span></td>{inputRow('SE')}</tr>
+          <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL muestras a comprar (ud)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(total)}</td></tr>
         </tbody>
       </table></div>
     </div>
@@ -3842,7 +3847,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   }, [empresa])
   // AUP por categoría (Producto): { categoría: [12] }
   const aupPorCat = (mca) => { const out = {}; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUP · ') !== 0) return; out[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])) }); return out }
-  const aucPorCat = (mca) => { const out = {}; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUC · ') === 0) out[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])); else if (upper(rub) === 'AUC') { const base = MESES.map((_, j) => num(r[4 + j])); (cats[mca] || []).forEach(({ cat }) => { if (!out[cat]) out[cat] = base }) } }); return out }
+  const aucPorCat = (mca) => { const out = {}; let marcaAuc = null; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUC · ') === 0) out[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])); else if (upper(rub) === 'AUC') marcaAuc = MESES.map((_, j) => num(r[4 + j])) }); if (marcaAuc) catList.forEach((c) => { const cat = c.cat || c; if (!out[cat]) out[cat] = marcaAuc }); return out }
   useEffect(() => { try { localStorage.setItem('ventas_growth_' + empresa, JSON.stringify(growth)) } catch { } }, [growth, empresa])
 
   const u2026 = {}, u2025 = {}, cliByMarca = {}
@@ -4063,7 +4068,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                   <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingTop: 6 }} colSpan={14}>① Margen bruto % <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= Margen ÷ Venta de la categoría</span></td></tr>
                   <tr className="grandrow"><td className="l" style={{ color: '#0f766e' }}>TOTAL {marca}</td>{mgMes.map((v, i) => <td key={i} className="tot" style={{ color: '#0f766e', fontWeight: 700, cursor: 'help' }} title={`${MESES[i].toUpperCase()}: margen $${fmt(v)} ÷ venta $${fmt(vnMes[i])} = ${pct(v, vnMes[i]).toFixed(1)}%`}>{vnMes[i] ? pct(v, vnMes[i]).toFixed(1) + '%' : '—'}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 700 }}>{vnTot ? pct(mgTot, vnTot).toFixed(1) + '%' : '—'}</td></tr>
                   {catList.map((c, i) => { const vnRt = vnCatTot(c.cat), mgRt = mgCatTot(c.cat); return <tr key={i}><td className="l">{c.cat}</td>{MESES.map((_, mi) => { const m = mgCat(c.cat, mi), v = vnCat(c.cat, mi); return <td key={mi} className="tot" style={{ cursor: 'help' }} title={`${c.cat} · ${MESES[mi].toUpperCase()}: margen $${fmt(m)} ÷ venta $${fmt(v)} = ${pct(m, v).toFixed(1)}%`}>{v > 0.5 ? pct(m, v).toFixed(1) + '%' : '—'}</td> })}<td className="tot">{vnRt ? pct(mgRt, vnRt).toFixed(1) + '%' : '—'}</td></tr> })}
-                  <tr><td className="l" style={{ color: '#1d4ed8', fontWeight: 800, borderTop: '1px solid #eef1f4', paddingTop: 6 }} colSpan={14}>② Peso del margen en la venta <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= Margen $ ÷ Venta total de la marca</span></td></tr>
+                  <tr><td className="l" style={{ color: '#1d4ed8', fontWeight: 800, borderTop: '1px solid #f4f6f9', paddingTop: 6 }} colSpan={14}>② Peso del margen en la venta <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= Margen $ ÷ Venta total de la marca</span></td></tr>
                   <tr className="grandrow"><td className="l" style={{ color: '#1d4ed8' }}>TOTAL {marca}</td>{mgMes.map((v, i) => <td key={i} className="tot" style={{ color: '#1d4ed8', fontWeight: 700, cursor: 'help' }} title={`${MESES[i].toUpperCase()}: margen $${fmt(v)} ÷ venta total marca $${fmt(vnMes[i])} = ${pct(v, vnMes[i]).toFixed(1)}%`}>{vnMes[i] ? pct(v, vnMes[i]).toFixed(1) + '%' : '—'}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{vnTot ? pct(mgTot, vnTot).toFixed(1) + '%' : '—'}</td></tr>
                   {catList.map((c, i) => { const mgRt = mgCatTot(c.cat); return <tr key={i}><td className="l">{c.cat}</td>{MESES.map((_, mi) => { const m = mgCat(c.cat, mi); return <td key={mi} className="tot" style={{ cursor: 'help' }} title={`${c.cat} · ${MESES[mi].toUpperCase()}: margen $${fmt(m)} ÷ venta total marca $${fmt(vnMes[mi])} = ${pct(m, vnMes[mi]).toFixed(1)}%`}>{vnMes[mi] ? pct(m, vnMes[mi]).toFixed(1) + '%' : '—'}</td> })}<td className="tot">{vnTot ? pct(mgRt, vnTot).toFixed(1) + '%' : '—'}</td></tr> })}
                 </tbody>
@@ -4220,7 +4225,7 @@ function CalendarioScreen({ empresa, puedeEditar }) {
                   const f = fechaDe2(y, m, d); const its = byFecha[f]; const col = diaColor(f); const esHoy = f === hoyF; const sel = f === selDia
                   return (
                     <div key={ci} onClick={() => its && setSelDia(sel ? null : f)}
-                      style={{ position: 'relative', minHeight: 30, borderRadius: 6, border: sel ? '2px solid #0e7490' : esHoy ? '2px solid #94a3b8' : '1px solid #eef1f4', background: col ? (col === '#dc2626' ? '#fdecec' : '#eafaef') : '#fff', cursor: its ? 'pointer' : 'default', padding: '2px 3px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}
+                      style={{ position: 'relative', minHeight: 30, borderRadius: 6, border: sel ? '2px solid #0e7490' : esHoy ? '2px solid #94a3b8' : '1px solid #f4f6f9', background: col ? (col === '#dc2626' ? '#fdecec' : '#eafaef') : '#fff', cursor: its ? 'pointer' : 'default', padding: '2px 3px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}
                       title={its ? its.map((x) => x.hito).join(', ') : ''}>
                       <span style={{ fontSize: 10.5, fontWeight: esHoy ? 800 : 600, color: esHoy ? '#0e7490' : col ? (col === '#dc2626' ? '#b91c1c' : '#15803d') : '#475569' }}>{d}</span>
                       {its && <span style={{ width: 7, height: 7, borderRadius: '50%', background: col, flex: '0 0 auto', marginTop: 2 }} />}
