@@ -54,7 +54,7 @@ import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoa
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -3604,6 +3604,12 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [, setTick] = useState(0)
   const usarCat = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] !== false } catch { return true } })()
   function setUsarCat(v) { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); u[marca] = v; saveEstado(empresa, 'usarcat', u) } catch { } setTick((t) => t + 1) }
+  // Tipo de producto por categoría (ROPA / CALZADO / etc.) — clasifica cada categoría. Se guarda por marca+categoría.
+  const TIPOS = ['ROPA', 'CALZADO / ZAPATILLAS', 'ACCESORIOS', 'MOCHILAS GRANDES', 'MOCHILAS PEQUEÑAS']
+  const [catTipo, setCatTipo] = useState(() => { try { return JSON.parse(localStorage.getItem('cattipo_' + empresa) || '{}') } catch { return {} } })
+  useEffect(() => { try { localStorage.setItem('cattipo_' + empresa, JSON.stringify(catTipo)) } catch { } }, [catTipo, empresa])
+  const tipoKey = (cat) => marca + '|' + cat
+  const setTipo = (cat, v) => setCatTipo({ ...catTipo, [tipoKey(cat)]: v })
   useEffect(() => {
     (async () => {
       try {
@@ -3629,6 +3635,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
     const rows = lista.filter((o) => String(o.cat).trim()).map((o) => ({ rubro: o.cat, sbu, marca, meses: [num(o.peso), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }))
     await postToTab('Cap_Categorias', empresa, usuario, role.label, rows, setMsg)
     saveEstado(empresa, 'catpct', catPct)
+    saveEstado(empresa, 'cattipo', catTipo)
     setSaving(false)
   }
   return (
@@ -3643,15 +3650,16 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
       <div className="panel">
         <h3>Categorías de {marca}<span className="fill-badge">✏️ para llenar</span></h3>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '2px 0 10px', fontWeight: 600 }}><input type="checkbox" checked={usarCat} onChange={(e) => setUsarCat(e.target.checked)} /> Usar categorías para {marca} <span className="unit">(si lo desactivas, Ventas solo usa el crecimiento por cliente)</span></label>
-        <div className="sub">Define los <b>nombres de las categorías</b> de la marca (ej. ROAD, TRAIL, HIKE). El peso de cada categoría ya <b>no se pone aquí</b>: se define abajo por cliente.</div>
+        <div className="sub">Define los <b>nombres de las categorías</b> de la marca (ej. ROAD, TRAIL, HIKE) y clasifica cada una con su <b>tipo de producto</b> (p.ej. ROAD → CALZADO). El peso de cada categoría ya <b>no se pone aquí</b>: se define abajo por cliente.</div>
         <div className="tablewrap">
           <table style={{ width: 'auto' }}>
-            <thead><tr><th className="l">Categoría</th><th></th></tr></thead>
+            <thead><tr><th className="l">Categoría</th><th className="l">Tipo de producto</th><th></th></tr></thead>
             <tbody>
-              {lista.length === 0 && <tr><td className="l" colSpan={2}>Agrega categorías con el botón de abajo.</td></tr>}
+              {lista.length === 0 && <tr><td className="l" colSpan={3}>Agrega categorías con el botón de abajo.</td></tr>}
               {lista.map((o, i) => (
                 <tr key={i}>
                   <td className="l"><input style={{ width: 280, padding: '6px' }} value={o.cat} onChange={(e) => setLista(lista.map((x, j) => j === i ? { ...x, cat: e.target.value } : x))} placeholder="Ej. ROAD, TRAIL, HIKE…" /></td>
+                  <td className="l"><select value={catTipo[tipoKey(o.cat)] || ''} onChange={(e) => setTipo(o.cat, e.target.value)} style={{ minWidth: 200, fontWeight: 600 }} title="Clasifica esta categoría (p.ej. ROAD → CALZADO)"><option value="">— elegir tipo —</option>{TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}</select></td>
                   <td><button className="btn" onClick={() => setLista(lista.filter((_, j) => j !== i))}>✕</button></td>
                 </tr>
               ))}
