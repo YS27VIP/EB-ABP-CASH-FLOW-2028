@@ -359,7 +359,7 @@ export default function App() {
     })()
     return () => { cancel = true }
   }, [authed])
-  const puede = (etiqueta) => !acceso || acceso.includes(etiqueta)
+  const puede = (etiqueta) => esAdmin || !acceso || acceso.includes(etiqueta) // los admin (yalik, paula…) ven todo, como clon de la vista completa
   const [admins, setAdmins] = useState([])
   useEffect(() => { if (!authed) return; (async () => { try { setAdmins(await gLoadAdmins()) } catch { } })() }, [authed])
   const emailLow = (getEmail() || '').trim().toLowerCase()
