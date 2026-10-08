@@ -114,6 +114,10 @@ table.vfix td.l,table.vfix th.l{overflow:hidden;text-overflow:ellipsis;white-spa
 /* Costos logísticos: líneas internas entre filas casi invisibles (la separación la da el color de letra por grupo). */
 table.logcost-tbl td{border-bottom-color:#f6f8fb}
 table.logcost-tbl tr.grandrow td{border-bottom-color:var(--line)}
+/* Cursor de bombillo (💡) al pasar sobre un número con detalle; si el navegador no lo pinta, cae a 'help'. */
+.help-bulb{cursor:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><text y='15' font-size='15'>💡</text></svg>") 2 15, help}
+/* Banda de sub-bloque en la tabla de costos logísticos */
+table.logcost-tbl tr.cost-band td{background:#f4f7fb;font-weight:800;font-size:11.5px;letter-spacing:.3px;text-align:left;padding-top:7px;padding-bottom:7px}
 
 /* Proyección de Ventas 2026 vs 2028 */
 td.ref{color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
