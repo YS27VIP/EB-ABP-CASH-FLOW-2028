@@ -1706,6 +1706,21 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <h3>Costos logísticos — {marca}{M$}{aprobLog ? <span className="empchip" style={{ marginLeft: 8, background: 'var(--ok)', fontSize: 11.5 }}>✓ Aprobado por Finanzas</span> : <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Logística" />}</h3>
+      {(() => {
+        const MU = upper(marca); const abpRef = logRef[MU] || {}; const r26 = (real26.marca || {})[MU] || { log: 0, vn: 0 }
+        const r26pct = r26.vn ? (r26.log / r26.vn * 100) : 0; const abp28pct = g(kLog)
+        return (
+          <div style={{ background: '#fffdf2', border: '1px solid #f0e6b8', borderRadius: 10, padding: '10px 14px', marginBottom: 14 }}>
+            <b style={{ color: '#8a6d1a' }}>📦 Referencia — Costo logístico de la venta</b> <span className="unit">(para que no se pierda de vista al definir tu %)</span>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, fontSize: 13, alignItems: 'center' }}>
+              <span>Tu <b>ABP 2028</b>: <b style={{ color: '#1d4ed8' }}>{fmt(abp28pct)}%</b> · <b>${fmt(rowTot(costoLog))}</b></span>
+              <span style={{ background: '#fff3bf', padding: '3px 9px', borderRadius: 6 }}>ABP 2026: <b>{fmt(abpRef.pct2026)}%</b></span>
+              <span style={{ background: '#fff3bf', padding: '3px 9px', borderRadius: 6 }}>ABP 2027: <b>{fmt(abpRef.pct2027)}%</b></span>
+              <span>Real acum. 2026: <b>${fmt(r26.log)}</b> <span className="unit">({fmt(r26pct)}% s/ventas netas)</span></span>
+            </div>
+          </div>
+        )
+      })()}
       <div className="sub">Cada costo es un <b>grupo de dos filas</b>: la fila <b>base</b> (el número de origen) y la fila <b>«= …»</b> (el costo que suma al total), ambas del <b>mismo color</b>. Los grupos se separan con una línea muy tenue. <b style={{ color: '#1d4ed8' }}>Azul</b> = costo logístico de la venta · <b style={{ color: '#0f766e' }}>Verde</b> = muestras · <b style={{ color: '#b45309' }}>Ámbar</b> = mantenimiento (pendiente por CBM). Pasa el cursor por cualquier número para ver de dónde sale.</div>
       <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -1769,18 +1784,25 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
   const marca = fixedMarca || marcasDe(sbus)?.[0]?.marca
   const stKey = `muestras_${empresa}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
-  const [logcost, setLogcost] = useState(() => { try { return JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { return {} } })
+  const [precios, setPrecios] = useState(() => { try { return JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}') } catch { return {} } })
+  const [catList, setCatList] = useState([])
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  useEffect(() => {
+    try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { }
+    ;(async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const cl = []; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl) } } catch { } })()
+  }, [empresa, marca])
   const k = (tipo, mi) => `${marca}|${tipo}|${mi}`
   const set = (tipo, mi, v) => setData((d) => ({ ...d, [k(tipo, mi)]: v }))
   const g = (tipo, mi) => num(data[k(tipo, mi)])
   const totTipo = (tipo) => MESES.reduce((a, _, mi) => a + g(tipo, mi), 0)
   const totMes = (mi) => g('PV', mi) + g('SE', mi)
   const total = MESES.reduce((a, _, mi) => a + totMes(mi), 0)
-  // Valorización $: unidades × ratio $/ud que define Logística (MUERATE). Se llena solo cuando Logística pone el ratio.
-  const rate = (tipo) => num(logcost[`${marca}|MUERATE|${tipo}`])
-  const usd = (tipo, mi) => g(tipo, mi) * rate(tipo)
-  const usdTotTipo = (tipo) => totTipo(tipo) * rate(tipo)
+  // Valorización $: las muestras NO arrastran inventario viejo → se valorizan al AUC de la TEMPORADA DE COMPRA del mes.
+  const seasonOf = (m) => m < 6 ? 'SS28' : m < 10 ? 'FW28' : 'SS29' // ene–jun = SS28 · jul–oct = FW28 · nov–dic = SS29
+  const seasonAUC = (s) => { let n = 0, d = 0; catList.forEach(({ cat, peso }) => { const a = num(precios[`PAUC|${marca}|${s}|${cat}`]); const w = (num(peso) || 0) + 0.0001; if (a > 0) { n += a * w; d += w } }); return d ? n / d : 0 }
+  const aucMes = (mi) => seasonAUC(seasonOf(mi))
+  const usd = (tipo, mi) => g(tipo, mi) * aucMes(mi)
+  const usdTotTipo = (tipo) => MESES.reduce((a, _, mi) => a + usd(tipo, mi), 0)
   const usdMes = (mi) => usd('PV', mi) + usd('SE', mi)
   const usdTotal = MESES.reduce((a, _, mi) => a + usdMes(mi), 0)
   function guardar() { setSaving(true); try { saveEstado(empresa, 'muestras', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (muestras).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
@@ -1804,11 +1826,13 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
         </tbody>
       </table></div>
 
-      <h3 style={{ marginTop: 22 }}>Valorización en $ — {marca} <span className="unit">(unidades × ratio $/ud de Logística)</span></h3>
-      <div className="sub">Se llena solo con el <b>ratio $/unidad</b> que pone Logística (Preventa <b>${fmt(rate('PV'))}/ud</b> · Seating <b>${fmt(rate('SE'))}/ud</b>). Si sale en cero, Logística aún no ha puesto el ratio.</div>
+      <h3 style={{ marginTop: 22 }}>Valorización en $ — {marca} <span className="unit">(unidades × AUC de la temporada de compra)</span></h3>
+      <div className="sub">Las muestras <b>no arrastran inventario viejo</b>: se valorizan al <b>AUC de la temporada que se compra ese mes</b> (ene–jun = SS28 · jul–oct = FW28 · nov–dic = SS29). La <b>temporada</b> y el <b>AUC</b> salen como espejo de Producto. Si el AUC sale en cero, Producto aún no capturó el PAUC de esa temporada.</div>
       <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
+          <tr><td className="l" style={{ color: '#9a6a1a' }}>Temporada de compra <span className="unit">(espejo)</span></td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#9a6a1a', fontWeight: 700 }}>{seasonOf(mi)}</td>)}<td className="tot"></td></tr>
+          <tr><td className="l" style={{ color: 'var(--muted)' }}>AUC temporada ($) <span className="unit">(espejo)</span></td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(aucMes(mi))}</td>)}<td className="tot"></td></tr>
           <tr><td className="l">Muestras Preventa ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(usd('PV', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(usdTotTipo('PV'))}</td></tr>
           <tr><td className="l">Seating samples ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(usd('SE', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(usdTotTipo('SE'))}</td></tr>
           <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0', background: '#eefaf6' }}><td className="l" style={{ color: '#0f766e' }}>TOTAL valorizado ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(usdMes(mi))}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(usdTotal)}</td></tr>

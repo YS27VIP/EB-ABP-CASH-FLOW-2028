@@ -126,16 +126,24 @@ export const gMkRef = () => _ebpRef('MK', 'MK')
 
 // Referencia ABP del costo logístico (viene de los archivos ABP 2026_2027): % por marca (2026 y 2027) + ratio $ de muestras.
 // Columnas de Config_LogRef: EMPRESA | SBU | MARCA | PCT2026 | PCT2027 | MUERATIO
+const LOGREF_DEFAULT = {
+  HOKA: { pct2026: 5.5, pct2027: 5.5, mue: 5 }, ALTRA: { pct2026: 6, pct2027: 6, mue: 36 }, INJINJI: { pct2026: 5, pct2027: 5, mue: 36 },
+  FJALLRAVEN: { pct2026: 4, pct2027: 4, mue: 16 }, NORDA: { pct2026: 4, pct2027: 4, mue: 53 }, UGG: { pct2026: 5, pct2027: 5, mue: 8 },
+  BIRKENSTOCK: { pct2026: 3.5, pct2027: 3.5, mue: 0 }, ECCO: { pct2026: 4, pct2027: 4, mue: 0 }, ARIAT: { pct2026: 5, pct2027: 5, mue: 0 },
+  BLUNDSTONE: { pct2026: 5, pct2027: 5, mue: 0 }, MAMMUT: { pct2026: 5.5, pct2027: 5.5, mue: 6 }, KEEN: { pct2026: 5.5, pct2027: 5.5, mue: 0 },
+  'GOORIN BROS': { pct2026: 5.5, pct2027: 5.5, mue: 0 }, COTOPAXI: { pct2026: 5.5, pct2027: 5.5, mue: 30 }, FITFLOP: { pct2026: 5.5, pct2027: 5.5, mue: 14 },
+  FOAMERS: { pct2026: 5, pct2027: 5, mue: 0 },
+}
 export async function gLoadLogRef() {
+  const out = { ...LOGREF_DEFAULT }
   try {
     const vals = await readValues('Config_LogRef')
-    const out = {}
     ;(vals || []).slice(1).forEach((r) => {
       const m = String(r[2] || '').trim().toUpperCase(); if (!m) return
       out[m] = { pct2026: Number(r[3]) || 0, pct2027: Number(r[4]) || 0, mue: Number(r[5]) || 0 }
     })
-    return { ok: true, val: out }
-  } catch { return { ok: false, val: {} } }
+  } catch { }
+  return { ok: true, val: out }
 }
 
 // Real acumulado 2026 del costo logístico de la venta (y ventas netas para el %), por marca y por SBU, desde el EBP.
