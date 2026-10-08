@@ -1238,7 +1238,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map(() => 0)])))); exportXlsx(aoa, `${role.tab}_CASHFLOW_Plantilla.xlsx`) }}>📄 Plantilla</button>
         {!soloVer && <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>}
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
-        {soloVer ? <span className="note ok" style={{ margin: 0, padding: '6px 12px' }}>👁️ Solo lectura — esto lo llena Finanzas</span> : <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>}
+        {soloVer && <span className="note ok" style={{ margin: 0, padding: '6px 12px' }}>👁️ Solo lectura — esto lo llena Finanzas{esDirector ? ' · tú solo defines el plazo de los clientes nuevos (celdas amarillas)' : ''}</span>}
+        {(!soloVer || esDirector) && <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : (esDirector ? '💾 Guardar plazos' : '💾 Guardar')}</button>}
       </div>
       <div className="panel">
         <h3>{role.label} — CASH FLOW{M$} <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer && ESP('Espejo (solo lectura): estos valores los llena Finanzas en su Cash Flow. Aquí solo se ven.')}</h3>
@@ -1809,7 +1810,7 @@ function ReporteScreen({ empresa, sbus }) {
                 <tr key={i} style={r.nuevo ? { background: '#eff6ff' } : undefined}>
                   <td className="l" style={{ color: sbuColor(r.sbu), fontWeight: 600 }}>{r.sbu}</td>
                   <td className="l"><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(r.mca), marginRight: 6 }}></span>{r.mca}</td>
-                  <td className="l">{r.cli}{r.nuevo && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, color: '#0e7490', border: '1px solid #0e7490', borderRadius: 4, padding: '1px 5px' }} title="Cliente nuevo (sin histórico ni plazo de SF)">Nuevo</span>}</td>
+                  <td className="l">{r.cli}{r.nuevo && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 800, color: '#fff', background: '#f97316', borderRadius: 5, padding: '2px 7px', letterSpacing: '.3px', boxShadow: '0 1px 2px rgba(249,115,22,.4)' }} title="Cliente nuevo (sin histórico ni plazo de SF)">NUEVO</span>}</td>
                   <td className="tot" style={{ fontWeight: 700, color: BCOL[BUCKETS.includes(r.t) ? r.t : 'Sin plazo'] }}>{r.t}</td>
                 </tr>
               ))}
