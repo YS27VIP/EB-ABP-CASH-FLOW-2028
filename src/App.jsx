@@ -190,6 +190,8 @@ const UD = <span className="unittag" title="Valores en unidades (ud)"># </span> 
 const Q = (t) => <span title={t} style={{ cursor: 'help', marginLeft: 5, fontSize: 10.5, fontWeight: 700, color: '#94a3b8', border: '1px solid #cbd5e1', borderRadius: '50%', display: 'inline-block', width: 15, height: 15, lineHeight: '14px', textAlign: 'center', verticalAlign: 'middle' }}>i</span>
 // 🪞 para vistas ESPEJO (solo lectura, el dato se llena/edita en otro lado): tooltip dice de dónde viene
 const ESP = (t) => <span className="unit" title={t} style={{ cursor: 'help', marginLeft: 6, fontSize: 12 }}>🪞</span>
+// Leyenda azul reutilizable: va en cada bloque cuyos números muestran el origen del cálculo al pasar el cursor.
+const HOVERTIP = <div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
 
 function effSBUS(empresa, combos) {
   const c = combos[empresa]
@@ -1250,6 +1252,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       <div className="panel">
         <h3>{role.label} — CASH FLOW{M$} <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer && ESP('Espejo (solo lectura): estos valores los llena Finanzas en su Cash Flow. Aquí solo se ven.')}</h3>
         <div className="sub">Proyección 2028 (enero a diciembre). <b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span></b>. {(isTotal || soloVer) ? <>🪞 Vista de solo lectura (consolidado). El <b>saldo en banco al cierre de 2027</b> lo pone Finanzas al entrar a cada marca.</> : <>Lo único que llenas a mano es el <b>saldo en banco al cierre de 2027</b> (el Cash Inicial de enero-28, la celda amarilla); todo lo demás se calcula.</>} El PSI (inventario, compras, ventas) viene de Comercial/Producto.</div>
+        {HOVERTIP}
         <div className="tablewrap">
           <table className="vfix"><colgroup><col style={{ width: '210px' }} />{CF_MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
             <thead>
@@ -2058,7 +2061,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <h3>Costos logísticos — {marca}{M$}{aprobLog ? <span className="empchip" style={{ marginLeft: 8, background: 'var(--ok)', fontSize: 11.5 }}>✓ Aprobado por Finanzas</span> : <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Logística" />}</h3>
-      <div className="sub">Cada costo es un <b>grupo de dos filas</b>: la fila <b>base</b> (el número de origen) y la fila <b>«= …»</b> (el costo que suma al total), ambas del <b>mismo color</b>. Los grupos se separan con una línea muy tenue. <b style={{ color: '#1d4ed8' }}>Azul</b> = costo logístico de la venta · <b style={{ color: '#0f766e' }}>Verde</b> = muestras · <b style={{ color: '#b45309' }}>Ámbar</b> = mantenimiento (pendiente por CBM). Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
+      {HOVERTIP}
       <div className="tablewrap"><table className="vfix logcost-tbl"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
@@ -2315,7 +2318,7 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
   }, [precios, marca])
   return (
     <>
-      <div className="note ok" style={{ marginBottom: 8 }}>Producto en un solo lugar y en orden: <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Compras 2028 y disponibilidad (SS28/FW28) · <b>3)</b> Combinación de temporadas (unidades por mes) — el saldo inicial se toma solo del paso 1 · <b>4)</b> Evolución mensual del AUP/AUC (consecuencia) · <b>5)</b> Resumen. Guarda cada paso con sus botones.</div>
+      <div className="note ok" style={{ marginBottom: 8 }}>Producto en un solo lugar y en orden: <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Compras 2028 y disponibilidad (SS28/FW28) · <b>3)</b> Combinación de temporadas (unidades por mes) — el saldo inicial se toma solo del paso 1 · <b>4)</b> Evolución mensual del AUP/AUC (consecuencia) · <b>5)</b> Resumen. Recuerda hacer clic en guardar.</div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 1 · Inventario, costo y precio por temporada y categoría</div>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="matriz" />
@@ -2553,6 +2556,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
       {showEvol && <div className="panel">
         <h3>Evolución mensual del AUP / AUC — {marca}{M$} <span className="unit">(consecuencia de la combinación)</span></h3>
         <div className="sub" style={{ marginBottom: 6 }}>Según la <b>combinación de temporadas</b>, cada mes se vende una combinación distinta de temporadas → el AUP y AUC <b>cambian mes a mes</b>. Ej.: si en junio se vende FW26 a AUC $46 y en julio entra SS28 a AUC $60, el AUC del mes sube de $46 a $60; y si un mes se vende mitad de cada una, el AUC efectivo es ~$53. <b>Estos valores mensuales por categoría son los que usa el resto del app</b> (Ventas, Contribución, Cash Flow).</div>
+        {HOVERTIP}
         {!MESES.some((_, m) => unitsMes(m) > 0.5) && <div className="note warn" style={{ marginBottom: 10 }}>Sale <b>vacía</b> porque aún no hay <b>salidas de inventario</b>. Ya pusiste las unidades arriba; ahora falta escribir las <b>unidades a rotar</b> por temporada en el bloque de Combinación de temporadas (Paso 2). Eso define qué se vende cada mes.</div>}
         {cats.length > 1 && <div className="toolbar" style={{ marginBottom: 8 }}><input value={catBuscar} onChange={(e) => setCatBuscar(e.target.value)} placeholder="🔍 Buscar categoría…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />{catBuscar && <button className="btn" onClick={() => setCatBuscar('')}>✕ limpiar</button>}</div>}
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
@@ -3141,7 +3145,8 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
     <>
       {!soloSBU && !cargando && <div className="panel">
         <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
-        <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno. Pasa el mouse sobre un total para ver el <b>detalle por marca</b>.</div>
+        <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno.</div>
+        {HOVERTIP}
         <div className="toolbar" style={{ marginBottom: 8 }}><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar</>)}</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}<th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th><th className="ya">FY2025</th><th className="ya">Δ25</th><th className="ya">FY2026</th><th className="ya">Δ26</th><th className="yb">ABP2027</th><th className="yb">Δ27</th></tr></thead>
@@ -3768,6 +3773,7 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
       <div className="panel">
         <h3 style={{ color: sbuColor(sbuName) }}>Unidades · Venta · Costo · Margen — {sbuName}{M$} <span className="unit">(por marca y categoría · 2028 · solo lectura)</span></h3>
         <div className="sub">Resumen por marca de la SBU, desglosado por <b>categoría</b>. El <b>margen</b> es Venta Neta − Costo (margen bruto de producto), calculado con la mezcla real de categorías por cliente. <span className="unit">Haz clic en una marca para ocultar o mostrar sus categorías.</span></div>
+        {HOVERTIP}
         <div className="tablewrap">
           <table>
             <thead><tr><th className="l">Marca / Categoría</th><th>Unidades</th><th>Venta Neta</th><th>Costo</th><th>Margen</th><th>Margen %</th></tr></thead>
@@ -4575,7 +4581,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>Venta Neta 2028 por categoría y mes — {marca}{M$} <span className="unit">(dinero $)</span></h3>
-            <div className="sub"><b>Venta Neta del mes = unidades del mes × AUP efectivo de ese mes</b> (por categoría). El <b>precio (AUP) de cada categoría y temporada lo define Producto</b>: el cliente no cambia el precio, solo decide <b>cuántas unidades</b> compra y <b>en qué categorías</b>. Cada mes se vende una <b>mezcla de temporadas</b> (Paso 2), así que el <b>AUP efectivo del mes</b> es el promedio de los AUP de esas temporadas, <b>ponderado por las unidades</b> que rota cada temporada ese mes (una temporada con más unidades pesa más). El Total del año es la suma de los meses.</div><div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
+            <div className="sub"><b>Venta Neta del mes = unidades del mes × AUP efectivo de ese mes</b> (por categoría). El <b>precio (AUP) de cada categoría y temporada lo define Producto</b>: el cliente no cambia el precio, solo decide <b>cuántas unidades</b> compra y <b>en qué categorías</b>. Cada mes se vende una <b>mezcla de temporadas</b>, así que el <b>AUP efectivo del mes</b> es el promedio de los AUP de esas temporadas, <b>ponderado por las unidades</b> que rota cada temporada ese mes (una temporada con más unidades pesa más). El Total del año es la suma de los meses.</div><div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
@@ -4600,7 +4606,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>Costo 2028 por categoría y mes — {marca}{M$} <span className="unit">(dinero $)</span></h3>
-            <div className="sub"><b>Costo del mes = unidades del mes × AUC efectivo de ese mes</b> (por categoría). El <b>AUC lo define Producto por categoría y temporada</b>, igual que el AUP. Como cada mes se vende una <b>mezcla de temporadas</b> (Paso 2), el AUC efectivo del mes es el <b>promedio ponderado</b> de las temporadas que rotan ese mes. El Total del año es la suma de los meses.</div><div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
+            <div className="sub"><b>Costo del mes = unidades del mes × AUC efectivo de ese mes</b> (por categoría). El <b>AUC lo define Producto por categoría y temporada</b>, igual que el AUP. Como cada mes se vende una <b>mezcla de temporadas</b>, el AUC efectivo del mes es el <b>promedio ponderado</b> de las temporadas que rotan ese mes. El Total del año es la suma de los meses.</div><div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
@@ -4675,9 +4681,13 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           <div className="spacer"></div>
           <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
         </div>
+        <div className="note" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 11, background: '#fff8e1', border: '1px solid #f0e0a8' }}>
+          <span style={{ fontSize: 24 }}>✍️</span>
+          <div><b style={{ color: '#8a6d1a' }}>¡Tu turno!</b> Completa las <b style={{ background: '#fff3bf', padding: '1px 6px', borderRadius: 4 }}>celdas amarillas de 2028</b> — ahí decides en qué meses vender. Pon el <b>% de crecimiento</b> por cliente y luego reparte las unidades mes a mes. 🎯</div>
+        </div>
         <div className="note ok" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 20 }}>📦</span>
-          <div>Stock disponible de temporadas anteriores de <b>{marca}</b>: <b style={{ fontSize: 15 }}>{fmt(stockViejo(marca))} ud</b>. <span className="unit">Tenlo en cuenta al proyectar: tu venta 2028 debería incluir mover este stock viejo; lo que exceda será compra nueva. (Referencia — lo captura Producto.)</span></div>
+          <div>Stock disponible de temporadas anteriores de <b>{marca}</b>: <b style={{ fontSize: 15 }}>{fmt(stockViejo(marca))} ud</b>. <span className="unit">Tenlo en cuenta al proyectar: tu venta 2028 debería incluir mover este stock viejo.</span></div>
         </div>
         <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: junto al % verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)) y la <b>Σ</b> de lo que llevas repartido. Luego, en las <b>celdas amarillas de 2028</b> (que arrancan vacías), tú decides <b>en qué meses</b> vender esas unidades. Cuando la Σ cuadra con el objetivo aparece <b style={{ color: '#15803d' }}>✓</b>; si no, sale en <b style={{ color: '#b45309' }}>ámbar ⚠</b> para que ajustes. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente. Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
         <div style={{ display: 'flex', gap: 28, margin: '4px 0 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -4737,7 +4747,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                 </Fragment2>
               ) })}
               {clientes.length > 0 && <>
-                <tr className="grandrow"><td className="l" rowSpan={3}>TOTAL {marca}</td><td rowSpan={3} style={{ fontSize: 10.5, lineHeight: 1.35, whiteSpace: 'nowrap' }} title="Crecimiento del total 2028 frente a cada año histórico">{(tot26Marca || tot25Marca) ? <>{tot26Marca ? <div>vs 2026: <b style={{ color: crecMarca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1)}%</b></div> : null}{tot25Marca ? <div>vs 2025: <b style={{ color: crec25Marca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crec25Marca >= 0 ? '+' : '') + crec25Marca.toFixed(1)}%</b></div> : null}</> : '—'}</td><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></tr>
+                <tr className="grandrow"><td className="l" rowSpan={3} style={{ verticalAlign: 'top' }}>TOTAL {marca}</td><td rowSpan={3} style={{ verticalAlign: 'top', fontSize: 10.5, lineHeight: 1.4, whiteSpace: 'nowrap' }} title="Crecimiento del total 2028 frente a cada año histórico">{(tot26Marca || tot25Marca) ? <div style={{ color: 'var(--muted)', fontWeight: 600, marginBottom: 3 }}>Crec. 2028:</div> : null}{tot26Marca ? <div>vs 2026 <b style={{ color: crecMarca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1)}%</b></div> : null}{tot25Marca ? <div>vs 2025 <b style={{ color: crec25Marca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crec25Marca >= 0 ? '+' : '') + crec25Marca.toFixed(1)}%</b></div> : null}{!(tot26Marca || tot25Marca) ? '—' : null}</td><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></tr>
                 <tr className="grandrow"><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>
                 <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td><td className="tot">100%</td></tr>
               </>}
