@@ -363,7 +363,8 @@ export default function App() {
   const [admins, setAdmins] = useState([])
   useEffect(() => { if (!authed) return; (async () => { try { setAdmins(await gLoadAdmins()) } catch { } })() }, [authed])
   const emailLow = (getEmail() || '').trim().toLowerCase()
-  const esAdmin = emailLow === 'yalik@energybrandsgroup.com' || admins.includes(emailLow)
+  const ADMINS_FIJOS = ['yalik@energybrandsgroup.com', 'paula@energybrandsgroup.com']
+  const esAdmin = ADMINS_FIJOS.includes(emailLow) || admins.includes(emailLow)
   const veTodasEff = veTodas || esAdmin // quién puede cambiar de empresa
 
   // ENERGY BRANDS: el agrupamiento SBU → marcas se deriva EN VIVO del EBP (misma fuente que los clientes),
