@@ -4572,7 +4572,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>Venta Neta 2028 por categoría y mes — {marca}{M$} <span className="unit">(dinero $)</span></h3>
-            <div className="sub"><b>Venta Neta del mes = unidades del mes × AUP efectivo de ese mes</b> (por categoría). El <b>precio (AUP) de cada categoría y temporada lo define Producto</b>: el cliente no cambia el precio, solo decide <b>cuántas unidades</b> compra y <b>en qué categorías</b>. Cada mes se vende una <b>mezcla de temporadas</b> (Paso 2), así que el <b>AUP efectivo del mes</b> es el promedio de los AUP de esas temporadas, <b>ponderado por las unidades</b> que rota cada temporada ese mes (una temporada con más unidades pesa más). El Total del año es la suma de los meses. <span className="unit">Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</span></div>
+            <div className="sub"><b>Venta Neta del mes = unidades del mes × AUP efectivo de ese mes</b> (por categoría). El <b>precio (AUP) de cada categoría y temporada lo define Producto</b>: el cliente no cambia el precio, solo decide <b>cuántas unidades</b> compra y <b>en qué categorías</b>. Cada mes se vende una <b>mezcla de temporadas</b> (Paso 2), así que el <b>AUP efectivo del mes</b> es el promedio de los AUP de esas temporadas, <b>ponderado por las unidades</b> que rota cada temporada ese mes (una temporada con más unidades pesa más). El Total del año es la suma de los meses.</div><div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
@@ -4631,7 +4631,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           {/* MARGEN $ */}
           <div className="panel">
             <h3>Margen 2028 por categoría y mes — {marca}{M$} <span className="unit">($ dinero)</span></h3>
-            <div className="sub"><b>Margen del mes = Venta Neta − Costo</b> (por categoría). El Total del año es la suma de los meses. <span className="unit">Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</span></div>
+            <div className="sub"><b>Margen del mes = Venta Neta − Costo</b> (por categoría). El Total del año es la suma de los meses.</div><div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
