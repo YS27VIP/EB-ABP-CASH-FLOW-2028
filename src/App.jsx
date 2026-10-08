@@ -3108,6 +3108,10 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   const totAgg = sbuList.reduce((acc, { a }) => { Object.keys(a).forEach((k) => acc[k] = (acc[k] || 0) + a[k]); return acc }, {})
   const ventaTot = totAgg.ventaNeta || 0
   const gastosDe = (a) => ventaTot > 0 ? gadminAnual * (a.ventaNeta || 0) / ventaTot : (a === totAgg ? gadminAnual : 0)
+  // Otros gastos de empresa (no SBU ni Retail): viajes de Finanzas + Admin + Procesos (los captura Gerencia). Se prorratean por peso de venta.
+  const GVIAJES_MARCAS = ['(FINANZAS)', '(ADMIN)', '(PROCESOS)']
+  const otrosAnual = finR.reduce((a, r) => (upper(r[0]) === upper(empresa) && GVIAJES_MARCAS.includes(String(r[3] || '').toUpperCase()) && esVi(String(r[1] || ''))) ? a + MESES.reduce((s, _, m) => s + num(r[4 + m]), 0) : a, 0)
+  const otrosDe = (a) => ventaTot > 0 ? otrosAnual * (a.ventaNeta || 0) / ventaTot : (a === totAgg ? otrosAnual : 0)
   const allM = sbuList.flatMap(({ s }) => sbus[s] || [])
   const filasG = [
     { k: 'Unidades', g: (a) => a.unidades },
@@ -3120,7 +3124,8 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
     { k: '(−) Viajes', g: (a) => a.viajes },
     { k: '= Contribución de la SBU', g: (a) => a.brand, strong: true },
     { k: '(−) Gastos administrativos', g: (a) => gastosDe(a) },
-    { k: '🎯 = Resultado Operativo', g: (a) => (a.brand || 0) - gastosDe(a), strong: true },
+    { k: '(−) Otros gastos', g: (a) => otrosDe(a), help: 'Viajes de Finanzas + Admin + Procesos (nivel empresa, no SBU ni Retail). Prorrateados por peso de venta de cada SBU.' },
+    { k: '🎯 = Resultado Operativo', g: (a) => (a.brand || 0) - gastosDe(a) - otrosDe(a), strong: true },
   ]
   const dpctG = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
   const dCellG = (cur, ref, cls) => { const d = dpctG(cur, ref); return <td className={'tot ' + cls + ' ' + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700, cursor: 'help' }} title={d == null ? 'Sin referencia para comparar' : `Variación % = (2028 − referencia) ÷ referencia\n2028 = ${fmt(cur)} vs referencia = ${fmt(ref)} → ${(d >= 0 ? '+' : '') + d.toFixed(0)}% (el 2028 está ${d >= 0 ? 'por encima' : 'por debajo'} de ese año)`}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
@@ -3136,7 +3141,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}<th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th><th className="ya">FY2025</th><th className="ya">Δ25</th><th className="ya">FY2026</th><th className="ya">Δ26</th><th className="yb">ABP2027</th><th className="yb">Δ27</th></tr></thead>
           <tbody>
-            {filasG.map((f) => { const cur = f.g(totAgg); return <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}</td>{sbuList.map(({ s, a }) => <td key={s} className="tot" style={cellStyle} title={brkSBU(f, sbus[s])}>{fmt(f.g(a))}</td>)}<td className="tot" style={{ cursor: 'help' }} title={'Consolidado = suma de las SBU:\n' + sbuList.map(({ s, a }) => `${s}: ${fmt(f.g(a))}`).join('\n')}>{fmt(cur)}</td>
+            {filasG.map((f) => { const cur = f.g(totAgg); return <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}{f.help && Q(f.help)}</td>{sbuList.map(({ s, a }) => <td key={s} className="tot" style={cellStyle} title={brkSBU(f, sbus[s])}>{fmt(f.g(a))}</td>)}<td className="tot" style={{ cursor: 'help' }} title={'Consolidado = suma de las SBU:\n' + sbuList.map(({ s, a }) => `${s}: ${fmt(f.g(a))}`).join('\n')}>{fmt(cur)}</td>
               <td className="tot ya">{f.fy25 != null ? fmt(f.fy25) : '—'}</td>{f.fy25 != null ? dCellG(cur, f.fy25, 'ya') : <td className="tot ya">—</td>}
               <td className="tot ya">{f.fy26 != null ? fmt(f.fy26) : '—'}</td>{f.fy26 != null ? dCellG(cur, f.fy26, 'ya') : <td className="tot ya">—</td>}
               <td className="tot yb">{f.abp27 != null ? fmt(f.abp27) : '—'}</td>{f.abp27 != null ? dCellG(cur, f.abp27, 'yb') : <td className="tot yb">—</td>}
