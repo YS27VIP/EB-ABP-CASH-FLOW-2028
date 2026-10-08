@@ -1030,7 +1030,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const logSaldoValBase = (mca) => { try { const inv = inventarioCalc(temp, mca, ventaMarcaMes(ventas, empresa, mca)); return MESES.map((_, m) => SEASONS.reduce((a, s) => a + inv.flujos[s][m].fin * seasonAUCfrom(precios, mca, s), 0)) } catch { return Array(12).fill(0) } }
   const logPct = (mca, k) => num(logcost[`${mca}|${k}`])
   const logVentaMes = (mca) => { const b = logCostoVentaBase(mca), p = logPct(mca, 'PCT_LOGVENTA'); return b.map((v) => v * p / 100) }
-  const logMuestrasMes = (mca) => { const b = comprasUsdMes(mca), p = logPct(mca, 'PCT_MUESTRAS'); return b.map((v) => v * p / 100) }
+  // Muestras: costo YA calculado por Logística ($/ud × unidades), guardado por mes como MUECOST.
+  const logMuestrasMes = (mca) => MESES.map((_, m) => num(logcost[`${mca}|MUECOST|${m}`]))
   const logMantMes = (mca) => { const b = logSaldoValBase(mca), p = logPct(mca, 'PCT_MANT'); return b.map((v) => v * p / 100) }
   const logTotalMes = (mca) => { const a = logVentaMes(mca), b = logMuestrasMes(mca), c = logMantMes(mca); return MESES.map((_, m) => a[m] + b[m] + c[m]) }
   const logisticaMes = (mca) => logTotalMes(mca) // el total (venta + muestras + mantenimiento) alimenta la línea Logística de Costos Operativos
@@ -1468,11 +1469,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>Costos logísticos — detalle {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(🪞 espejo · lo llena Logística por marca)</span></h3>
-            <div className="sub">Cálculo por <b>%</b> (los define <b>Logística</b> y aprueba Finanzas): <b>costo logístico de la venta</b> = % × costo de venta (unid×AUC); <b>muestras</b> = % × compras; <b>mantenimiento</b> = % × valor del saldo de inventario. El <b>total</b> alimenta la línea <b>Logística</b> de Costos Operativos (arriba).</div>
+            <div className="sub">Lo define <b>Logística</b> y aprueba Finanzas: <b>costo logístico de la venta</b> = % × costo de venta (unid×AUC); <b>muestras</b> = <b>$/unidad × unidades de muestras</b> (ratio en dólares, no %); <b>mantenimiento</b> = % × valor del saldo de inventario. El <b>total</b> alimenta la línea <b>Logística</b> de Costos Operativos (arriba).</div>
             {isTotal && <div className="tablewrap" style={{ marginBottom: 12, maxWidth: 560 }}>
               <table style={{ width: 'auto' }}>
-                <thead><tr><th className="l">Marca</th><th>% venta</th><th>% muestras</th><th>% mant.</th></tr></thead>
-                <tbody>{listaL.map((mca) => <tr key={mca}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td className="tot">{fmt(logPct(mca, 'PCT_LOGVENTA'))}%</td><td className="tot">{fmt(logPct(mca, 'PCT_MUESTRAS'))}%</td><td className="tot">{fmt(logPct(mca, 'PCT_MANT'))}%</td></tr>)}</tbody>
+                <thead><tr><th className="l">Marca</th><th>% venta</th><th>Muestras $</th><th>% mant.</th></tr></thead>
+                <tbody>{listaL.map((mca) => <tr key={mca}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td className="tot">{fmt(logPct(mca, 'PCT_LOGVENTA'))}%</td><td className="tot">{fmt(MESES.reduce((a, _, m) => a + num(logcost[`${mca}|MUECOST|${m}`]), 0))}</td><td className="tot">{fmt(logPct(mca, 'PCT_MANT'))}%</td></tr>)}</tbody>
               </table>
             </div>}
             <div className="tablewrap">
@@ -1481,8 +1482,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                 <tbody>
                   <tr><td className="l sub2">Costo de venta ($) <span className="unit">(base)</span></td>{cvBase.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cvBase))}</td></tr>
                   <tr className="catrow"><td className="l">Costo logístico de la venta<span className="unit">{pl('PCT_LOGVENTA')}</span></td>{cLog.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cLog))}</td></tr>
-                  <tr><td className="l sub2">Compras / movimiento ($) <span className="unit">(base)</span></td>{cmpBase.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cmpBase))}</td></tr>
-                  <tr className="catrow"><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Costo de movimiento de muestras<span className="unit">{pl('PCT_MUESTRAS')}</span></td>{cMue.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cMue))}</td></tr>
+                  <tr className="catrow"><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Costo de movimiento de muestras<span className="unit"> (= $/ud × unidades de muestras)</span></td>{cMue.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cMue))}</td></tr>
                   <tr className="grandrow" style={{ background: '#eef6ff' }}><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Subtotal para Cash Flow <span className="unit">(venta + muestras)</span></td>{paraCF.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(paraCF))}</td></tr>
                   <tr><td className="l sub2">Valor saldo inventario ($) <span className="unit">(base)</span></td>{svBase.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(svBase))}</td></tr>
                   <tr className="catrow"><td className="l">Costo mantenimiento de stock<span className="unit">{pl('PCT_MANT')}</span></td>{cMant.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(RT(cMant))}</td></tr>
@@ -1677,17 +1677,20 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
   // Valor del saldo = saldo de cada temporada × el AUC de esa temporada (lo que costó al comprarlo)
   const saldoValue = MESES.map((_, m) => SEASONS.reduce((a, s) => a + inv.flujos[s][m].fin * seasonAUCfrom(precios, marca, s), 0))
   const kLog = `${marca}|PCT_LOGVENTA`, kMant = `${marca}|PCT_MANT`
-  // % de muestras AHORA por línea (lo pone Logística en el espejo de muestras abajo): Preventa y Seating.
-  const kMuePV = `${marca}|MUEPCT|PV`, kMueSE = `${marca}|MUEPCT|SE`
-  const muePctTot = g(kMuePV) + g(kMueSE)
+  // Costo de muestras = RATIO EN DÓLARES por unidad (lo pone Logística por línea) × unidades de muestras del Director.
+  const kMueRatePV = `${marca}|MUERATE|PV`, kMueRateSE = `${marca}|MUERATE|SE`
+  const mUnit = (tipo, m) => num(muestras[`${marca}|${tipo}|${m}`])
   const costoLog = MESES.map((_, m) => costoVenta[m] * g(kLog) / 100)
-  const costoMue = MESES.map((_, m) => comprasUsd[m] * muePctTot / 100)
+  const costoMue = MESES.map((_, m) => mUnit('PV', m) * g(kMueRatePV) + mUnit('SE', m) * g(kMueRateSE))
   // Mantenimiento: PENDIENTE — se calculará por CBM (volumen), no por %. Por ahora no suma al total.
   const total = MESES.map((_, m) => costoLog[m] + costoMue[m])
   const rowTot = (arr) => arr.reduce((a, b) => a + b, 0)
-  function guardar() { setSaving(true); try { const merged = { ...data, [`${marca}|PCT_MUESTRAS`]: String(muePctTot) }; setData(merged); saveEstado(empresa, 'logcost', merged); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (costos logísticos).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  // Guarda además el costo mensual de muestras ya calculado ($/ud × unidades) para que Cash Flow,
+  // Contribución y el resumen de la SBU lo lean directo (fuente única de verdad).
+  function guardar() { setSaving(true); try { const merged = { ...data }; MESES.forEach((_, m) => { merged[`${marca}|MUECOST|${m}`] = String(costoMue[m]) }); setData(merged); saveEstado(empresa, 'logcost', merged); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (costos logísticos).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   const aprobLog = (() => { try { return !!JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')[`LOGISTICA|${marca}`] } catch { return false } })()
   const pctInput = (k) => <input className={aprobLog ? '' : 'fillin'} value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="%" style={aprobLog ? { width: 60, textAlign: 'center', background: '#e6f4ea', border: '1px solid #bfe3c9', borderRadius: 6, padding: '6px 8px' } : { width: 60, textAlign: 'center' }} />
+  const ratioInput = (k) => <input className={aprobLog ? '' : 'fillin'} value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="$/ud" style={aprobLog ? { width: 68, textAlign: 'center', background: '#e6f4ea', border: '1px solid #bfe3c9', borderRadius: 6, padding: '6px 8px' } : { width: 68, textAlign: 'center' }} />
 
   return (
     <div className="panel">
@@ -1709,7 +1712,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
 
           {/* ② MUESTRAS — verde */}
           <tr><td className="l" style={{ color: '#4e9a92', paddingLeft: 18, borderTop: '1px solid #f4f6f9' }} title="Compras / movimiento del mes valorizado a AUC.">Compras / movimiento ($) <span className="unit">base</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #f4f6f9' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #f4f6f9' }}>{fmt(rowTot(comprasUsd))}</td></tr>
-          <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingLeft: 18 }} title={`= ${fmt(muePctTot)}% (Preventa ${fmt(g(kMuePV))}% + Seating ${fmt(g(kMueSE))}%) × compras del mes`}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot" style={{ color: '#0f766e', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: ${fmt(muePctTot)}% × $${fmt(comprasUsd[m])} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
+          <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingLeft: 18 }} title={`= unidades de muestras × ratio $/ud (Preventa $${fmt(g(kMueRatePV))}/ud · Seating $${fmt(g(kMueRateSE))}/ud)`}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot" style={{ color: '#0f766e', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: Preventa ${fmt(mUnit('PV', m))} ud × $${fmt(g(kMueRatePV))} + Seating ${fmt(mUnit('SE', m))} ud × $${fmt(g(kMueRateSE))} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
 
           {/* ③ MANTENIMIENTO — ámbar (pendiente CBM) */}
           <tr><td className="l" style={{ color: '#c99a5b', paddingLeft: 18, borderTop: '1px solid #f4f6f9' }} title="Valor del saldo = saldo de cada temporada × AUC de esa temporada.">Valor saldo inventario ($) <span className="unit">base</span></td>{saldoValue.map((v, m) => <td key={m} className="tot" style={{ color: '#c99a5b', borderTop: '1px solid #f4f6f9' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#c99a5b', borderTop: '1px solid #f4f6f9' }}>{fmt(rowTot(saldoValue))}</td></tr>
@@ -1740,13 +1743,14 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
         return (
           <div style={{ marginTop: 24 }}>
             <h3>Muestras a comprar — {marca} <span className="unit">(unidades · espejo)</span></h3>
-            <div className="sub">Las <b>unidades</b> las define el <b>Director</b> (espejo, solo lectura). <b>Logística</b> pone el <b>% s/compras</b> de cada línea (Preventa y Seating); la suma de esos % es la que alimenta el <b>Costo de muestras</b> de arriba (<span style={{ color: '#0f766e', fontWeight: 700 }}>= {fmt(muePctTot)}% × compras</span>).</div>
+            <div className="sub">Las <b>unidades</b> las define el <b>Director</b> (espejo, solo lectura). <b>Logística</b> pone el <b>ratio $/unidad</b> de cada línea (Preventa y Seating). El <b>Costo de muestras</b> = unidades × $/ud, y ese total alimenta el bloque verde de arriba.</div>
             <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} /><col style={{ width: '100px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-              <thead><tr><th className="l">Concepto</th><th>% s/compras</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+              <thead><tr><th className="l">Concepto</th><th>$ / unidad</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
               <tbody>
-                <tr><td className="l" style={{ color: 'var(--muted)' }}>Muestras Preventa (ud)</td><td className="cell" style={{ textAlign: 'center' }}>{pctInput(kMuePV)}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('PV', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('PV'))}</td></tr>
-                <tr><td className="l" style={{ color: 'var(--muted)' }}>Seating samples (ud)</td><td className="cell" style={{ textAlign: 'center' }}>{pctInput(kMueSE)}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('SE', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('SE'))}</td></tr>
-                <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL muestras (ud)</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(muePctTot)}%</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mMes(mi))}</td>)}<td className="tot">{fmt(granTot)}</td></tr>
+                <tr><td className="l" style={{ color: 'var(--muted)' }}>Muestras Preventa (ud)</td><td className="cell" style={{ textAlign: 'center' }}>{ratioInput(kMueRatePV)}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('PV', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('PV'))}</td></tr>
+                <tr><td className="l" style={{ color: 'var(--muted)' }}>Seating samples (ud)</td><td className="cell" style={{ textAlign: 'center' }}>{ratioInput(kMueRateSE)}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('SE', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('SE'))}</td></tr>
+                <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL muestras (ud)</td><td className="tot" style={{ color: 'var(--muted)' }}>—</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mMes(mi))}</td>)}<td className="tot">{fmt(granTot)}</td></tr>
+                <tr style={{ background: '#eefaf6' }}><td className="l" style={{ color: '#0f766e', fontWeight: 800 }}>= Costo de muestras ($)</td><td className="tot" style={{ color: '#0f766e' }}>—</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(costoMue[mi])}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
               </tbody>
             </table></div>
           </div>
@@ -2178,13 +2182,13 @@ function AprobacionesForm({ empresa, sbus }) {
       <div className="sub">Revisa los <b>% de costos logísticos</b> que capturó cada marca y <b>apruébalos</b>. Mientras <b>no</b> apruebas, en Logística esos campos siguen <b>amarillos</b> (para revisar); al aprobar pasan a <b>verde</b> (confirmados). Aprobadas: <b>{nAp}</b> de {marcas.length}.</div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="tablewrap"><table style={{ width: 'auto' }}>
-        <thead><tr><th className="l">Marca</th><th>% Log. venta</th><th>% Muestras</th><th>% Mant.</th><th>Estado</th><th>Acción</th></tr></thead>
+        <thead><tr><th className="l">Marca</th><th>% Log. venta</th><th>Muestras $</th><th>% Mant.</th><th>Estado</th><th>Acción</th></tr></thead>
         <tbody>
           {marcas.map(({ marca: m }) => { const ap = isAprob(m); return (
             <tr key={m}>
               <td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>
               <td className="tot">{fmt(g(`${m}|PCT_LOGVENTA`))}%</td>
-              <td className="tot">{fmt(g(`${m}|PCT_MUESTRAS`))}%</td>
+              <td className="tot">{fmt(MESES.reduce((a, _, mi) => a + num(data[`${m}|MUECOST|${mi}`]), 0))}</td>
               <td className="tot">{fmt(g(`${m}|PCT_MANT`))}%</td>
               <td className="tot" style={{ color: ap ? 'var(--ok)' : 'var(--warn)', fontWeight: 800 }}>{ap ? '✓ Aprobado' : 'Pendiente'}</td>
               <td><button className={'btn' + (ap ? '' : ' primary')} onClick={() => toggle(m)}>{ap ? '↺ Quitar aprobación' : '✓ Aprobar'}</button></td>
@@ -3265,7 +3269,8 @@ function LogisticaResumen({ empresa, sbuName, marcasSBU }) {
     const comprasUsd = MESES.map((_, m) => SEASONS.reduce((a, s) => a + num(tData[`CP|${marca}|${s}|${m}`]), 0) * auc[m])
     const saldoValue = MESES.map((_, m) => SEASONS.reduce((a, s) => a + inv.flujos[s][m].fin * seasonAUCfrom(precios, marca, s), 0))
     const costoLog = MESES.map((_, m) => costoVenta[m] * g(`${marca}|PCT_LOGVENTA`) / 100)
-    const costoMue = MESES.map((_, m) => comprasUsd[m] * g(`${marca}|PCT_MUESTRAS`) / 100)
+    // Muestras: costo ya calculado por Logística ($/ud × unidades), guardado por mes como MUECOST.
+    const costoMue = MESES.map((_, m) => g(`${marca}|MUECOST|${m}`))
     const mant = MESES.map((_, m) => saldoValue[m] * g(`${marca}|PCT_MANT`) / 100)
     const totalMes = MESES.map((_, m) => costoLog[m] + costoMue[m] + mant[m])
     const sum = (a) => a.reduce((x, y) => x + y, 0)
