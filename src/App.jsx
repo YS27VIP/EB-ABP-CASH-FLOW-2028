@@ -1478,7 +1478,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       })()}
 
       {(() => {
-        const SP = '#fde8cf' // color "término de la marca (pago a proveedor)"
+        const SP = '#fde8cf' // color "término de la marca (pago a proveedor)" sin aprobar (ámbar)
+        const aprobCompra = (mca) => { try { return !!JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')[`COMPRA|${mca}`] } catch { return false } }
         const listaM = isTotal ? sbuMarcas : [marca]
         const comprasX = MESES.map((_, m) => listaM.reduce((a, mca) => a + comprasUsdMes(mca)[m], 0)) // XFD
         const comprasD = MESES.map((_, m) => listaM.reduce((a, mca) => a + comprasUsdDisp(mca)[m], 0)) // disponible
@@ -1494,7 +1495,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
             <div className="sub">La <b>compra 2028</b> se coloca por <b>fecha XFD</b>; la <b>disponible</b> = XFD + tránsito (se define en Producto · Paso 2). El <b>pago al proveedor</b> se calcula sobre la base que elijas (<b>XFD por defecto</b>) según el <b>término de pago de la marca</b> (Cash = mismo mes · 30d = +1 · 60 = +2 …). {hayCorp && <>Además, HOKA/UGG pagan una <b>comisión corporativa</b> de <b>$/ud sobre las compras</b>. </>}Todo alimenta el <b>Cash Out</b>.</div>
             {!isTotal && <div className="toolbar" style={{ marginBottom: 8, gap: 14, flexWrap: 'wrap' }}>
               <span><label>Término de pago de {marca} <span className="unit">(a proveedor)</span> </label>
-              {soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{data[`PTERM|${marca}`] || '—'}</span> : <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.filter((t) => t !== 'Intercompañía').map((t) => <option key={t}>{t}</option>)}</select>}</span>
+              {aprobCompra(marca)
+                ? <span className="empchip" style={{ background: '#d7f0dd', color: '#15803d', fontWeight: 700, border: '1px solid #bfe3c9' }}>✓ {data[`PTERM|${marca}`] || '—'} · aprobado</span>
+                : (soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{data[`PTERM|${marca}`] || '—'}</span> : <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.filter((t) => t !== 'Intercompañía').map((t) => <option key={t}>{t}</option>)}</select>)}</span>
               <span className="unit" style={{ alignSelf: 'center' }}>Pago sobre <b>fecha XFD</b> · Tránsito de {marca}: <b>{transitOf(marca)}</b> mes(es) {ESP('El pago al proveedor se calcula siempre sobre la compra por fecha XFD. El tiempo de tránsito se define en Producto · Paso 2 (solo afecta la fecha disponible del inventario).')}</span>
               {esCorpMarca(marca) && <span><label>Comisión corporativa <span className="unit">($/ud sobre compras)</span> </label>{soloVer ? <span className="empchip" style={{ background: '#eef1f4', color: '#475569' }}>{data[`CORP|${marca}`] || '—'} $/ud</span> : <input className="fillin" value={data[`CORP|${marca}`] ?? ''} onChange={(e) => set(`CORP|${marca}`, e.target.value)} inputMode="decimal" placeholder="$/ud" style={{ width: 70 }} />}</span>}
             </div>}
@@ -2563,13 +2566,17 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
 function AprobacionesForm({ empresa, sbus }) {
   const marcas = marcasDe(sbus)
   const [logd, setLogd] = useState({})
+  const [cf, setCf] = useState({})
   const [aprob, setAprob] = useState(() => { try { return JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}') } catch { return {} } })
   const [msg, setMsg] = useState(null)
-  useEffect(() => { try { setLogd(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setAprob(JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')) } catch { } }, [empresa])
+  useEffect(() => { try { setLogd(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setCf(JSON.parse(localStorage.getItem(`cf_${empresa}`) || '{}')) } catch { } try { setAprob(JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')) } catch { } }, [empresa])
   const g = (k) => num(logd[k])
   const isAprob = (mca) => !!aprob[`LOGISTICA|${mca}`]
   const toggle = (mca) => { const next = { ...aprob, [`LOGISTICA|${mca}`]: !isAprob(mca) }; setAprob(next); saveEstado(empresa, 'aprob', next); setMsg({ t: 'ok', x: (next[`LOGISTICA|${mca}`] ? 'Aprobado' : 'Aprobación quitada') + ' · ' + mca + '. Se refleja en Logística.' }) }
   const nAp = marcas.filter(({ marca: m }) => isAprob(m)).length
+  const isAprobC = (mca) => !!aprob[`COMPRA|${mca}`]
+  const toggleC = (mca) => { const next = { ...aprob, [`COMPRA|${mca}`]: !isAprobC(mca) }; setAprob(next); saveEstado(empresa, 'aprob', next); setMsg({ t: 'ok', x: (next[`COMPRA|${mca}`] ? 'Término de compra aprobado' : 'Aprobación quitada') + ' · ' + mca + '. Se pone verde en Finanzas y Director.' }) }
+  const nApC = marcas.filter(({ marca: m }) => isAprobC(m)).length
   return (
     <div className="panel">
       <h3>Aprobaciones — Logística {M$}<span className="unit"> (Finanzas · por marca)</span></h3>
@@ -2586,6 +2593,22 @@ function AprobacionesForm({ empresa, sbus }) {
               <td className="tot">{fmt(g(`${m}|PCT_MANT`))}%</td>
               <td className="tot" style={{ color: ap ? 'var(--ok)' : 'var(--warn)', fontWeight: 800 }}>{ap ? '✓ Aprobado' : 'Pendiente'}</td>
               <td><button className={'btn' + (ap ? '' : ' primary')} onClick={() => toggle(m)}>{ap ? '↺ Quitar aprobación' : '✓ Aprobar'}</button></td>
+            </tr>
+          ) })}
+        </tbody>
+      </table></div>
+
+      <h3 style={{ marginTop: 22 }}>Aprobaciones — Términos de compra a proveedor <span className="unit">(Finanzas · por marca)</span></h3>
+      <div className="sub">Revisa el <b>término de pago a proveedor</b> que cargó cada marca y <b>apruébalo</b>. Al aprobar, el campo se pone <b style={{ color: '#15803d' }}>verde</b> en la hoja de <b>Finanzas</b> y de los <b>Directores</b>. Aprobadas: <b>{nApC}</b> de {marcas.length}.</div>
+      <div className="tablewrap"><table style={{ width: 'auto' }}>
+        <thead><tr><th className="l">Marca</th><th>Término a proveedor</th><th>Estado</th><th>Acción</th></tr></thead>
+        <tbody>
+          {marcas.map(({ marca: m }) => { const ap = isAprobC(m); const pt = cf[`PTERM|${m}`]; return (
+            <tr key={m}>
+              <td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>
+              <td className="tot" style={{ fontWeight: 700, color: pt ? '#0b5566' : 'var(--muted)' }}>{pt || '— sin definir'}</td>
+              <td className="tot" style={{ color: ap ? 'var(--ok)' : 'var(--warn)', fontWeight: 800 }}>{ap ? '✓ Aprobado' : 'Pendiente'}</td>
+              <td><button className={'btn' + (ap ? '' : ' primary')} disabled={!pt && !ap} onClick={() => toggleC(m)}>{ap ? '↺ Quitar aprobación' : '✓ Aprobar'}</button></td>
             </tr>
           ) })}
         </tbody>
@@ -2794,7 +2817,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   const role = SECS.find((r) => r.id === secId)
   const col = sbuColor(sbuName)
   const acc = marca === '__TOTAL__' ? col : marcaColor(marca)
-  const totTabEf = (['brand', 'viajes', 'mk', 'ucvm', 'log', 'mivista'].includes(totTab) && !puedeDir) ? 'cash' : (totTab === 'cash' && !pu('Finanzas')) ? 'brand' : totTab
+  const totTabEf = (['brand', 'viajes', 'mk', 'ucvm', 'log', 'mivista', 'avance'].includes(totTab) && !puedeDir) ? 'cash' : (totTab === 'cash' && !pu('Finanzas')) ? 'brand' : totTab
 
   if (isRetail) {
     return <div className="panel"><h3 style={{ color: sbuColor('Retail') }}>Retail — tiendas propias</h3><div className="note warn">Retail le compra internamente a las SBU (venta intercompañía). Para activarlo necesito el <b>precio de transferencia</b> (margen fijo, % sobre costo o AUP interno). En cuanto lo definamos, aquí verás la captura y el consolidado de Retail. 🏬</div></div>
@@ -2823,10 +2846,13 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
               {puedeDir && <button className={'seg' + (totTabEf === 'mk' ? ' active' : '')} onClick={() => setTotTab('mk')} style={totTabEf === 'mk' ? { background: col, borderColor: col, color: '#fff' } : {}}>📣 Marketing</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'viajes' ? ' active' : '')} onClick={() => setTotTab('viajes')} style={totTabEf === 'viajes' ? { background: col, borderColor: col, color: '#fff' } : {}}>🧳 Viajes</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'mivista' ? ' active' : '')} onClick={() => setTotTab('mivista')} style={totTabEf === 'mivista' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>📊 Comparador</button>}
+              {puedeDir && <button className={'seg' + (totTabEf === 'avance' ? ' active' : '')} onClick={() => setTotTab('avance')} style={totTabEf === 'avance' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>✅ Avance</button>}
               {puedeDir && <><div style={{ flex: 1 }}></div><SbuResultDownload empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} /></>}
             </div>
             {!puedeDir && !pu('Finanzas')
               ? <div className="note warn">No tienes acceso al consolidado de esta SBU. Entra a tu área (Ventas/Producto/Logística/Marketing) eligiendo una marca en el panel de la izquierda.</div>
+              : totTabEf === 'avance'
+              ? <AvanceSBU empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />
               : totTabEf === 'mivista'
               ? <ComparadorMarcas empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />
               : totTabEf === 'cash'
@@ -3497,6 +3523,58 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
 }
 
 /* ===== RESUMEN POR MARCA: Marketing / Unidades·Venta·Costo·Margen (vista TOTAL SBU) ===== */
+/* ===== AVANCE: monitorea qué está pendiente de llenar por marca (secciones llenables) ===== */
+function AvanceSBU({ empresa, sbuName, marcasSBU }) {
+  const [ven, setVen] = useState([]); const [prod, setProd] = useState([]); const [cat, setCat] = useState([]); const [mk, setMk] = useState([])
+  const [load, setLoad] = useState(true)
+  const ls = (k) => { try { return JSON.parse(localStorage.getItem(k) || '{}') } catch { return {} } }
+  const logcost = ls(`logcost_${empresa}`), muestras = ls(`muestras_${empresa}`), cf = ls(`cf_${empresa}`)
+  useEffect(() => { (async () => {
+    try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVen(j.values.slice(1)) } catch { }
+    try { const j = await gReadTab('Cap_Producto'); if (j && j.ok && j.values) setProd(j.values.slice(1)) } catch { }
+    try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) setCat(j.values.slice(1)) } catch { }
+    try { const j = await gReadTab('Cap_Marketing'); if (j && j.ok && j.values) setMk(j.values.slice(1)) } catch { }
+    setLoad(false)
+  })() }, [empresa])
+  const col = sbuColor(sbuName)
+  const marcas = marcasSBU || []
+  const inM = (r, m) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m)
+  const anyMes = (r) => MESES.some((_, i) => num(r[4 + i]) > 0)
+  const catsOf = (m) => cat.filter((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m) && r[1]).map((r) => r[1])
+  const SECTIONS = [
+    ['Ventas', '🧭', (m) => ven.some((r) => inM(r, m) && !String(r[1] || '').toUpperCase().startsWith('VIAJES') && anyMes(r))],
+    ['Prod·AUP', '🏷️', (m) => prod.some((r) => inM(r, m) && String(r[1] || '').toUpperCase().indexOf('AUP') === 0 && anyMes(r))],
+    ['Prod·AUC', '🏷️', (m) => prod.some((r) => inM(r, m) && String(r[1] || '').toUpperCase().indexOf('AUC') === 0 && anyMes(r))],
+    ['Categorías', '🗂️', (m) => catsOf(m).length > 0],
+    ['Logíst·%', '🚚', (m) => num(logcost[`${m}|PCT_LOGVENTA`]) > 0],
+    ['CBM', '📦', (m) => catsOf(m).some((c) => num(logcost[`${m}|CBM|${c}`]) > 0)],
+    ['Muestras', '🎁', (m) => Object.keys(muestras).some((k) => k.indexOf(`${m}|`) === 0 && num(muestras[k]) > 0)],
+    ['Marketing', '📣', (m) => mk.some((r) => inM(r, m) && !String(r[1] || '').toUpperCase().startsWith('VIAJES') && anyMes(r))],
+    ['Pago prov.', '💵', (m) => !!cf[`PTERM|${m}`]],
+  ]
+  if (load) return <div className="panel"><h3 style={{ color: col }}>✅ Avance — {sbuName}</h3><div className="sub">⏳ Cargando el avance…</div></div>
+  const pct = (m) => Math.round(SECTIONS.filter(([, , fn]) => fn(m)).length / SECTIONS.length * 100)
+  return (
+    <div className="panel">
+      <h3 style={{ color: col }}>✅ Avance de llenado — {sbuName} <span className="unit">(qué falta por marca · 2028)</span></h3>
+      <div className="sub">Monitorea qué secciones <b>llenables</b> están completas (<b style={{ color: '#15803d' }}>✓</b>) o pendientes (<b style={{ color: '#b45309' }}>•</b>) por marca. Pasa el cursor sobre el % para ver qué falta.</div>
+      <div className="tablewrap"><table>
+        <thead><tr><th className="l">Marca</th>{SECTIONS.map(([n, ic]) => <th key={n} title={n}>{ic}<br /><span className="unit" style={{ fontSize: 9.5 }}>{n}</span></th>)}<th>% completo</th></tr></thead>
+        <tbody>
+          {marcas.map((m) => { const falta = SECTIONS.filter(([, , fn]) => !fn(m)).map(([n]) => n); const p = pct(m); return (
+            <tr key={m}>
+              <td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>
+              {SECTIONS.map(([n, , fn]) => { const ok = fn(m); return <td key={n} className="tot" style={{ color: ok ? '#15803d' : '#d9a441', fontWeight: 800, fontSize: 15 }} title={ok ? n + ': completo' : n + ': pendiente'}>{ok ? '✓' : '•'}</td> })}
+              <td className="tot" style={{ fontWeight: 800, color: p === 100 ? '#15803d' : p >= 50 ? '#b45309' : '#b91c1c', cursor: 'help' }} title={falta.length ? 'Falta: ' + falta.join(', ') : 'Todo completo 🎉'}>{p}%</td>
+            </tr>
+          ) })}
+          <tr className="grandrow"><td className="l">Promedio SBU</td>{SECTIONS.map(([n, , fn]) => { const c = marcas.filter((m) => fn(m)).length; return <td key={n} className="tot" title={`${c} de ${marcas.length} marcas`}>{c}/{marcas.length}</td> })}<td className="tot">{marcas.length ? Math.round(marcas.reduce((a, m) => a + pct(m), 0) / marcas.length) : 0}%</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  )
+}
+
 /* ===== COMPARADOR DE MARCAS: KPIs de todas las marcas de la SBU lado a lado (vista consolidada del director) ===== */
 function ComparadorMarcas({ empresa, sbuName, marcasSBU }) {
   const [P, setP] = useState(null)
