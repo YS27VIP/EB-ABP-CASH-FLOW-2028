@@ -132,7 +132,7 @@ const CF_TERMINOS = ['Cash', '30 días', '60 días', '90 días', '120 días', '1
 const CF_PLAZO_MESES = { 'Cash': 0, '30 días': 1, '60 días': 2, '90 días': 3, '120 días': 4, '150 días': 5, '180 días': 6, 'Intercompañía': 0 }
 /* Costos Operativos = suma de estos 4 sub-rubros (el usuario los llena; el total es calculado) */
 const CF_COSTOS_PARENT = 'Costos Operativos'
-const CF_COSTOS = ['Gastos administrativos', 'Logística', 'Viajes', 'Marketing', 'Comisiones']
+const CF_COSTOS = ['Gastos administrativos directos', 'Logística', 'Gastos administrativos generales', 'Viajes', 'Marketing', 'Comisiones']
 /* Nuevas líneas que llena Finanzas (nivel empresa, solo en la vista TOTAL), antes del Flujo neto */
 const CF_FIN_PARENT = 'Costos Financieros'
 const CF_FIN = [['perd', 'Intereses perdidos'], ['gan', 'Intereses ganados']]
@@ -1102,7 +1102,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const gadminSubtot = MESES.map((_, m) => gadminCfg.reduce((a, it) => a + num(gadminData[`${it.cod}|${m}`]), 0))
   const cellRaw = (concepto, mi) => {
     if (concepto === 'Comisiones') return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[mi], 0) : comisTotalMes(marca)[mi]
-    if (concepto === 'Gastos administrativos') return isTotal ? gadminSubtot[mi] : 0 // gastos admin solo existen a TOTAL SBU
+    if (concepto === 'Gastos administrativos directos') return isTotal ? gadminSubtot[mi] : 0 // gastos admin directos solo existen a TOTAL SBU
+    if (concepto === 'Gastos administrativos generales') return 0 // PENDIENTE: definir la captura de gastos administrativos generales (corporativos, prorrateados por venta)
     if (concepto === 'Viajes') { const base = isTotal ? sbuMarcas.reduce((s, m) => s + viajesMes(m)[mi], 0) : viajesMes(marca)[mi]; return base + ((isTotal && sbu === '__ALL__') ? gViajesMes(mi) : 0) } // en el consolidado de EMPRESA (TODAS) se suman los viajes de Gerencia (Finanzas/Admin/Procesos)
     if (concepto === 'Marketing') return isTotal ? sbuMarcas.reduce((s, m) => s + marketingMes(m)[mi], 0) : marketingMes(marca)[mi]
     if (concepto === 'Logística') return isTotal ? sbuMarcas.reduce((s, m) => s + logisticaMes(m)[mi], 0) : logisticaMes(marca)[mi]
@@ -1330,7 +1331,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       <Fragment2 key={it}>
                         {fila}
                         {openCostos && CF_COSTOS.map((sub) => {
-                          const fuente = sub === 'Gastos administrativos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de todo el equipo' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)'
+                          const fuente = sub === 'Gastos administrativos directos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Gastos administrativos generales' ? 'pendiente: gastos administrativos generales (corporativos, prorrateados por venta)' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de todo el equipo' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)'
                           const sceldas = CF_MESES.map((_, mi) => { const bn = brk(sub, mi); return <td key={mi} className="tot yb" style={{ cursor: 'help' }} title={'Origen: ' + fuente + (bn ? '\nDatos de origen: ' + bn : '')}>{fmt(cellRaw(sub, mi))}</td> })
                           return <tr key={sub}><td className="l sub2">{sub} {ESP(fuente)}</td>{sceldas}<td className="tot">{fmt(subTot(sub))}</td></tr>
                         })}
