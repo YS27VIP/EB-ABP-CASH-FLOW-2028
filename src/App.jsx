@@ -1695,23 +1695,23 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <h3>Costos logísticos — {marca}{M$}{aprobLog ? <span className="empchip" style={{ marginLeft: 8, background: 'var(--ok)', fontSize: 11.5 }}>✓ Aprobado por Finanzas</span> : <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Logística" />}</h3>
-      <div className="sub">Se calculan por <b>%</b>: costo logístico de venta = % × <b>costo de venta</b> (unidades × AUC); muestras = % × <b>compras</b>; mantenimiento = % × <b>valor del saldo de inventario</b>. Los tres % se ponen arriba. <span style={{ color: '#2f5c8f', fontWeight: 700 }}>Lectura:</span> cada grupo separado por una línea → la fila <span style={{ color: 'var(--muted)' }}>gris</span> es la <b>base</b> y la fila <b style={{ color: '#2f5c8f' }}>azul (=)</b> es el <b>costo</b> que suma al total.</div>
-      <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+      <div className="sub">Cada costo es un <b>grupo de dos filas</b>: la fila <b>base</b> (el número de origen) y la fila <b>«= …»</b> (el costo que suma al total), ambas del <b>mismo color</b>. Los grupos se separan con una línea muy tenue. <b style={{ color: '#1d4ed8' }}>Azul</b> = costo logístico de la venta · <b style={{ color: '#0f766e' }}>Verde</b> = muestras · <b style={{ color: '#b45309' }}>Ámbar</b> = mantenimiento (pendiente por CBM). Pasa el cursor por cualquier número para ver de dónde sale.</div>
+      <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
-          <tr className="secrow"><td colSpan={14} style={{ color: '#2f5c8f' }}>① COSTO LOGÍSTICO DE LA VENTA <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= {fmt(g(kLog))}% × costo de venta</span></td></tr>
-          <tr><td className="l sub2">Costo de venta ($) <span className="unit">(base)</span></td>{costoVenta.map((v, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(rowTot(costoVenta))}</td></tr>
-          <tr style={{ background: '#eaf1fa', fontWeight: 800 }}><td className="l" style={{ color: '#2f5c8f' }}>= Costo logístico de la venta</td>{costoLog.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(costoLog))}</td></tr>
+          {/* ① LOGÍSTICO DE LA VENTA — azul */}
+          <tr><td className="l" style={{ color: '#6b8fd6', paddingLeft: 18 }} title="Costo de venta = Σ (unidades de cada categoría × AUC de la categoría). Es el espejo de lo que calcula Ventas; Logística solo lo lee.">Costo de venta ($) <span className="unit">base</span></td>{costoVenta.map((v, m) => <td key={m} className="tot" style={{ color: '#6b8fd6' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#6b8fd6' }}>{fmt(rowTot(costoVenta))}</td></tr>
+          <tr><td className="l" style={{ color: '#1d4ed8', fontWeight: 800, paddingLeft: 18 }} title={`= ${fmt(g(kLog))}% × costo de venta del mes`}>= Costo logístico de la venta</td>{costoLog.map((v, m) => <td key={m} className="tot" style={{ color: '#1d4ed8', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: ${fmt(g(kLog))}% × $${fmt(costoVenta[m])} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(rowTot(costoLog))}</td></tr>
 
-          <tr className="secrow"><td colSpan={14} style={{ color: '#2f5c8f' }}>② COSTO DE MUESTRAS <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= {fmt(g(kMue))}% × compras</span></td></tr>
-          <tr><td className="l sub2">Compras / movimiento ($) <span className="unit">(base)</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(rowTot(comprasUsd))}</td></tr>
-          <tr style={{ background: '#eaf1fa', fontWeight: 800 }}><td className="l" style={{ color: '#2f5c8f' }}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(costoMue))}</td></tr>
+          {/* ② MUESTRAS — verde */}
+          <tr><td className="l" style={{ color: '#4e9a92', paddingLeft: 18, borderTop: '1px solid #eef1f4' }} title="Compras / movimiento del mes valorizado a AUC.">Compras / movimiento ($) <span className="unit">base</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #eef1f4' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#4e9a92', borderTop: '1px solid #eef1f4' }}>{fmt(rowTot(comprasUsd))}</td></tr>
+          <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingLeft: 18 }} title={`= ${fmt(g(kMue))}% × compras del mes`}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot" style={{ color: '#0f766e', fontWeight: 800, cursor: 'help' }} title={`${MESES[m].toUpperCase()}: ${fmt(g(kMue))}% × $${fmt(comprasUsd[m])} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
 
-          <tr className="secrow"><td colSpan={14} style={{ color: '#8a6d1a' }}>③ COSTO DE MANTENIMIENTO DE STOCK <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>(pendiente: se calculará por CBM, no por %)</span></td></tr>
-          <tr><td className="l sub2">Valor saldo inventario ($) <span className="unit">(base)</span></td>{saldoValue.map((v, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(rowTot(saldoValue))}</td></tr>
-          <tr style={{ background: '#fdf7e3' }}><td className="l" style={{ color: '#8a6d1a', fontStyle: 'italic' }}>= Costo mantenimiento de stock <span className="unit" style={{ fontStyle: 'normal' }}>(pendiente por CBM)</span></td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: '#b9a86a' }}>—</td>)}<td className="tot" style={{ color: '#b9a86a' }}>—</td></tr>
+          {/* ③ MANTENIMIENTO — ámbar (pendiente CBM) */}
+          <tr><td className="l" style={{ color: '#c99a5b', paddingLeft: 18, borderTop: '1px solid #eef1f4' }} title="Valor del saldo = saldo de cada temporada × AUC de esa temporada.">Valor saldo inventario ($) <span className="unit">base</span></td>{saldoValue.map((v, m) => <td key={m} className="tot" style={{ color: '#c99a5b', borderTop: '1px solid #eef1f4' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#c99a5b', borderTop: '1px solid #eef1f4' }}>{fmt(rowTot(saldoValue))}</td></tr>
+          <tr><td className="l" style={{ color: '#b45309', fontStyle: 'italic', paddingLeft: 18 }} title="Pendiente: el costo de mantenimiento se calculará a partir del CBM (volumen) que captura Logística abajo, no por %.">= Costo mantenimiento de stock <span className="unit" style={{ fontStyle: 'normal' }}>(pendiente por CBM)</span></td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: '#d9bf8e' }}>—</td>)}<td className="tot" style={{ color: '#d9bf8e' }}>—</td></tr>
 
-          <tr className="grandrow" style={{ borderTop: '3px solid #3b6ea5' }}><td className="l">TOTAL costos logísticos</td>{total.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(total))}</td></tr>
+          <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL costos logísticos</td>{total.map((v, m) => <td key={m} className="tot" style={{ cursor: 'help' }} title={`${MESES[m].toUpperCase()}: logístico $${fmt(costoLog[m])} + muestras $${fmt(costoMue[m])} = $${fmt(v)} (mantenimiento pendiente por CBM)`}>{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(total))}</td></tr>
         </tbody>
       </table></div>
 
@@ -3973,20 +3973,21 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
       {usarCat && (() => {
         const aup = aupPorCat(marca)
+        const money = (v) => (Math.round(v * 100) / 100).toLocaleString('en-US')
         const vnCat = (cat, mi) => uCatMes(cat, mi) * ((aup[cat] || [])[mi] || 0)
         const vnMes = MESES.map((_, mi) => catList.reduce((a, c) => a + vnCat(c.cat, mi), 0))
         const vnTot = vnMes.reduce((a, b) => a + b, 0)
         return (
           <div className="panel">
             <h3>Venta Neta 2028 por categoría y mes — {marca}{M$} <span className="unit">(dinero $)</span></h3>
-            <div className="sub"><b>Venta Neta del mes = unidades del mes × AUP efectivo de ese mes</b> (por categoría). El <b>AUP lo define Producto por categoría y temporada</b> — no depende del cliente (el cliente solo define cuántas unidades y en qué categorías). Como cada mes se vende una <b>mezcla de temporadas</b> (Paso 2), el AUP efectivo del mes es el <b>promedio ponderado</b> de las temporadas que rotan ese mes. El Total del año es la suma de los meses (no un promedio anual único).</div>
+            <div className="sub"><b>Venta Neta del mes = unidades del mes × AUP efectivo de ese mes</b> (por categoría). El <b>AUP lo define Producto por categoría y temporada</b> — no depende del cliente (el cliente solo define cuántas unidades y en qué categorías). Como cada mes se vende una <b>mezcla de temporadas</b> (Paso 2), el AUP efectivo del mes es el <b>promedio ponderado</b> de las temporadas que rotan ese mes. El Total del año es la suma de los meses (no un promedio anual único). <span className="unit">Pasa el cursor por cualquier número para ver de dónde sale.</span></div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
                 <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
-                  <tr className="grandrow"><td className="l">TOTAL {marca}</td>{vnMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(vnTot)}</td></tr>
-                  {catList.map((c, i) => { const row = MESES.map((_, mi) => vnCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); return <tr key={i}><td className="l">{c.cat}</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
+                  <tr className="grandrow"><td className="l">TOTAL {marca}</td>{vnMes.map((v, i) => { const det = catList.filter((c) => vnCat(c.cat, i) > 0.5).map((c) => `  ${c.cat}: ${fmt(uCatMes(c.cat, i))} ud × $${money((aup[c.cat] || [])[i] || 0)} = $${fmt(vnCat(c.cat, i))}`).join('\n'); return <td key={i} className="tot" style={{ cursor: 'help' }} title={`Venta Neta ${MESES[i].toUpperCase()} = Σ (unidades × AUP) por categoría:\n${det || '  (sin venta)'}\n= $${fmt(v)}`}>{fmt(v)}</td> })}<td className="tot">{fmt(vnTot)}</td></tr>
+                  {catList.map((c, i) => { const row = MESES.map((_, mi) => vnCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); return <tr key={i}><td className="l">{c.cat}</td>{row.map((v, mi) => <td key={mi} className="tot" style={{ cursor: 'help' }} title={`${c.cat} · ${MESES[mi].toUpperCase()}: ${fmt(uCatMes(c.cat, mi))} ud × $${money((aup[c.cat] || [])[mi] || 0)} AUP = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
                 </tbody>
               </table>
             </div>
@@ -3997,6 +3998,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
       {usarCat && (() => {
         const auc = aucPorCat(marca)
+        const money = (v) => (Math.round(v * 100) / 100).toLocaleString('en-US')
         const coCat = (cat, mi) => uCatMes(cat, mi) * ((auc[cat] || [])[mi] || 0)
         const coMes = MESES.map((_, mi) => catList.reduce((a, c) => a + coCat(c.cat, mi), 0))
         const coTot = coMes.reduce((a, b) => a + b, 0)
@@ -4009,8 +4011,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
                 <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
-                  <tr className="grandrow"><td className="l">TOTAL {marca}</td>{coMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(coTot)}</td></tr>
-                  {catList.map((c, i) => { const row = MESES.map((_, mi) => coCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); return <tr key={i}><td className="l">{c.cat}</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
+                  <tr className="grandrow"><td className="l">TOTAL {marca}</td>{coMes.map((v, i) => { const det = catList.filter((c) => coCat(c.cat, i) > 0.5).map((c) => `  ${c.cat}: ${fmt(uCatMes(c.cat, i))} ud × $${money((auc[c.cat] || [])[i] || 0)} = $${fmt(coCat(c.cat, i))}`).join('\n'); return <td key={i} className="tot" style={{ cursor: 'help' }} title={`Costo ${MESES[i].toUpperCase()} = Σ (unidades × AUC) por categoría:\n${det || '  (sin costo)'}\n= $${fmt(v)}`}>{fmt(v)}</td> })}<td className="tot">{fmt(coTot)}</td></tr>
+                  {catList.map((c, i) => { const row = MESES.map((_, mi) => coCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); return <tr key={i}><td className="l">{c.cat}</td>{row.map((v, mi) => <td key={mi} className="tot" style={{ cursor: 'help' }} title={`${c.cat} · ${MESES[mi].toUpperCase()}: ${fmt(uCatMes(c.cat, mi))} ud × $${money((auc[c.cat] || [])[mi] || 0)} AUC = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
                 </tbody>
               </table>
             </div>
@@ -4021,6 +4023,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
 
       {usarCat && (() => {
         const aup = aupPorCat(marca), auc = aucPorCat(marca)
+        const money = (v) => (Math.round(v * 100) / 100).toLocaleString('en-US')
         const vnCat = (cat, mi) => uCatMes(cat, mi) * ((aup[cat] || [])[mi] || 0)
         const coCat = (cat, mi) => uCatMes(cat, mi) * ((auc[cat] || [])[mi] || 0)
         const mgCat = (cat, mi) => vnCat(cat, mi) - coCat(cat, mi)
@@ -4028,23 +4031,46 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         const mgMes = MESES.map((_, mi) => catList.reduce((a, c) => a + mgCat(c.cat, mi), 0))
         const mgTot = mgMes.reduce((a, b) => a + b, 0)
         const vnTot = vnMes.reduce((a, b) => a + b, 0)
-        const pct = (mg, vn) => vn ? (mg / vn * 100) : 0
+        const pct = (a, b) => b ? (a / b * 100) : 0
+        const vnCatTot = (cat) => MESES.reduce((a, _, mi) => a + vnCat(cat, mi), 0)
+        const mgCatTot = (cat) => MESES.reduce((a, _, mi) => a + mgCat(cat, mi), 0)
         return (
+          <>
+          {/* MARGEN $ */}
           <div className="panel">
-            <h3>Margen 2028 por categoría y mes — {marca}{M$} <span className="unit">(margen $ y %)</span></h3>
-            <div className="sub"><b>Margen del mes = Venta Neta − Costo</b> (por categoría). El <b>% de margen = Margen ÷ Venta Neta</b>. La fila <b>TOTAL</b> muestra en azul el <b>% de margen</b> de cada mes. El Total del año es la suma de los meses.</div>
+            <h3>Margen 2028 por categoría y mes — {marca}{M$} <span className="unit">($ dinero)</span></h3>
+            <div className="sub"><b>Margen del mes = Venta Neta − Costo</b> (por categoría). El Total del año es la suma de los meses. <span className="unit">Pasa el cursor por cualquier número para ver de dónde sale.</span></div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
                 <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
-                  <tr className="grandrow"><td className="l">TOTAL {marca} <span className="unit">($)</span></td>{mgMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(mgTot)}</td></tr>
-                  <tr style={{ background: '#eef4fb' }}><td className="l" style={{ color: '#1d4ed8', fontWeight: 700 }}>% Margen {marca}</td>{mgMes.map((v, i) => <td key={i} className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{vnMes[i] ? pct(v, vnMes[i]).toFixed(1) + '%' : '—'}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{vnTot ? pct(mgTot, vnTot).toFixed(1) + '%' : '—'}</td></tr>
-                  {catList.map((c, i) => { const row = MESES.map((_, mi) => mgCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); const vnR = MESES.map((_, mi) => vnCat(c.cat, mi)); const vnRt = vnR.reduce((s, x) => s + x, 0); return <tr key={i}><td className="l">{c.cat} <span className="unit" title="% de margen de la categoría en el año" style={{ color: '#1d4ed8' }}>{vnRt ? pct(rt, vnRt).toFixed(1) + '%' : ''}</span></td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
+                  <tr className="grandrow"><td className="l">TOTAL {marca}</td>{mgMes.map((v, i) => <td key={i} className="tot" style={{ cursor: 'help' }} title={`Margen ${MESES[i].toUpperCase()} = Venta $${fmt(vnMes[i])} − Costo $${fmt(vnMes[i] - v)} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot">{fmt(mgTot)}</td></tr>
+                  {catList.map((c, i) => { const row = MESES.map((_, mi) => mgCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); return <tr key={i}><td className="l">{c.cat}</td>{row.map((v, mi) => <td key={mi} className="tot" style={{ cursor: 'help' }} title={`${c.cat} · ${MESES[mi].toUpperCase()}: Venta $${fmt(vnCat(c.cat, mi))} − Costo $${fmt(coCat(c.cat, mi))} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
                 </tbody>
               </table>
             </div>
           </div>
+          {/* MARGEN % — dos lecturas */}
+          <div className="panel">
+            <h3>Margen 2028 en % — {marca}</h3>
+            <div className="sub">Dos lecturas, separadas con una línea suave: <b style={{ color: '#0f766e' }}>① Margen bruto %</b> = Margen ÷ Venta <i>de la categoría</i> (qué tan rentable es). <b style={{ color: '#1d4ed8' }}>② Peso del margen en la venta</b> = Margen $ ÷ Venta total de la marca (cuánto pesa esa plata de margen frente a toda la venta). <span className="unit">Pasa el cursor por cualquier % para ver el cálculo.</span></div>
+            <div className="tablewrap">
+              <table className="vfix">
+                <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+                <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+                <tbody>
+                  <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingTop: 6 }} colSpan={14}>① Margen bruto % <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= Margen ÷ Venta de la categoría</span></td></tr>
+                  <tr className="grandrow"><td className="l" style={{ color: '#0f766e' }}>TOTAL {marca}</td>{mgMes.map((v, i) => <td key={i} className="tot" style={{ color: '#0f766e', fontWeight: 700, cursor: 'help' }} title={`${MESES[i].toUpperCase()}: margen $${fmt(v)} ÷ venta $${fmt(vnMes[i])} = ${pct(v, vnMes[i]).toFixed(1)}%`}>{vnMes[i] ? pct(v, vnMes[i]).toFixed(1) + '%' : '—'}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 700 }}>{vnTot ? pct(mgTot, vnTot).toFixed(1) + '%' : '—'}</td></tr>
+                  {catList.map((c, i) => { const vnRt = vnCatTot(c.cat), mgRt = mgCatTot(c.cat); return <tr key={i}><td className="l">{c.cat}</td>{MESES.map((_, mi) => { const m = mgCat(c.cat, mi), v = vnCat(c.cat, mi); return <td key={mi} className="tot" style={{ cursor: 'help' }} title={`${c.cat} · ${MESES[mi].toUpperCase()}: margen $${fmt(m)} ÷ venta $${fmt(v)} = ${pct(m, v).toFixed(1)}%`}>{v > 0.5 ? pct(m, v).toFixed(1) + '%' : '—'}</td> })}<td className="tot">{vnRt ? pct(mgRt, vnRt).toFixed(1) + '%' : '—'}</td></tr> })}
+                  <tr><td className="l" style={{ color: '#1d4ed8', fontWeight: 800, borderTop: '1px solid #eef1f4', paddingTop: 6 }} colSpan={14}>② Peso del margen en la venta <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= Margen $ ÷ Venta total de la marca</span></td></tr>
+                  <tr className="grandrow"><td className="l" style={{ color: '#1d4ed8' }}>TOTAL {marca}</td>{mgMes.map((v, i) => <td key={i} className="tot" style={{ color: '#1d4ed8', fontWeight: 700, cursor: 'help' }} title={`${MESES[i].toUpperCase()}: margen $${fmt(v)} ÷ venta total marca $${fmt(vnMes[i])} = ${pct(v, vnMes[i]).toFixed(1)}%`}>{vnMes[i] ? pct(v, vnMes[i]).toFixed(1) + '%' : '—'}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{vnTot ? pct(mgTot, vnTot).toFixed(1) + '%' : '—'}</td></tr>
+                  {catList.map((c, i) => { const mgRt = mgCatTot(c.cat); return <tr key={i}><td className="l">{c.cat}</td>{MESES.map((_, mi) => { const m = mgCat(c.cat, mi); return <td key={mi} className="tot" style={{ cursor: 'help' }} title={`${c.cat} · ${MESES[mi].toUpperCase()}: margen $${fmt(m)} ÷ venta total marca $${fmt(vnMes[mi])} = ${pct(m, vnMes[mi]).toFixed(1)}%`}>{vnMes[mi] ? pct(m, vnMes[mi]).toFixed(1) + '%' : '—'}</td> })}<td className="tot">{vnTot ? pct(mgRt, vnTot).toFixed(1) + '%' : '—'}</td></tr> })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          </>
         )
       })()}
 
