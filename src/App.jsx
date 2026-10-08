@@ -1754,13 +1754,14 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
 /* ===== REPORTE (menú): términos de pago de clientes de TODAS las SBU + gráfica por plazo ===== */
 function ReporteScreen({ empresa, sbus }) {
   const [hist, setHist] = useState([])
+  const [ventas, setVentas] = useState([])
   const [cf, setCf] = useState(() => { try { return JSON.parse(localStorage.getItem(`cf_${empresa}`) || '{}') } catch { return {} } })
   const [load, setLoad] = useState(true)
-  useEffect(() => { (async () => { try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { } try { setCf(JSON.parse(localStorage.getItem(`cf_${empresa}`) || '{}')) } catch { } setLoad(false) })() }, [empresa])
-  const addcli = (() => { try { return JSON.parse(localStorage.getItem(`addcli_${empresa}`) || '{}') } catch { return {} } })()
+  useEffect(() => { (async () => { try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { } try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVentas(jv.values.slice(1)) } catch { } try { setCf(JSON.parse(localStorage.getItem(`cf_${empresa}`) || '{}')) } catch { } setLoad(false) })() }, [empresa])
   const histAll = (() => { const s = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) s.add(upper(cli)) }); return s })()
   const esNew = (cli) => !histAll.has(upper(cli))
-  const clientesDe = (mca) => { const set = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) set.add(cli) }); (addcli[mca] || []).forEach((c) => { if (c) set.add(c) }); return [...set].sort((a, b) => a.localeCompare(b)) }
+  // Universo = SOLO clientes que participan en la compra 2028 (con unidades > 0 en Ventas 2028).
+  const clientesDe = (mca) => { const set = new Set(); ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli || cli.toUpperCase().startsWith('VIAJES')) return; let s = 0; for (let m = 0; m < 12; m++) s += Math.max(0, num(r[4 + m])); if (s > 0) set.add(cli) }); return [...set].sort((a, b) => a.localeCompare(b)) }
   const term = (mca, cli) => cf[`TERM|${mca}|${cli}`] || ''
   const BUCKETS = ['Cash', '30 días', '60 días', '90 días', '120 días', '150 días', '180 días', 'Intercompañía']
   const BCOL = { 'Cash': '#0f766e', '30 días': '#2563eb', '60 días': '#7c3aed', '90 días': '#b45309', '120 días': '#be185d', '150 días': '#9a6a1a', '180 días': '#b91c1c', 'Intercompañía': '#64748b', 'Sin plazo': '#cbd5e1' }
@@ -1780,7 +1781,7 @@ function ReporteScreen({ empresa, sbus }) {
     <>
       <div className="panel">
         <h3>📊 Términos de pago de clientes — {empresa} <span className="unit">(todas las SBU · ventas 2028)</span></h3>
-        <div className="sub">Cómo quedó el <b>plazo de cobro</b> de cada cliente (viene de Salesforce; los <b>nuevos</b> los define el Director). La gráfica cuenta cuántas asignaciones <b>cliente × marca</b> hay en cada plazo. Total: <b>{fmt(totalAsign)}</b>.</div>
+        <div className="sub">Universo = <b>clientes que participan en la compra 2028</b> (con unidades en Ventas). Cómo quedó su <b>plazo de cobro</b> (viene de Salesforce; los <b>nuevos</b> los define el Director). La gráfica cuenta cuántas asignaciones <b>cliente × marca</b> hay en cada plazo. Total: <b>{fmt(totalAsign)}</b>.</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '10px 0 4px' }}>
           {[...BUCKETS, 'Sin plazo'].map((b) => { const c = counts[b]; const pct = totalAsign ? (c / totalAsign * 100) : 0; return (
             <div key={b} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', opacity: fTerm && fTerm !== b ? 0.45 : 1 }} onClick={() => setFTerm(fTerm === b ? '' : b)} title="Clic para filtrar la tabla">
@@ -1793,6 +1794,55 @@ function ReporteScreen({ empresa, sbus }) {
           ) })}
         </div>
         {fTerm && <div className="sub" style={{ marginTop: 6 }}>Filtrando: <b>{fTerm}</b> · <button className="btn" style={{ padding: '2px 8px' }} onClick={() => setFTerm('')}>✕ quitar filtro</button></div>}
+      </div>
+      {(() => {
+        const pieSVG = (cnt, tot, size) => {
+          const r = size / 2, cx = r, cy = r
+          const terms = [...BUCKETS, 'Sin plazo'].filter((b) => cnt[b] > 0)
+          if (terms.length === 1) return <svg width={size} height={size}><circle cx={cx} cy={cy} r={r} fill={BCOL[terms[0]]} /></svg>
+          let a0 = -Math.PI / 2; const paths = []
+          terms.forEach((b) => { const frac = cnt[b] / tot; const a1 = a0 + frac * 2 * Math.PI; const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0), x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1); const large = frac > 0.5 ? 1 : 0; paths.push(<path key={b} d={`M${cx},${cy} L${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${large} 1 ${x1.toFixed(2)},${y1.toFixed(2)} Z`} fill={BCOL[b]} />); a0 = a1 })
+          return <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>{paths}</svg>
+        }
+        const pieData = []
+        Object.entries(sbus).forEach(([sbu, marcas]) => marcas.forEach((mca) => { const cnt = {}; [...BUCKETS, 'Sin plazo'].forEach((b) => cnt[b] = 0); let tot = 0; clientesDe(mca).forEach((cli) => { const t = term(mca, cli); const key = BUCKETS.includes(t) ? t : 'Sin plazo'; cnt[key]++; tot++ }); if (tot > 0) pieData.push({ sbu, mca, cnt, tot }) }))
+        return (
+          <div className="panel">
+            <h3>% por término de pago — por marca <span className="unit">(pastel del universo de clientes de cada marca)</span></h3>
+            <div className="sub">Cada marca: cómo se reparte su universo de clientes entre los plazos de cobro. Pasa el cursor por cada porción para ver el detalle.</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '8px 0 14px' }}>
+              {[...BUCKETS, 'Sin plazo'].map((b) => <span key={b} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, marginRight: 8 }}><span style={{ width: 11, height: 11, borderRadius: 3, background: BCOL[b], display: 'inline-block' }}></span>{b}</span>)}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
+              {pieData.length === 0 && <div className="sub">Aún no hay clientes con plazo capturado.</div>}
+              {pieData.map(({ mca, cnt, tot }) => (
+                <div key={mca} style={{ width: 150, textAlign: 'center' }}>
+                  <div title={[...BUCKETS, 'Sin plazo'].filter((b) => cnt[b] > 0).map((b) => `${b}: ${cnt[b]} (${(cnt[b] / tot * 100).toFixed(0)}%)`).join('\n')} style={{ cursor: 'help', display: 'inline-block' }}>{pieSVG(cnt, tot, 120)}</div>
+                  <div style={{ fontWeight: 700, fontSize: 12.5, marginTop: 4 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(mca), marginRight: 5 }}></span>{mca}</div>
+                  <div className="unit">{tot} cliente(s)</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+      <div className="panel">
+        <h3>Términos de pago a proveedor — por marca <span className="unit">(cuándo la marca le paga a su proveedor)</span></h3>
+        <div className="sub">El plazo que cada marca cargó para <b>pagar a su proveedor</b> (Cash, 30, 60… días); define cuándo la compra 2028 se vuelve <b>pago (Cash Out)</b>.</div>
+        <div className="tablewrap" style={{ maxHeight: '50vh', overflowY: 'auto' }}>
+          <table>
+            <thead><tr><th className="l">SBU</th><th className="l">Marca</th><th>Término a proveedor</th></tr></thead>
+            <tbody>
+              {Object.entries(sbus).map(([sbu, marcas]) => marcas.map((mca) => { const pt = cf[`PTERM|${mca}`]; return (
+                <tr key={sbu + '|' + mca}>
+                  <td className="l" style={{ color: sbuColor(sbu), fontWeight: 600 }}>{sbu}</td>
+                  <td className="l"><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(mca), marginRight: 6 }}></span>{mca}</td>
+                  <td className="tot" style={{ fontWeight: 700, color: pt ? '#0b5566' : 'var(--muted)' }}>{pt || '— sin definir'}</td>
+                </tr>
+              ) }))}
+            </tbody>
+          </table>
+        </div>
       </div>
       <div className="panel">
         <div className="toolbar" style={{ marginBottom: 8 }}>
@@ -2532,7 +2582,7 @@ function AprobacionesForm({ empresa, sbus }) {
             <tr key={m}>
               <td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>
               <td className="tot">{fmt(g(`${m}|PCT_LOGVENTA`))}%</td>
-              <td className="tot">{fmt(MESES.reduce((a, _, mi) => a + num(data[`${m}|MUECOST|${mi}`]), 0))}</td>
+              <td className="tot">{fmt(MESES.reduce((a, _, mi) => a + g(`${m}|MUECOST|${mi}`), 0))}</td>
               <td className="tot">{fmt(g(`${m}|PCT_MANT`))}%</td>
               <td className="tot" style={{ color: ap ? 'var(--ok)' : 'var(--warn)', fontWeight: 800 }}>{ap ? '✓ Aprobado' : 'Pendiente'}</td>
               <td><button className={'btn' + (ap ? '' : ' primary')} onClick={() => toggle(m)}>{ap ? '↺ Quitar aprobación' : '✓ Aprobar'}</button></td>
@@ -2627,15 +2677,28 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
   useEffect(() => { if (!marca && firstMarca) setMarca(firstMarca) }, [firstMarca])
   const isTot = String(marca || '').startsWith('TOTAL::')
   const acc = isTot ? sbuColor(String(marca).slice(7)) : marcaColor(marca)
+  // Indicador de completitud por marca: Ventas, Producto (AUP/AUC) y Logística.
+  const [vtas, setVtas] = useState([]); const [prod, setProd] = useState([])
+  const logcost = (() => { try { return JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { return {} } })()
+  useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVtas(j.values.slice(1)) } catch { } try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProd(j2.values.slice(1)) } catch { } })() }, [empresa])
+  const marcaStatus = (m) => {
+    const vOk = vtas.some((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m) && MESES.some((_, i) => num(r[4 + i]) > 0))
+    const pAup = prod.some((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m) && String(r[1] || '').toUpperCase().indexOf('AUP') === 0 && MESES.some((_, i) => num(r[4 + i]) > 0))
+    const pAuc = prod.some((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m) && String(r[1] || '').toUpperCase().indexOf('AUC') === 0 && MESES.some((_, i) => num(r[4 + i]) > 0))
+    const lOk = num(logcost[`${m}|PCT_LOGVENTA`]) > 0
+    const miss = []; if (!vOk) miss.push('Ventas'); if (!pAup) miss.push('Producto · AUP'); if (!pAuc) miss.push('Producto · AUC'); if (!lOk) miss.push('Logística · %')
+    return { ok: miss.length === 0, miss }
+  }
   return (
     <div className="comercial">
       <aside className="cmz-side">
+        <div className="sub" style={{ fontSize: 11, margin: '0 0 6px', padding: '0 4px' }}>✅ completo · ⚠️ falta algo</div>
         <button className={'cmz-marca' + (marca === '__REPORTE__' ? ' active' : '')} onClick={() => setMarca('__REPORTE__')} style={{ marginBottom: 8, fontWeight: 800, ...(marca === '__REPORTE__' ? { background: '#0e7490', color: '#fff' } : { color: '#0e7490' }) }}>📊 Reporte</button>
         {Object.entries(sbus).map(([s, ms]) => (
           <div className="cmz-sbu" key={s}>
             <div className="cmz-sbu-h" style={{ color: sbuColor(s), borderLeft: '4px solid ' + sbuColor(s), paddingLeft: 8 }}>{s}</div>
             <button className={'cmz-marca' + (marca === `TOTAL::${s}` ? ' active' : '')} onClick={() => setMarca(`TOTAL::${s}`)} style={marca === `TOTAL::${s}` ? { background: sbuColor(s), color: '#fff' } : {}}>▣ TOTAL {s}</button>
-            {ms.map((m) => { const c = marcaColor(m); const on = m === marca; return <button key={m} className={'cmz-marca' + (on ? ' active' : '')} onClick={() => setMarca(m)} style={on ? { background: c, color: '#fff' } : {}}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: c, marginRight: 8, verticalAlign: 'middle' }}></span>{m}</button> })}
+            {ms.map((m) => { const c = marcaColor(m); const on = m === marca; const st = marcaStatus(m); return <button key={m} className={'cmz-marca' + (on ? ' active' : '')} onClick={() => setMarca(m)} style={on ? { background: c, color: '#fff' } : {}}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: c, marginRight: 8, verticalAlign: 'middle' }}></span>{m}<span style={{ float: 'right' }} title={st.ok ? 'Completo: Ventas, Producto (AUP/AUC) y Logística llenos' : 'Falta por llenar: ' + st.miss.join(', ')}>{st.ok ? '✅' : '⚠️'}</span></button> })}
           </div>
         ))}
       </aside>
