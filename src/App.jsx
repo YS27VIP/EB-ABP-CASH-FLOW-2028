@@ -3580,6 +3580,7 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
   const rolesV = ROLES.filter((r) => r.rubros.some((rb) => rb.k === 'VIAJES'))
   const [tabs, setTabs] = useState(null)
   const [vref, setVref] = useState(null) // viajes de referencia (EBP): 2025/2026 por marca y SBU
+  const [vtas, setVtas] = useState([]); const [prod, setProd] = useState([]); const [cats, setCats] = useState({}); const [histR, setHistR] = useState([])
   useEffect(() => {
     let cancel = false
     ;(async () => {
@@ -3587,11 +3588,19 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
       await Promise.all(rolesV.map(async (r) => { try { const j = await gReadTab(r.tab); out[r.tab] = (j && j.ok && j.values) ? j.values.slice(1) : [] } catch { out[r.tab] = [] } }))
       if (!cancel) setTabs(out)
       try { const v = await gViajesRef(); if (!cancel) setVref(v) } catch { }
+      try { const jv = await gReadTab('Cap_Ventas'); if (!cancel && jv && jv.ok && jv.values) setVtas(jv.values.slice(1)) } catch { }
+      try { const jp = await gReadTab('Cap_Producto'); if (!cancel && jp && jp.ok && jp.values) setProd(jp.values.slice(1)) } catch { }
+      try { const jc = await gReadTab('Cap_Categorias'); if (!cancel && jc && jc.ok && jc.values) { const c = {}; jc.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const cat = r[1], mar = r[3]; if (!mar || !cat) return; (c[upper(mar)] = c[upper(mar)] || []).push(cat) }); setCats(c) } } catch { }
+      try { const jh = await gHistorico(); if (!cancel && jh && jh.ok && jh.values) setHistR(jh.values.slice(1)) } catch { }
     })()
     return () => { cancel = true }
   }, [empresa])
   const refMar = (mca, y) => (((vref || {}).marca || {})[upper(mca)] || {})[y] || 0
   const refSbu = (sb, y) => (((vref || {}).sbu || {})[upper(sb)] || {})[y] || 0
+  // Venta Neta 2028 por mes (proyección) = unidades × AUP efectivo (igual que Comercial).
+  const vnMes2028 = (mca) => realAupAuc(empresa, mca, vtas, prod, cats[upper(mca)] || []).ventaMes || Array(12).fill(0)
+  // Venta Neta histórica (EBP) por marca y año, para la relación viajes/venta de 2025 y 2026.
+  const vnAnual = (mca, y) => histR.reduce((s, r) => (upper(r[5]) === upper(mca) && String(r[1]) === String(y) && String(r[3] || '').toUpperCase().indexOf('VENTA') >= 0) ? s + num(r[7]) : s, 0)
 
   const viajesMes = (tab, mca) => {
     const a = Array(12).fill(0)
@@ -3611,10 +3620,11 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
     const filas = rolesV.map((r) => ({ r, mes: viajesMes(r.tab, mca), tot: anual(r.tab, mca) }))
     const totMarcaMes = MESES.map((_, mi) => filas.reduce((s, f) => s + f.mes[mi], 0))
     const totMarca = totMarcaMes.reduce((s, v) => s + v, 0)
+    const vnMes = vnMes2028(mca); const vnTot = vnMes.reduce((a, b) => a + b, 0)
+    const pct = (num, den) => den > 0 ? (num / den * 100).toFixed(1) + '%' : '—'
     return (
       <div className="panel" key={mca}>
-        <h3 style={{ color: marcaColor(mca) }}>Viajes del equipo — {mca} <span className="unit">(solo lectura · 2028)</span></h3>
-        <div className="sub">Suma de los viajes que cada área captura para esta marca. El Director llena los suyos en la sección <b>Director</b>; aquí ve además los del resto del equipo y el total por marca.</div>
+        <h3 style={{ color: marcaColor(mca) }}>Viajes del equipo — {mca} <span className="unit">(🪞 espejo · 2028)</span></h3>
         <div className="tablewrap">
           <table className="vfix">
             <colgroup><col style={{ width: '160px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
@@ -3622,10 +3632,20 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
             <tbody>
               {filas.map((f) => <tr key={f.r.id}><td className="l">{f.r.icon} {f.r.label}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td></tr>)}
               <tr className="grandrow"><td className="l">Total {mca}</td>{totMarcaMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarca)}</td></tr>
+              <tr><td className="l" style={{ color: '#0e7490' }}>Venta Neta 2028</td>{vnMes.map((v, i) => <td key={i} className="tot" style={{ color: '#0e7490' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0e7490' }}>{fmt(vnTot)}</td></tr>
+              <tr><td className="l" style={{ color: '#6b21a8', fontWeight: 700 }}>% viajes / venta</td>{MESES.map((_, i) => <td key={i} className="tot" style={{ color: '#6b21a8' }}>{pct(totMarcaMes[i], vnMes[i])}</td>)}<td className="tot" style={{ color: '#6b21a8', fontWeight: 700 }}>{pct(totMarca, vnTot)}</td></tr>
             </tbody>
           </table>
         </div>
-        <div className="sub" style={{ marginTop: 6 }}>📎 <b>Referencia (EBP)</b> · Total gastado en viajes de {mca}: <b>2025</b> ${fmt(refMar(mca, 2025))} · <b>2026</b> ${fmt(refMar(mca, 2026))} {vref ? '' : '(cargando…)'}</div>
+        <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="unit" style={{ fontWeight: 600 }}>📎 Referencia EBP:</span>
+          {[2025, 2026].map((y) => { const vj = refMar(mca, y); const vn = vnAnual(mca, y); return (
+            <span key={y} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f3eefb', border: '1px solid #e0d4f0', borderRadius: 14, padding: '3px 11px', fontSize: 12.5 }}>
+              <b style={{ color: '#6b21a8' }}>{y}</b><span style={{ fontWeight: 700 }}>${fmt(vj)}</span><span className="unit" title="Viajes ÷ Venta Neta de ese año (EBP)">({pct(vj, vn)} de la venta)</span>
+            </span>
+          ) })}
+          {!vref && <span className="unit">(cargando…)</span>}
+        </div>
       </div>
     )
   }
