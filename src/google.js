@@ -92,13 +92,14 @@ async function readValuesFrom(sheetId, tab) {
 // Referencia del EBP por rubro (ej. VIAJES, MK): 2026 de su pestaña + 2025 de "OTROS 2025". Total por marca y por SBU.
 const _refCache = {}
 async function _ebpRef(tab2026, rubroMatch) {
-  const ck = tab2026 + '|' + rubroMatch
+  const tabList = Array.isArray(tab2026) ? tab2026 : [tab2026, 'OTROS 2025']
+  const ck = tabList.join(',') + '|' + rubroMatch
   if (_refCache[ck] && Date.now() - _refCache[ck].at < 60000) return _refCache[ck].val
   const out = { marca: {}, sbu: {} }
   const add = (bucket, key, year, val) => { const o = bucket[key] || (bucket[key] = {}); o[year] = (o[year] || 0) + val }
-  for (const tab of [tab2026, 'OTROS 2025']) {
+  for (const tab of tabList) {
     let rows = []
-    for (let i = 0; i < 3; i++) { rows = await readValuesFrom(EBP_SHEET_ID, tab); if (rows && rows.length) break; await new Promise((r) => setTimeout(r, 400 * (i + 1))) }
+    for (let i = 0; i < 3; i++) { try { rows = await readValuesFrom(EBP_SHEET_ID, tab) } catch { rows = [] } if (rows && rows.length) break; await new Promise((r) => setTimeout(r, 400 * (i + 1))) }
     if (!rows || !rows.length) continue
     let hr = -1
     for (let i = 0; i < Math.min(rows.length, 10); i++) { const c = rows[i].map((x) => String(x || '').trim().toUpperCase()); if (c.includes('RUBRO') && (c.includes('MARCA') || c.includes('BRAND'))) { hr = i; break } }
@@ -123,6 +124,11 @@ async function _ebpRef(tab2026, rubroMatch) {
 }
 export const gViajesRef = () => _ebpRef('VIAJES', 'VIAJES')
 export const gMkRef = () => _ebpRef('MK', 'MK')
+// Logística y Comisiones: 2025 vienen de la hoja "OTROS 2025" del EBP (su pestaña 2026 puede no existir; si existe, también se incluye).
+export const gLogExpRef = () => _ebpRef('LOGISTICA', 'LOGISTIC')
+export const gComisRef = () => _ebpRef('COMISIONES', 'COMISION')
+// Gastos administrativos por SBU: 2026 de la pestaña "GASTOS…" + 2025 de "OTROS 2025". Rubro "Gastos Administrativos" (marca vacía → solo por SBU).
+export const gGAdminRef = () => _ebpRef(['GASTOS ADMINISTRATIVOS', 'GASTOS ADMIN', 'GASTOS', 'OTROS 2025'], 'GASTOS')
 
 // Referencia ABP del costo logístico (viene de los archivos ABP 2026_2027): % por marca (2026 y 2027) + ratio $ de muestras.
 // Columnas de Config_LogRef: EMPRESA | SBU | MARCA | PCT2026 | PCT2027 | MUERATIO

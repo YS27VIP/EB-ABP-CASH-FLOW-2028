@@ -47,7 +47,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
+import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -3350,12 +3350,14 @@ function BrandContribution({ empresa, marca }) {
       const [ven, prod, cap, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
       let hist = []; try { const jh = await gHistorico(); if (jh && jh.ok && jh.values) hist = jh.values.slice(1) } catch { }
       let plan = {}; try { const jp = await gPlan2027(); if (jp && jp.map) plan = jp.map } catch { }
-      let vjRef = null, mkRef = null, logRef26 = null
+      let vjRef = null, mkRef = null, logRef26 = null, logExp = null, comisRef = null
       try { vjRef = await gViajesRef() } catch { }
       try { mkRef = await gMkRef() } catch { }
       try { logRef26 = await gLogRef2026() } catch { }
+      try { logExp = await gLogExpRef() } catch { }
+      try { comisRef = await gComisRef() } catch { }
       const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
-      setP({ ven, prod, cats, mk, log, dir, hist, plan, vjRef, mkRef, logRef26 }); setLoad(false)
+      setP({ ven, prod, cats, mk, log, dir, hist, plan, vjRef, mkRef, logRef26, logExp, comisRef }); setLoad(false)
     })()
   }, [empresa])
 
@@ -3506,12 +3508,15 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
       const [ven, prod, cap, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
       let hist = []; try { const j = await gHistorico(); if (j && j.ok && j.values) hist = j.values.slice(1) } catch { }
       let plan = {}; try { const jp = await gPlan2027(); if (jp && jp.map) plan = jp.map } catch { }
-      let vjRef = null, mkRef = null, logRef26 = null
+      let vjRef = null, mkRef = null, logRef26 = null, logExp = null, comisRef = null
       try { vjRef = await gViajesRef() } catch { }
       try { mkRef = await gMkRef() } catch { }
       try { logRef26 = await gLogRef2026() } catch { }
+      try { logExp = await gLogExpRef() } catch { }
+      try { comisRef = await gComisRef() } catch { }
+      let gadminRef = null; try { gadminRef = await gGAdminRef() } catch { }
       const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
-      setP({ ven, prod, cats, mk, log, dir, hist, plan, vjRef, mkRef, logRef26 })
+      setP({ ven, prod, cats, mk, log, dir, hist, plan, vjRef, mkRef, logRef26, logExp, comisRef, gadminRef })
     })()
   }, [empresa])
 
@@ -3547,6 +3552,9 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   const vjRefS = (y) => { const v = (((P.vjRef || {}).sbu || {})[upper(sbuName)] || {})[y] || 0; return v || null }
   const mkRefS = (y) => { const v = (((P.mkRef || {}).sbu || {})[upper(sbuName)] || {})[y] || 0; return v || null }
   const logRef26S = (() => { const v = ((((P.logRef26 || {}).val || {}).sbu || {})[upper(sbuName)] || {}).log || 0; return v || null })()
+  const logExpS = (y) => { const v = (((P.logExp || {}).sbu || {})[upper(sbuName)] || {})[y] || 0; return v || null }
+  const comisS = (y) => { const v = (((P.comisRef || {}).sbu || {})[upper(sbuName)] || {})[y] || 0; return v || null }
+  const gadminS = (y) => { const v = (((P.gadminRef || {}).sbu || {})[upper(sbuName)] || {})[y] || 0; return v || null }
   // Gastos administrativos (compartidos por toda la empresa) — total anual
   const gadminAnual = (() => { try { const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } return cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { return 0 } })()
 
@@ -3554,13 +3562,13 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
     { k: 'Unidades', get: (v) => v.unidades },
     { k: 'Venta Neta', get: (v) => v.ventaNeta, strong: true, fy26: fyVenta(2026), fy25: fyVenta(2025), abp27: abpVenta },
     { k: '(−) Costo', get: (v) => v.costo, fy26: fyCosto(2026), fy25: fyCosto(2025), abp27: abpCosto },
-    { k: '(−) Comisiones', get: (v) => v.comisiones },
-    { k: '(−) Logística', get: (v) => v.logistica, fy26: logRef26S, fy25: null, abp27: null },
+    { k: '(−) Comisiones', get: (v) => v.comisiones, fy26: comisS(2026), fy25: comisS(2025), abp27: null },
+    { k: '(−) Logística', get: (v) => v.logistica, fy26: logRef26S || logExpS(2026), fy25: logExpS(2025), abp27: null },
     { k: '= Margen Bruto', get: (v) => v.margenBruto, strong: true, fy26: fyMargen(2026), fy25: fyMargen(2025), abp27: abpMargen },
     { k: '(−) Marketing', get: (v) => v.marketing, fy26: mkRefS(2026), fy25: mkRefS(2025), abp27: null },
     { k: '(−) Viajes', get: (v) => v.viajes, fy26: vjRefS(2026), fy25: vjRefS(2025), abp27: null },
     { k: '= CONTRIBUCIÓN DE LA BU', get: (v) => v.brand, strong: true },
-    { k: '(−) Gastos administrativos', get: () => 0, totVal: gadminAnual },
+    { k: '(−) Gastos administrativos', get: () => 0, totVal: gadminAnual, fy26: gadminS(2026), fy25: gadminS(2025), abp27: null },
     { k: '🎯 = RESULTADO OPERATIVO', get: () => 0, totVal: (tot.brand || 0) - gadminAnual, strong: true },
   ]
   const dpct = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
