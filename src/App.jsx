@@ -1989,13 +1989,12 @@ function LogisticaHome({ empresa, sbus }) {
   return (
     <div className="panel">
       <h3>🪞 Impacto logístico — {empresa}{M$} <span className="unit">(por SBU y marca · 2028 · espejo, solo lectura)</span></h3>
-      <div className="sub">Aquí <b>no se llena nada</b>: es un <b>espejo</b>. Los <b>3 tipos de gasto logístico 2028</b> (costo logístico de la venta, muestras y mantenimiento) vienen de lo que se llena en <b>Logística</b> por marca; <b style={{ color: '#8a6d1a' }}>ABP 2026 y 2027</b> (amarillo) vienen de los archivos que subiste y el <b>Real acum. 2026</b> del EBP. Haz clic en una marca para abrir su ficha y llenarla.</div>
       <div className="tablewrap" style={{ overflowX: 'auto' }}>
         <table style={{ minWidth: 1180 }}>
           <thead>
             <tr>
               <th className="l" rowSpan={2}>SBU / Marca</th>
-              <th colSpan={6} style={{ background: '#eef4fb', color: '#1d4ed8' }}>Gasto logístico 2028 ($) — lo llena Logística</th>
+              <th colSpan={6} style={{ background: '#eef4fb', color: '#1d4ed8' }}>Gasto logístico 2028 ($)</th>
               <th colSpan={4} style={{ background: '#fffdf2', color: '#8a6d1a' }}>Referencia · costo logístico de la venta</th>
             </tr>
             <tr>
@@ -2041,7 +2040,6 @@ function LogisticaHome({ empresa, sbus }) {
           </tbody>
         </table>
       </div>
-      <div className="sub" style={{ marginTop: 10 }}>Nota: el % ABP 2028 es sobre el <b>costo de venta</b>; el Real 2026 % es sobre <b>ventas netas</b> (bases distintas, por eso se muestran los dos como referencia).</div>
     </div>
   )
 }
