@@ -1384,7 +1384,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         <h3>{role.label} — Término de cobros a los clientes <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): lo captura Finanzas por marca. Aquí solo se ve.')}</h3>
         {(isTotal || soloVer)
           ? <div className="note ok" style={{ marginBottom: 12 }}>🪞 <b>Espejo (solo lectura):</b> el saldo pendiente por cobrar del 2027 lo captura <b>Finanzas por cada marca</b>. Aquí solo ves el consolidado.</div>
-          : <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b><div style={{ marginTop: 6, paddingLeft: 16 }}><div><b>1.</b> Selecciona el <b>término de pago</b> de cada cliente (Cash, 30 días, 60 días, 90 días).</div><div style={{ marginTop: 4 }}><b>2.</b> Coloca las <b>cuentas por cobrar del 2027</b> en el mes en que debe efectuarse el cobro (enero a marzo).</div></div></div>}
+          : <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b><div style={{ marginTop: 6, paddingLeft: 16 }}><div>Coloca las <b>cuentas por cobrar del 2027</b> en el mes en que debe efectuarse el cobro (enero a marzo).</div></div></div>}
         {buscador}
         {(!soloVer || esDirector) && <div className="toolbar" style={{ marginBottom: 8 }}><div style={{ flex: 1 }}></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : (esDirector && soloVer ? '💾 Guardar plazos' : '💾 Guardar')}</button></div>}
         {(() => {
@@ -1449,7 +1449,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
 
       <div className="panel">
         <h3>{role.label} — Mapa de cobros{M$} <span className="unit">(de dónde sale el Cash In · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span></h3>
-        <div className="sub">Cada mes el <b>Cash In</b> sale del <b style={{ color: '#b45309' }}>Saldo pendiente por cobrar del 2027</b> más las <b style={{ color: '#15803d' }}>ventas 2028</b>, y estas últimas <b>desglosadas por plazo</b> (Cash, 30, 60, 90… días) — como tu tabla de COBROS USD.</div>
+        <div className="sub">Cada mes el <b>Cash In</b> sale del <b style={{ color: '#b45309' }}>Saldo pendiente por cobrar del 2027</b> más las <b style={{ color: '#15803d' }}>ventas 2028</b>, y estas últimas <b>desglosadas por plazo</b> (Cash, 30, 60, 90… días).</div>
         <div className="tablewrap">
           <table className="vfix"><colgroup><col style={{ width: '270px' }} />{CF_MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
             <thead><tr><th className="l">Fuente del cobro</th>{CF_M2028.map((m) => <th key={m} className="yb">{m}</th>)}<th>Total</th></tr></thead>
@@ -1532,13 +1532,13 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>{role.label} — Condiciones comerciales con la marca {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(Cash Out)</span></h3>
-            <div className="sub">La <b>compra 2028</b> se coloca por <b>fecha XFD</b>; la <b>disponible</b> = XFD + tránsito (se define en Producto · Paso 2). El <b>pago al proveedor</b> se calcula sobre la base que elijas (<b>XFD por defecto</b>) según el <b>término de pago de la marca</b> (Cash = mismo mes · 30d = +1 · 60 = +2 …). {hayCorp && <>Además, HOKA/UGG pagan una <b>comisión corporativa</b> de <b>$/ud sobre las compras</b>. </>}Todo alimenta el <b>Cash Out</b>.</div>
+            <div className="sub">La <b>compra 2028</b> se coloca por <b>fecha XFD</b>; la <b>disponible</b> = XFD + tránsito (se define en Producto). El <b>pago al proveedor</b> se calcula sobre la base que elijas (<b>XFD por defecto</b>) según el <b>término de pago de la marca</b> (Cash = mismo mes · 30d = +1 · 60 = +2 …). {hayCorp && <>Además, HOKA/UGG pagan una <b>comisión corporativa</b> de <b>$/ud sobre las compras</b>. </>}Todo alimenta el <b>Cash Out</b>.</div>
             {!isTotal && <div className="toolbar" style={{ marginBottom: 8, gap: 14, flexWrap: 'wrap' }}>
               <span><label>Término de pago de {marca} <span className="unit">(a proveedor)</span> </label>
               {aprobCompra(marca)
                 ? <span className="empchip" style={{ background: '#d7f0dd', color: '#15803d', fontWeight: 700, border: '1px solid #bfe3c9' }}>✓ {data[`PTERM|${marca}`] || '—'} · aprobado</span>
                 : (soloVer ? <span className="empchip" style={{ background: SP, color: '#7a4a10' }}>{data[`PTERM|${marca}`] || '—'}</span> : <select value={data[`PTERM|${marca}`] ?? ''} onChange={(e) => set(`PTERM|${marca}`, e.target.value)} style={{ background: SP }}><option value="">—</option>{CF_TERMINOS.filter((t) => t !== 'Intercompañía').map((t) => <option key={t}>{t}</option>)}</select>)}</span>
-              <span className="unit" style={{ alignSelf: 'center' }}>Pago sobre <b>fecha XFD</b> · Tránsito de {marca}: <b>{transitOf(marca)}</b> mes(es) {ESP('El pago al proveedor se calcula siempre sobre la compra por fecha XFD. El tiempo de tránsito se define en Producto · Paso 2 (solo afecta la fecha disponible del inventario).')}</span>
+              <span className="unit" style={{ alignSelf: 'center' }}>Pago sobre <b>fecha XFD</b> · Tránsito de {marca}: <b>{transitOf(marca)}</b> mes(es) {ESP('El pago al proveedor se calcula siempre sobre la compra por fecha XFD. El tiempo de tránsito se define en Producto (solo afecta la fecha disponible del inventario).')}</span>
               {esCorpMarca(marca) && <span><label>Comisión corporativa <span className="unit">($/ud sobre compras)</span> </label>{soloVer ? <span className="empchip" style={{ background: '#eef1f4', color: '#475569' }}>{data[`CORP|${marca}`] || '—'} $/ud</span> : <input className="fillin" value={data[`CORP|${marca}`] ?? ''} onChange={(e) => set(`CORP|${marca}`, e.target.value)} inputMode="decimal" placeholder="$/ud" style={{ width: 70 }} />}</span>}
               {!soloVer && <><div style={{ flex: 1 }}></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></>}
             </div>}
@@ -1584,7 +1584,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>Costos logísticos — detalle {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(🪞 espejo · lo llena Logística por marca)</span></h3>
-            <div className="sub">Mismo formato que Logística. <b style={{ color: '#1d4ed8' }}>Azul</b> = costo logístico de la venta (% × costo de venta) · <b style={{ color: '#0f766e' }}>Verde</b> = muestras ($/ud × unidades) · <b style={{ color: '#b45309' }}>Ámbar</b> = mantenimiento (pendiente por CBM). El <b>Total</b> (venta + muestras) alimenta la línea <b>Logística</b> del Cash Flow.</div>
+            <div className="sub"><b style={{ color: '#1d4ed8' }}>Azul</b> = costo logístico de la venta (% × costo de venta) · <b style={{ color: '#0f766e' }}>Verde</b> = muestras ($/ud × unidades) · <b style={{ color: '#b45309' }}>Ámbar</b> = mantenimiento (pendiente por CBM). El <b>Total</b> (venta + muestras) alimenta la línea <b>Logística</b> del Cash Flow.</div>
             {isTotal && <div className="tablewrap" style={{ marginBottom: 12, maxWidth: 560 }}>
               <table style={{ width: 'auto' }}>
                 <thead><tr><th className="l">Marca</th><th>% venta</th><th>Muestras $</th><th>Mant.</th></tr></thead>
@@ -3350,8 +3350,12 @@ function BrandContribution({ empresa, marca }) {
       const [ven, prod, cap, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
       let hist = []; try { const jh = await gHistorico(); if (jh && jh.ok && jh.values) hist = jh.values.slice(1) } catch { }
       let plan = {}; try { const jp = await gPlan2027(); if (jp && jp.map) plan = jp.map } catch { }
+      let vjRef = null, mkRef = null, logRef26 = null
+      try { vjRef = await gViajesRef() } catch { }
+      try { mkRef = await gMkRef() } catch { }
+      try { logRef26 = await gLogRef2026() } catch { }
       const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
-      setP({ ven, prod, cats, mk, log, dir, hist, plan }); setLoad(false)
+      setP({ ven, prod, cats, mk, log, dir, hist, plan, vjRef, mkRef, logRef26 }); setLoad(false)
     })()
   }, [empresa])
 
@@ -3380,6 +3384,10 @@ function BrandContribution({ empresa, marca }) {
   // FY histórico (EBP) por marca + ABP2027 (hoja PLAN)
   const fy = (year, tipo) => { let s = 0; P.hist.forEach((r) => { if (String(r[1]) !== String(year)) return; if (upper(r[5]) !== upper(marca)) return; if (String(r[3] || '').toUpperCase().indexOf(tipo) < 0) return; s += num(r[7]) }); return s }
   const fyVenta = (y) => fy(y, 'VENTA'), fyCosto = (y) => fy(y, 'COSTO'), fyMargen = (y) => fyVenta(y) - fyCosto(y)
+  // Referencias EBP por marca para líneas operativas (viajes, marketing, logística).
+  const vjRefY = (y) => { const v = (((P.vjRef || {}).marca || {})[upper(marca)] || {})[y] || 0; return v || null }
+  const mkRefY = (y) => { const v = (((P.mkRef || {}).marca || {})[upper(marca)] || {})[y] || 0; return v || null }
+  const logRef26M = (() => { const v = ((((P.logRef26 || {}).val || {}).marca || {})[upper(marca)] || {}).log || 0; return v || null })()
   const o27 = P.plan[upper(marca)] || {}
   const abpVenta = o27.venta || 0, abpCosto = o27.costo || 0, abpMargen = abpVenta - abpCosto
   const dpct = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
@@ -3407,10 +3415,10 @@ function BrandContribution({ empresa, marca }) {
               {fila('Venta Neta', ventaNeta, true, { fy25: fyVenta(2025), fy26: fyVenta(2026), abp27: abpVenta })}
               {fila('(−) Costo', costo, false, { fy25: fyCosto(2025), fy26: fyCosto(2026), abp27: abpCosto })}
               {fila('(−) Comisiones', comisiones)}
-              {fila('(−) Logística', logistica)}
+              {fila('(−) Logística', logistica, false, { fy25: null, fy26: logRef26M, abp27: null })}
               {fila('= Margen Bruto', margenBruto, true, { fy25: fyMargen(2025), fy26: fyMargen(2026), abp27: abpMargen })}
-              {fila('(−) Marketing', marketing)}
-              {fila('(−) Viajes', viajes)}
+              {fila('(−) Marketing', marketing, false, { fy25: mkRefY(2025), fy26: mkRefY(2026), abp27: null })}
+              {fila('(−) Viajes', viajes, false, { fy25: vjRefY(2025), fy26: vjRefY(2026), abp27: null })}
               {fila('= CONTRIBUCIÓN DE LA SBU', brand, true)}
             </tbody>
           </table>
@@ -3750,22 +3758,23 @@ function ComparadorMarcas({ empresa, sbuName, marcasSBU }) {
     const r = realAupAuc(empresa, m, P.ven, P.prod, (P.cats[m] || []))
     const unidades = r.totalUnits.reduce((a, b) => a + b, 0), venta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0)
     const margen = venta - costo, u26 = u26tot(m)
-    const vn25 = histAgg(m, 2025, 'VENTA'), vn26 = histAgg(m, 2026, 'VENTA'), u26u = histAgg(m, 2026, 'UNID')
-    return { m, unidades, venta, costo, margen, aup: unidades ? venta / unidades : 0, mpct: venta ? margen / venta * 100 : null, u26, crec: u26 > 0 ? (unidades - u26) / u26 * 100 : null, nuevo: u26 === 0 && unidades > 0, vn25, vn26, aup26: u26u ? vn26 / u26u : 0 }
+    const vn25 = histAgg(m, 2025, 'VENTA'), vn26 = histAgg(m, 2026, 'VENTA'), u26u = histAgg(m, 2026, 'UNID'), u25 = histAgg(m, 2025, 'UNID')
+    return { m, unidades, venta, costo, margen, aup: unidades ? venta / unidades : 0, mpct: venta ? margen / venta * 100 : null, u26, u25, crec: u26 > 0 ? (unidades - u26) / u26 * 100 : null, crec25: u25 > 0 ? (unidades - u25) / u25 * 100 : null, nuevo: u26 === 0 && unidades > 0, vn25, vn26, aup26: u26u ? vn26 / u26u : 0 }
   })
-  const T = filas.reduce((a, f) => ({ unidades: a.unidades + f.unidades, venta: a.venta + f.venta, costo: a.costo + f.costo, margen: a.margen + f.margen, u26: a.u26 + f.u26, vn25: a.vn25 + f.vn25, vn26: a.vn26 + f.vn26 }), { unidades: 0, venta: 0, costo: 0, margen: 0, u26: 0, vn25: 0, vn26: 0 })
+  const T = filas.reduce((a, f) => ({ unidades: a.unidades + f.unidades, venta: a.venta + f.venta, costo: a.costo + f.costo, margen: a.margen + f.margen, u26: a.u26 + f.u26, u25: a.u25 + f.u25, vn25: a.vn25 + f.vn25, vn26: a.vn26 + f.vn26 }), { unidades: 0, venta: 0, costo: 0, margen: 0, u26: 0, u25: 0, vn25: 0, vn26: 0 })
   const share = (v) => T.venta > 0 ? (v / T.venta * 100) : 0
   const crecTot = T.u26 > 0 ? (T.unidades - T.u26) / T.u26 * 100 : null
+  const crecTot25 = T.u25 > 0 ? (T.unidades - T.u25) / T.u25 * 100 : null
   const pct = (x) => x == null ? '—' : (x >= 0 ? '+' : '') + x.toFixed(1) + '%'
   return (
     <div className="panel">
       <h3 style={{ color: col }}>📊 Comparador de marcas — {sbuName} <span className="unit">(lado a lado · 2028)</span></h3>
       <div className="sub">Las marcas de la SBU comparadas en los indicadores clave: volumen, venta, precio promedio (AUP), rentabilidad y crecimiento vs 2026. Consolida en una sola vista lo que está repartido en las demás pestañas.</div>
       <div className="tablewrap"><table>
-        <thead><tr><th className="l">Marca</th><th>Unidades</th><th>Venta Neta</th><th>% de la SBU</th><th>AUP prom.</th><th>Margen $</th><th>Margen %</th><th>Crec. vs 2026</th><th className="ya">Venta 2025</th><th className="ya">Venta 2026</th><th className="ya">AUP prom. 2026</th></tr></thead>
+        <thead><tr><th className="l">Marca</th><th>Unidades</th><th>Venta Neta</th><th>% de la SBU</th><th>AUP prom.</th><th>Margen $</th><th>Margen %</th><th>Crec. vs 2026</th><th>Crec. vs 2025</th><th className="ya">Venta 2025</th><th className="ya">Venta 2026</th><th className="ya">AUP prom. 2026</th></tr></thead>
         <tbody>
-          {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td><td className="tot">{fmt(f.unidades)}</td><td className="tot">${fmt(f.venta)}</td><td className="tot">{share(f.venta).toFixed(1)}%</td><td className="tot" title="Precio promedio = Venta Neta ÷ Unidades">${fmt(f.aup)}</td><td className="tot">${fmt(f.margen)}</td><td className="tot" style={{ fontWeight: 700 }}>{f.mpct == null ? '—' : f.mpct.toFixed(1) + '%'}</td><td className={'tot ' + (f.crec == null ? '' : f.crec >= 0 ? 'pos' : 'neg')} title={f.nuevo ? 'Marca nueva (sin histórico 2026)' : (f.u26 ? `2028 ${fmt(f.unidades)} ud vs 2026 ${fmt(f.u26)} ud` : '')}>{f.nuevo ? '🆕 nuevo' : pct(f.crec)}</td><td className="tot ya">${fmt(f.vn25)}</td><td className="tot ya">${fmt(f.vn26)}</td><td className="tot ya" title="AUP 2026 (EBP) = Venta Neta 2026 ÷ Unidades 2026">${fmt(f.aup26)}</td></tr>)}
-          <tr className="grandrow"><td className="l">TOTAL {sbuName}</td><td className="tot">{fmt(T.unidades)}</td><td className="tot">${fmt(T.venta)}</td><td className="tot">100%</td><td className="tot">${fmt(T.unidades ? T.venta / T.unidades : 0)}</td><td className="tot">${fmt(T.margen)}</td><td className="tot">{T.venta ? (T.margen / T.venta * 100).toFixed(1) + '%' : '—'}</td><td className={'tot ' + (crecTot == null ? '' : crecTot >= 0 ? 'pos' : 'neg')}>{pct(crecTot)}</td><td className="tot ya">${fmt(T.vn25)}</td><td className="tot ya">${fmt(T.vn26)}</td><td className="tot ya">${fmt(T.u26 ? T.vn26 / T.u26 : 0)}</td></tr>
+          {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td><td className="tot">{fmt(f.unidades)}</td><td className="tot">${fmt(f.venta)}</td><td className="tot">{share(f.venta).toFixed(1)}%</td><td className="tot" title="Precio promedio = Venta Neta ÷ Unidades">${fmt(f.aup)}</td><td className="tot">${fmt(f.margen)}</td><td className="tot" style={{ fontWeight: 700 }}>{f.mpct == null ? '—' : f.mpct.toFixed(1) + '%'}</td><td className={'tot ' + (f.crec == null ? '' : f.crec >= 0 ? 'pos' : 'neg')} title={f.nuevo ? 'Marca nueva (sin histórico 2026)' : (f.u26 ? `2028 ${fmt(f.unidades)} ud vs 2026 ${fmt(f.u26)} ud` : '')}>{f.nuevo ? '🆕 nuevo' : pct(f.crec)}</td><td className={'tot ' + (f.crec25 == null ? '' : f.crec25 >= 0 ? 'pos' : 'neg')} title={f.u25 ? `2028 ${fmt(f.unidades)} ud vs 2025 ${fmt(f.u25)} ud` : 'Sin histórico 2025'}>{f.u25 ? pct(f.crec25) : '—'}</td><td className="tot ya">${fmt(f.vn25)}</td><td className="tot ya">${fmt(f.vn26)}</td><td className="tot ya" title="AUP 2026 (EBP) = Venta Neta 2026 ÷ Unidades 2026">${fmt(f.aup26)}</td></tr>)}
+          <tr className="grandrow"><td className="l">TOTAL {sbuName}</td><td className="tot">{fmt(T.unidades)}</td><td className="tot">${fmt(T.venta)}</td><td className="tot">100%</td><td className="tot">${fmt(T.unidades ? T.venta / T.unidades : 0)}</td><td className="tot">${fmt(T.margen)}</td><td className="tot">{T.venta ? (T.margen / T.venta * 100).toFixed(1) + '%' : '—'}</td><td className={'tot ' + (crecTot == null ? '' : crecTot >= 0 ? 'pos' : 'neg')}>{pct(crecTot)}</td><td className={'tot ' + (crecTot25 == null ? '' : crecTot25 >= 0 ? 'pos' : 'neg')}>{pct(crecTot25)}</td><td className="tot ya">${fmt(T.vn25)}</td><td className="tot ya">${fmt(T.vn26)}</td><td className="tot ya">${fmt(T.u26 ? T.vn26 / T.u26 : 0)}</td></tr>
         </tbody>
       </table></div>
     </div>
