@@ -3744,14 +3744,16 @@ function ComparadorMarcas({ empresa, sbuName, marcasSBU }) {
   const col = sbuColor(sbuName)
   if (!P) return <div className="panel"><h3 style={{ color: col }}>📊 Comparador de marcas — {sbuName}</h3><div className="sub">Cargando…</div></div>
   const marcas = marcasSBU || []
-  const u26tot = (mca) => { let s = 0; (P.hist || []).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca) || String(r[1]) !== '2026') return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; s += num(r[7]) }); return s }
+  const histAgg = (mca, y, kind) => { let s = 0; (P.hist || []).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca) || String(r[1]) !== String(y)) return; const rub = upper(r[3]); const ok = kind === 'UNID' ? rub.indexOf('UNIDAD') >= 0 : rub.indexOf('VENTA') >= 0; if (ok) s += num(r[7]) }); return s }
+  const u26tot = (mca) => histAgg(mca, 2026, 'UNID')
   const filas = marcas.map((m) => {
     const r = realAupAuc(empresa, m, P.ven, P.prod, (P.cats[m] || []))
     const unidades = r.totalUnits.reduce((a, b) => a + b, 0), venta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0)
     const margen = venta - costo, u26 = u26tot(m)
-    return { m, unidades, venta, costo, margen, aup: unidades ? venta / unidades : 0, mpct: venta ? margen / venta * 100 : null, u26, crec: u26 > 0 ? (unidades - u26) / u26 * 100 : null, nuevo: u26 === 0 && unidades > 0 }
+    const vn25 = histAgg(m, 2025, 'VENTA'), vn26 = histAgg(m, 2026, 'VENTA'), u26u = histAgg(m, 2026, 'UNID')
+    return { m, unidades, venta, costo, margen, aup: unidades ? venta / unidades : 0, mpct: venta ? margen / venta * 100 : null, u26, crec: u26 > 0 ? (unidades - u26) / u26 * 100 : null, nuevo: u26 === 0 && unidades > 0, vn25, vn26, aup26: u26u ? vn26 / u26u : 0 }
   })
-  const T = filas.reduce((a, f) => ({ unidades: a.unidades + f.unidades, venta: a.venta + f.venta, costo: a.costo + f.costo, margen: a.margen + f.margen, u26: a.u26 + f.u26 }), { unidades: 0, venta: 0, costo: 0, margen: 0, u26: 0 })
+  const T = filas.reduce((a, f) => ({ unidades: a.unidades + f.unidades, venta: a.venta + f.venta, costo: a.costo + f.costo, margen: a.margen + f.margen, u26: a.u26 + f.u26, vn25: a.vn25 + f.vn25, vn26: a.vn26 + f.vn26 }), { unidades: 0, venta: 0, costo: 0, margen: 0, u26: 0, vn25: 0, vn26: 0 })
   const share = (v) => T.venta > 0 ? (v / T.venta * 100) : 0
   const crecTot = T.u26 > 0 ? (T.unidades - T.u26) / T.u26 * 100 : null
   const pct = (x) => x == null ? '—' : (x >= 0 ? '+' : '') + x.toFixed(1) + '%'
@@ -3760,10 +3762,10 @@ function ComparadorMarcas({ empresa, sbuName, marcasSBU }) {
       <h3 style={{ color: col }}>📊 Comparador de marcas — {sbuName} <span className="unit">(lado a lado · 2028)</span></h3>
       <div className="sub">Las marcas de la SBU comparadas en los indicadores clave: volumen, venta, precio promedio (AUP), rentabilidad y crecimiento vs 2026. Consolida en una sola vista lo que está repartido en las demás pestañas.</div>
       <div className="tablewrap"><table>
-        <thead><tr><th className="l">Marca</th><th>Unidades</th><th>Venta Neta</th><th>% de la SBU</th><th>AUP prom.</th><th>Margen $</th><th>Margen %</th><th>Crec. vs 2026</th></tr></thead>
+        <thead><tr><th className="l">Marca</th><th>Unidades</th><th>Venta Neta</th><th>% de la SBU</th><th>AUP prom.</th><th>Margen $</th><th>Margen %</th><th>Crec. vs 2026</th><th className="ya">Venta 2025</th><th className="ya">Venta 2026</th><th className="ya">AUP prom. 2026</th></tr></thead>
         <tbody>
-          {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td><td className="tot">{fmt(f.unidades)}</td><td className="tot">${fmt(f.venta)}</td><td className="tot">{share(f.venta).toFixed(1)}%</td><td className="tot" title="Precio promedio = Venta Neta ÷ Unidades">${fmt(f.aup)}</td><td className="tot">${fmt(f.margen)}</td><td className="tot" style={{ fontWeight: 700 }}>{f.mpct == null ? '—' : f.mpct.toFixed(1) + '%'}</td><td className={'tot ' + (f.crec == null ? '' : f.crec >= 0 ? 'pos' : 'neg')} title={f.nuevo ? 'Marca nueva (sin histórico 2026)' : (f.u26 ? `2028 ${fmt(f.unidades)} ud vs 2026 ${fmt(f.u26)} ud` : '')}>{f.nuevo ? '🆕 nuevo' : pct(f.crec)}</td></tr>)}
-          <tr className="grandrow"><td className="l">TOTAL {sbuName}</td><td className="tot">{fmt(T.unidades)}</td><td className="tot">${fmt(T.venta)}</td><td className="tot">100%</td><td className="tot">${fmt(T.unidades ? T.venta / T.unidades : 0)}</td><td className="tot">${fmt(T.margen)}</td><td className="tot">{T.venta ? (T.margen / T.venta * 100).toFixed(1) + '%' : '—'}</td><td className={'tot ' + (crecTot == null ? '' : crecTot >= 0 ? 'pos' : 'neg')}>{pct(crecTot)}</td></tr>
+          {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td><td className="tot">{fmt(f.unidades)}</td><td className="tot">${fmt(f.venta)}</td><td className="tot">{share(f.venta).toFixed(1)}%</td><td className="tot" title="Precio promedio = Venta Neta ÷ Unidades">${fmt(f.aup)}</td><td className="tot">${fmt(f.margen)}</td><td className="tot" style={{ fontWeight: 700 }}>{f.mpct == null ? '—' : f.mpct.toFixed(1) + '%'}</td><td className={'tot ' + (f.crec == null ? '' : f.crec >= 0 ? 'pos' : 'neg')} title={f.nuevo ? 'Marca nueva (sin histórico 2026)' : (f.u26 ? `2028 ${fmt(f.unidades)} ud vs 2026 ${fmt(f.u26)} ud` : '')}>{f.nuevo ? '🆕 nuevo' : pct(f.crec)}</td><td className="tot ya">${fmt(f.vn25)}</td><td className="tot ya">${fmt(f.vn26)}</td><td className="tot ya" title="AUP 2026 (EBP) = Venta Neta 2026 ÷ Unidades 2026">${fmt(f.aup26)}</td></tr>)}
+          <tr className="grandrow"><td className="l">TOTAL {sbuName}</td><td className="tot">{fmt(T.unidades)}</td><td className="tot">${fmt(T.venta)}</td><td className="tot">100%</td><td className="tot">${fmt(T.unidades ? T.venta / T.unidades : 0)}</td><td className="tot">${fmt(T.margen)}</td><td className="tot">{T.venta ? (T.margen / T.venta * 100).toFixed(1) + '%' : '—'}</td><td className={'tot ' + (crecTot == null ? '' : crecTot >= 0 ? 'pos' : 'neg')}>{pct(crecTot)}</td><td className="tot ya">${fmt(T.vn25)}</td><td className="tot ya">${fmt(T.vn26)}</td><td className="tot ya">${fmt(T.u26 ? T.vn26 / T.u26 : 0)}</td></tr>
         </tbody>
       </table></div>
     </div>
