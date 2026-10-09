@@ -3506,8 +3506,12 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
       const [ven, prod, cap, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
       let hist = []; try { const j = await gHistorico(); if (j && j.ok && j.values) hist = j.values.slice(1) } catch { }
       let plan = {}; try { const jp = await gPlan2027(); if (jp && jp.map) plan = jp.map } catch { }
+      let vjRef = null, mkRef = null, logRef26 = null
+      try { vjRef = await gViajesRef() } catch { }
+      try { mkRef = await gMkRef() } catch { }
+      try { logRef26 = await gLogRef2026() } catch { }
       const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
-      setP({ ven, prod, cats, mk, log, dir, hist, plan })
+      setP({ ven, prod, cats, mk, log, dir, hist, plan, vjRef, mkRef, logRef26 })
     })()
   }, [empresa])
 
@@ -3539,6 +3543,10 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   // ABP 2027 (hoja PLAN del EBP): suma por marca de la SBU
   const abp = (campo) => (marcasSBU || []).reduce((s, m) => { const o = P.plan[upper(m)]; return s + (o ? o[campo] || 0 : 0) }, 0)
   const abpVenta = abp('venta'), abpCosto = abp('costo'), abpMargen = abpVenta - abpCosto
+  // Referencias EBP por SBU para líneas operativas (viajes, marketing, logística).
+  const vjRefS = (y) => { const v = (((P.vjRef || {}).sbu || {})[upper(sbuName)] || {})[y] || 0; return v || null }
+  const mkRefS = (y) => { const v = (((P.mkRef || {}).sbu || {})[upper(sbuName)] || {})[y] || 0; return v || null }
+  const logRef26S = (() => { const v = ((((P.logRef26 || {}).val || {}).sbu || {})[upper(sbuName)] || {}).log || 0; return v || null })()
   // Gastos administrativos (compartidos por toda la empresa) — total anual
   const gadminAnual = (() => { try { const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } return cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { return 0 } })()
 
@@ -3547,10 +3555,10 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
     { k: 'Venta Neta', get: (v) => v.ventaNeta, strong: true, fy26: fyVenta(2026), fy25: fyVenta(2025), abp27: abpVenta },
     { k: '(−) Costo', get: (v) => v.costo, fy26: fyCosto(2026), fy25: fyCosto(2025), abp27: abpCosto },
     { k: '(−) Comisiones', get: (v) => v.comisiones },
-    { k: '(−) Logística', get: (v) => v.logistica },
+    { k: '(−) Logística', get: (v) => v.logistica, fy26: logRef26S, fy25: null, abp27: null },
     { k: '= Margen Bruto', get: (v) => v.margenBruto, strong: true, fy26: fyMargen(2026), fy25: fyMargen(2025), abp27: abpMargen },
-    { k: '(−) Marketing', get: (v) => v.marketing },
-    { k: '(−) Viajes', get: (v) => v.viajes },
+    { k: '(−) Marketing', get: (v) => v.marketing, fy26: mkRefS(2026), fy25: mkRefS(2025), abp27: null },
+    { k: '(−) Viajes', get: (v) => v.viajes, fy26: vjRefS(2026), fy25: vjRefS(2025), abp27: null },
     { k: '= CONTRIBUCIÓN DE LA BU', get: (v) => v.brand, strong: true },
     { k: '(−) Gastos administrativos', get: () => 0, totVal: gadminAnual },
     { k: '🎯 = RESULTADO OPERATIVO', get: () => 0, totVal: (tot.brand || 0) - gadminAnual, strong: true },
