@@ -1762,7 +1762,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
       })()}
       <div className="panel">
         <h3>Combinación de temporadas — {marca} <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Producto" /></h3>
-        <div className="sub">El <b>vendedor manda el total a vender</b> de cada mes. Aquí Producto decide <b>cuántas unidades de cada temporada</b> cubren ese total: en cada mes escribe las <b>unidades a rotar</b> por temporada (p.ej. 500 de FW25). No puedes poner más de lo que hay en stock. La fila <b>«Por asignar»</b> te dice cuánto falta para llegar a la venta del mes, y <b>«Saldo por asignar»</b> debajo de cada temporada te muestra cuánto stock te queda de esa temporada. {iiAuto ? <>El <b>inventario inicial</b> viene de la matriz de arriba.</> : <>Pon también el <b>inventario inicial</b> y las <b>compras 2028</b>.</>}</div>
+        <div className="sub">El <b>vendedor asigna el total a vender por mes</b>. Aquí tú decides <b>cuántas unidades de cada temporada</b> cubren ese total: en cada mes escribe las <b>unidades a rotar</b> por temporada (p.ej. 500 de FW25). No puedes poner más de lo que hay en stock. La fila <b>«Por asignar»</b> te dice cuánto falta para llegar a la venta del mes, y <b>«Saldo por asignar»</b> debajo de cada temporada te muestra cuánto stock te queda de esa temporada. {iiAuto ? <>El <b>inventario inicial</b> viene de la matriz de arriba.</> : <>Pon también el <b>inventario inicial</b> y las <b>compras 2028</b>.</>}</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '300px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Temporada / concepto</th><th>Inicial</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
@@ -2337,7 +2337,7 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
   }, [precios, marca])
   return (
     <>
-      <div className="note ok" style={{ marginBottom: 8 }}>Producto en un solo lugar y en orden: <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Compras 2028 y disponibilidad (SS28/FW28) · <b>3)</b> Combinación de temporadas (unidades por mes) — el saldo inicial se toma solo del paso 1 · <b>4)</b> Evolución mensual del AUP/AUC (consecuencia) · <b>5)</b> Resumen. Recuerda hacer clic en guardar.</div>
+      <div className="note ok" style={{ marginBottom: 8 }}><b>Instrucciones:</b> <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Compras 2028 y disponibilidad (SS28/FW28) · <b>3)</b> Combinación de temporadas (unidades por mes) — el saldo inicial se toma solo del paso 1 · <b>4)</b> Evolución mensual del AUP/AUC (consecuencia) · <b>5)</b> Resumen. Recuerda hacer clic en guardar.</div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 1 · Inventario, costo y precio por temporada y categoría</div>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="matriz" />
@@ -4710,7 +4710,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           <span style={{ fontSize: 20 }}>📦</span>
           <div>Stock disponible de temporadas anteriores de <b>{marca}</b>: <b style={{ fontSize: 15 }}>{fmt(stockViejo(marca))} ud</b>. <span className="unit">Tenlo en cuenta al proyectar: tu venta 2028 debería incluir mover este stock viejo.</span></div>
         </div>
-        <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: junto al % verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)) y la <b>Σ</b> de lo que llevas repartido. Luego, en las <b>celdas amarillas de 2028</b> (que arrancan vacías), tú decides <b>en qué meses</b> vender esas unidades. Cuando la Σ cuadra con el objetivo aparece <b style={{ color: '#15803d' }}>✓</b>; si no, sale en <b style={{ color: '#b45309' }}>ámbar ⚠</b> para que ajustes. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente. Total 2028 de {marca}: <b>{fmt(totMarcaSel)} ud</b></div>
+        <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: junto al % verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)) y la <b>suma</b> de lo que llevas repartido. Luego, en las <b>celdas amarillas de 2028</b>, tú decides <b>en qué meses</b> vender esas unidades. Cuando la suma cuadra con el objetivo aparece <b style={{ color: '#15803d' }}>✓</b>; si no, sale en <b style={{ color: '#b45309' }}>ámbar ⚠</b> para que ajustes. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente.</div>
+        <div className="sub" style={{ marginTop: 4, fontWeight: 700, color: '#5b9bd5' }}>Total 2028 de {marca}: {fmt(totMarcaSel)} ud</div>
         <div style={{ display: 'flex', gap: 28, margin: '4px 0 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ order: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
             <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />
@@ -4745,7 +4746,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                     <td className="cell" rowSpan={3} style={{ verticalAlign: 'top' }}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}
                       <div style={{ marginTop: 7, fontSize: 11, lineHeight: 1.45 }}>
                         {!nuevo && <div style={{ color: 'var(--muted)' }} title="Total objetivo = total 2026 × (1 + % crecimiento). Reparte este total en los meses de 2028.">🎯 obj <b>{fmt(obj)}</b></div>}
-                        <div style={{ color: desc ? '#b45309' : (t28(cli) > 0 ? '#15803d' : 'var(--muted)'), fontWeight: 700 }} title={nuevo ? 'Total 2028 que llevas repartido por mes.' : (desc ? 'Lo repartido por mes NO cuadra con el objetivo del %. Ajusta los meses.' : 'El reparto por mes cuadra con el objetivo ✓')}>Σ <b>{fmt(t28(cli))}</b>{!nuevo && (desc ? ' ⚠' : (t28(cli) > 0 ? ' ✓' : ''))}</div>
+                        <div style={{ color: desc ? '#b45309' : (t28(cli) > 0 ? '#15803d' : 'var(--muted)'), fontWeight: 700 }} title={nuevo ? 'Total 2028 que llevas repartido por mes.' : (desc ? 'Lo repartido por mes NO cuadra con el objetivo del %. Ajusta los meses.' : 'El reparto por mes cuadra con el objetivo ✓')}><span style={{ fontWeight: 600, color: 'var(--muted)' }}>suma </span><b>{fmt(t28(cli))}</b>{!nuevo && (desc ? ' ⚠' : (t28(cli) > 0 ? ' ✓' : ''))}</div>
                       </div>
                     </td>
                     <td className="yl">2025</td>
