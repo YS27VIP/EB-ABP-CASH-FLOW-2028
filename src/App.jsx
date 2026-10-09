@@ -2943,7 +2943,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
       </aside>
       <div className="cmz-main" style={{ '--accent': acc, borderTop: '4px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-          {marca !== '__TOTAL__' && (secId === 'ventas' || (secId === 'comercial' && (comSub === 'all' || comSub === 'ventas') && comercialRoles.some((r) => r.id === 'ventas'))) &&
+          {marca !== '__TOTAL__' && (secId === 'comercial' || secId === 'marketing' || secId === 'director') &&
             <TurnoBanner />}
           <div style={{ flex: 1 }}><TeamPanel empresa={empresa} sbuName={sbuName} /></div>
         </div>
