@@ -89,6 +89,13 @@ async function readValuesFrom(sheetId, tab) {
     const j = await r.json(); return j.values || []
   } catch { return [] }
 }
+// Extrae el año de una celda de fecha en cualquier formato del EBP: "may-25", "ene-26", "2026-01-01", "25/5/2026", serial, etc.
+function _yearOf(cell) {
+  const s = String(cell || '').trim()
+  const m4 = s.match(/(19|20)\d{2}/); if (m4) return parseInt(m4[0], 10)
+  const m2 = s.match(/[-/](\d{2})(?!\d)/); if (m2) return 2000 + parseInt(m2[1], 10)
+  return null
+}
 // Referencia del EBP por rubro (ej. VIAJES, MK): 2026 de su pestaña + 2025 de "OTROS 2025". Total por marca y por SBU.
 const _refCache = {}
 async function _ebpRef(tab2026, rubroMatch) {
@@ -111,9 +118,8 @@ async function _ebpRef(tab2026, rubroMatch) {
       const row = rows[r]
       if (String(row[iR] || '').toUpperCase().indexOf(rubroMatch) < 0) continue
       if (String(row[iT] || '').toUpperCase() === 'TAHO') continue
-      const f = String(row[iF] || '').toLowerCase().replace(/\s/g, '-').split('-'); const yy = f[f.length - 1]
-      let year = yy && yy.length >= 2 ? (yy.length === 4 ? parseInt(yy, 10) : 2000 + parseInt(yy, 10)) : null
-      if (!year || isNaN(year)) continue
+      const year = _yearOf(row[iF])
+      if (!year) continue
       const val = Number(String(row[iV] || '').replace(/[^0-9.\-]/g, '')) || 0
       const mar = String(row[iM] || '').trim().toUpperCase(), sbu = String(row[iS] || '').trim().toUpperCase()
       if (mar && mar !== 'ADMINISTRACION') add(out.marca, mar, year, val)
@@ -174,9 +180,7 @@ export async function gLogRef2026() {
         const isLog = rub.indexOf('COSTO LOGISTICO DE LA VENTA') >= 0
         const isVN = rub.indexOf('VENTAS NETAS') >= 0
         if (!isLog && !isVN) continue
-        const mm = String(row[iF] || '').toLowerCase().replace(/\s/g, '-').split('-'); const yy = mm[mm.length - 1]
-        const year = yy && yy.length >= 2 ? (yy.length === 4 ? parseInt(yy, 10) : 2000 + parseInt(yy, 10)) : null
-        if (year !== 2026) continue
+        if (_yearOf(row[iF]) !== 2026) continue
         const val = Number(String(row[iV] || '').replace(/[^0-9.\-]/g, '')) || 0
         const mar = String(row[iM] || '').trim().toUpperCase(), sbu = String(row[iS] || '').trim().toUpperCase()
         if (mar) { const o = ens(out.marca, mar); if (isLog) o.log += val; else o.vn += val }
