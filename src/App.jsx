@@ -193,6 +193,14 @@ const Q = (t) => <span title={t} style={{ cursor: BULB_CURSOR, marginLeft: 5, fo
 const ESP = (t) => <span className="unit" title={t} style={{ cursor: BULB_CURSOR, marginLeft: 6, fontSize: 12 }}>🪞</span>
 // Leyenda azul reutilizable: va en cada bloque cuyos números muestran el origen del cálculo al pasar el cursor.
 const HOVERTIP = <div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
+// Encabezado de paso: número en círculo + huella discreta + título. Se usa en la vista de Producto (Pasos 1→5).
+const PasoH = ({ n, children }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
+    <span style={{ flex: '0 0 auto', width: 24, height: 24, borderRadius: '50%', background: '#017e84', color: '#fff', fontWeight: 800, fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(1,126,132,.35)' }}>{n}</span>
+    <span style={{ fontWeight: 800, color: '#017e84', fontSize: 15, letterSpacing: .2 }}>{children}</span>
+    <span style={{ fontSize: 13, opacity: .35, marginLeft: 2 }} title="Paso">👣</span>
+  </div>
+)
 
 function effSBUS(empresa, combos) {
   const c = combos[empresa]
@@ -2339,23 +2347,23 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
     <>
       <div className="note ok" style={{ marginBottom: 8 }}><b>Instrucciones:</b> <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Compras 2028 y disponibilidad (SS28/FW28) · <b>3)</b> Combinación de temporadas (unidades por mes) — el saldo inicial se toma solo del paso 1 · <b>4)</b> Evolución mensual del AUP/AUC (consecuencia) · <b>5)</b> Resumen. Recuerda hacer clic en guardar.</div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
-        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 1 · Inventario, costo y precio por temporada y categoría</div>
+        <PasoH n={1}>Inventario, costo y precio por temporada y categoría</PasoH>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="matriz" />
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
-        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 2 · Compras 2028 y disponibilidad (SS28 / FW28)</div>
+        <PasoH n={2}>Compras 2028 y disponibilidad (SS28 / FW28)</PasoH>
         <ComprasXFDStep empresa={empresa} marca={marca} temp={temp} setTemp={setTemp} precios={precios} />
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
-        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 3 · Combinación de temporadas (unidades por mes)</div>
+        <PasoH n={3}>Combinación de temporadas (unidades por mes)</PasoH>
         <TemporadaForm empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" tempState={temp} setTempState={setTemp} sinResumen iiAuto />
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
-        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 4 · Evolución mensual del AUP/AUC (consecuencia)</div>
+        <PasoH n={4}>Evolución mensual del AUP/AUC (consecuencia)</PasoH>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="evolucion" />
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14 }}>
-        <div style={{ fontWeight: 800, color: '#017e84', fontSize: 15, marginBottom: 8 }}>Paso 5 · Resumen de inventario</div>
+        <PasoH n={5}>Resumen de inventario</PasoH>
         <ResumenInventario marca={marca} tempState={temp} precios={precios} empresa={empresa} />
       </div>
     </>
