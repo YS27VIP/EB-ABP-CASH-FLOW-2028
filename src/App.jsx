@@ -54,7 +54,7 @@ import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoa
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -193,6 +193,12 @@ const Q = (t) => <span title={t} style={{ cursor: BULB_CURSOR, marginLeft: 5, fo
 const ESP = (t) => <span className="unit" title={t} style={{ cursor: BULB_CURSOR, marginLeft: 6, fontSize: 12 }}>🪞</span>
 // Leyenda azul reutilizable: va en cada bloque cuyos números muestran el origen del cálculo al pasar el cursor.
 const HOVERTIP = <div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
+// Banner amable "¡Tu turno!": instrucción para que la persona complete lo amarillo. Reutilizable (Comercial, Finanzas…).
+const TurnoBanner = () => (
+  <div className="note" style={{ margin: 0, padding: '7px 12px', display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff8e1', border: '1px solid #f0e0a8' }}>
+    <span style={{ fontSize: 18 }}>✍️</span><span><b style={{ color: '#8a6d1a' }}>¡Tu turno!</b> Completa las <b style={{ background: '#fff3bf', padding: '1px 6px', borderRadius: 4 }}>celdas amarillas</b>.</span>
+  </div>
+)
 // Encabezado de paso: número en círculo + huella discreta + título. Se usa en la vista de Producto (Pasos 1→5).
 const PasoH = ({ n, children }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
@@ -879,7 +885,9 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
   const marcas = marcasDe(sbus)
   const [marca, setMarca] = useState(fixedMarca || marcas[0].marca)
   useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
-  const [extras, setExtras] = useState(() => { try { return JSON.parse(localStorage.getItem(extrasKey) || '[]') } catch { return [] } })
+  // Rubros extra: por EMPRESA y persistidos en el Sheet (Cap_Estado) para que TODOS los roles que viajan los vean.
+  const [extras, setExtras] = useState(() => { try { return JSON.parse(localStorage.getItem(`${extrasKey}_${empresa}`) || localStorage.getItem(extrasKey) || '[]') } catch { return [] } })
+  useEffect(() => { try { setExtras(JSON.parse(localStorage.getItem(`${extrasKey}_${empresa}`) || '[]')) } catch { setExtras([]) } }, [empresa, extrasKey])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   const multi = groups.length > 1
@@ -905,11 +913,19 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
   const totalGeneral = MESES.reduce((a, _, mi) => a + totMes(mi), 0)
 
   function agregarRubro() {
-    const n = window.prompt('Nombre del nuevo rubro (se agrega a TODAS las marcas):')
+    const n = window.prompt('Nombre del nuevo rubro de ' + rubro.k + ' (se agrega a TODAS las marcas y lo verán todos los roles que ' + (rubro.k === 'VIAJES' ? 'viajan' : 'usan ' + rubro.k) + ' en ' + empresa + '):')
     if (!n) return
-    const next = [...extras, n.trim().toUpperCase()]
+    const nm = n.trim().toUpperCase(); if (!nm) return
+    if (extras.includes(nm)) { setMsg({ t: 'warn', x: 'Ese rubro ya existe.' }); return }
+    const next = [...extras, nm]
     setExtras(next)
-    try { localStorage.setItem(extrasKey, JSON.stringify(next)) } catch {}
+    saveEstado(empresa, extrasKey, next)
+    setMsg({ t: 'ok', x: 'Rubro "' + nm + '" agregado para toda la empresa. Captura sus montos y guarda.' })
+  }
+  function quitarRubro(nm) {
+    const next = extras.filter((e) => e !== nm)
+    setExtras(next)
+    saveEstado(empresa, extrasKey, next)
   }
   async function guardar() {
     setSaving(true); setMsg(null)
@@ -952,7 +968,6 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         </select></>}
         {isTotal && !fixedMarca && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
         <div className="spacer"></div>
-        <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'GRUPO', 'RUBRO', 'SBU', 'MARCA', ...MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, gr.g, it.n, sb, mca, ...MESES.map(() => 0)])))); exportXlsx(aoa, `Plantilla_${role.tab}_${rubro.k}.xlsx`) }}>📄 Plantilla</button>
         <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
@@ -960,7 +975,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
       </div>
       <div className="panel">
         <h3>{rubro.k} sobre la venta — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(venta viene de Comercial)</span></h3>
-        <div className="sub">Cuánto pesa <b>{rubro.k}</b> sobre la <b>venta neta</b> (Unidades×AUP de Comercial), por mes y en total.</div>
+        <div className="sub">Cuánto pesa <b>{rubro.k}</b> sobre la <b>venta neta</b>, por mes y en total.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
           <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
@@ -971,8 +986,12 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         </table></div>
       </div>
       <div className="panel">
-        <h3>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>solo lectura</span> : <Responsable empresa={empresa} seccion="Finanzas" />}</h3>
-        <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : 'Captura por rubro y mes. Los rubros son iguales para todas las marcas.'} Total: <b>${fmt(totalGeneral)}</b></div>
+        <div className="toolbar" style={{ alignItems: 'center', marginBottom: 2 }}>
+          <h3 style={{ margin: 0 }}>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>solo lectura</span> : <Responsable empresa={empresa} seccion="Finanzas" />}</h3>
+          <div className="spacer"></div>
+          {!isTotal && <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>}
+        </div>
+        <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : <>Captura por rubro y mes. Los rubros son iguales para todas las marcas. Un rubro que agregues aquí se suma para <b>toda la empresa</b> y lo verán <b>todos los roles</b> que capturan {rubro.k.toLowerCase()}.</>} Total: <b>${fmt(totalGeneral)}</b></div>
         <div className="tablewrap">
           <table>
             <thead><tr><th className="cod">Cód.</th><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
@@ -995,8 +1014,10 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
                       const k = key(marca, id, mi); const v = data[k] ?? ''; tot += num(v)
                       return <td key={mi} className="cell"><input value={v} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
-                    return <tr key={id}><td className="cod">{it.c}</td><td className="l sub2">{it.n}</td>{celdas}<td className="tot">{fmt(tot)}</td></tr>
+                    const esExtra = !it.c && extras.includes(it.n)
+                    return <tr key={id}><td className="cod">{it.c}</td><td className="l sub2">{it.n}{esExtra && !isTotal && <button title="Quitar este rubro de toda la empresa" onClick={() => { if (window.confirm('¿Quitar el rubro "' + it.n + '" de toda la empresa?')) quitarRubro(it.n) }} style={{ marginLeft: 8, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>}</td>{celdas}<td className="tot">{fmt(tot)}</td></tr>
                   })}
+                  {gr.g === 'ADICIONALES' && gr.items.length === 0 && <tr><td className="cod"></td><td className="l sub2" colSpan={14} style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Sin rubros adicionales. Usa ➕ Agregar rubro para añadir uno nuevo.</td></tr>}
                 </Fragment2>
               ))}
               {!multi && <tr className="grandrow"><td className="cod"></td><td className="l">TOTAL</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totalGeneral)}</td></tr>}
@@ -1260,7 +1281,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       </div>
       <div className="panel">
         <h3>{role.label} — CASH FLOW{M$} <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer && ESP('Espejo (solo lectura): estos valores los llena Finanzas en su Cash Flow. Aquí solo se ven.')}</h3>
-        <div className="sub">Proyección 2028 (enero a diciembre). <b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span></b>. {(isTotal || soloVer) ? <>🪞 Vista de solo lectura (consolidado). El <b>saldo en banco al cierre de 2027</b> lo pone Finanzas al entrar a cada marca.</> : <>Lo único que llenas a mano es el <b>saldo en banco al cierre de 2027</b> (el Cash Inicial de enero-28, la celda amarilla); todo lo demás se calcula.</>} El PSI (inventario, compras, ventas) viene de Comercial/Producto.</div>
+        <div className="sub">Proyección 2028 (enero a diciembre). <b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span> − <span style={{ color: '#b91c1c' }}>Costos financieros</span> + <span style={{ color: '#15803d' }}>Otros ingresos</span> − <span style={{ color: '#b91c1c' }}>Otros gastos</span></b>.</div>
         {HOVERTIP}
         <div className="tablewrap">
           <table className="vfix"><colgroup><col style={{ width: '210px' }} />{CF_MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
@@ -2770,9 +2791,11 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
   const isTot = String(marca || '').startsWith('TOTAL::')
   const acc = isTot ? sbuColor(String(marca).slice(7)) : marcaColor(marca)
   // Indicador de completitud por marca: Ventas, Producto (AUP/AUC) y Logística.
-  const [vtas, setVtas] = useState([]); const [prod, setProd] = useState([])
+  const [vtas, setVtas] = useState([]); const [prod, setProd] = useState([]); const [finR, setFinR] = useState([])
   const logcost = (() => { try { return JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { return {} } })()
-  useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVtas(j.values.slice(1)) } catch { } try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProd(j2.values.slice(1)) } catch { } })() }, [empresa])
+  useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVtas(j.values.slice(1)) } catch { } try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProd(j2.values.slice(1)) } catch { } try { const j3 = await gReadTab('Cap_Finanzas'); if (j3 && j3.ok && j3.values) setFinR(j3.values.slice(1)) } catch { } })() }, [empresa])
+  // Viajes de Finanzas: lleno si hay algún rubro VIAJES de la marca especial "(Finanzas)" con monto > 0.
+  const viajesFinOk = finR.some((r) => upper(r[0]) === upper(empresa) && String(r[3] || '').toUpperCase() === '(FINANZAS)' && String(r[1] || '').toUpperCase().startsWith('VIAJES') && MESES.some((_, i) => num(r[4 + i]) > 0))
   const marcaStatus = (m) => {
     const vOk = vtas.some((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m) && MESES.some((_, i) => num(r[4 + i]) > 0))
     const pAup = prod.some((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m) && String(r[1] || '').toUpperCase().indexOf('AUP') === 0 && MESES.some((_, i) => num(r[4 + i]) > 0))
@@ -2785,7 +2808,7 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
     <div className="comercial">
       <aside className="cmz-side">
         <div className="sub" style={{ fontSize: 11, margin: '0 0 6px', padding: '0 4px' }}>✅ completo · ⚠️ falta algo</div>
-        <button className={'cmz-marca' + (marca === '__VIAJES__' ? ' active' : '')} onClick={() => setMarca('__VIAJES__')} style={{ marginBottom: 6, fontWeight: 800, ...(marca === '__VIAJES__' ? { background: '#6b21a8', color: '#fff' } : { color: '#6b21a8' }) }}>🧳 Viajes <span className="unit" style={{ fontWeight: 400 }}>(1 vez)</span></button>
+        <button className={'cmz-marca' + (marca === '__VIAJES__' ? ' active' : '')} onClick={() => setMarca('__VIAJES__')} style={{ marginBottom: 6, fontWeight: 800, ...(marca === '__VIAJES__' ? { background: '#6b21a8', color: '#fff' } : { color: '#6b21a8' }) }}>🧳 Viajes <span className="unit" style={{ fontWeight: 400 }}>(1 vez)</span><span style={{ float: 'right' }} title={viajesFinOk ? 'Viajes de Finanzas lleno' : 'Falta llenar los Viajes de Finanzas'}>{viajesFinOk ? '✅' : '⚠️'}</span></button>
         <button className={'cmz-marca' + (marca === '__REPORTE__' ? ' active' : '')} onClick={() => setMarca('__REPORTE__')} style={{ marginBottom: 8, fontWeight: 800, ...(marca === '__REPORTE__' ? { background: '#0e7490', color: '#fff' } : { color: '#0e7490' }) }}>📊 Reporte</button>
         {Object.entries(sbus).map(([s, ms]) => (
           <div className="cmz-sbu" key={s}>
@@ -4371,7 +4394,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
       <div className="panel">
         <h3>Categorías de {marca}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Director" /></h3>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '2px 0 10px', fontWeight: 600 }}><input type="checkbox" checked={usarCat} onChange={(e) => setUsarCat(e.target.checked)} /> Usar categorías para {marca} <span className="unit">(si lo desactivas, Ventas solo usa el crecimiento por cliente)</span></label>
-        <div className="sub">Define los <b>nombres de las categorías</b> de la marca (ej. ROAD, TRAIL, HIKE) y clasifica cada una con su <b>tipo de producto</b> (p.ej. ROAD → CALZADO). El peso de cada categoría ya <b>no se pone aquí</b>: se define abajo por cliente.</div>
+        <div className="sub">Define los <b>nombres de las categorías</b> de la marca (ej. ROAD, TRAIL, HIKE) y clasifica cada una con su <b>tipo de producto</b> (p.ej. ROAD → CALZADO). El <b>peso de cada categoría se asigna por cliente</b> (abajo).</div>
         <div className="tablewrap">
           <table style={{ width: 'auto' }}>
             <thead><tr><th className="l">Categoría</th><th className="l">Tipo de producto</th><th></th></tr></thead>
