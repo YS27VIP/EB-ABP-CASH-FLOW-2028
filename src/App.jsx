@@ -1984,7 +1984,8 @@ function LogisticaHome({ empresa, sbus }) {
     </>)
   }
   // Fila de totales por grupo
-  const tot = { logVenta: 0, mue: 0, total: 0, real: 0 }
+  const tot = { logVenta: 0, mue: 0, total: 0, real: 0, venta: 0 }
+  const pesoPct = (t, vn) => vn > 0 ? (t / vn * 100).toFixed(1) + '%' : '—'
   return (
     <div className="panel">
       <h3>🪞 Impacto logístico — {empresa}{M$} <span className="unit">(por SBU y marca · 2028 · espejo, solo lectura)</span></h3>
@@ -1994,7 +1995,7 @@ function LogisticaHome({ empresa, sbus }) {
           <thead>
             <tr>
               <th className="l" rowSpan={2}>SBU / Marca</th>
-              <th colSpan={5} style={{ background: '#eef4fb', color: '#1d4ed8' }}>Gasto logístico 2028 ($) — lo llena Logística</th>
+              <th colSpan={6} style={{ background: '#eef4fb', color: '#1d4ed8' }}>Gasto logístico 2028 ($) — lo llena Logística</th>
               <th colSpan={4} style={{ background: '#fffdf2', color: '#8a6d1a' }}>Referencia · costo logístico de la venta</th>
             </tr>
             <tr>
@@ -2003,6 +2004,7 @@ function LogisticaHome({ empresa, sbus }) {
               <th style={{ background: '#eef4fb' }}>Muestras $</th>
               <th style={{ background: '#eef4fb' }}>Mantenim. $</th>
               <th style={{ background: '#eef4fb' }}>Total $</th>
+              <th style={{ background: '#eef4fb' }} title="Total gasto logístico ÷ venta neta 2028">Total / Venta %</th>
               <th style={{ background: '#fff8e1' }}>ABP 2026</th>
               <th style={{ background: '#fff8e1' }}>ABP 2027</th>
               <th style={{ background: '#fffdf2' }}>Real 2026 $</th>
@@ -2011,11 +2013,11 @@ function LogisticaHome({ empresa, sbus }) {
           </thead>
           <tbody>
             {Object.entries(sbus).map(([sbu, marcas]) => {
-              const st = { logVenta: 0, mue: 0, total: 0, real: 0 }
-              const rows = marcas.map((m) => { const c = calc(m); st.logVenta += c.logVenta; st.mue += c.mue; st.total += c.total; st.real += c.real; tot.logVenta += c.logVenta; tot.mue += c.mue; tot.total += c.total; tot.real += c.real; return { m, c } })
+              const st = { logVenta: 0, mue: 0, total: 0, real: 0, venta: 0 }
+              const rows = marcas.map((m) => { const c = calc(m); st.logVenta += c.logVenta; st.mue += c.mue; st.total += c.total; st.real += c.real; st.venta += c.ventaNetaTot; tot.logVenta += c.logVenta; tot.mue += c.mue; tot.total += c.total; tot.real += c.real; tot.venta += c.ventaNetaTot; return { m, c } })
               return (
                 <Fragment2 key={sbu}>
-                  <tr className="sburow"><td className="l" style={{ color: sbuColor(sbu), fontWeight: 800 }} colSpan={10}>{sbu}</td></tr>
+                  <tr className="sburow"><td className="l" style={{ color: sbuColor(sbu), fontWeight: 800 }} colSpan={11}>{sbu}</td></tr>
                   {rows.map(({ m, c }) => (
                     <tr key={m}>
                       <td className="l" style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#cdd7e0' }} onClick={() => setDetMarca(m)} title="Abrir su ficha de Logística para llenar"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>
@@ -2024,17 +2026,18 @@ function LogisticaHome({ empresa, sbus }) {
                       <td className="tot">{c.mue ? money(c.mue) : '—'}</td>
                       <td className="tot" style={{ color: 'var(--muted)' }} title="Pendiente: se calculará por CBM">—</td>
                       <td className="tot" style={{ fontWeight: 700 }}>{c.total ? money(c.total) : '—'}</td>
+                      <td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }} title="Total gasto logístico ÷ venta neta 2028">{pesoPct(c.total, c.ventaNetaTot)}</td>
                       <td className="tot" style={{ background: '#fffdf2' }}>{c.abp26 != null ? fmt(c.abp26) + '%' : '—'}</td>
                       <td className="tot" style={{ background: '#fffdf2' }}>{c.abp27 != null ? fmt(c.abp27) + '%' : '—'}</td>
                       <td className="tot" style={{ background: '#fffdf2' }}>{c.real ? money(c.real) : '—'}</td>
                       <td className="tot" style={{ background: '#fffdf2' }}>{c.realpct ? fmt(c.realpct) + '%' : '—'}</td>
                     </tr>
                   ))}
-                  <tr style={{ background: '#f4f7fa' }}><td className="l" style={{ fontWeight: 700 }}>Subtotal {sbu}</td><td className="tot"></td><td className="tot" style={{ fontWeight: 700 }}>{money(st.logVenta)}</td><td className="tot" style={{ fontWeight: 700 }}>{money(st.mue)}</td><td className="tot">—</td><td className="tot" style={{ fontWeight: 800 }}>{money(st.total)}</td><td className="tot" style={{ background: '#fffdf2' }}></td><td className="tot" style={{ background: '#fffdf2' }}></td><td className="tot" style={{ background: '#fffdf2', fontWeight: 700 }}>{money(st.real)}</td><td className="tot" style={{ background: '#fffdf2' }}></td></tr>
+                  <tr style={{ background: '#f4f7fa' }}><td className="l" style={{ fontWeight: 700 }}>Subtotal {sbu}</td><td className="tot"></td><td className="tot" style={{ fontWeight: 700 }}>{money(st.logVenta)}</td><td className="tot" style={{ fontWeight: 700 }}>{money(st.mue)}</td><td className="tot">—</td><td className="tot" style={{ fontWeight: 800 }}>{money(st.total)}</td><td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{pesoPct(st.total, st.venta)}</td><td className="tot" style={{ background: '#fffdf2' }}></td><td className="tot" style={{ background: '#fffdf2' }}></td><td className="tot" style={{ background: '#fffdf2', fontWeight: 700 }}>{money(st.real)}</td><td className="tot" style={{ background: '#fffdf2' }}></td></tr>
                 </Fragment2>
               )
             })}
-            <tr className="grandrow"><td className="l">TOTAL {empresa}</td><td className="tot"></td><td className="tot">{money(tot.logVenta)}</td><td className="tot">{money(tot.mue)}</td><td className="tot">—</td><td className="tot">{money(tot.total)}</td><td className="tot" style={{ background: '#fff8e1' }}></td><td className="tot" style={{ background: '#fff8e1' }}></td><td className="tot" style={{ background: '#fffdf2' }}>{money(tot.real)}</td><td className="tot" style={{ background: '#fffdf2' }}></td></tr>
+            <tr className="grandrow"><td className="l">TOTAL {empresa}</td><td className="tot"></td><td className="tot">{money(tot.logVenta)}</td><td className="tot">{money(tot.mue)}</td><td className="tot">—</td><td className="tot">{money(tot.total)}</td><td className="tot" style={{ color: '#1d4ed8' }}>{pesoPct(tot.total, tot.venta)}</td><td className="tot" style={{ background: '#fff8e1' }}></td><td className="tot" style={{ background: '#fff8e1' }}></td><td className="tot" style={{ background: '#fffdf2' }}>{money(tot.real)}</td><td className="tot" style={{ background: '#fffdf2' }}></td></tr>
           </tbody>
         </table>
       </div>
