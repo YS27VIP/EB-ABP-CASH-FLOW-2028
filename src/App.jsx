@@ -2943,9 +2943,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
       <div className="cmz-main" style={{ '--accent': acc, borderTop: '4px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
           {marca !== '__TOTAL__' && (secId === 'ventas' || (secId === 'comercial' && (comSub === 'all' || comSub === 'ventas') && comercialRoles.some((r) => r.id === 'ventas'))) &&
-            <div className="note" style={{ margin: 0, padding: '7px 12px', display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff8e1', border: '1px solid #f0e0a8' }}>
-              <span style={{ fontSize: 18 }}>✍️</span><span><b style={{ color: '#8a6d1a' }}>¡Tu turno!</b> Completa las <b style={{ background: '#fff3bf', padding: '1px 6px', borderRadius: 4 }}>celdas amarillas</b>.</span>
-            </div>}
+            <TurnoBanner />}
           <div style={{ flex: 1 }}><TeamPanel empresa={empresa} sbuName={sbuName} /></div>
         </div>
         {marca === '__TOTAL__'
