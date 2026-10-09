@@ -2003,19 +2003,20 @@ function LogisticaHome({ empresa, sbus }) {
         <div className="sub">Los 3 tipos de gasto logístico 2028 (costo logístico de la venta + muestras + mantenimiento) y su comparación con el <b>total logístico real</b> del EBP (2026 y 2025, por SBU).</div>
         <div className="tablewrap" style={{ overflowX: 'auto' }}>
           <table style={{ minWidth: 760, fontSize: 12 }}>
-            <colgroup><col style={{ width: 160 }} />{Array.from({ length: 7 }).map((_, i) => <col key={i} style={{ width: 92 }} />)}</colgroup>
+            <colgroup><col style={{ width: 160 }} />{Array.from({ length: 8 }).map((_, i) => <col key={i} style={{ width: 88 }} />)}</colgroup>
             <thead>
               <tr>
                 <th className="l" rowSpan={2}>SBU / Marca</th>
-                <th colSpan={4} style={{ background: '#eef4fb', color: '#1d4ed8' }}>Gasto logístico 2028 ($)</th>
+                <th colSpan={6} style={{ background: '#eef4fb', color: '#1d4ed8' }}>Gasto logístico 2028 ($)</th>
                 <th colSpan={2} style={{ background: '#fffdf2', color: '#8a6d1a' }}>Total logístico real (EBP)</th>
-                <th rowSpan={2} style={{ background: '#eef4fb' }} title="Total gasto logístico 2028 ÷ venta neta 2028">Total / Venta % 2028</th>
               </tr>
               <tr>
+                <th style={{ background: '#eef4fb' }} title="% que Logística aplica sobre el costo de venta">Costo log. venta %</th>
                 <th style={{ background: '#eef4fb' }}>Costo log. venta $</th>
                 <th style={{ background: '#eef4fb' }}>Muestras $</th>
                 <th style={{ background: '#eef4fb' }}>Mantenim. $</th>
                 <th style={{ background: '#eef4fb' }}>Total 2028 $</th>
+                <th style={{ background: '#eef4fb' }} title="Total gasto logístico 2028 ÷ venta neta 2028">Total / Venta % 2028</th>
                 <th style={{ background: '#fffdf2' }} title="Costo logístico real 2026 del EBP (por SBU)">Real 2026 $</th>
                 <th style={{ background: '#fffdf2' }} title="Total logístico 2025 de la hoja OTROS 2025 (por SBU)">Real 2025 $</th>
               </tr>
@@ -2023,23 +2024,24 @@ function LogisticaHome({ empresa, sbus }) {
             <tbody>
               {sbuData.map(({ sbu, rows, st, sbuR, r25 }) => (
                 <Fragment2 key={sbu}>
-                  <tr className="sburow"><td className="l" style={{ color: sbuColor(sbu), fontWeight: 800 }} colSpan={8}>{sbu}</td></tr>
+                  <tr className="sburow"><td className="l" style={{ color: sbuColor(sbu), fontWeight: 800 }} colSpan={9}>{sbu}</td></tr>
                   {rows.map(({ m, c }) => (
                     <tr key={m}>
                       {marcaCell(m)}
+                      <td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{c.pct ? fmt(c.pct) + '%' : '—'}</td>
                       <td className="tot">{c.logVenta ? money(c.logVenta) : '—'}</td>
                       <td className="tot">{c.mue ? money(c.mue) : '—'}</td>
                       <td className="tot" style={{ color: 'var(--muted)' }} title="Pendiente: se calculará por CBM">—</td>
                       <td className="tot" style={{ fontWeight: 700 }}>{c.total ? money(c.total) : '—'}</td>
-                      <td className="tot" style={{ background: '#fffdf2', color: 'var(--muted)' }} title="El EBP trae el real solo por SBU (ver subtotal)">—</td>
-                      <td className="tot" style={{ background: '#fffdf2', color: 'var(--muted)' }} title="El EBP trae el real solo por SBU (ver subtotal)">—</td>
                       <td className="tot help-bulb" style={{ color: '#1d4ed8', fontWeight: 700 }} title={`Total gasto logístico 2028 ÷ venta neta 2028\n$${fmt(c.total)} ÷ $${fmt(c.ventaNetaTot)} = ${pesoPct(c.total, c.ventaNetaTot)}`}>{pesoPct(c.total, c.ventaNetaTot)}</td>
+                      <td className="tot" style={{ background: '#fffdf2', color: 'var(--muted)' }} title="El EBP trae el real solo por SBU (ver subtotal)">—</td>
+                      <td className="tot" style={{ background: '#fffdf2', color: 'var(--muted)' }} title="El EBP trae el real solo por SBU (ver subtotal)">—</td>
                     </tr>
                   ))}
-                  <tr style={{ background: '#f4f7fa' }}><td className="l" style={{ fontWeight: 700 }}>Subtotal {sbu}</td><td className="tot" style={{ fontWeight: 700 }}>{money(st.logVenta)}</td><td className="tot" style={{ fontWeight: 700 }}>{money(st.mue)}</td><td className="tot">—</td><td className="tot" style={{ fontWeight: 800 }}>{money(st.total)}</td><td className="tot" style={{ background: '#fffdf2', fontWeight: 700 }}>{sbuR.log ? money(sbuR.log) : '—'}</td><td className="tot" style={{ background: '#fffdf2', fontWeight: 700 }}>{r25 ? money(r25) : '—'}</td><td className="tot help-bulb" style={{ color: '#1d4ed8', fontWeight: 800 }} title={`$${fmt(st.total)} ÷ $${fmt(st.venta)} = ${pesoPct(st.total, st.venta)}`}>{pesoPct(st.total, st.venta)}</td></tr>
+                  <tr style={{ background: '#f4f7fa' }}><td className="l" style={{ fontWeight: 700 }}>Subtotal {sbu}</td><td className="tot"></td><td className="tot" style={{ fontWeight: 700 }}>{money(st.logVenta)}</td><td className="tot" style={{ fontWeight: 700 }}>{money(st.mue)}</td><td className="tot">—</td><td className="tot" style={{ fontWeight: 800 }}>{money(st.total)}</td><td className="tot help-bulb" style={{ color: '#1d4ed8', fontWeight: 800 }} title={`$${fmt(st.total)} ÷ $${fmt(st.venta)} = ${pesoPct(st.total, st.venta)}`}>{pesoPct(st.total, st.venta)}</td><td className="tot" style={{ background: '#fffdf2', fontWeight: 700 }}>{sbuR.log ? money(sbuR.log) : '—'}</td><td className="tot" style={{ background: '#fffdf2', fontWeight: 700 }}>{r25 ? money(r25) : '—'}</td></tr>
                 </Fragment2>
               ))}
-              <tr className="grandrow"><td className="l">TOTAL {empresa}</td><td className="tot">{money(GT.logVenta)}</td><td className="tot">{money(GT.mue)}</td><td className="tot">—</td><td className="tot">{money(GT.total)}</td><td className="tot" style={{ background: '#fffdf2' }}>{GT.real ? money(GT.real) : '—'}</td><td className="tot" style={{ background: '#fffdf2' }}>{GT.r25 ? money(GT.r25) : '—'}</td><td className="tot help-bulb" style={{ color: '#1d4ed8' }} title={`$${fmt(GT.total)} ÷ $${fmt(GT.venta)} = ${pesoPct(GT.total, GT.venta)}`}>{pesoPct(GT.total, GT.venta)}</td></tr>
+              <tr className="grandrow"><td className="l">TOTAL {empresa}</td><td className="tot"></td><td className="tot">{money(GT.logVenta)}</td><td className="tot">{money(GT.mue)}</td><td className="tot">—</td><td className="tot">{money(GT.total)}</td><td className="tot help-bulb" style={{ color: '#1d4ed8' }} title={`$${fmt(GT.total)} ÷ $${fmt(GT.venta)} = ${pesoPct(GT.total, GT.venta)}`}>{pesoPct(GT.total, GT.venta)}</td><td className="tot" style={{ background: '#fffdf2' }}>{GT.real ? money(GT.real) : '—'}</td><td className="tot" style={{ background: '#fffdf2' }}>{GT.r25 ? money(GT.r25) : '—'}</td></tr>
             </tbody>
           </table>
         </div>
