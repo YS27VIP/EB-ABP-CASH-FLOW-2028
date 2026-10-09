@@ -2179,7 +2179,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
           {/* ② MUESTRAS — verde */}
           <tr className="cost-band"><td colSpan={14} style={{ color: '#0f766e' }}>② Costo de muestras</td></tr>
           <tr><td className="l" style={{ color: '#4e9a92', paddingLeft: 18 }} title="Compras / movimiento del mes valorizado a AUC.">Compras / movimiento ($) <span className="unit">base</span></td>{comprasUsd.map((v, m) => <td key={m} className="tot" style={{ color: '#4e9a92' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#4e9a92' }}>{fmt(rowTot(comprasUsd))}</td></tr>
-          <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingLeft: 18 }} title={`= unidades de muestras × ratio $/ud (Preventa $${fmt(g(kMueRatePV))}/ud · Seating $${fmt(g(kMueRateSE))}/ud)`}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot" style={{ color: '#0f766e', fontWeight: 800, cursor: BULB_CURSOR }} title={`${MESES[m].toUpperCase()}: Preventa ${fmt(mUnit('PV', m))} ud × $${fmt(g(kMueRatePV))} + Seating ${fmt(mUnit('SE', m))} ud × $${fmt(g(kMueRateSE))} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
+          <tr><td className="l" style={{ color: '#0f766e', fontWeight: 800, paddingLeft: 18 }} title={`= unidades de muestras × ratio $/ud (Preventa $${fmt(g(kMueRatePV))}/ud · Seeding $${fmt(g(kMueRateSE))}/ud)`}>= Costo de muestras</td>{costoMue.map((v, m) => <td key={m} className="tot" style={{ color: '#0f766e', fontWeight: 800, cursor: BULB_CURSOR }} title={`${MESES[m].toUpperCase()}: Preventa ${fmt(mUnit('PV', m))} ud × $${fmt(g(kMueRatePV))} + Seeding ${fmt(mUnit('SE', m))} ud × $${fmt(g(kMueRateSE))} = $${fmt(v)}`}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
           {spacer}
 
           {/* ③ MANTENIMIENTO — ámbar (pendiente CBM) */}
@@ -2212,12 +2212,12 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
         return (
           <div style={{ marginTop: 24 }}>
             <h3>🪞 Muestras a comprar — {marca} <span className="unit">(unidades · espejo del Director)</span></h3>
-            <div className="sub">Las <b>unidades</b> las define el <b>Director</b> (espejo, solo lectura). <b>Logística</b> pone el <b>ratio $/unidad</b> de cada línea (Preventa y Seating). El <b>Costo de muestras</b> = unidades × $/ud, y ese total alimenta el bloque verde de arriba.</div>
+            <div className="sub">Las <b>unidades</b> las define el <b>Director</b> (espejo, solo lectura). <b>Logística</b> pone el <b>ratio $/unidad</b> de cada línea (Preventa y Seeding). El <b>Costo de muestras</b> = unidades × $/ud, y ese total alimenta el bloque verde de arriba.</div>
             <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} /><col style={{ width: '100px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
               <thead><tr><th className="l">Concepto</th><th>$ / unidad</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
               <tbody>
                 <tr><td className="l" style={{ color: 'var(--muted)' }}>Muestras Preventa (ud)</td><td className="cell" style={{ textAlign: 'center' }}>{ratioInput(kMueRatePV)}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('PV', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('PV'))}</td></tr>
-                <tr><td className="l" style={{ color: 'var(--muted)' }}>Seating samples (ud)</td><td className="cell" style={{ textAlign: 'center' }}>{ratioInput(kMueRateSE)}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('SE', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('SE'))}</td></tr>
+                <tr><td className="l" style={{ color: 'var(--muted)' }}>Seeding samples (ud)</td><td className="cell" style={{ textAlign: 'center' }}>{ratioInput(kMueRateSE)}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('SE', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('SE'))}</td></tr>
                 <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL muestras (ud)</td><td className="tot" style={{ color: 'var(--muted)' }}>—</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mMes(mi))}</td>)}<td className="tot">{fmt(granTot)}</td></tr>
                 <tr style={{ background: '#eefaf6' }}><td className="l" style={{ color: '#0f766e', fontWeight: 800 }}>= Costo de muestras ($)</td><td className="tot" style={{ color: '#0f766e' }}>—</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(costoMue[mi])}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
               </tbody>
@@ -2295,7 +2295,7 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
           <tr><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Muestras Preventa (ud) <span className="unit">(fin comercial — preventa con posibilidad de venta)</span></td>{inputRow('PV')}</tr>
-          <tr><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Seating samples (ud) <span className="unit">(Marketing / seating — regalo o venta a empleados)</span></td>{inputRow('SE')}</tr>
+          <tr><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>Seeding samples (ud) <span className="unit">(Marketing / seeding — regalo o venta a empleados)</span></td>{inputRow('SE')}</tr>
           <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL muestras a comprar (ud)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(total)}</td></tr>
         </tbody>
       </table></div>
@@ -2308,7 +2308,7 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
           <tr><td className="l" style={{ color: '#9a6a1a' }}>Temporada de compra <span className="unit">(espejo)</span></td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#9a6a1a', fontWeight: 700 }}>{seasonOf(mi)}</td>)}<td className="tot"></td></tr>
           <tr><td className="l" style={{ color: 'var(--muted)' }}>AUC temporada ($) <span className="unit">(espejo)</span></td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(aucMes(mi))}</td>)}<td className="tot"></td></tr>
           <tr><td className="l">Muestras Preventa ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(usd('PV', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(usdTotTipo('PV'))}</td></tr>
-          <tr><td className="l">Seating samples ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(usd('SE', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(usdTotTipo('SE'))}</td></tr>
+          <tr><td className="l">Seeding samples ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(usd('SE', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(usdTotTipo('SE'))}</td></tr>
           <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0', background: '#eefaf6' }}><td className="l" style={{ color: '#0f766e' }}>TOTAL valorizado ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(usdMes(mi))}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(usdTotal)}</td></tr>
         </tbody>
       </table></div>
