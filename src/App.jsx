@@ -3361,13 +3361,16 @@ function BrandContribution({ empresa, marca }) {
   const aucMes = () => { const a = Array(12).fill(0); P.prod.forEach((r) => { if (!inMarca(r) || upper(r[1]) !== 'AUC') return; for (let j = 0; j < 12; j++) a[j] = num(r[4 + j]) }); return a }
   const sumTab = (rows, filt) => { let s = 0; rows.forEach((r) => { if (!inMarca(r)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
 
+  const aucCatF = () => { const o = {}; let base = null; P.prod.forEach((r) => { if (!inMarca(r)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUC · ') === 0) o[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])); else if (upper(rub) === 'AUC') base = MESES.map((_, j) => num(r[4 + j])) }); if (base) (P.cats[marca] || []).forEach(({ cat }) => { if (!o[cat]) o[cat] = base }); return o }
   const acat = aupCat()
+  const acatC = aucCatF()
   const catList = P.cats[marca] || []
   const catNames = catList.map((c) => c.cat)
   const R = realAupAuc(empresa, marca, P.ven, P.prod, catNames)
   let unidades = 0, ventaNeta = 0, costo = 0
   for (let j = 0; j < 12; j++) { unidades += R.totalUnits[j]; ventaNeta += R.ventaMes[j]; costo += R.costoMes[j] }
-  const comisiones = 0
+  const comisData = (() => { try { return JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}') } catch { return {} } })()
+  const comisiones = comisionCalc(marca, comisData, R.ventaMes).total.reduce((a, b) => a + b, 0)
   const logistica = sumTab(P.log)
   const marketing = sumTab(P.mk)
   const viajes = [P.ven, P.prod, P.mk, P.log, P.dir].reduce((t, rows) => t + sumTab(rows, (rub) => rub.toUpperCase().startsWith('VIAJES')), 0)
@@ -3395,7 +3398,6 @@ function BrandContribution({ empresa, marca }) {
   return (
     <div className="panel">
       <h3 style={{ color: marcaColor(marca) }}>Contribución de la SBU — {marca}{M$} <span className="unit">(2028 · solo lectura)</span></h3>
-      <div className="sub">Venta Neta = Unidades × AUP · Costo = Unidades × AUC · Margen Bruto = Venta Neta − Costo − Comisiones − Logística · Contribución = Margen Bruto − Marketing − Viajes. Las columnas <b>FY2025/FY2026</b> (histórico EBP) y <b>ABP 2027</b> (hoja PLAN) traen el valor y la <b>variación %</b> del 2028 vs cada uno (solo Venta, Costo y Margen).</div>
       {load ? <div className="sub">Cargando…</div> : (<>
         <div className="tablewrap">
           <table style={{ width: 'auto' }}>
@@ -3415,13 +3417,13 @@ function BrandContribution({ empresa, marca }) {
         </div>
         {catList.length > 0 && <div className="tablewrap" style={{ marginTop: 14 }}>
           <table>
-            <thead><tr><th className="l">Categoría</th><th>Peso pond. %</th><th>Unidades</th><th>Venta Neta</th></tr></thead>
+            <thead><tr><th className="l">Categoría</th><th>Peso pond. %</th><th>Unidades</th><th>Venta Neta</th><th>Costo</th><th>Margen</th><th>Margen %</th></tr></thead>
             <tbody>
-              {catList.map(({ cat }, i) => { const uc = R.unitsCat[cat] || []; const x = acat[cat] || []; let un = 0, vn = 0; for (let j = 0; j < 12; j++) { un += uc[j] || 0; vn += (uc[j] || 0) * (x[j] || 0) } const pw = unidades > 0 ? (un / unidades * 100) : 0; return <tr key={i}><td className="l">{cat}</td><td className="tot">{pw.toFixed(1)}%</td><td className="tot">{fmt(un)}</td><td className="tot">{fmt(vn)}</td></tr> })}
+              {catList.map(({ cat }, i) => { const uc = R.unitsCat[cat] || []; const x = acat[cat] || []; const xc = acatC[cat] || []; let un = 0, vn = 0, co = 0; for (let j = 0; j < 12; j++) { un += uc[j] || 0; vn += (uc[j] || 0) * (x[j] || 0); co += (uc[j] || 0) * (xc[j] || 0) } const mg = vn - co; const pw = unidades > 0 ? (un / unidades * 100) : 0; const mgp = vn > 0 ? (mg / vn * 100) : 0; return <tr key={i}><td className="l">{cat}</td><td className="tot">{pw.toFixed(1)}%</td><td className="tot">{fmt(un)}</td><td className="tot">{fmt(vn)}</td><td className="tot">{fmt(co)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(mg)}</td><td className="tot" style={{ color: '#0f766e' }}>{vn > 0 ? mgp.toFixed(1) + '%' : '—'}</td></tr> })}
+              {(() => { let un = 0, vn = 0, co = 0; catList.forEach(({ cat }) => { const uc = R.unitsCat[cat] || [], x = acat[cat] || [], xc = acatC[cat] || []; for (let j = 0; j < 12; j++) { un += uc[j] || 0; vn += (uc[j] || 0) * (x[j] || 0); co += (uc[j] || 0) * (xc[j] || 0) } }); const mg = vn - co; return <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">100.0%</td><td className="tot">{fmt(un)}</td><td className="tot">{fmt(vn)}</td><td className="tot">{fmt(co)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(mg)}</td><td className="tot" style={{ color: '#0f766e' }}>{vn > 0 ? (mg / vn * 100).toFixed(1) + '%' : '—'}</td></tr> })()}
             </tbody>
           </table>
         </div>}
-        {(comisiones === 0) && <div className="sub" style={{ marginTop: 8 }}>Nota: Comisiones y Venta Bruta/Descuentos aún no se capturan por marca; se conectan cuando definamos esos campos.</div>}
       </>)}
     </div>
   )
@@ -3621,10 +3623,12 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
     const totMarcaMes = MESES.map((_, mi) => filas.reduce((s, f) => s + f.mes[mi], 0))
     const totMarca = totMarcaMes.reduce((s, v) => s + v, 0)
     const vnMes = vnMes2028(mca); const vnTot = vnMes.reduce((a, b) => a + b, 0)
+    const acc = marcaColor(mca)
     const pct = (num, den) => den > 0 ? (num / den * 100).toFixed(1) + '%' : '—'
+    const cargando = !vref || !histR.length
     return (
       <div className="panel" key={mca}>
-        <h3 style={{ color: marcaColor(mca) }}>Viajes del equipo — {mca} <span className="unit">(🪞 espejo · 2028)</span></h3>
+        <h3 style={{ color: acc }}>Viajes del equipo — {mca} <span className="unit">(🪞 espejo · 2028)</span></h3>
         <div className="tablewrap">
           <table className="vfix">
             <colgroup><col style={{ width: '160px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
@@ -3633,18 +3637,17 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
               {filas.map((f) => <tr key={f.r.id}><td className="l">{f.r.icon} {f.r.label}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td></tr>)}
               <tr className="grandrow"><td className="l">Total {mca}</td>{totMarcaMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarca)}</td></tr>
               <tr><td className="l" style={{ color: '#0e7490' }}>Venta Neta 2028</td>{vnMes.map((v, i) => <td key={i} className="tot" style={{ color: '#0e7490' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0e7490' }}>{fmt(vnTot)}</td></tr>
-              <tr><td className="l" style={{ color: '#6b21a8', fontWeight: 700 }}>% viajes / venta</td>{MESES.map((_, i) => <td key={i} className="tot" style={{ color: '#6b21a8' }}>{pct(totMarcaMes[i], vnMes[i])}</td>)}<td className="tot" style={{ color: '#6b21a8', fontWeight: 700 }}>{pct(totMarca, vnTot)}</td></tr>
+              <tr><td className="l" style={{ color: acc, fontWeight: 700 }}>% viajes / venta</td>{MESES.map((_, i) => <td key={i} className="tot" style={{ color: acc }}>{pct(totMarcaMes[i], vnMes[i])}</td>)}<td className="tot" style={{ color: acc, fontWeight: 700 }}>{pct(totMarca, vnTot)}</td></tr>
             </tbody>
           </table>
         </div>
         <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span className="unit" style={{ fontWeight: 600 }}>📎 Referencia EBP:</span>
           {[2025, 2026].map((y) => { const vj = refMar(mca, y); const vn = vnAnual(mca, y); return (
-            <span key={y} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f3eefb', border: '1px solid #e0d4f0', borderRadius: 14, padding: '3px 11px', fontSize: 12.5 }}>
-              <b style={{ color: '#6b21a8' }}>{y}</b><span style={{ fontWeight: 700 }}>${fmt(vj)}</span><span className="unit" title="Viajes ÷ Venta Neta de ese año (EBP)">({pct(vj, vn)} de la venta)</span>
+            <span key={y} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: acc + '18', border: '1px solid ' + acc + '55', borderRadius: 14, padding: '3px 11px', fontSize: 12.5 }}>
+              <b style={{ color: acc }}>{y}</b><span style={{ fontWeight: 700 }}>${fmt(vj)}</span>{vn > 0 && <span className="unit" title="Viajes ÷ Venta Neta de ese año (EBP)">({pct(vj, vn)} de la venta)</span>}
             </span>
           ) })}
-          {!vref && <span className="unit">(cargando…)</span>}
+          {cargando && <span className="unit">(cargando…)</span>}
         </div>
       </div>
     )
