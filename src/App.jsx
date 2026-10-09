@@ -1990,7 +1990,8 @@ function LogisticaHome({ empresa, sbus }) {
     <div className="panel">
       <h3>🪞 Impacto logístico — {empresa}{M$} <span className="unit">(por SBU y marca · 2028 · espejo, solo lectura)</span></h3>
       <div className="tablewrap" style={{ overflowX: 'auto' }}>
-        <table style={{ minWidth: 1180 }}>
+        <table style={{ minWidth: 980, fontSize: 12 }}>
+          <colgroup><col style={{ width: 148 }} />{Array.from({ length: 10 }).map((_, i) => <col key={i} style={{ width: 78 }} />)}</colgroup>
           <thead>
             <tr>
               <th className="l" rowSpan={2}>SBU / Marca</th>
@@ -2002,7 +2003,7 @@ function LogisticaHome({ empresa, sbus }) {
               <th style={{ background: '#eef4fb' }}>Costo log. venta $</th>
               <th style={{ background: '#eef4fb' }}>Muestras $</th>
               <th style={{ background: '#eef4fb' }}>Mantenim. $</th>
-              <th style={{ background: '#eef4fb' }}>Total $</th>
+              <th style={{ background: '#eef4fb' }}>Total gastos log.</th>
               <th style={{ background: '#eef4fb' }} title="Total gasto logístico ÷ venta neta 2028">Total / Venta %</th>
               <th style={{ background: '#fff8e1' }}>ABP 2026</th>
               <th style={{ background: '#fff8e1' }}>ABP 2027</th>
