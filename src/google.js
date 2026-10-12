@@ -89,6 +89,8 @@ async function readValuesFrom(sheetId, tab) {
     const j = await r.json(); return j.values || []
   } catch { return [] }
 }
+// Normaliza texto para comparar rubros del EBP: mayúsculas y SIN acentos (ej. "LOGÍSTICO" → "LOGISTICO").
+function _norm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase() }
 // Extrae el año de una celda de fecha en cualquier formato del EBP: "may-25", "ene-26", "2026-01-01", "25/5/2026", serial, etc.
 function _yearOf(cell) {
   const s = String(cell || '').trim()
@@ -116,7 +118,7 @@ async function _ebpRef(tab2026, rubroMatch) {
     const iT = idx(['TIPO']), iR = idx(['RUBRO']), iS = idx(['SBU', 'SBU ARCH']), iM = idx(['MARCA', 'BRAND']), iF = idx(['FECHA ARREGLADA', 'FECHA', 'MES']), iV = idx(['VALOR EN DOLARES', 'DOLARES', 'VALOR'])
     for (let r = hr + 1; r < rows.length; r++) {
       const row = rows[r]
-      if (String(row[iR] || '').toUpperCase().indexOf(rubroMatch) < 0) continue
+      if (_norm(row[iR]).indexOf(rubroMatch) < 0) continue
       if (String(row[iT] || '').toUpperCase() === 'TAHO') continue
       const year = _yearOf(row[iF])
       if (!year) continue
@@ -176,7 +178,7 @@ export async function gLogRef2026() {
       for (let r = hr + 1; r < rows.length; r++) {
         const row = rows[r]
         if (String(row[iT] || '').toUpperCase() === 'TAHO') continue
-        const rub = String(row[iR] || '').toUpperCase()
+        const rub = _norm(row[iR])
         const isLog = rub.indexOf('COSTO LOGISTICO DE LA VENTA') >= 0
         const isVN = rub.indexOf('VENTAS NETAS') >= 0
         if (!isLog && !isVN) continue
