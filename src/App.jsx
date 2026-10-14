@@ -47,7 +47,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
+import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -431,9 +431,13 @@ export default function App() {
           <div className="hero">
             <div className="hero-tag">ABP · Annual Business Plan + Cash Flow</div>
             <h1>Bienvenido al plan 2028</h1>
-            <p>Inicia sesión con tu cuenta de <b>Energy Brands</b> para capturar tu información. Cada área ve solo lo que le corresponde. 🚀</p>
+            <p>Inicia sesión con tu cuenta de <b>Energy Brands</b> (@energybrandsgroup.com) para capturar tu información. Cada área ve solo lo que le corresponde. 🚀</p>
           </div>
-          <button className="btn primary" style={{ fontSize: 15, padding: '12px 22px' }} onClick={() => signIn()}>Iniciar sesión con Google</button>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn primary" style={{ fontSize: 15, padding: '12px 22px' }} onClick={() => signIn()}>Iniciar sesión con Google</button>
+            <button className="btn" style={{ fontSize: 14, padding: '12px 18px' }} onClick={() => switchAccount()} title="Si tienes varias cuentas de Google abiertas, elige la de @energybrandsgroup.com">Elegir / cambiar cuenta</button>
+          </div>
+          <div className="sub" style={{ marginTop: 10, color: 'var(--muted)' }}>¿Te sale "acceso bloqueado"? Entraste con una cuenta que no es @energybrandsgroup.com. Usa <b>Elegir / cambiar cuenta</b>.</div>
         </main>
       </>
     )
