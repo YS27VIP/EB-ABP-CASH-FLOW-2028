@@ -763,6 +763,20 @@ function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving
   const useSbus = fixedMarca ? { [sbuDe(sbus, fixedMarca)]: [fixedMarca] } : sbus
   const key = (sbu, marca, mi) => `${rubro.k}|${sbu}|${marca}|${mi}`
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  // Recarga lo ya guardado desde el Sheet al abrir (así no se ve vacío al regresar).
+  useEffect(() => { (async () => {
+    try {
+      const j = await gReadTab(role.tab); if (!j || !j.ok || !j.values) return
+      const next = {}
+      j.values.slice(1).forEach((row) => {
+        if (upper(row[0]) !== upper(empresa)) return
+        if (String(row[1] || '').toUpperCase() !== String(rubro.k).toUpperCase()) return
+        const sb = row[2], mca = row[3]
+        for (let mi = 0; mi < 12; mi++) { const v = num(row[4 + mi]); if (v) next[key(sb, mca, mi)] = v }
+      })
+      if (Object.keys(next).length) setData((d) => { const m = { ...d }; Object.keys(next).forEach((k) => { if (m[k] === undefined || m[k] === '') m[k] = next[k] }); return m })
+    } catch { }
+  })() }, [empresa, role.tab, rubro.k])
   const marcas = marcasDe(useSbus)
   const [bulkMarca, setBulkMarca] = useState(marcas[0] ? marcas[0].marca : '')
   const [bulkVal, setBulkVal] = useState('')
@@ -855,7 +869,7 @@ function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, sa
   useEffect(() => {
     (async () => {
       try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
-      try { const j2 = await gReadTab(role.tab); if (j2 && j2.ok && j2.values) { const next = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const rub = String(row[1] || ''); if (rub.indexOf(PFX) !== 0) return; const cat = rub.slice(PFX.length), mar = row[3]; for (let mi = 0; mi < 12; mi++) { const v = num(row[5 + mi]); if (v) next[key(mar, cat, mi)] = v } }); if (Object.keys(next).length) setData((d) => ({ ...d, ...next })) } } catch { }
+      try { const j2 = await gReadTab(role.tab); if (j2 && j2.ok && j2.values) { const next = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const rub = String(row[1] || ''); if (rub.indexOf(PFX) !== 0) return; const cat = rub.slice(PFX.length), mar = row[3]; for (let mi = 0; mi < 12; mi++) { const v = num(row[4 + mi]); if (v) next[key(mar, cat, mi)] = v } }); if (Object.keys(next).length) setData((d) => { const m = { ...d }; Object.keys(next).forEach((k) => { if (m[k] === undefined || m[k] === '') m[k] = next[k] }); return m }) } } catch { }
     })()
   }, [empresa])
 
@@ -3056,7 +3070,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   // Nuevo modelo: costo = AUC wholesale ponderado (del mapa) × factor global; venta = costo × (1+margen%) × (1−desc%)
   const margenPct = (t, mi) => num(vt[`${t}||MARGEN||${mi}`])
   const descPct = (t, mi) => num(vt[`${t}||DESC||${mi}`])
-  const whUnit = (c, mi) => srcOf(c).reduce((a, s) => a + (num(s.pct) / 100) * aucMC(s.marca, s.cat, mi), 0)   // costo wholesale ponderado por unidad (mapa global)
+  const whUnit = (c, mi) => wholesaleMarcas.reduce((a, m) => a + (pctOf(c, m) / 100) * aucMarcaMes(m, mi), 0)   // costo wholesale ponderado por unidad (mapa: % por marca)
   const cogsUnit = (c, mi) => whUnit(c, mi) * factor()                                                         // costo de la venta por unidad (× factor)
   const ventaUnit = (t, c, mi) => cogsUnit(c, mi) * (1 + margenPct(t, mi) / 100) * (1 - descPct(t, mi) / 100)  // venta neta por unidad (margen/desc por tienda+mes)
   const ventaM = (t, c, mi) => num(vt[cvk(t, c, mi)]) * ventaUnit(t, c, mi)
@@ -3096,17 +3110,15 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   // AUC wholesale por (marca, categoría, mes) desde Cap_Producto ("AUC · <cat>")
   const aucMC = (marca, cat, mi) => { const pfx = 'AUC · ' + cat; let v = 0; producto.forEach((r) => { if (upper(r[3]) !== upper(marca)) return; const rub = String(r[1] || ''); if (rub === pfx || rub === 'AUC · ' + cat) v = num(r[4 + mi]) }); return v }
   const wholesaleMarcas = marcasDe(sbus).map((m) => m.marca)
-  // Mapa de abastecimiento: subcategoría Retail → [{marca, cat, pct}] (por tienda+subcat)
+  // Mapa de abastecimiento (matriz): subcategoría Retail → { [marca]: % }. Global, aplica a todas las tiendas.
   const [smap, setSmap] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_map_${empresa}`) || '{}') } catch { return {} } })
   useEffect(() => { try { setSmap(JSON.parse(localStorage.getItem(`retail_map_${empresa}`) || '{}')) } catch { } }, [empresa])
-  const [openMap, setOpenMap] = useState('')
-  // Mapa GLOBAL por subcategoría (no por tienda): se configura una vez y aplica a todas las tiendas.
-  const srcOf = (c) => smap[c] || []
-  const setSrc = (c, arr) => setSmap((d) => ({ ...d, [c]: arr }))
-  const addSrc = (c) => setSrc(c, [...srcOf(c), { marca: wholesaleMarcas[0] || '', cat: '', pct: '' }])
-  const updSrc = (c, i, field, val) => { const arr = srcOf(c).map((s, j) => j === i ? { ...s, [field]: val, ...(field === 'marca' ? { cat: '' } : {}) } : s); setSrc(c, arr) }
-  const delSrc = (c, i) => setSrc(c, srcOf(c).filter((_, j) => j !== i))
-  const srcPctSum = (c) => srcOf(c).reduce((a, s) => a + num(s.pct), 0)
+  // AUC promedio por marca (promedio simple de los AUC de sus categorías en Producto)
+  const aucMarcaMes = (m, mi) => { const cs = prodCats[m] || []; if (!cs.length) return 0; const s = cs.reduce((a, ct) => a + aucMC(m, ct, mi), 0); return s / cs.length }
+  const pctOf = (c, m) => num((smap[c] || {})[m])
+  const setPct = (c, m, v) => setSmap((d) => ({ ...d, [c]: { ...(d[c] || {}), [m]: v } }))
+  const rowSum = (c) => wholesaleMarcas.reduce((a, m) => a + pctOf(c, m), 0)
+  const marcasDeSub = (c) => wholesaleMarcas.filter((m) => pctOf(c, m) > 0)
   const whAvg = (c) => MESES.reduce((a, _, mi) => a + whUnit(c, mi), 0) / 12   // costo wholesale promedio/ud (referencia)
   const allSubcats = [...new Set(tiendas.flatMap((t) => catsOf(t)))]   // universo de subcategorías para el mapa
   const factor = () => { const f = num(cf[fk('FACTOR', 0)]); return f > 0 ? f : 1.25 }
@@ -3123,14 +3135,13 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   function guardarCF() { setSaving(true); try { saveEstado(empresa, 'retail_cf', cf); setMsg({ t: 'ok', x: 'Cash Flow guardado.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   // ---- Cash Flow Retail: mismas líneas que las marcas, Cash Final encadenado ----
   const mpct = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
-  // Importaciones DERIVADAS del mapa: por marca/mes = Σ(tiendas, subcats) unidades × (AUC wholesale ponderado de esa marca) × factor.
-  const impMarcaMes = (m, mi) => tiendas.reduce((aT, t) => aT + catsOf(t).reduce((aC, c) => { const u = num(vt[cvk(t, c, mi)]); if (!u) return aC; const w = srcOf(c).reduce((a, s) => s.marca === m ? a + (num(s.pct) / 100) * aucMC(m, s.cat, mi) : a, 0); return aC + u * w * factor() }, 0), 0)
+  // Importaciones DERIVADAS del mapa (matriz % por marca): por marca/mes = Σ(tiendas, subcats) unidades × %marca × AUC prom. marca × factor.
+  const impMarcaMes = (m, mi) => tiendas.reduce((aT, t) => aT + catsOf(t).reduce((aC, c) => { const u = num(vt[cvk(t, c, mi)]); if (!u) return aC; const p = pctOf(c, m); if (!p) return aC; return aC + u * (p / 100) * aucMarcaMes(m, mi) * factor() }, 0), 0)
   const impMarcaAnual = (m) => MESES.reduce((a, _, mi) => a + impMarcaMes(m, mi), 0)
   const impMes = (mi) => wholesaleMarcas.reduce((a, m) => a + impMarcaMes(m, mi), 0)
-  // Detalle de costo por (marca, categoría) según el mapa
-  const mapPairs = [...new Set(Object.values(smap).flat().filter((s) => s && s.marca && s.cat).map((s) => `${s.marca}||${s.cat}`))].map((k) => { const [m, ct] = k.split('||'); return { m, ct } })
-  const aucPairAvg = (m, ct) => MESES.reduce((a, _, mi) => a + aucMC(m, ct, mi), 0) / 12
-  const impPairAnual = (m, ct) => MESES.reduce((sum, _, mi) => sum + tiendas.reduce((aT, t) => aT + catsOf(t).reduce((aC, c) => { const u = num(vt[cvk(t, c, mi)]); if (!u) return aC; const w = srcOf(c).reduce((a, s) => (s.marca === m && s.cat === ct) ? a + (num(s.pct) / 100) * aucMC(m, ct, mi) : a, 0); return aC + u * w * factor() }, 0), 0), 0)
+  // Detalle de costo por marca según el mapa
+  const mapMarcasUsadas = wholesaleMarcas.filter((m) => allSubcats.some((c) => pctOf(c, m) > 0))
+  const aucMarcaAvg = (m) => MESES.reduce((a, _, mi) => a + aucMarcaMes(m, mi), 0) / 12
   const gastoMes = (mi) => gRubros.reduce((a, r) => a + num(gastos[gk(r.n, mi)]), 0)
   // totales de venta/costo (después de declarar cf/smap/producto, de los que dependen las fórmulas)
   const totVenta = tiendas.reduce((a, t) => a + tVenta(t), 0), totCosto = tiendas.reduce((a, t) => a + tCosto(t), 0)
@@ -3255,7 +3266,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                   <tr><th className="l">Subcategoría Retail</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th className="ya">Costo/ud</th><th>Costo</th></tr>
                 </thead>
                 <tbody>
-                  {cs.map((c) => { const sum = srcPctSum(c); const nF = srcOf(c).length; return <tr key={c}>
+                  {cs.map((c) => { const sum = rowSum(c); const nF = marcasDeSub(c).length; return <tr key={c}>
                     <td className="l sub2">{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}
                       <button title="Quitar subcategoría" onClick={() => delCat(t, c)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>
                       <button title="Ir a configurar el mapa de abastecimiento" onClick={() => setComTab('mapa')} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: nF ? '#0f766e' : '#b45309', cursor: 'pointer', fontSize: 11 }}>🧭 {nF ? `${nF} fuente${nF > 1 ? 's' : ''}` : 'sin mapa'}</button>
@@ -3293,12 +3304,12 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               </tbody>
             </table>
           </div>
-          <div className="sub" style={{ fontWeight: 700, color: col, margin: '16px 0 6px' }}>Detalle del costo por marca / categoría <span className="unit" style={{ fontWeight: 400 }}>(AUC wholesale × factor {fmt(factor())})</span></div>
-          {mapPairs.length === 0 ? <div className="sub">Aún no hay fuentes en el <b>Mapa de abastecimiento</b>. Configúralo para ver el detalle.</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table><thead><tr><th className="l">Marca</th><th className="l">Categoría wholesale</th><th>AUC wholesale /ud</th><th>× Factor</th><th>Costo /ud</th><th>Importación 2028 $</th></tr></thead>
+          <div className="sub" style={{ fontWeight: 700, color: col, margin: '16px 0 6px' }}>Detalle del costo por marca <span className="unit" style={{ fontWeight: 400 }}>(AUC prom. wholesale × factor {fmt(factor())})</span></div>
+          {mapMarcasUsadas.length === 0 ? <div className="sub">Aún no hay % en el <b>Mapa de abastecimiento</b>. Configúralo para ver el detalle.</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table><thead><tr><th className="l">Marca</th><th>AUC prom. wholesale /ud</th><th>× Factor</th><th>Costo /ud</th><th>Importación 2028 $</th></tr></thead>
               <tbody>
-                {mapPairs.map(({ m, ct }) => { const auc = aucPairAvg(m, ct); return <tr key={m + '|' + ct}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td><td className="l sub2">{ct}</td><td className="tot">{fmt(auc)}</td><td className="tot ya">{fmt(factor())}</td><td className="tot">{fmt(auc * factor())}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(impPairAnual(m, ct))}</td></tr> })}
-                <tr className="grandrow"><td className="l" colSpan={5}>TOTAL importaciones</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(mapPairs.reduce((a, { m, ct }) => a + impPairAnual(m, ct), 0))}</td></tr>
+                {mapMarcasUsadas.map((m) => { const auc = aucMarcaAvg(m); return <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td><td className="tot">{fmt(auc)}</td><td className="tot ya">{fmt(factor())}</td><td className="tot">{fmt(auc * factor())}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(impMarcaAnual(m))}</td></tr> })}
+                <tr className="grandrow"><td className="l" colSpan={4}>TOTAL importaciones</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(mapMarcasUsadas.reduce((a, m) => a + impMarcaAnual(m), 0))}</td></tr>
               </tbody>
             </table>
           </div>}
@@ -3310,30 +3321,21 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Mapa de abastecimiento</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
-          <h3 style={{ color: col }}>Mapa de abastecimiento <span className="unit">(a quién le compra Retail cada subcategoría)</span></h3>
-          <div className="sub">Define <b>una sola vez</b> de dónde se surte cada subcategoría Retail: a qué <b>marca</b> y <b>categoría</b> wholesale (SBU) se le compra y en qué <b>%</b> (una subcategoría puede venir de varias). La suma debe dar <b>100%</b>. Con esto el app calcula el <b>costo</b> (promedio ponderado del AUC de Producto × factor) y la <b>venta intercompañía</b>. Aplica a <b>todas las tiendas</b>.</div>
-          {allSubcats.length === 0 ? <div className="sub">No hay subcategorías. Agrégalas en "Ventas por tienda".</div> : <div style={{ marginTop: 10 }}>
-            {allSubcats.map((c) => { const sum = srcPctSum(c); const okSum = Math.round(sum) === 100 || srcOf(c).length === 0; return <div key={c} style={{ border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', marginBottom: 8, background: '#fff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <b style={{ color: col, minWidth: 180 }}>{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}</b>
-                <span className="unit">Suma: <b style={{ color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%</b>{!okSum && ' ⚠ debe dar 100%'} · Costo wholesale prom./ud: ${fmt(whAvg(c))}</span>
-                <div className="spacer"></div>
-                <button className="btn" onClick={() => addSrc(c)} style={{ padding: '3px 10px', fontSize: 12 }}>➕ Agregar fuente</button>
-              </div>
-              {srcOf(c).length === 0 && <div className="sub" style={{ margin: '6px 0 0' }}>Sin fuentes. Agrega de qué marca/categoría se compra "{c}".</div>}
-              {srcOf(c).map((s, i) => <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
-                <select value={s.marca} onChange={(e) => updSrc(c, i, 'marca', e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--line)' }}>
-                  <option value="">— marca —</option>{wholesaleMarcas.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <select value={s.cat} onChange={(e) => updSrc(c, i, 'cat', e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--line)', minWidth: 170 }}>
-                  <option value="">— categoría —</option>{(prodCats[s.marca] || []).map((ct) => <option key={ct} value={ct}>{ct}</option>)}
-                </select>
-                <input className="fillin" value={s.pct} onChange={(e) => updSrc(c, i, 'pct', e.target.value)} inputMode="decimal" placeholder="%" style={{ width: 60, textAlign: 'center' }} />
-                <span className="unit">AUC prom. {s.marca && s.cat ? '$' + fmt(MESES.reduce((a, _, mi) => a + aucMC(s.marca, s.cat, mi), 0) / 12) : '—'}</span>
-                <button onClick={() => delSrc(c, i)} title="Quitar fuente" style={{ border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>
-              </div>)}
-            </div> })}
+          <h3 style={{ color: col }}>Mapa de abastecimiento <span className="unit">(a qué marca le compra Retail cada subcategoría)</span></h3>
+          <div className="sub">Para cada <b>subcategoría</b> (filas), pon el <b>%</b> que se le compra a cada <b>marca</b> wholesale (columnas). Cada fila debe sumar <b>100%</b> — si no, se marca en rojo. Con esto el app calcula el <b>costo</b> (AUC promedio de la marca × factor) y las <b>importaciones</b>. Aplica a <b>todas las tiendas</b>.</div>
+          {allSubcats.length === 0 ? <div className="sub">No hay subcategorías. Agrégalas en "Importaciones por tienda".</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '200px' }} />{wholesaleMarcas.map((_, i) => <col key={i} style={{ width: '70px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+              <thead><tr><th className="l">Subcategoría</th>{wholesaleMarcas.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 4 }}></span>{m.length > 7 ? m.slice(0, 7) + '…' : m}</th>)}<th>Suma</th></tr></thead>
+              <tbody>
+                {allSubcats.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; return <tr key={c}>
+                  <td className="l sub2">{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}</td>
+                  {wholesaleMarcas.map((m) => <td key={m} className="cell ya"><input value={(smap[c] || {})[m] ?? ''} onChange={(e) => setPct(c, m, e.target.value)} inputMode="decimal" title={`${c} ← ${m}`} /></td>)}
+                  <td className="tot" style={{ fontWeight: 800, color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%{!okSum && ' ⚠'}</td>
+                </tr> })}
+              </tbody>
+            </table>
           </div>}
+          <div className="sub" style={{ marginTop: 6 }}>⚠ = la fila no suma 100%. El costo usa el <b>AUC promedio</b> de cada marca (de Producto).</div>
         </div>
       </>}
 
