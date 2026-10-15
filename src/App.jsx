@@ -3109,16 +3109,24 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const [prodCats, setProdCats] = useState({}) // { marca: [categorías wholesale] }
   const reloadCaps = async () => {
     const tabs = ['Cap_Marketing', 'Cap_Ventas', 'Cap_Producto', 'Cap_Director', 'Cap_Categorias']
-    const out = {}; for (const tb of tabs) { try { const j = await gReadTab(tb); out[tb] = (j && j.ok && j.values) ? j.values.slice(1) : [] } catch { out[tb] = [] } }
+    const out = {}; for (const tb of tabs) { try { const j = await gReadTab(tb); out[tb] = (j && j.ok && Array.isArray(j.values)) ? j.values.slice(1) : [] } catch { out[tb] = [] } }
+    // Protección: si TODAS las pestañas volvieron vacías es casi seguro un fallo transitorio de lectura → NO borrar lo que ya se ve.
+    const totalRows = tabs.reduce((a, tb) => a + (out[tb] || []).length, 0)
+    if (totalRows === 0) return
     const isRetail = (r) => upper(r[0]) === upper(empresa) && upper(r[3]) === '(RETAIL)'
     const esVj = (r) => String(r[1] || '').toUpperCase().startsWith('VIAJES')
-    const mk = (out['Cap_Marketing'] || []).filter((r) => isRetail(r) && !esVj(r))
-    const vj = tabs.flatMap((tb) => (out[tb] || []).filter((r) => isRetail(r) && esVj(r)))
-    setCapRows({ mk, vj })
     const vjF = (tb) => (out[tb] || []).filter((r) => isRetail(r) && esVj(r))
-    setCapVj({ ventas: vjF('Cap_Ventas'), producto: vjF('Cap_Producto'), marketing: vjF('Cap_Marketing'), director: vjF('Cap_Director') })
-    setProducto((out['Cap_Producto'] || []).filter((r) => upper(r[0]) === upper(empresa)))
-    const pc = {}; (out['Cap_Categorias'] || []).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const cat = r[1], mar = r[3]; if (!mar || !cat) return; (pc[mar] = pc[mar] || []); if (!pc[mar].includes(cat)) pc[mar].push(cat) }); setProdCats(pc)
+    const nmk = (out['Cap_Marketing'] || []).filter((r) => isRetail(r) && !esVj(r))
+    const nvj = tabs.flatMap((tb) => (out[tb] || []).filter((r) => isRetail(r) && esVj(r)))
+    const nVjArea = { ventas: vjF('Cap_Ventas'), producto: vjF('Cap_Producto'), marketing: vjF('Cap_Marketing'), director: vjF('Cap_Director') }
+    const nprod = (out['Cap_Producto'] || []).filter((r) => upper(r[0]) === upper(empresa))
+    const pc = {}; (out['Cap_Categorias'] || []).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const cat = r[1], mar = r[3]; if (!mar || !cat) return; (pc[mar] = pc[mar] || []); if (!pc[mar].includes(cat)) pc[mar].push(cat) })
+    // Cada campo: si lo nuevo viene vacío pero ya teníamos datos, se conserva lo anterior (no se borra la pantalla).
+    const keep = (nv, pv) => (nv.length || !(pv || []).length) ? nv : pv
+    setCapRows((p) => ({ mk: keep(nmk, p.mk), vj: keep(nvj, p.vj) }))
+    setCapVj((p) => ({ ventas: keep(nVjArea.ventas, p.ventas), producto: keep(nVjArea.producto, p.producto), marketing: keep(nVjArea.marketing, p.marketing), director: keep(nVjArea.director, p.director) }))
+    setProducto((p) => keep(nprod, p))
+    setProdCats((p) => (Object.keys(pc).length || !Object.keys(p).length) ? pc : p)
   }
   useEffect(() => { reloadCaps() }, [empresa, ver])
   // AUC wholesale por (marca, categoría, mes) desde Cap_Producto ("AUC · <cat>")
