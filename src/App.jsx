@@ -959,10 +959,12 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
     setExtras(next)
     saveEstado(empresa, extrasKey, next)
   }
+  // Cuando hay fixedMarca (Retail, Finanzas, etc.) la marca no está en la lista de SBU: se guarda esa marca directamente.
+  const marcasGuardar = fixedMarca ? [{ sbu: (sbuDe(sbus, fixedMarca) || (fixedMarca === '(Retail)' ? 'Retail' : 'Gerencia')), marca: fixedMarca }] : marcas
   async function guardar() {
     setSaving(true); setMsg(null)
     const rows = []
-    marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => {
+    marcasGuardar.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => {
       const meses = MESES.map((_, mi) => val(mca, idDe(gr.g, it), mi))
       if (meses.some((v) => v !== 0)) rows.push({ rubro: `${gr.g} - ${it.n}`, sbu: sb, marca: mca, meses })
     })))
@@ -971,7 +973,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
   }
   function exportar() {
     const aoa = [['EMPRESA', 'GRUPO', 'RUBRO', 'SBU', 'MARCA', ...MESES]]
-    marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => {
+    marcasGuardar.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => {
       aoa.push([empresa, gr.g, it.n, sb, mca, ...MESES.map((_, mi) => val(mca, idDe(gr.g, it), mi))])
     })))
     exportXlsx(aoa, `${role.tab}_${rubro.k}.xlsx`)
@@ -2993,7 +2995,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const [tab, setTab] = useState('imp')
   const TABS = [
     ['imp', '🚢 Importaciones'], ['gastos', '💵 Gastos'], ['ventas', '🏬 Ventas por tienda'],
-    ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
+    ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'], ['ucv', '💹 Unidades · Costo · Venta'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
   ]
   // ---- Importaciones (captura mensual del COSTO de importación por marca, con referencia 2027) ----
   const [imp, setImp] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}') } catch { return {} } })
@@ -3039,6 +3041,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const rowCosto = (t, c) => MESES.reduce((a, _, mi) => a + costoM(t, c, mi), 0)
   const storeVentaM = (t, mi) => catsOf(t).reduce((a, c) => a + ventaM(t, c, mi), 0)
   const storeCostoM = (t, mi) => catsOf(t).reduce((a, c) => a + costoM(t, c, mi), 0)
+  const storeUnitsM = (t, mi) => catsOf(t).reduce((a, c) => a + num(vt[cvk(t, c, mi)]), 0)
+  const esTiendaNueva = (t) => !RETAIL_TIENDAS.includes(t)
   const tVenta = (t) => MESES.reduce((a, _, mi) => a + storeVentaM(t, mi), 0)
   const tCosto = (t) => MESES.reduce((a, _, mi) => a + storeCostoM(t, mi), 0)
   const totVenta = tiendas.reduce((a, t) => a + tVenta(t), 0), totCosto = tiendas.reduce((a, t) => a + tCosto(t), 0)
@@ -3201,6 +3205,42 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               </tbody>
             </table>
           </div>
+        </div>
+      </>}
+
+      {tab === 'ucv' && <>
+        <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
+        {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+        <div className="panel">
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Unidades · Costo · Venta</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarCF}>{saving ? 'Guardando…' : '💾 Guardar TRM'}</button></div>
+          <h3 style={{ color: col }}>Proyección por tienda — 2028 <span className="unit">(resumen · se alimenta de "Ventas por tienda")</span></h3>
+          <div className="sub">Unidades, ingresos (venta neta) y costo por tienda y mes, con la utilidad bruta. Las tiendas nuevas (agregadas por ti) salen marcadas con <b style={{ color: '#0e7490' }}>NUEVA</b>.</div>
+          {(() => {
+            const nf = (v) => Math.round(v).toLocaleString('en-US')
+            const uMes = (mi) => tiendas.reduce((a, t) => a + storeUnitsM(t, mi), 0)
+            const vMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
+            const cMes = (mi) => tiendas.reduce((a, t) => a + storeCostoM(t, mi), 0)
+            const nombre = (t) => <>{t}{esTiendaNueva(t) && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, color: '#0e7490', border: '1px solid #0e7490', borderRadius: 4, padding: '0 4px', verticalAlign: 'middle' }} title="Tienda nueva (agregada por el usuario)">NUEVA</span>}</>
+            const annual = (fn) => MESES.reduce((a, _, mi) => a + fn(mi), 0)
+            const Section = ({ title, color, perStore, totalFn, bold }) => <>
+              <tr className="secrow"><td colSpan={14} style={{ color: color || undefined }}>{title}</td></tr>
+              {tiendas.map((t) => <tr key={t}><td className="l sub2">{nombre(t)}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{nf(perStore(t, mi))}</td>)}<td className="tot">{nf(MESES.reduce((a, _, mi) => a + perStore(t, mi), 0))}</td></tr>)}
+              <tr className="grandrow"><td className="l">{bold}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{nf(totalFn(mi))}</td>)}<td className="tot">{nf(annual(totalFn))}</td></tr>
+            </>
+            return <div className="tablewrap" style={{ overflowX: 'auto' }}>
+              <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '72px' }} />)}<col style={{ width: '92px' }} /></colgroup>
+                <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+                <tbody>
+                  {/* TRM editable */}
+                  <tr><td className="l" style={{ fontWeight: 700 }}>TRM <span className="unit">(tipo de cambio)</span></td>{MESES.map((_, mi) => <td key={mi} className="cell ya"><input value={cf[fk('TRM', mi)] ?? ''} onChange={(e) => setCF('TRM', mi, e.target.value)} inputMode="decimal" placeholder="—" /></td>)}<td className="tot">—</td></tr>
+                  <Section title="UNIDADES PROYECTADAS" perStore={storeUnitsM} totalFn={uMes} bold="Total unidades" />
+                  <Section title="INGRESOS PROYECTADOS (venta neta)" color="#15803d" perStore={storeVentaM} totalFn={vMes} bold="Total ingresos" />
+                  <Section title="COSTOS PROYECTADOS" color="#b91c1c" perStore={storeCostoM} totalFn={cMes} bold="Total costos" />
+                  <tr className="grandrow" style={{ background: '#eafaf1' }}><td className="l" style={{ color: '#0f766e', fontWeight: 800 }}>UTILIDAD BRUTA PROYECTADA</td>{MESES.map((_, mi) => { const u = vMes(mi) - cMes(mi); return <td key={mi} className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{nf(u)}</td> })}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{nf(annual((mi) => vMes(mi) - cMes(mi)))}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          })()}
         </div>
       </>}
 
