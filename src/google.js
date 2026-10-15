@@ -60,11 +60,20 @@ async function _api(path, opts = {}) {
   return r.json()
 }
 const A1 = (t) => "'" + String(t).replace(/'/g, "''") + "'"
-async function readValues(tab) { try { const j = await _api('/values/' + encodeURIComponent(A1(tab)) + '?valueRenderOption=UNFORMATTED_VALUE'); return j.values || [] } catch { return [] } }
-async function writeValues(tab, a1, values, raw) { return _api('/values/' + encodeURIComponent(A1(tab) + '!' + a1) + '?valueInputOption=' + (raw ? 'RAW' : 'USER_ENTERED'), { method: 'PUT', body: JSON.stringify({ values }) }) }
-async function appendValues(tab, values, raw) { return _api('/values/' + encodeURIComponent(A1(tab) + '!A1') + ':append?valueInputOption=' + (raw ? 'RAW' : 'USER_ENTERED') + '&insertDataOption=INSERT_ROWS', { method: 'POST', body: JSON.stringify({ values }) }) }
-async function clearValues(tab) { return _api('/values/' + encodeURIComponent(A1(tab)) + ':clear', { method: 'POST', body: '{}' }) }
-async function batchUpdateValues(data) { return _api('/values:batchUpdate', { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) }) }
+// ---- Caché de lecturas: evita agotar la cuota de Google (429 "Read requests per minute").
+//      Reusa lo leído por unos segundos; al escribir una pestaña se invalida su caché; si una lectura falla, devuelve lo cacheado (no vacío).
+const _readCache = new Map(); const READ_TTL = 12000
+function _invalidate(tab) { if (tab) _readCache.delete(String(tab)) }
+async function readValues(tab, force) {
+  const key = String(tab), c = _readCache.get(key)
+  if (!force && c && Date.now() - c.ts < READ_TTL) return c.values
+  try { const j = await _api('/values/' + encodeURIComponent(A1(tab)) + '?valueRenderOption=UNFORMATTED_VALUE'); const v = j.values || []; _readCache.set(key, { ts: Date.now(), values: v }); return v }
+  catch (e) { if (c) return c.values; throw e }
+}
+async function writeValues(tab, a1, values, raw) { _invalidate(tab); return _api('/values/' + encodeURIComponent(A1(tab) + '!' + a1) + '?valueInputOption=' + (raw ? 'RAW' : 'USER_ENTERED'), { method: 'PUT', body: JSON.stringify({ values }) }) }
+async function appendValues(tab, values, raw) { _invalidate(tab); return _api('/values/' + encodeURIComponent(A1(tab) + '!A1') + ':append?valueInputOption=' + (raw ? 'RAW' : 'USER_ENTERED') + '&insertDataOption=INSERT_ROWS', { method: 'POST', body: JSON.stringify({ values }) }) }
+async function clearValues(tab) { _invalidate(tab); return _api('/values/' + encodeURIComponent(A1(tab)) + ':clear', { method: 'POST', body: '{}' }) }
+async function batchUpdateValues(data) { try { (data || []).forEach((d) => { const m = /^'?([^'!]+)'?!/.exec(d.range || ''); if (m) _invalidate(m[1].replace(/''/g, "'")) }) } catch { } return _api('/values:batchUpdate', { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) }) }
 async function sheetTitles() { const j = await _api('?fields=sheets.properties.title'); return (j.sheets || []).map((s) => s.properties.title) }
 async function ensureTab(title, header) {
   const titles = await sheetTitles()
@@ -80,7 +89,7 @@ const k4 = (a, b, c, d) => [a, b, c, d].map(up).join('|')
 const pad12 = (a) => { const o = (a || []).slice(0, 12); while (o.length < 12) o.push(0); return o }
 const colLetter = (n) => { let s = ''; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26) } return s }
 
-export async function gReadTab(tab) { const values = await readValues(tab); return { ok: true, values } }
+export async function gReadTab(tab) { try { const values = await readValues(tab); return { ok: true, values } } catch (e) { return { ok: false, values: null, error: String(e && e.message || e) } } }
 
 /* ---- Histórico EN VIVO desde el libro EBP (se actualiza solo al avanzar el EBP) ---- */
 const EBP_SHEET_ID = '1OZNU8e2P8D8Dewa0rz9fGL7B-h8RJ6_7XGGuUpro8wc'

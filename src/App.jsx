@@ -3477,19 +3477,25 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         <div className="panel">
           <h3 style={{ color: col }}>P&L — Retail <span className="unit">(2028 · estilo Contribución de las SBU)</span></h3>
-          <div className="sub">Resultado operativo de Retail: <b>Venta Neta</b> (por tienda) − <b>Costo</b> = <b>Margen Bruto</b>; luego se restan <b>Gastos</b>, <b>Marketing</b> y <b>Viajes</b>. Todo se alimenta de las otras pestañas.</div>
-          <div className="tablewrap" style={{ overflowX: 'auto', maxWidth: 520 }}>
-            <table><thead><tr><th className="l">Concepto</th><th>2028</th></tr></thead>
+          <div className="sub">Resultado operativo de Retail: <b>Venta Neta</b> (por tienda) − <b>Costo</b> = <b>Margen Bruto</b>; luego se restan <b>Gastos</b>, <b>Marketing</b> y <b>Viajes</b>. La columna <b>2027</b> es la referencia del ABP (hoja P&L USD del Excel). En 2027, Marketing y Viajes están dentro de Gastos, por eso van como "—" en esas filas.</div>
+          <div className="tablewrap" style={{ overflowX: 'auto', maxWidth: 640 }}>
+            <table><thead><tr><th className="l">Concepto</th><th>2028</th><th className="ya">2027 (ref)</th><th className="ya">Δ vs 2027</th></tr></thead>
               <tbody>
-                {(() => { const mb = totVenta - totCosto; const res = mb - gGran - mkAnual - vjAnual; const pc = (a) => totVenta > 0 ? ' · ' + (a / totVenta * 100).toFixed(1) + '%' : ''
+                {(() => {
+                  const R27 = { venta: 2363461, costo: 1360521, margen: 1002941, gastos: 2193944, resultado: -1191004 }
+                  const mb = totVenta - totCosto, res = mb - gGran - mkAnual - vjAnual
+                  const pc = (a) => totVenta > 0 ? ' · ' + (a / totVenta * 100).toFixed(1) + '%' : ''
+                  const r27 = (v) => v == null ? '—' : fmt(v)
+                  const dCell = (v28, v27) => v27 == null ? <td className="tot ya">—</td> : <td className="tot ya" style={{ color: (v28 - v27) >= 0 ? '#15803d' : '#b91c1c' }}>{(v28 - v27) >= 0 ? '+' : ''}{fmt(v28 - v27)}</td>
+                  const row = (lbl, v28, v27, opts = {}) => <tr className={opts.grand ? 'grandrow' : undefined}><td className={'l' + (opts.sub ? ' sub2' : '')} style={opts.color ? { color: opts.color } : undefined}>{lbl}</td><td className="tot" style={{ color: opts.color, fontWeight: opts.grand ? 800 : undefined }}>{fmt(v28)}{opts.pctOf ? <span className="unit">{pc(v28)}</span> : null}</td><td className="tot ya">{r27(v27)}</td>{dCell(v28, v27)}</tr>
                   return <>
-                    <tr><td className="l">Venta Neta</td><td className="tot">{fmt(totVenta)}</td></tr>
-                    <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Costo</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCosto)}</td></tr>
-                    <tr className="grandrow"><td className="l">= Margen Bruto</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(mb)}<span className="unit">{pc(mb)}</span></td></tr>
-                    <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Gastos</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(gGran)}</td></tr>
-                    <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Marketing</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(mkAnual)}</td></tr>
-                    <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Viajes</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(vjAnual)}</td></tr>
-                    <tr className="grandrow"><td className="l">= Resultado Operativo</td><td className="tot" style={{ fontWeight: 800, color: res >= 0 ? '#0f766e' : '#b91c1c' }}>{fmt(res)}<span className="unit">{pc(res)}</span></td></tr>
+                    {row('Venta Neta', totVenta, R27.venta)}
+                    {row('(−) Costo', totCosto, R27.costo, { sub: true, color: '#b91c1c' })}
+                    {row('= Margen Bruto', mb, R27.margen, { grand: true, pctOf: true })}
+                    {row('(−) Gastos', gGran, R27.gastos, { sub: true, color: '#b91c1c' })}
+                    {row('(−) Marketing', mkAnual, null, { sub: true, color: '#b91c1c' })}
+                    {row('(−) Viajes', vjAnual, null, { sub: true, color: '#b91c1c' })}
+                    {row('= Resultado Operativo', res, R27.resultado, { grand: true, pctOf: true, color: res >= 0 ? '#0f766e' : '#b91c1c' })}
                   </>
                 })()}
               </tbody>
