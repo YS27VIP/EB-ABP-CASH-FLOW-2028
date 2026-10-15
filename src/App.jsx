@@ -83,7 +83,7 @@ const SBU_NAMES = ['SBU 1', 'SBU 2', 'SBU 3']
 const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO']
 
 /* Colores por SBU y por marca (identidad visual dinámica) */
-const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'RETAIL': '#be123c', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
+const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'RETAIL': '#4338ca', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
 const sbuColor = (s) => SBU_COLORS[String(s || '').toUpperCase()] || '#0e7490'
 // Paleta sin verde ni amarillo, tonos bien separados (para marcas no fijadas)
 const MARCA_PALETTE = ['#2563eb', '#dc2626', '#9333ea', '#ea580c', '#db2777', '#b45309', '#4f46e5', '#e11d48', '#7c3aed', '#c026d3', '#475569', '#be123c']
@@ -3006,6 +3006,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
       </div>
 
       {tab === 'imp' && <>
+        <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Importaciones</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarImp}>{saving ? 'Guardando…' : '💾 Guardar importaciones'}</button></div>
