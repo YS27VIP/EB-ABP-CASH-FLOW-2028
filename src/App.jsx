@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -2985,12 +2985,15 @@ function TeamPanel({ empresa, sbuName }) {
 }
 
 /* ===== RETAIL: tiendas propias — Importaciones, Gastos, Ventas/Costo por tienda, Marketing, Viajes, Cash Flow ===== */
+// Retail: categorías/subcategorías por defecto para una tienda nueva (editables, se pueden agregar).
+const RETAIL_CATS_DEF = ['W Footwear', 'M Footwear', 'W Apparel', 'M Apparel', 'Accessories']
+
 function RetailWorkspace({ empresa, usuario, sbus }) {
   const col = sbuColor('Retail')
   const [tab, setTab] = useState('imp')
   const TABS = [
     ['imp', '🚢 Importaciones'], ['gastos', '💵 Gastos'], ['ventas', '🏬 Ventas por tienda'],
-    ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'], ['cf', '💰 Cash Flow'],
+    ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
   ]
   // ---- Importaciones (captura mensual del COSTO de importación por marca, con referencia 2027) ----
   const [imp, setImp] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}') } catch { return {} } })
@@ -3017,28 +3020,74 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   function guardarGastos() { setSaving(true); try { saveEstado(empresa, 'retail_gastos', gastos); saveEstado(empresa, 'retail_gastos_x', gRubrosX); setMsg({ t: 'ok', x: 'Gastos guardados.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   function addRubroG() { const n = window.prompt('Nombre del nuevo rubro de gasto:'); if (!n) return; const nm = n.trim(); if (!nm || gRubros.some((r) => r.n.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Ese rubro ya existe.' }); return } const next = [...gRubrosX, nm]; setGRubrosX(next); saveEstado(empresa, 'retail_gastos_x', next) }
   function delRubroG(nm) { const next = gRubrosX.filter((x) => x !== nm); setGRubrosX(next); saveEstado(empresa, 'retail_gastos_x', next) }
-  // ---- Ventas y costo por tienda (con margen) + agregar tienda ----
+  // ---- Ventas por tienda: se ESCOGE una tienda y se llena por categoría/subcategoría ----
   const [tiendas, setTiendas] = useState(() => { try { const t = JSON.parse(localStorage.getItem(`retail_tiendas_${empresa}`) || 'null'); return Array.isArray(t) && t.length ? t : RETAIL_TIENDAS } catch { return RETAIL_TIENDAS } })
+  const [cats, setCats] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_cats_${empresa}`) || '{}') } catch { return {} } })
   const [vt, setVt] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}') } catch { return {} } })
-  useEffect(() => { try { const t = JSON.parse(localStorage.getItem(`retail_tiendas_${empresa}`) || 'null'); if (Array.isArray(t) && t.length) setTiendas(t) } catch { } try { setVt(JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}')) } catch { } }, [empresa])
-  const vk = (t, kind, mi) => `${t}|${kind}|${mi}`
-  const setVT = (t, kind, mi, v) => setVt((d) => ({ ...d, [vk(t, kind, mi)]: v }))
-  const tVenta = (t) => MESES.reduce((a, _, mi) => a + num(vt[vk(t, 'V', mi)]), 0)
-  const tCosto = (t) => MESES.reduce((a, _, mi) => a + num(vt[vk(t, 'C', mi)]), 0)
+  const [selT, setSelT] = useState(null)
+  useEffect(() => { try { const t = JSON.parse(localStorage.getItem(`retail_tiendas_${empresa}`) || 'null'); if (Array.isArray(t) && t.length) setTiendas(t) } catch { } try { setCats(JSON.parse(localStorage.getItem(`retail_cats_${empresa}`) || '{}')) } catch { } try { setVt(JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}')) } catch { } setSelT(null) }, [empresa])
+  const catsOf = (t) => (Array.isArray(cats[t]) && cats[t].length) ? cats[t] : RETAIL_CATS_DEF
+  const selStore = selT && tiendas.includes(selT) ? selT : (tiendas[0] || null)
+  const cvk = (t, c, mi) => `${t}||${c}||U||${mi}`           // unidades del mes
+  const cmk = (t, c, f) => `${t}||${c}||${f}`                 // AUC / AUP / DESC (constante por fila)
+  const setU = (t, c, mi, v) => setVt((d) => ({ ...d, [cvk(t, c, mi)]: v }))
+  const setMeta = (t, c, f, v) => setVt((d) => ({ ...d, [cmk(t, c, f)]: v }))
+  const rowUnits = (t, c) => MESES.reduce((a, _, mi) => a + num(vt[cvk(t, c, mi)]), 0)
+  const ventaM = (t, c, mi) => num(vt[cvk(t, c, mi)]) * num(vt[cmk(t, c, 'AUP')]) * (1 - num(vt[cmk(t, c, 'DESC')]) / 100)
+  const costoM = (t, c, mi) => num(vt[cvk(t, c, mi)]) * num(vt[cmk(t, c, 'AUC')])
+  const rowVenta = (t, c) => MESES.reduce((a, _, mi) => a + ventaM(t, c, mi), 0)
+  const rowCosto = (t, c) => MESES.reduce((a, _, mi) => a + costoM(t, c, mi), 0)
+  const storeVentaM = (t, mi) => catsOf(t).reduce((a, c) => a + ventaM(t, c, mi), 0)
+  const storeCostoM = (t, mi) => catsOf(t).reduce((a, c) => a + costoM(t, c, mi), 0)
+  const tVenta = (t) => MESES.reduce((a, _, mi) => a + storeVentaM(t, mi), 0)
+  const tCosto = (t) => MESES.reduce((a, _, mi) => a + storeCostoM(t, mi), 0)
   const totVenta = tiendas.reduce((a, t) => a + tVenta(t), 0), totCosto = tiendas.reduce((a, t) => a + tCosto(t), 0)
-  function guardarVentas() { setSaving(true); try { saveEstado(empresa, 'retail_ventas', vt); saveEstado(empresa, 'retail_tiendas', tiendas); setMsg({ t: 'ok', x: 'Ventas por tienda guardadas.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
-  function addTienda() { const n = window.prompt('Nombre de la nueva tienda:'); if (!n) return; const nm = n.trim(); if (!nm || tiendas.some((t) => t.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa tienda ya existe.' }); return } const next = [...tiendas, nm]; setTiendas(next); saveEstado(empresa, 'retail_tiendas', next) }
-  function delTienda(t) { const next = tiendas.filter((x) => x !== t); setTiendas(next); saveEstado(empresa, 'retail_tiendas', next) }
-  // ---- Cash Flow Retail (consolida) ----
+  function guardarVentas() { setSaving(true); try { saveEstado(empresa, 'retail_ventas', vt); saveEstado(empresa, 'retail_cats', cats); saveEstado(empresa, 'retail_tiendas', tiendas); setMsg({ t: 'ok', x: 'Ventas por tienda guardadas.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function addTienda() { const n = window.prompt('Nombre de la nueva tienda:'); if (!n) return; const nm = n.trim(); if (!nm || tiendas.some((t) => t.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa tienda ya existe.' }); return } const next = [...tiendas, nm]; setTiendas(next); setSelT(nm); saveEstado(empresa, 'retail_tiendas', next) }
+  function delTienda(t) { if (!window.confirm(`¿Quitar la tienda "${t}"?`)) return; const next = tiendas.filter((x) => x !== t); setTiendas(next); if (selT === t) setSelT(next[0] || null); saveEstado(empresa, 'retail_tiendas', next) }
+  function addCat(t) { const n = window.prompt('Categoría / Subcategoría (ej: "W Footwear / Everyday Road"):'); if (!n) return; const nm = n.trim(); const cur = catsOf(t); if (!nm || cur.some((c) => c.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa categoría ya existe en la tienda.' }); return } setCats((d) => ({ ...d, [t]: [...cur, nm] })) }
+  function delCat(t, c) { const cur = catsOf(t).filter((x) => x !== c); setCats((d) => ({ ...d, [t]: cur })) }
+  // ---- Marketing y Viajes de Retail (espejo de lo capturado en sus pestañas, marca "(Retail)") ----
+  const [capRows, setCapRows] = useState({ mk: [], vj: [] })
+  useEffect(() => { let on = true; (async () => {
+    const tabs = ['Cap_Marketing', 'Cap_Ventas', 'Cap_Producto', 'Cap_Director']
+    const out = {}; for (const tb of tabs) { try { const j = await gReadTab(tb); out[tb] = (j && j.ok && j.values) ? j.values.slice(1) : [] } catch { out[tb] = [] } }
+    if (!on) return
+    const isRetail = (r) => upper(r[0]) === upper(empresa) && upper(r[3]) === '(RETAIL)'
+    const esVj = (r) => String(r[1] || '').toUpperCase().startsWith('VIAJES')
+    const mk = (out['Cap_Marketing'] || []).filter((r) => isRetail(r) && !esVj(r))
+    const vj = tabs.flatMap((tb) => (out[tb] || []).filter((r) => isRetail(r) && esVj(r)))
+    setCapRows({ mk, vj })
+  })(); return () => { on = false } }, [empresa])
+  const mkMes = (mi) => capRows.mk.reduce((a, r) => a + num(r[4 + mi]), 0)
+  const vjMes = (mi) => capRows.vj.reduce((a, r) => a + num(r[4 + mi]), 0)
+  const mkAnual = MESES.reduce((a, _, mi) => a + mkMes(mi), 0)
+  const vjAnual = MESES.reduce((a, _, mi) => a + vjMes(mi), 0)
+  // ---- Líneas de Finanzas del Cash Flow (semilla Cash Inicial, Costos Financieros, Otros ing/gastos) ----
+  const [cf, setCf] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_cf_${empresa}`) || '{}') } catch { return {} } })
+  useEffect(() => { try { setCf(JSON.parse(localStorage.getItem(`retail_cf_${empresa}`) || '{}')) } catch { } }, [empresa])
+  const fk = (line, mi) => `${line}|${mi}`
+  const setCF = (line, mi, v) => setCf((d) => ({ ...d, [fk(line, mi)]: v }))
+  function guardarCF() { setSaving(true); try { saveEstado(empresa, 'retail_cf', cf); setMsg({ t: 'ok', x: 'Cash Flow guardado.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  // ---- Cash Flow Retail: mismas líneas que las marcas, Cash Final encadenado ----
   const mpct = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
   const impMes = (mi) => RETAIL_MARCAS.reduce((a, m) => a + num(imp[`${m}|${mi}`]), 0)
-  const cfRows = MESES.map((_, mi) => {
-    const cashIn = tiendas.reduce((a, t) => a + num(vt[vk(t, 'V', mi)]), 0)
-    const compras = impMes(mi)
-    const gasto = gRubros.reduce((a, r) => a + num(gastos[gk(r.n, mi)]), 0)
-    const out = compras + gasto
-    return { cashIn, compras, gasto, out, neto: cashIn - out }
+  const gastoMes = (mi) => gRubros.reduce((a, r) => a + num(gastos[gk(r.n, mi)]), 0)
+  const cfRows = []; let prevFin = 0
+  MESES.forEach((_, mi) => {
+    const ini = mi === 0 ? num(cf[fk('INI', 0)]) : prevFin
+    const cobros = tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
+    const pagos = impMes(mi)
+    const oper = gastoMes(mi) + mkMes(mi) + vjMes(mi)
+    const fin = num(cf[fk('FIN', mi)])
+    const oIng = num(cf[fk('OING', mi)])
+    const oGas = num(cf[fk('OGAS', mi)])
+    const flujo = cobros + oIng - pagos - oper - fin - oGas
+    const final = ini + flujo
+    cfRows.push({ ini, cobros, pagos, oper, fin, oIng, oGas, flujo, final })
+    prevFin = final
   })
+  const cfSum = (k) => cfRows.reduce((a, r) => a + r[k], 0)
 
   return (
     <div>
@@ -3108,31 +3157,45 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div className="panel">
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Ventas por tienda</span><div className="spacer"></div><button className="btn" onClick={addTienda}>➕ Agregar tienda</button><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Ventas y costo proyectados por tienda — 2028</h3>
-          <div className="sub" style={{ fontWeight: 700, color: '#15803d', margin: '6px 0' }}>① Ingresos (venta neta) por tienda</div>
-          <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
-              <thead><tr><th className="l">Tienda</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
-              <tbody>
-                {tiendas.map((t) => <tr key={t}><td className="l sub2">{t}<button title="Quitar tienda" onClick={() => delTienda(t)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button></td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={vt[vk(t, 'V', mi)] ?? ''} onChange={(e) => setVT(t, 'V', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot">{fmt(tVenta(t))}</td></tr>)}
-                <tr className="grandrow"><td className="l">Total ingresos</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(tiendas.reduce((a, t) => a + num(vt[vk(t, 'V', mi)]), 0))}</td>)}<td className="tot">{fmt(totVenta)}</td></tr>
-              </tbody>
-            </table>
+          <div className="sub">Escoge una <b>tienda</b> y llena su proyección <b>por categoría / subcategoría</b>: unidades por mes + <b>AUC</b> (costo unitario) + <b>AUP</b> (precio sin descuento) + <b>% descuento</b>. La venta neta y el costo se calculan solos.</div>
+          {/* Selector de tienda */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 4px' }}>
+            {tiendas.map((t) => <button key={t} className={'seg' + (selStore === t ? ' active' : '')} onClick={() => setSelT(t)} style={selStore === t ? { background: col, borderColor: col, color: '#fff' } : {}}>{t}</button>)}
           </div>
-          <div className="sub" style={{ fontWeight: 700, color: '#b91c1c', margin: '14px 0 6px' }}>② Costo por tienda</div>
-          <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
-              <thead><tr><th className="l">Tienda</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
-              <tbody>
-                {tiendas.map((t) => <tr key={t}><td className="l sub2">{t}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={vt[vk(t, 'C', mi)] ?? ''} onChange={(e) => setVT(t, 'C', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot">{fmt(tCosto(t))}</td></tr>)}
-                <tr className="grandrow"><td className="l">Total costo</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(tiendas.reduce((a, t) => a + num(vt[vk(t, 'C', mi)]), 0))}</td>)}<td className="tot">{fmt(totCosto)}</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div className="sub" style={{ fontWeight: 700, color: '#0f766e', margin: '14px 0 6px' }}>③ Margen por tienda</div>
+          {!selStore ? <div className="sub">No hay tiendas. Usa <b>➕ Agregar tienda</b>.</div> : (() => { const t = selStore; const cs = catsOf(t); return <>
+            <div className="toolbar" style={{ margin: '12px 0 6px' }}>
+              <span style={{ fontWeight: 800, color: col, fontSize: 15 }}>🏬 {t}</span>
+              <span className="unit" style={{ marginLeft: 8 }}>Venta neta {fmt(tVenta(t))} · Costo {fmt(tCosto(t))} · Margen {mpct(tVenta(t) - tCosto(t), tVenta(t))}</span>
+              <div className="spacer"></div>
+              <button className="btn" onClick={() => addCat(t)}>➕ Agregar categoría</button>
+              <button className="btn" onClick={() => delTienda(t)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>
+            </div>
+            <div className="tablewrap" style={{ overflowX: 'auto' }}>
+              <table className="vfix"><colgroup><col style={{ width: '190px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}<col style={{ width: '66px' }} /><col style={{ width: '66px' }} /><col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '82px' }} /></colgroup>
+                <thead>
+                  <tr><th className="l">Categoría / Subcategoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th className="ya">AUC $</th><th className="ya">AUP $</th><th className="ya">% Desc</th><th>Venta neta</th><th>Costo</th></tr>
+                </thead>
+                <tbody>
+                  {cs.map((c) => <tr key={c}>
+                    <td className="l sub2">{c}<button title="Quitar categoría" onClick={() => delCat(t, c)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button></td>
+                    {MESES.map((_, mi) => <td key={mi} className="cell"><input value={vt[cvk(t, c, mi)] ?? ''} onChange={(e) => setU(t, c, mi, e.target.value)} inputMode="decimal" title={`${c} · unidades`} /></td>)}
+                    <td className="cell ya"><input value={vt[cmk(t, c, 'AUC')] ?? ''} onChange={(e) => setMeta(t, c, 'AUC', e.target.value)} inputMode="decimal" /></td>
+                    <td className="cell ya"><input value={vt[cmk(t, c, 'AUP')] ?? ''} onChange={(e) => setMeta(t, c, 'AUP', e.target.value)} inputMode="decimal" /></td>
+                    <td className="cell ya"><input value={vt[cmk(t, c, 'DESC')] ?? ''} onChange={(e) => setMeta(t, c, 'DESC', e.target.value)} inputMode="decimal" /></td>
+                    <td className="tot" style={{ color: '#15803d' }}>{fmt(rowVenta(t, c))}</td>
+                    <td className="tot" style={{ color: '#b91c1c' }}>{fmt(rowCosto(t, c))}</td>
+                  </tr>)}
+                  <tr className="grandrow"><td className="l">Total {t} <span className="unit">(unid: {fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))})</span></td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(cs.reduce((a, c) => a + num(vt[cvk(t, c, mi)]), 0))}</td>)}<td className="tot ya">—</td><td className="tot ya">—</td><td className="tot ya">—</td><td className="tot" style={{ color: '#15803d' }}>{fmt(tVenta(t))}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCosto(t))}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </> })()}
+          {/* Resumen de todas las tiendas */}
+          <div className="sub" style={{ fontWeight: 700, color: '#0f766e', margin: '16px 0 6px' }}>Resumen por tienda (todas)</div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table><thead><tr><th className="l">Tienda</th><th>Venta Neta</th><th>Costo</th><th>Margen $</th><th>Margen %</th></tr></thead>
               <tbody>
-                {tiendas.map((t) => { const v = tVenta(t), c = tCosto(t); return <tr key={t}><td className="l">{t}</td><td className="tot">{fmt(v)}</td><td className="tot">{fmt(c)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(v - c)}</td><td className="tot" style={{ color: '#0f766e' }}>{mpct(v - c, v)}</td></tr> })}
+                {tiendas.map((t) => { const v = tVenta(t), c = tCosto(t); return <tr key={t} onClick={() => setSelT(t)} style={{ cursor: 'pointer' }}><td className="l">{t}</td><td className="tot">{fmt(v)}</td><td className="tot">{fmt(c)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(v - c)}</td><td className="tot" style={{ color: '#0f766e' }}>{mpct(v - c, v)}</td></tr> })}
                 <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(totVenta)}</td><td className="tot">{fmt(totCosto)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(totVenta - totCosto)}</td><td className="tot" style={{ color: '#0f766e' }}>{mpct(totVenta - totCosto, totVenta)}</td></tr>
               </tbody>
             </table>
@@ -3140,21 +3203,59 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         </div>
       </>}
 
-      {tab === 'cf' && <div className="panel">
-        <h3 style={{ color: col }}>Cash Flow — Retail <span className="unit">(consolida ventas, importaciones y gastos · 2028)</span></h3>
-        <div className="sub"><b>Cash In</b> = ventas por tienda · <b>Cash Out</b> = importaciones (compras) + gastos · <b>Flujo neto</b> = Cash In − Cash Out. (Marketing y Viajes de Retail se capturan en sus pestañas y se integrarán al consolidado.)</div>
-        <div className="tablewrap" style={{ overflowX: 'auto' }}>
-          <table className="vfix"><colgroup><col style={{ width: '200px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '70px' }} />)}<col style={{ width: '95px' }} /></colgroup>
-            <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
-            <tbody>
-              <tr><td className="l" style={{ color: '#15803d', fontWeight: 700 }}>Cash In (ventas)</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: '#15803d' }}>{fmt(r.cashIn)}</td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(cfRows.reduce((a, r) => a + r.cashIn, 0))}</td></tr>
-              <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Importaciones</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: '#b91c1c' }}>{fmt(r.compras)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>{fmt(cfRows.reduce((a, r) => a + r.compras, 0))}</td></tr>
-              <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Gastos</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: '#b91c1c' }}>{fmt(r.gasto)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>{fmt(cfRows.reduce((a, r) => a + r.gasto, 0))}</td></tr>
-              <tr className="grandrow"><td className="l">= Flujo neto del mes</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: r.neto >= 0 ? '#15803d' : '#b91c1c', fontWeight: 800 }}>{fmt(r.neto)}</td>)}<td className="tot" style={{ fontWeight: 800 }}>{fmt(cfRows.reduce((a, r) => a + r.neto, 0))}</td></tr>
-            </tbody>
-          </table>
+      {tab === 'cf' && <>
+        <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
+        {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+        <div className="panel">
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Cash Flow</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarCF}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+          <h3 style={{ color: col }}>Cash Flow — Retail <span className="unit">(2028 · mismas líneas que las marcas)</span></h3>
+          <div className="sub"><b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> + <span style={{ color: '#15803d' }}>Otros ingresos</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span> − <span style={{ color: '#b91c1c' }}>Costos financieros</span> − <span style={{ color: '#b91c1c' }}>Otros gastos</span></b>. Cobros = ventas por tienda · Pagos = importaciones · Costos operativos = gastos + marketing + viajes de Retail. El <b>Cash Inicial de enero</b> (semilla) y las líneas de Finanzas se escriben a mano.</div>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '95px' }} /></colgroup>
+              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+              <tbody>
+                <tr><td className="l" style={{ fontWeight: 700 }}>Cash Inicial</td>{cfRows.map((r, mi) => mi === 0
+                  ? <td key={mi} className="cell"><input value={cf[fk('INI', 0)] ?? ''} onChange={(e) => setCF('INI', 0, e.target.value)} inputMode="decimal" title="Semilla: saldo en banco al cierre de 2027" /></td>
+                  : <td key={mi} className="tot" title="= Cash Final del mes anterior">{fmt(r.ini)}</td>)}<td className="tot">—</td></tr>
+                <tr><td className="l" style={{ color: '#15803d', fontWeight: 700 }}>Cash In (Cobros)</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: '#15803d' }}>{fmt(r.cobros)}</td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(cfSum('cobros'))}</td></tr>
+                <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Cash Out (Pagos · importaciones)</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: '#b91c1c' }}>{fmt(r.pagos)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>{fmt(cfSum('pagos'))}</td></tr>
+                <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Costos Operativos <span className="unit">(gastos+mk+viajes)</span></td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: '#b91c1c' }}>{fmt(r.oper)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>{fmt(cfSum('oper'))}</td></tr>
+                <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Costos Financieros</td>{cfRows.map((r, mi) => <td key={mi} className="cell"><input value={cf[fk('FIN', mi)] ?? ''} onChange={(e) => setCF('FIN', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot" style={{ color: '#b91c1c' }}>{fmt(cfSum('fin'))}</td></tr>
+                <tr><td className="l sub2" style={{ color: '#15803d' }}>(+) Otros ingresos</td>{cfRows.map((r, mi) => <td key={mi} className="cell"><input value={cf[fk('OING', mi)] ?? ''} onChange={(e) => setCF('OING', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(cfSum('oIng'))}</td></tr>
+                <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Otros gastos</td>{cfRows.map((r, mi) => <td key={mi} className="cell"><input value={cf[fk('OGAS', mi)] ?? ''} onChange={(e) => setCF('OGAS', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot" style={{ color: '#b91c1c' }}>{fmt(cfSum('oGas'))}</td></tr>
+                <tr className="grandrow"><td className="l">= Flujo neto del mes</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: r.flujo >= 0 ? '#15803d' : '#b91c1c', fontWeight: 800 }}>{fmt(r.flujo)}</td>)}<td className="tot" style={{ fontWeight: 800 }}>{fmt(cfSum('flujo'))}</td></tr>
+                <tr className="grandrow"><td className="l" style={{ fontWeight: 800 }}>Cash Final</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ fontWeight: 800 }}>{fmt(r.final)}</td>)}<td className="tot">—</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>}
+      </>}
+
+      {tab === 'pl' && <>
+        <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
+        <div className="panel">
+          <h3 style={{ color: col }}>P&L — Retail <span className="unit">(2028 · estilo Contribución de las SBU)</span></h3>
+          <div className="sub">Resultado operativo de Retail: <b>Venta Neta</b> (por tienda) − <b>Costo</b> = <b>Margen Bruto</b>; luego se restan <b>Gastos</b>, <b>Marketing</b> y <b>Viajes</b>. Todo se alimenta de las otras pestañas.</div>
+          <div className="tablewrap" style={{ overflowX: 'auto', maxWidth: 520 }}>
+            <table><thead><tr><th className="l">Concepto</th><th>2028</th></tr></thead>
+              <tbody>
+                {(() => { const mb = totVenta - totCosto; const res = mb - gGran - mkAnual - vjAnual; const pc = (a) => totVenta > 0 ? ' · ' + (a / totVenta * 100).toFixed(1) + '%' : ''
+                  return <>
+                    <tr><td className="l">Venta Neta</td><td className="tot">{fmt(totVenta)}</td></tr>
+                    <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Costo</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCosto)}</td></tr>
+                    <tr className="grandrow"><td className="l">= Margen Bruto</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(mb)}<span className="unit">{pc(mb)}</span></td></tr>
+                    <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Gastos</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(gGran)}</td></tr>
+                    <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Marketing</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(mkAnual)}</td></tr>
+                    <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Viajes</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(vjAnual)}</td></tr>
+                    <tr className="grandrow"><td className="l">= Resultado Operativo</td><td className="tot" style={{ fontWeight: 800, color: res >= 0 ? '#0f766e' : '#b91c1c' }}>{fmt(res)}<span className="unit">{pc(res)}</span></td></tr>
+                  </>
+                })()}
+              </tbody>
+            </table>
+          </div>
+          <div className="sub" style={{ marginTop: 8 }}>Marketing {fmt(mkAnual)} y Viajes {fmt(vjAnual)} vienen de lo capturado con marca <b>(Retail)</b> en sus pestañas.</div>
+        </div>
+      </>}
     </div>
   )
 }
