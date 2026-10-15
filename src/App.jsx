@@ -47,7 +47,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
+import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -385,6 +385,7 @@ export default function App() {
   const emailLow = (getEmail() || '').trim().toLowerCase()
   const ADMINS_FIJOS = ['yalik@energybrandsgroup.com', 'paula@energybrandsgroup.com']
   const esAdmin = ADMINS_FIJOS.includes(emailLow) || admins.includes(emailLow)
+  const esSuperAdmin = ADMINS_FIJOS.includes(emailLow) // solo yalik y paula ven Configuración
   const veTodasEff = veTodas || esAdmin // quién puede cambiar de empresa
 
   // ENERGY BRANDS: el agrupamiento SBU → marcas se deriva EN VIVO del EBP (misma fuente que los clientes),
@@ -531,7 +532,7 @@ export default function App() {
               <span className="appicon" style={{ background: '#455a64' }}>📝</span>
               <span className="applabel">Bitácora</span>
             </button>}
-            {esAdmin && <button className="app" onClick={() => setRoleId('config')}>
+            {esSuperAdmin && <button className="app" onClick={() => setRoleId('config')}>
               <span className="appicon" style={{ background: '#5b6470' }}>⚙️</span>
               <span className="applabel">Configuración</span>
             </button>}
@@ -622,7 +623,7 @@ export default function App() {
     )
   }
 
-  if (roleId === 'config') {
+  if (roleId === 'config' && esSuperAdmin) {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><div className="spacer"></div>
@@ -3054,7 +3055,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
             <div className="subtabs" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 6, display: 'flex', borderTop: '1px solid var(--line)', paddingTop: 10 }}>
               {SECS.map((r) => { const on = r.id === secId; return <button key={r.id} className={'seg' + (on ? ' active' : '')} onClick={() => setSecId(r.id)} style={on ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{r.icon} {r.label}</button> })}
               {canViajes && <button className={'seg' + (secId === 'viajes' ? ' active' : '')} onClick={() => setSecId('viajes')} style={secId === 'viajes' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>🧳 Viajes equipo</button>}
-              {puedeDir && <button className={'seg' + (secId === 'brand' ? ' active' : '')} onClick={() => setSecId('brand')} style={secId === 'brand' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>📊 Contribución de la SBU</button>}
+              {puedeDir && <button className={'seg' + (secId === 'brand' ? ' active' : '')} onClick={() => setSecId('brand')} style={secId === 'brand' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>📊 Contribución de la marca</button>}
             </div>
             {SECS.length === 0 && secId !== 'viajes' && secId !== 'brand' && <div className="note warn">No tienes áreas asignadas en esta SBU. Pídele a un administrador que ajuste tu acceso en Configuración → Colaboradores.</div>}
             {secId === 'brand'
@@ -3473,7 +3474,7 @@ function BrandContribution({ empresa, marca }) {
 
   return (
     <div className="panel">
-      <h3 style={{ color: marcaColor(marca) }}>Contribución de la SBU — {marca}{M$} <span className="unit">(2028 · solo lectura)</span></h3>
+      <h3 style={{ color: marcaColor(marca) }}>Contribución de la marca — {marca}{M$} <span className="unit">(2028 · solo lectura)</span></h3>
       {load ? <div className="sub">Cargando…</div> : (<>
         <div className="tablewrap">
           <table style={{ width: 'auto' }}>
@@ -3487,7 +3488,7 @@ function BrandContribution({ empresa, marca }) {
               {fila('= Margen Bruto', margenBruto, true, { fy25: fyMargen(2025), fy26: fyMargen(2026), abp27: abpMargen })}
               {fila('(−) Marketing', marketing, false, { fy25: mkRefY(2025), fy26: mkRefY(2026), abp27: null })}
               {fila('(−) Viajes', viajes, false, { fy25: vjRefY(2025), fy26: vjRefY(2026), abp27: null })}
-              {fila('= CONTRIBUCIÓN DE LA SBU', brand, true)}
+              {fila('= CONTRIBUCIÓN DE LA MARCA', brand, true)}
             </tbody>
           </table>
         </div>
@@ -3879,9 +3880,11 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
   const [mkref, setMkref] = useState(null) // marketing de referencia (EBP) 2025/2026
   const [colapsadas, setColapsadas] = useState({}) // marcas con su detalle de categorías oculto
   const toggleCat = (m) => setColapsadas((c) => ({ ...c, [m]: !c[m] }))
-  useEffect(() => { let x = false; (async () => { try { const v = await gMkRef(); if (!x) setMkref(v) } catch { } })(); return () => { x = true } }, [empresa])
+  const [abp27, setAbp27] = useState(null) // ABP 2027 por marca (marketing, venta, viajes)
+  useEffect(() => { let x = false; (async () => { try { const v = await gMkRef(); if (!x) setMkref(v) } catch { } try { const a = await gABP2027Ref(); if (!x && a && a.ok) setAbp27(a.val) } catch { } })(); return () => { x = true } }, [empresa])
   const mkRefM = (m, y) => (((mkref || {}).marca || {})[upper(m)] || {})[y] || 0
   const mkRefS = (sb, y) => (((mkref || {}).sbu || {})[upper(sb)] || {})[y] || 0
+  const a27 = (m) => (abp27 || {})[upper(m)] || { mk: 0, vn: 0, vj: 0 }
   useEffect(() => {
     (async () => {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
@@ -3898,20 +3901,38 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
 
   if (vista === 'mk') {
     const mkMes = (mca) => { const a = Array(12).fill(0); P.mk.forEach((r) => { if (!inM(r, mca) || esViaje(r[1])) return; for (let j = 0; j < 12; j++) a[j] += num(r[4 + j]) }); return a }
+    const vnY = (mca, y) => (P.hist || []).reduce((s, r) => (upper(r[5]) === upper(mca) && String(r[1]) === String(y) && String(r[3] || '').toUpperCase().indexOf('VENTA') >= 0) ? s + num(r[7]) : s, 0)
     const filas = marcas.map((m) => { const mes = mkMes(m); return { m, mes, tot: mes.reduce((s, v) => s + v, 0) } })
     const totMes = MESES.map((_, mi) => filas.reduce((s, f) => s + f.mes[mi], 0))
     const gt = totMes.reduce((s, v) => s + v, 0)
+    const dc = (cur, ref) => { if (!(ref > 0)) return <td className="tot">—</td>; const d = (cur - ref) / ref * 100; return <td className={'tot ' + (d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700 }}>{(d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
+    const l26 = lbl26(P.hist)
+    // Totales SBU por año (marketing y venta)
+    const T = { mk27: 0, vn27: 0, mk26: 0, vn26: 0, mk25: 0, vn25: 0 }
+    filas.forEach((f) => { const a = a27(f.m); T.mk27 += a.mk; T.vn27 += a.vn; T.mk26 += mkRefM(f.m, 2026); T.vn26 += vnY(f.m, 2026); T.mk25 += mkRefM(f.m, 2025); T.vn25 += vnY(f.m, 2025) })
+    const yrCols = (mkv, cur, vnv, cls) => <>{<td className={'tot ' + cls}>{fmt(mkv)}</td>}{dc(cur, mkv)}<td className={'tot ' + cls} title="Venta neta del año">{fmt(vnv)}</td></>
     return (
       <div className="panel">
         <h3 style={{ color: sbuColor(sbuName) }}>Marketing por marca — {sbuName}{M$} <span className="unit">(solo lectura · 2028)</span></h3>
-        <div className="sub">Total de marketing que el equipo captura por cada marca de la SBU, mes a mes, con el total de la SBU al final.</div>
-        <div className="tablewrap">
-          <table className="vfix">
-            <colgroup><col style={{ width: '160px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '90px' }} /></colgroup>
-            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">2025</th><th className="ya">{lbl26(P.hist)}</th></tr></thead>
+        <div className="sub">Marketing por marca, mes a mes (2028), comparado con <b>ABP 2027</b>, <b>Real {l26}</b> y <b>Real 2025</b> — con la variación del 2028 vs cada año y la venta neta de cada uno.</div>
+        <div className="tablewrap" style={{ overflowX: 'auto' }}>
+          <table className="vfix" style={{ width: 'auto', minWidth: 1168 }}>
+            <colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '58px' }} />)}<col style={{ width: '82px' }} />{Array.from({ length: 9 }).map((_, i) => <col key={i} style={{ width: '82px' }} />)}</colgroup>
+            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th>
+              <th className="yb">ABP 2027</th><th className="yb">Δ 28·27</th><th className="yb">Venta 2027</th>
+              <th className="ya">Real {l26}</th><th className="ya">Δ 28·26</th><th className="ya">Venta {l26}</th>
+              <th className="ya">Real 2025</th><th className="ya">Δ 28·25</th><th className="ya">Venta 2025</th></tr></thead>
             <tbody>
-              {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td><td className="tot ya">{fmt(mkRefM(f.m, 2025))}</td><td className="tot ya">{fmt(mkRefM(f.m, 2026))}</td></tr>)}
-              <tr className="grandrow"><td className="l">Total {sbuName}{Q('Consolidado = suma del marketing de cada marca:\n' + filas.map((f) => `${f.m}: ${fmt(f.tot)}`).join('\n'))}</td>{totMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(gt)}</td><td className="tot ya">{fmt(mkRefS(sbuName, 2025))}</td><td className="tot ya">{fmt(mkRefS(sbuName, 2026))}</td></tr>
+              {filas.map((f) => { const a = a27(f.m); return <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td>
+                {yrCols(a.mk, f.tot, a.vn, 'yb')}
+                {yrCols(mkRefM(f.m, 2026), f.tot, vnY(f.m, 2026), 'ya')}
+                {yrCols(mkRefM(f.m, 2025), f.tot, vnY(f.m, 2025), 'ya')}
+              </tr> })}
+              <tr className="grandrow"><td className="l">Total {sbuName}</td>{totMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(gt)}</td>
+                {yrCols(T.mk27, gt, T.vn27, 'yb')}
+                {yrCols(T.mk26, gt, T.vn26, 'ya')}
+                {yrCols(T.mk25, gt, T.vn25, 'ya')}
+              </tr>
             </tbody>
           </table>
         </div>
@@ -4095,11 +4116,13 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
   useEffect(() => {
     if (empresa !== 'ENERGY BRANDS') return
     if (!ebSbus || !Object.keys(ebSbus).length) return
-    if (combos[empresa] && Object.keys(combos[empresa]).length) return
+    // ENERGY BRANDS: BASE = mapeo del EBP (cada marca en su SBU). ENCIMA se aplican tus ajustes guardados (reorganización), que mandan.
     const m = {}; [...ALL_MARCAS, ...extraMarcas, ...Object.values(ebSbus).flat()].forEach((mk) => { m[mk] = '' })
     Object.entries(ebSbus).forEach(([s, ms]) => ms.forEach((mk) => { if (SBU_NAMES.includes(s)) m[mk] = s }))
+    const c = combos[empresa]
+    if (c) { SBU_NAMES.forEach((s) => (c[s] || []).forEach((mk) => { m[mk] = s })); (c['NO VENDE'] || []).forEach((mk) => { m[mk] = 'NO' }) }
     setAsign(m)
-  }, [empresa, ebSbus])
+  }, [empresa, ebSbus, extraMarcas])
   function cargarDeEBP() {
     if (!ebSbus || !Object.keys(ebSbus).length) { setMsg({ t: 'warn', x: 'Aún no hay datos del EBP para cargar. Entra a una SBU para que cargue el histórico y vuelve.' }); return }
     const m = {}; allMarcas.forEach((mk) => { m[mk] = '' })
