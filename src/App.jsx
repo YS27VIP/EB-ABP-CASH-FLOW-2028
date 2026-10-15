@@ -3367,11 +3367,11 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               <tbody>
                 {allSubcats.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; return <tr key={c}>
                   <td className="l sub2">{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}</td>
-                  {wholesaleMarcas.map((m) => { const p = pctOf(c, m); const faltaCat = p > 0 && !catOf(c, m); return <td key={m} style={{ padding: 4, verticalAlign: 'top', borderBottom: '1px solid var(--line)' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={`${c} ← ${m}`} style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #f0e6c9', background: '#fdf7e3', borderRadius: 5, padding: '5px', textAlign: 'center' }} />
-                      <select value={cellOf(c, m).cat ?? ''} onChange={(e) => setCell(c, m, 'cat', e.target.value)} title="Categoría de esta marca" style={{ width: '100%', boxSizing: 'border-box', fontSize: 10.5, padding: '3px 2px', borderRadius: 4, border: `1.5px solid ${faltaCat ? '#e11d8f' : 'var(--line)'}`, color: catOf(c, m) ? 'inherit' : 'var(--muted)', background: '#fff' }}>
-                        <option value="">— categoría —</option>{(prodCats[m] || []).map((x) => <option key={x} value={x}>{x}</option>)}
+                  {wholesaleMarcas.map((m) => { const p = pctOf(c, m); const faltaCat = p > 0 && !catOf(c, m); return <td key={m} style={{ padding: 4, verticalAlign: 'top', borderBottom: '1px solid var(--line)', background: faltaCat ? '#ffe4f1' : undefined }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={`${c} ← ${m} · porcentaje`} style={{ display: 'block', width: '100%', boxSizing: 'border-box', border: '1px solid #f0e6c9', background: '#fdf7e3', borderRadius: 5, padding: '6px 4px', textAlign: 'center', font: 'inherit' }} />
+                      <select value={cellOf(c, m).cat ?? ''} onChange={(e) => setCell(c, m, 'cat', e.target.value)} title="Categoría de esta marca" style={{ display: 'block', width: '100%', boxSizing: 'border-box', fontSize: 10.5, padding: '4px 2px', borderRadius: 4, border: `1.5px solid ${faltaCat ? '#e11d8f' : '#cbd5e1'}`, color: catOf(c, m) ? '#111' : (faltaCat ? '#e11d8f' : '#94a3b8'), background: '#fff', fontWeight: faltaCat ? 700 : 400 }}>
+                        <option value="">{faltaCat ? '⚠ elige categoría' : '— categoría —'}</option>{(prodCats[m] || []).map((x) => <option key={x} value={x}>{x}</option>)}
                       </select>
                     </div>
                   </td> })}
