@@ -2999,7 +2999,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
     ['comercial', '🛍️ Comercial'], ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'],
     ['gastos', '💵 Gastos'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
   ]
-  const COM_TABS = [['ventas', '🏬 Ventas por tienda'], ['mapa', '🧭 Mapa de abastecimiento'], ['ucv', '💹 Unidades · Costo · Venta']]
+  const COM_TABS = [['ventas', '🚢 Importaciones por tienda'], ['mapa', '🧭 Mapa de abastecimiento'], ['ucv', '💹 Unidades · Costo · Venta']]
   // ---- Importaciones (captura mensual del COSTO de importación por marca, con referencia 2027) ----
   const [imp, setImp] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
@@ -3187,8 +3187,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Ventas por tienda</span><div className="spacer"></div><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
-          <h3 style={{ color: col }}>Ventas y costo proyectados por tienda — 2028</h3>
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Importaciones por tienda</span><div className="spacer"></div><button className="btn" onClick={() => setComTab('mapa')}>🧭 Mapa de abastecimiento</button><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+          <h3 style={{ color: col }}>Importaciones y costo proyectados por tienda — 2028 <span className="unit">(unidades a comprar · Retail → Wholesale)</span></h3>
           <div className="sub">Escoge una <b>tienda</b> y captura por <b>subcategoría Retail</b>: las <b>unidades por mes</b>. El <b>costo</b> sale del <b>mapa de abastecimiento</b> (de qué marca/categoría wholesale se compra cada subcategoría) × el <b>factor</b> global.</div>
           <div className="toolbar" style={{ margin: '8px 0 2px', gap: 8, alignItems: 'center' }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Factor wholesale→Retail (×):</label>
@@ -3229,13 +3229,13 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               </table>
             </div>
           </> })()}
-          {/* Resumen de todas las tiendas: venta / costo / margen */}
-          <div className="sub" style={{ fontWeight: 700, color: '#0f766e', margin: '16px 0 6px' }}>Resumen por tienda (todas)</div>
+          {/* Resumen de todas las tiendas: unidades y costo (importación) */}
+          <div className="sub" style={{ fontWeight: 700, color: '#0f766e', margin: '16px 0 6px' }}>Resumen por tienda (todas) <span className="unit" style={{ fontWeight: 400 }}>— unidades a comprar y costo</span></div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table><thead><tr><th className="l">Tienda</th><th>Venta Neta</th><th>Costo</th><th>Margen $</th><th>Margen %</th></tr></thead>
+            <table><thead><tr><th className="l">Tienda</th><th>Unidades</th><th>Costo</th></tr></thead>
               <tbody>
-                {tiendas.map((t) => { const v = tVenta(t), c = tCosto(t); return <tr key={t} onClick={() => setSelT(t)} style={{ cursor: 'pointer' }}><td className="l">{t}</td><td className="tot" style={{ color: '#15803d' }}>{fmt(v)}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(c)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(v - c)}</td><td className="tot" style={{ color: '#0f766e' }}>{mpct(v - c, v)}</td></tr> })}
-                <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot" style={{ color: '#15803d' }}>{fmt(totVenta)}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCosto)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(totVenta - totCosto)}</td><td className="tot" style={{ color: '#0f766e' }}>{mpct(totVenta - totCosto, totVenta)}</td></tr>
+                {tiendas.map((t) => { const u = MESES.reduce((a, _, mi) => a + storeUnitsM(t, mi), 0), c = tCosto(t); return <tr key={t} onClick={() => setSelT(t)} style={{ cursor: 'pointer' }}><td className="l">{t}</td><td className="tot">{fmt(u)}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(c)}</td></tr> })}
+                <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(tiendas.reduce((a, t) => a + MESES.reduce((s, _, mi) => s + storeUnitsM(t, mi), 0), 0))}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCosto)}</td></tr>
               </tbody>
             </table>
           </div>
