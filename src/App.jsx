@@ -2994,12 +2994,12 @@ const RETAIL_CATS_DEF = ["Everyday Road", "Everyday Trail", "Training", "Road ra
 function RetailWorkspace({ empresa, usuario, sbus }) {
   const col = sbuColor('Retail')
   const [tab, setTab] = useState('comercial')
-  const [comTab, setComTab] = useState('ventas') // sub-vista de Comercial
+  const [comTab, setComTab] = useState('mapa') // sub-vista de Comercial (paso 1 = mapa)
   const TABS = [
     ['comercial', '🛍️ Comercial'], ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'],
     ['gastos', '💵 Gastos'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
   ]
-  const COM_TABS = [['ventas', '🚢 Importaciones por tienda'], ['mapa', '🧭 Mapa de abastecimiento'], ['ucv', '💹 Unidades · Costo · Venta']]
+  const COM_TABS = [['mapa', '1. 🧭 Mapa de abastecimiento'], ['ventas', '2. 🚢 Importaciones por tienda'], ['ucv', '3. 🏬 Ventas por tienda']]
   // ---- Importaciones (captura mensual del COSTO de importación por marca, con referencia 2027) ----
   const [imp, setImp] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
@@ -3300,8 +3300,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Unidades · Costo · Venta</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
-          <h3 style={{ color: col }}>Proyección por tienda — 2028 <span className="unit">(resumen · se alimenta de "Ventas por tienda")</span></h3>
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Ventas por tienda</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+          <h3 style={{ color: col }}>Ventas por tienda — 2028 <span className="unit">(unidades · costo · venta · se alimenta de las importaciones y el margen)</span></h3>
           <div className="sub">Unidades, ingresos (venta neta) y costo por tienda y mes, con la utilidad bruta. Las tiendas nuevas (agregadas por ti) salen marcadas con <b style={{ color: '#0e7490' }}>NUEVA</b>.</div>
           {/* Supuestos de venta: %Margen / %Descuento por tienda y mes (generan la venta neta) */}
           <div className="sub" style={{ fontWeight: 700, margin: '10px 0 4px', color: col }}>Supuestos de venta por tienda <span className="unit" style={{ fontWeight: 400 }}>(venta neta = costo × (1 + %margen) × (1 − %descuento))</span></div>
