@@ -3224,7 +3224,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           const pctC = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
           const totVjAnual = MESES.reduce((a, _, mi) => a + totVjMes(mi), 0), vnAnual = MESES.reduce((a, _, mi) => a + vnMes(mi), 0)
           return <div className="panel" style={{ marginBottom: 12 }}>
-            <h3 style={{ color: col }}>Viajes del equipo — Retail <span className="unit">(🪞 espejo · 2028)</span></h3>
+            <div className="toolbar" style={{ marginBottom: 2 }}><h3 style={{ color: col, margin: 0 }}>Viajes del equipo — Retail <span className="unit">(🪞 espejo · 2028)</span></h3><div className="spacer"></div><button className="btn" onClick={() => reloadCaps()}>🔄 Actualizar</button></div>
+            <div className="sub" style={{ marginBottom: 6 }}>Refleja lo <b>guardado</b> en cada bloque. Si guardaste y no lo ves, pulsa <b>🔄 Actualizar</b>.</div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
               <table className="vfix"><colgroup><col style={{ width: '170px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
                 <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
