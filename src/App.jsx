@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -181,6 +181,13 @@ const INV_SEASONS = ['ANT', 'SS27', 'FW27']
 const BUY_SEASONS = ['SS28', 'FW28', 'SS29']
 const SEASONS = [...INV_SEASONS, ...BUY_SEASONS]
 const sLbl = (s) => s === 'ANT' ? 'TEMPORADAS ANTERIORES' : s
+// Retail: referencia 2027 de importaciones por marca (del archivo ABP 2026_2027, hoja IMPORTACIONES): u = unidades, c = costo USD.
+const RETAIL_IMP_2027 = {
+  ALTRA: { u: 390, c: 23019 }, ARIAT: { u: 396, c: 40734 }, BIRKENSTOCK: { u: 7410, c: 429025 }, BLUNDSTONE: { u: 288, c: 22226 },
+  COTOPAXI: { u: 617, c: 18201 }, FITFLOP: { u: 354, c: 17654 }, FOAMERS: { u: 330, c: 16335 }, HOKA: { u: 6582, c: 351846 },
+  INJINJI: { u: 102, c: 546 }, MAMMUT: { u: 83, c: 3530 }, UGG: { u: 1848, c: 102577 },
+}
+const RETAIL_MARCAS = Object.keys(RETAIL_IMP_2027)
 const sTag = (s, buy) => buy ? '(compra 2028)' : (s === 'ANT' ? '(saldo viejo agrupado)' : '(saldo anterior)')
 
 /* ===== helpers ===== */
@@ -2968,6 +2975,79 @@ function TeamPanel({ empresa, sbuName }) {
   )
 }
 
+/* ===== RETAIL: tiendas propias — Importaciones, Gastos, Ventas/Costo por tienda, Marketing, Viajes, Cash Flow ===== */
+function RetailWorkspace({ empresa, usuario, sbus }) {
+  const col = sbuColor('Retail')
+  const [tab, setTab] = useState('imp')
+  const TABS = [
+    ['imp', '🚢 Importaciones'], ['gastos', '💵 Gastos'], ['ventas', '🏬 Ventas por tienda'],
+    ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'], ['cf', '💰 Cash Flow'],
+  ]
+  // ---- Importaciones (captura mensual del COSTO de importación por marca, con referencia 2027) ----
+  const [imp, setImp] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}') } catch { return {} } })
+  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  useEffect(() => { try { setImp(JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}')) } catch { } }, [empresa])
+  const ik = (m, mi) => `${m}|${mi}`
+  const setI = (m, mi, v) => setImp((d) => ({ ...d, [ik(m, mi)]: v }))
+  const rowTotM = (m) => MESES.reduce((a, _, mi) => a + num(imp[ik(m, mi)]), 0)
+  const colTotM = (mi) => RETAIL_MARCAS.reduce((a, m) => a + num(imp[ik(m, mi)]), 0)
+  const granTot = RETAIL_MARCAS.reduce((a, m) => a + rowTotM(m), 0)
+  function guardarImp() { setSaving(true); try { saveEstado(empresa, 'retail_imp', imp); setMsg({ t: 'ok', x: 'Importaciones guardadas. Alimentan el Cash Out del Cash Flow de Retail.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  const vjRoles = ['director', 'producto', 'marketing', 'ventas'].map((id) => ROLES.find((r) => r.id === id))
+  const mkRubro = (ROLES.find((r) => r.id === 'marketing').rubros || [])[0]
+
+  return (
+    <div>
+      <div className="toolbar" style={{ marginBottom: 10 }}>
+        <span className="empchip" style={{ background: col, marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>🏬 Retail · {empresa}</span>
+      </div>
+      <div className="subtabs" style={{ marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 6, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+        {TABS.map(([id, lbl]) => <button key={id} className={'seg' + (tab === id ? ' active' : '')} onClick={() => setTab(id)} style={tab === id ? { background: col, borderColor: col, color: '#fff' } : {}}>{lbl}</button>)}
+      </div>
+
+      {tab === 'imp' && <>
+        {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+        <div className="panel">
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Importaciones</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarImp}>{saving ? 'Guardando…' : '💾 Guardar importaciones'}</button></div>
+          <h3 style={{ color: col }}>Importaciones 2028 — Retail <span className="unit">(costo de importación en $, por marca y mes · alimenta el Cash Out)</span></h3>
+          <div className="sub">Escribe el <b>costo de importación por mes</b> (lo que se compra a la SBU). A la derecha, el <b>total 2027 de referencia</b> (del ABP). Las unidades 2027 de referencia están en el tooltip de cada marca.</div>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '95px' }} /></colgroup>
+              <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">Ref 2027 $</th></tr></thead>
+              <tbody>
+                {RETAIL_MARCAS.map((m) => { const ref = RETAIL_IMP_2027[m] || {}; return <tr key={m}><td className="l" title={`Referencia 2027: ${fmt(ref.u)} ud · $${fmt(ref.c)}`}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={imp[ik(m, mi)] ?? ''} onChange={(e) => setI(m, mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot">{fmt(rowTotM(m))}</td><td className="tot ya">{fmt(ref.c)}</td></tr> })}
+                <tr className="grandrow"><td className="l">TOTAL Retail</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(colTotM(mi))}</td>)}<td className="tot">{fmt(granTot)}</td><td className="tot ya">{fmt(RETAIL_MARCAS.reduce((a, m) => a + (RETAIL_IMP_2027[m]?.c || 0), 0))}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>}
+
+      {tab === 'mk' && <>
+        <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
+        <RoleForm key="retail-mk" role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" />
+      </>}
+
+      {tab === 'viajes' && <>
+        <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
+        <div className="sub" style={{ marginBottom: 8 }}>En Retail viajan <b>4 áreas</b>: Director, Producto, Marketing y Ventas. Cada bloque tiene su captura y su total.</div>
+        {vjRoles.map((r) => (
+          <div key={r.id} style={{ marginTop: 14 }}>
+            <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 10px', display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> Viajes de {r.label} — Retail</div>
+            <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" />
+          </div>
+        ))}
+      </>}
+
+      {(tab === 'gastos' || tab === 'ventas' || tab === 'cf') && (
+        <div className="panel"><h3 style={{ color: col }}>{tab === 'gastos' ? '💵 Gastos de Retail' : tab === 'ventas' ? '🏬 Ventas y Costo por tienda' : '💰 Cash Flow de Retail'}</h3>
+          <div className="note warn">🚧 En construcción (próxima fase). {tab === 'gastos' ? 'Rubros del P&L con referencia 2027, editables y con "agregar rubro".' : tab === 'ventas' ? 'Ingresos y costo proyectados por tienda física (con opción de agregar tienda nueva) y su margen.' : 'Consolida importaciones (Cash Out), ventas (Cash In), gastos, marketing y viajes en el mismo formato de Cash Flow.'}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   const pu = puede || (() => true)
   // Acceso por rol: solo se ven las áreas asignadas al colaborador.
@@ -3009,7 +3089,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   }
 
   if (isRetail) {
-    return <div className="panel"><h3 style={{ color: sbuColor('Retail') }}>Retail — tiendas propias</h3><div className="note warn">Retail le compra internamente a las SBU (venta intercompañía). Para activarlo necesito el <b>precio de transferencia</b> (margen fijo, % sobre costo o AUP interno). En cuanto lo definamos, aquí verás la captura y el consolidado de Retail. 🏬</div></div>
+    return <RetailWorkspace empresa={empresa} usuario={usuario} sbus={sbus} />
   }
   return (
     <div className="comercial">
