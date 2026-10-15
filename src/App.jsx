@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -2987,8 +2987,8 @@ function TeamPanel({ empresa, sbuName }) {
 }
 
 /* ===== RETAIL: tiendas propias — Importaciones, Gastos, Ventas/Costo por tienda, Marketing, Viajes, Cash Flow ===== */
-// Retail: categorías/subcategorías por defecto para una tienda nueva (editables, se pueden agregar).
-const RETAIL_CATS_DEF = ['W Footwear', 'M Footwear', 'W Apparel', 'M Apparel', 'Accessories']
+// Retail: subcategorías de ejemplo para una tienda nueva (editables, se pueden agregar/quitar).
+const RETAIL_CATS_DEF = ['CALZADO', 'ROPA', 'ACCESORIOS']
 
 function RetailWorkspace({ empresa, usuario, sbus }) {
   const col = sbuColor('Retail')
@@ -3035,8 +3035,14 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const setU = (t, c, mi, v) => setVt((d) => ({ ...d, [cvk(t, c, mi)]: v }))
   const setMeta = (t, c, f, v) => setVt((d) => ({ ...d, [cmk(t, c, f)]: v }))
   const rowUnits = (t, c) => MESES.reduce((a, _, mi) => a + num(vt[cvk(t, c, mi)]), 0)
-  const ventaM = (t, c, mi) => num(vt[cvk(t, c, mi)]) * num(vt[cmk(t, c, 'AUP')]) * (1 - num(vt[cmk(t, c, 'DESC')]) / 100)
-  const costoM = (t, c, mi) => num(vt[cvk(t, c, mi)]) * num(vt[cmk(t, c, 'AUC')])
+  // Nuevo modelo: costo = AUC wholesale ponderado (del mapa) × factor global; venta = costo × (1+margen%) × (1−desc%)
+  const margenPct = (t, mi) => num(vt[`${t}||MARGEN||${mi}`])
+  const descPct = (t, mi) => num(vt[`${t}||DESC||${mi}`])
+  const whUnit = (t, c, mi) => srcOf(t, c).reduce((a, s) => a + (num(s.pct) / 100) * aucMC(s.marca, s.cat, mi), 0)   // costo wholesale ponderado por unidad
+  const cogsUnit = (t, c, mi) => whUnit(t, c, mi) * factor()                                                           // costo de la venta por unidad (× factor)
+  const ventaUnit = (t, c, mi) => cogsUnit(t, c, mi) * (1 + margenPct(t, mi) / 100) * (1 - descPct(t, mi) / 100)        // venta neta por unidad
+  const ventaM = (t, c, mi) => num(vt[cvk(t, c, mi)]) * ventaUnit(t, c, mi)
+  const costoM = (t, c, mi) => num(vt[cvk(t, c, mi)]) * cogsUnit(t, c, mi)
   const rowVenta = (t, c) => MESES.reduce((a, _, mi) => a + ventaM(t, c, mi), 0)
   const rowCosto = (t, c) => MESES.reduce((a, _, mi) => a + costoM(t, c, mi), 0)
   const storeVentaM = (t, mi) => catsOf(t).reduce((a, c) => a + ventaM(t, c, mi), 0)
@@ -3046,15 +3052,17 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const tVenta = (t) => MESES.reduce((a, _, mi) => a + storeVentaM(t, mi), 0)
   const tCosto = (t) => MESES.reduce((a, _, mi) => a + storeCostoM(t, mi), 0)
   const totVenta = tiendas.reduce((a, t) => a + tVenta(t), 0), totCosto = tiendas.reduce((a, t) => a + tCosto(t), 0)
-  function guardarVentas() { setSaving(true); try { saveEstado(empresa, 'retail_ventas', vt); saveEstado(empresa, 'retail_cats', cats); saveEstado(empresa, 'retail_tiendas', tiendas); setMsg({ t: 'ok', x: 'Ventas por tienda guardadas.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function guardarVentas() { setSaving(true); try { saveEstado(empresa, 'retail_ventas', vt); saveEstado(empresa, 'retail_cats', cats); saveEstado(empresa, 'retail_tiendas', tiendas); saveEstado(empresa, 'retail_map', smap); saveEstado(empresa, 'retail_cf', cf); setMsg({ t: 'ok', x: 'Ventas por tienda guardadas.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   function addTienda() { const n = window.prompt('Nombre de la nueva tienda:'); if (!n) return; const nm = n.trim(); if (!nm || tiendas.some((t) => t.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa tienda ya existe.' }); return } const next = [...tiendas, nm]; setTiendas(next); setSelT(nm); saveEstado(empresa, 'retail_tiendas', next) }
   function delTienda(t) { if (!window.confirm(`¿Quitar la tienda "${t}"?`)) return; const next = tiendas.filter((x) => x !== t); setTiendas(next); if (selT === t) setSelT(next[0] || null); saveEstado(empresa, 'retail_tiendas', next) }
-  function addCat(t) { const n = window.prompt('Categoría / Subcategoría (ej: "W Footwear / Everyday Road"):'); if (!n) return; const nm = n.trim(); const cur = catsOf(t); if (!nm || cur.some((c) => c.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa categoría ya existe en la tienda.' }); return } setCats((d) => ({ ...d, [t]: [...cur, nm] })) }
-  function delCat(t, c) { const cur = catsOf(t).filter((x) => x !== c); setCats((d) => ({ ...d, [t]: cur })) }
-  // ---- Marketing y Viajes de Retail (espejo de lo capturado en sus pestañas, marca "(Retail)") ----
+  function addCat(t) { const n = window.prompt('Subcategoría Retail (ej: "CORRER", "SENDERISMO"):'); if (!n) return; const nm = n.trim(); const cur = catsOf(t); if (!nm || cur.some((c) => c.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa subcategoría ya existe en la tienda.' }); return } setCats((d) => ({ ...d, [t]: [...cur, nm] })) }
+  function delCat(t, c) { const cur = catsOf(t).filter((x) => x !== c); setCats((d) => ({ ...d, [t]: cur })); setSmap((d) => { const n = { ...d }; delete n[mapKey(t, c)]; return n }) }
+  // ---- Marketing y Viajes de Retail (espejo) + Producto (AUC wholesale) + categorías wholesale por marca ----
   const [capRows, setCapRows] = useState({ mk: [], vj: [] })
+  const [producto, setProducto] = useState([])
+  const [prodCats, setProdCats] = useState({}) // { marca: [categorías wholesale] }
   useEffect(() => { let on = true; (async () => {
-    const tabs = ['Cap_Marketing', 'Cap_Ventas', 'Cap_Producto', 'Cap_Director']
+    const tabs = ['Cap_Marketing', 'Cap_Ventas', 'Cap_Producto', 'Cap_Director', 'Cap_Categorias']
     const out = {}; for (const tb of tabs) { try { const j = await gReadTab(tb); out[tb] = (j && j.ok && j.values) ? j.values.slice(1) : [] } catch { out[tb] = [] } }
     if (!on) return
     const isRetail = (r) => upper(r[0]) === upper(empresa) && upper(r[3]) === '(RETAIL)'
@@ -3062,7 +3070,25 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
     const mk = (out['Cap_Marketing'] || []).filter((r) => isRetail(r) && !esVj(r))
     const vj = tabs.flatMap((tb) => (out[tb] || []).filter((r) => isRetail(r) && esVj(r)))
     setCapRows({ mk, vj })
+    setProducto((out['Cap_Producto'] || []).filter((r) => upper(r[0]) === upper(empresa)))
+    const pc = {}; (out['Cap_Categorias'] || []).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const cat = r[1], mar = r[3]; if (!mar || !cat) return; (pc[mar] = pc[mar] || []); if (!pc[mar].includes(cat)) pc[mar].push(cat) }); setProdCats(pc)
   })(); return () => { on = false } }, [empresa])
+  // AUC wholesale por (marca, categoría, mes) desde Cap_Producto ("AUC · <cat>")
+  const aucMC = (marca, cat, mi) => { const pfx = 'AUC · ' + cat; let v = 0; producto.forEach((r) => { if (upper(r[3]) !== upper(marca)) return; const rub = String(r[1] || ''); if (rub === pfx || rub === 'AUC · ' + cat) v = num(r[4 + mi]) }); return v }
+  const wholesaleMarcas = marcasDe(sbus).map((m) => m.marca)
+  // Mapa de abastecimiento: subcategoría Retail → [{marca, cat, pct}] (por tienda+subcat)
+  const [smap, setSmap] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_map_${empresa}`) || '{}') } catch { return {} } })
+  useEffect(() => { try { setSmap(JSON.parse(localStorage.getItem(`retail_map_${empresa}`) || '{}')) } catch { } }, [empresa])
+  const [openMap, setOpenMap] = useState('')
+  const mapKey = (t, c) => `${t}||${c}`
+  const srcOf = (t, c) => smap[mapKey(t, c)] || []
+  const setSrc = (t, c, arr) => setSmap((d) => ({ ...d, [mapKey(t, c)]: arr }))
+  const addSrc = (t, c) => setSrc(t, c, [...srcOf(t, c), { marca: wholesaleMarcas[0] || '', cat: '', pct: '' }])
+  const updSrc = (t, c, i, field, val) => { const arr = srcOf(t, c).map((s, j) => j === i ? { ...s, [field]: val, ...(field === 'marca' ? { cat: '' } : {}) } : s); setSrc(t, c, arr) }
+  const delSrc = (t, c, i) => setSrc(t, c, srcOf(t, c).filter((_, j) => j !== i))
+  const srcPctSum = (t, c) => srcOf(t, c).reduce((a, s) => a + num(s.pct), 0)
+  const whAvg = (t, c) => MESES.reduce((a, _, mi) => a + whUnit(t, c, mi), 0) / 12   // costo wholesale promedio/ud (referencia)
+  const factor = () => { const f = num(cf[fk('FACTOR', 0)]); return f > 0 ? f : 1.25 }
   const mkMes = (mi) => capRows.mk.reduce((a, r) => a + num(r[4 + mi]), 0)
   const vjMes = (mi) => capRows.vj.reduce((a, r) => a + num(r[4 + mi]), 0)
   const mkAnual = MESES.reduce((a, _, mi) => a + mkMes(mi), 0)
@@ -3163,34 +3189,71 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div className="panel">
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Ventas por tienda</span><div className="spacer"></div><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Ventas y costo proyectados por tienda — 2028</h3>
-          <div className="sub">Escoge una <b>tienda</b> y llena su proyección <b>por categoría / subcategoría</b>: unidades por mes + <b>AUC</b> (costo unitario) + <b>AUP</b> (precio sin descuento) + <b>% descuento</b>. La venta neta y el costo se calculan solos.</div>
+          <div className="sub">Escoge una <b>tienda</b> y captura por <b>subcategoría Retail</b>: las <b>unidades por mes</b>. El <b>costo</b> sale del <b>mapa de abastecimiento</b> (de qué marca/categoría wholesale se compra cada subcategoría) × el <b>factor</b> global. La <b>venta</b> = costo × (1 + %margen) × (1 − %descuento), con %margen y %descuento <b>por tienda y mes</b>.</div>
+          <div className="toolbar" style={{ margin: '8px 0 2px', gap: 8, alignItems: 'center' }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Factor wholesale→Retail (×):</label>
+            <input value={cf[fk('FACTOR', 0)] ?? ''} onChange={(e) => setCF('FACTOR', 0, e.target.value)} inputMode="decimal" placeholder="1.25" style={{ width: 70, padding: '6px 8px', borderRadius: 7, border: '1.5px solid var(--line)', textAlign: 'center' }} />
+            <span className="unit">Costo de la venta = costo wholesale × {fmt(factor())}. Si lo dejas vacío usa 1.25.</span>
+          </div>
           {/* Selector de tienda */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 4px' }}>
-            {tiendas.map((t) => <button key={t} className={'seg' + (selStore === t ? ' active' : '')} onClick={() => setSelT(t)} style={selStore === t ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{t}</button>)}
+            {tiendas.map((t) => <button key={t} className={'seg' + (selStore === t ? ' active' : '')} onClick={() => setSelT(t)} style={selStore === t ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{t}{esTiendaNueva(t) && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 800 }}>NUEVA</span>}</button>)}
           </div>
           {!selStore ? <div className="sub">No hay tiendas. Usa <b>➕ Agregar tienda</b>.</div> : (() => { const t = selStore; const cs = catsOf(t); return <>
             <div className="toolbar" style={{ margin: '12px 0 6px' }}>
               <span style={{ fontWeight: 800, color: col, fontSize: 15 }}>🏬 {t}</span>
               <span className="unit" style={{ marginLeft: 8 }}>Venta neta {fmt(tVenta(t))} · Costo {fmt(tCosto(t))} · Margen {mpct(tVenta(t) - tCosto(t), tVenta(t))}</span>
               <div className="spacer"></div>
-              <button className="btn" onClick={() => addCat(t)}>➕ Agregar categoría</button>
+              <button className="btn" onClick={() => addCat(t)}>➕ Agregar subcategoría</button>
             </div>
+            {/* %margen y %descuento por mes (nivel tienda) */}
+            <div className="tablewrap" style={{ overflowX: 'auto', marginBottom: 10 }}>
+              <table className="vfix"><colgroup><col style={{ width: '190px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}</colgroup>
+                <thead><tr><th className="l">Supuesto (por mes)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}</tr></thead>
+                <tbody>
+                  <tr><td className="l sub2" style={{ color: '#15803d' }}>% Margen</td>{MESES.map((_, mi) => <td key={mi} className="cell ya"><input value={vt[`${t}||MARGEN||${mi}`] ?? ''} onChange={(e) => setVt((d) => ({ ...d, [`${t}||MARGEN||${mi}`]: e.target.value }))} inputMode="decimal" /></td>)}</tr>
+                  <tr><td className="l sub2" style={{ color: '#b45309' }}>% Descuento</td>{MESES.map((_, mi) => <td key={mi} className="cell ya"><input value={vt[`${t}||DESC||${mi}`] ?? ''} onChange={(e) => setVt((d) => ({ ...d, [`${t}||DESC||${mi}`]: e.target.value }))} inputMode="decimal" /></td>)}</tr>
+                </tbody>
+              </table>
+            </div>
+            {/* Captura de unidades por subcategoría + mapa de abastecimiento */}
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
-              <table className="vfix"><colgroup><col style={{ width: '190px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}<col style={{ width: '66px' }} /><col style={{ width: '66px' }} /><col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '82px' }} /></colgroup>
+              <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}<col style={{ width: '82px' }} /><col style={{ width: '82px' }} /><col style={{ width: '82px' }} /></colgroup>
                 <thead>
-                  <tr><th className="l">Categoría / Subcategoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th className="ya">AUC $</th><th className="ya">AUP $</th><th className="ya">% Desc</th><th>Venta neta</th><th>Costo</th></tr>
+                  <tr><th className="l">Subcategoría Retail</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th className="ya">Costo/ud</th><th>Venta neta</th><th>Costo</th></tr>
                 </thead>
                 <tbody>
-                  {cs.map((c) => <tr key={c}>
-                    <td className="l sub2">{c}<button title="Quitar categoría" onClick={() => delCat(t, c)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button></td>
-                    {MESES.map((_, mi) => <td key={mi} className="cell"><input value={vt[cvk(t, c, mi)] ?? ''} onChange={(e) => setU(t, c, mi, e.target.value)} inputMode="decimal" title={`${c} · unidades`} /></td>)}
-                    <td className="cell ya"><input value={vt[cmk(t, c, 'AUC')] ?? ''} onChange={(e) => setMeta(t, c, 'AUC', e.target.value)} inputMode="decimal" /></td>
-                    <td className="cell ya"><input value={vt[cmk(t, c, 'AUP')] ?? ''} onChange={(e) => setMeta(t, c, 'AUP', e.target.value)} inputMode="decimal" /></td>
-                    <td className="cell ya"><input value={vt[cmk(t, c, 'DESC')] ?? ''} onChange={(e) => setMeta(t, c, 'DESC', e.target.value)} inputMode="decimal" /></td>
-                    <td className="tot" style={{ color: '#15803d' }}>{fmt(rowVenta(t, c))}</td>
-                    <td className="tot" style={{ color: '#b91c1c' }}>{fmt(rowCosto(t, c))}</td>
-                  </tr>)}
-                  <tr className="grandrow"><td className="l">Total {t} <span className="unit">(unid: {fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))})</span></td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(cs.reduce((a, c) => a + num(vt[cvk(t, c, mi)]), 0))}</td>)}<td className="tot ya">—</td><td className="tot ya">—</td><td className="tot ya">—</td><td className="tot" style={{ color: '#15803d' }}>{fmt(tVenta(t))}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCosto(t))}</td></tr>
+                  {cs.map((c) => { const mk = mapKey(t, c); const abierto = openMap === mk; const sum = srcPctSum(t, c); return <Fragment2 key={c}>
+                    <tr>
+                      <td className="l sub2">{c}
+                        <button title="Mapa de abastecimiento" onClick={() => setOpenMap(abierto ? '' : mk)} className="btn" style={{ marginLeft: 6, padding: '0 6px', fontSize: 11 }}>🧭 mapa{srcOf(t, c).length ? ` (${srcOf(t, c).length})` : ''}</button>
+                        <button title="Quitar subcategoría" onClick={() => delCat(t, c)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>
+                        {srcOf(t, c).length > 0 && Math.round(sum) !== 100 && <span className="unit" style={{ color: '#b45309', marginLeft: 4 }} title="El mapa no suma 100%">⚠ {fmt(sum)}%</span>}
+                      </td>
+                      {MESES.map((_, mi) => <td key={mi} className="cell"><input value={vt[cvk(t, c, mi)] ?? ''} onChange={(e) => setU(t, c, mi, e.target.value)} inputMode="decimal" title={`${c} · unidades`} /></td>)}
+                      <td className="tot ya" title="Costo de la venta por unidad = costo wholesale ponderado × factor">{whAvg(t, c) > 0 ? fmt(whAvg(t, c) * factor()) : '—'}</td>
+                      <td className="tot" style={{ color: '#15803d' }}>{fmt(rowVenta(t, c))}</td>
+                      <td className="tot" style={{ color: '#b91c1c' }}>{fmt(rowCosto(t, c))}</td>
+                    </tr>
+                    {abierto && <tr><td colSpan={16} style={{ background: '#f8fafc', padding: '8px 12px' }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, color: col }}>🧭 Mapa de abastecimiento de "{c}" <span className="unit">— de qué marca/categoría wholesale se compra (suma 100%)</span></div>
+                      {srcOf(t, c).length === 0 && <div className="sub" style={{ margin: '0 0 6px' }}>Aún no hay fuentes. Agrega de qué marca/categoría se compra esta subcategoría.</div>}
+                      {srcOf(t, c).map((s, i) => <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 5, flexWrap: 'wrap' }}>
+                        <select value={s.marca} onChange={(e) => updSrc(t, c, i, 'marca', e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--line)' }}>
+                          <option value="">— marca —</option>{wholesaleMarcas.map((m) => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <select value={s.cat} onChange={(e) => updSrc(t, c, i, 'cat', e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--line)', minWidth: 160 }}>
+                          <option value="">— categoría —</option>{(prodCats[s.marca] || []).map((ct) => <option key={ct} value={ct}>{ct}</option>)}
+                        </select>
+                        <input value={s.pct} onChange={(e) => updSrc(t, c, i, 'pct', e.target.value)} inputMode="decimal" placeholder="%" style={{ width: 60, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--line)', textAlign: 'center' }} />
+                        <span className="unit">AUC prom. {s.marca && s.cat ? '$' + fmt(MESES.reduce((a, _, mi) => a + aucMC(s.marca, s.cat, mi), 0) / 12) : '—'}</span>
+                        <button onClick={() => delSrc(t, c, i)} style={{ border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>
+                      </div>)}
+                      <button className="btn" onClick={() => addSrc(t, c)} style={{ marginTop: 2, padding: '3px 10px', fontSize: 12 }}>➕ Agregar fuente</button>
+                      <span className="unit" style={{ marginLeft: 10 }}>Suma: <b style={{ color: Math.round(sum) === 100 ? '#15803d' : '#b45309' }}>{fmt(sum)}%</b> · Costo wholesale prom./ud: ${fmt(whAvg(t, c))}</span>
+                    </td></tr>}
+                  </Fragment2> })}
+                  <tr className="grandrow"><td className="l">Total {t} <span className="unit">(unid: {fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))})</span></td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(cs.reduce((a, c) => a + num(vt[cvk(t, c, mi)]), 0))}</td>)}<td className="tot ya">—</td><td className="tot" style={{ color: '#15803d' }}>{fmt(tVenta(t))}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCosto(t))}</td></tr>
                 </tbody>
               </table>
             </div>
