@@ -2212,7 +2212,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
         <div className="sub">Las <b>categorías</b> y su <b>tipo de producto</b> vienen de lo que definió el Director. Aquí Logística escribe el <b>CBM</b> (metros cúbicos) de cada categoría, para dimensionar el volumen de envío y almacenaje.</div>
         {catList.length === 0
           ? <div className="note warn">Aún no hay categorías para {marca}. El Director las define en su pestaña <b>Categorías</b>; cuando las guarde, aquí aparecerán para ponerles el CBM.</div>
-          : <div className="tablewrap"><table style={{ width: 'auto' }}>
+          : <div className="tablewrap" style={{ overflowX: 'auto' }}><table style={{ width: 'auto' }}>
             <thead><tr><th className="l">Categoría</th><th className="l">Tipo de producto</th><th>CBM</th></tr></thead>
             <tbody>
               {catList.map((c) => { const k = `${marca}|CBM|${c}`; const tipo = catTipo[`${marca}|${c}`]; return <tr key={c}><td className="l">{c}</td><td className="l">{tipo ? tipo : <span className="unit">(sin tipo definido)</span>}</td><td className="cell"><input className="fillin" value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" placeholder="CBM" style={{ width: 100, textAlign: 'center' }} /></td></tr> })}
@@ -2655,7 +2655,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
         <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar precios'}</button></div>
         <h3>Inventario, costo y precio por temporada y categoría — {marca}{M$}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Producto" /></h3>
         <div className="sub" style={{ marginBottom: 6 }}>Por cada <b>temporada</b> (añada) y <b>categoría</b>: cuántas <b>unidades</b>, su <b>AUC</b> (costo) y su <b>AUP</b> (precio). Para las temporadas <b>anteriores</b> las unidades son el <b>saldo on-hand</b> (se escriben aquí); para <b>SS28/FW28/SS29</b> las unidades son <b>solo lectura</b> — vienen de las compras que capturas en el <b>Paso 4</b>, repartidas por el peso de la categoría (aquí solo pones sus precios AUC/AUP). Las categorías vienen de lo que definió el Director.</div>
-        <div className="tablewrap"><table style={{ width: 'auto' }}>
+        <div className="tablewrap" style={{ overflowX: 'auto' }}><table style={{ width: 'auto' }}>
           <thead><tr><th className="l">Categoría / Temporada</th><th style={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Unidades<br /><span className="unit" style={{ fontWeight: 400 }}>saldo / compra proy.</span></th><th>AUC ($)</th><th>AUP ($)</th><th>Margen bruto ($)</th><th>Margen bruto %</th><th>Landed ($)</th><th>Margen landed ($)</th><th>Margen landed %</th></tr></thead>
           <tbody>
             {cats.map((c) => (
@@ -2668,7 +2668,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
           </tbody>
         </table></div>
         <div style={{ fontWeight: 800, color: '#017e84', fontSize: 13.5, margin: '16px 0 6px' }}>Total por temporada <span className="unit" style={{ fontWeight: 400 }}>(suma de todas las categorías · solo lectura)</span></div>
-        <div className="tablewrap"><table style={{ width: 'auto' }}>
+        <div className="tablewrap" style={{ overflowX: 'auto' }}><table style={{ width: 'auto' }}>
           <thead><tr><th className="l">Temporada</th><th>Unidades</th><th>AUC ($)</th><th>AUP ($)</th><th>Margen bruto ($)</th><th>Margen bruto %</th><th>Landed ($)</th><th>Margen landed ($)</th><th>Margen landed %</th></tr></thead>
           <tbody>
             {SEASONS.map((s) => { const buy = BUY_SEASONS.includes(s); const au = seasonAUP(s), ac = seasonAUC(s), u = invSeason(s); return <tr key={s}><td className="l">{sLbl(s)} <span className="unit" style={{ fontSize: 10 }}>{sTag(s, buy)}</span></td><td className="tot help-bulb" title={`Fórmula: unidades de ${s} = suma de las unidades de todas las categorías de esta temporada`}>{fmt(u)}</td><td className="tot help-bulb" title={`Fórmula: AUC de ${s} = Σ (unidades × AUC de cada categoría) ÷ total de unidades\nDatos de origen:\n${cats.filter((c) => invSC(s, c) > 0.5).map((c) => `  ${c}: ${fmt(invSC(s, c))} ud × $${money(aucSC(s, c)) || '0'} = $${money(invSC(s, c) * aucSC(s, c)) || '0'}`).join('\n') || '  (sin unidades)'}\n= $${money(ac * u) || '0'} ÷ ${fmt(u)} ud = $${money(ac) || '0'}`}>{money(ac)}</td><td className="tot help-bulb" title={`Fórmula: AUP de ${s} = Σ (unidades × AUP de cada categoría) ÷ total de unidades\nDatos de origen:\n${cats.filter((c) => invSC(s, c) > 0.5).map((c) => `  ${c}: ${fmt(invSC(s, c))} ud × $${money(aupSC(s, c)) || '0'} = $${money(invSC(s, c) * aupSC(s, c)) || '0'}`).join('\n') || '  (sin unidades)'}\n= $${money(au * u) || '0'} ÷ ${fmt(u)} ud = $${money(au) || '0'}`}>{money(au)}</td><td className="tot help-bulb" title={`Fórmula: Margen = AUP − AUC\nDatos de origen: $${money(au) || '0'} − $${money(ac) || '0'} = $${money(au - ac) || '0'}`}>{money(au - ac)}</td><td className="tot help-bulb" title={`Fórmula: Margen % = (AUP − AUC) ÷ AUP\nDatos de origen: ($${money(au) || '0'} − $${money(ac) || '0'}) ÷ $${money(au) || '0'} = ${mpct(au, ac) || '0%'}`}>{mpct(au, ac)}</td><td className="tot help-bulb" title={`Landed = AUC × (1 + ${fmt(pctLog)}% logística) = $${money(land(ac)) || '0'}`}>{money(land(ac))}</td><td className="tot help-bulb" title={`Margen landed = AUP − landed = $${money(au - land(ac)) || '0'}`}>{money(au - land(ac))}</td><td className="tot">{mpct(au, land(ac))}</td></tr> })}
@@ -2731,7 +2731,7 @@ function AprobacionesForm({ empresa, sbus }) {
       <h3>Aprobaciones — Logística {M$}<span className="unit"> (Finanzas · por marca)</span></h3>
       <div className="sub">Revisa los <b>% de costos logísticos</b> que capturó cada marca y <b>apruébalos</b>. Mientras <b>no</b> apruebas, en Logística esos campos siguen <b>amarillos</b> (para revisar); al aprobar pasan a <b>verde</b> (confirmados). Aprobadas: <b>{nAp}</b> de {marcas.length}.</div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      <div className="tablewrap"><table style={{ width: 'auto' }}>
+      <div className="tablewrap" style={{ overflowX: 'auto' }}><table style={{ width: 'auto' }}>
         <thead><tr><th className="l">Marca</th><th>% Log. venta</th><th>Muestras $</th><th>% Mant.</th><th>Estado</th><th>Acción</th></tr></thead>
         <tbody>
           {marcas.map(({ marca: m }) => { const ap = isAprob(m); return (
@@ -2749,7 +2749,7 @@ function AprobacionesForm({ empresa, sbus }) {
 
       <h3 style={{ marginTop: 22 }}>Aprobaciones — Términos de compra a proveedor <span className="unit">(Finanzas · por marca)</span></h3>
       <div className="sub">Revisa el <b>término de pago a proveedor</b> que cargó cada marca y <b>apruébalo</b>. Al aprobar, el campo se pone <b style={{ color: '#15803d' }}>verde</b> en la hoja de <b>Finanzas</b> y de los <b>Directores</b>. Aprobadas: <b>{nApC}</b> de {marcas.length}.</div>
-      <div className="tablewrap"><table style={{ width: 'auto' }}>
+      <div className="tablewrap" style={{ overflowX: 'auto' }}><table style={{ width: 'auto' }}>
         <thead><tr><th className="l">Marca</th><th>Término a proveedor</th><th>Estado</th><th>Acción</th></tr></thead>
         <tbody>
           {marcas.map(({ marca: m }) => { const ap = isAprobC(m); const pt = cf[`PTERM|${m}`]; return (
@@ -4626,6 +4626,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
   const [hist, setHist] = useState([])
   const [cats, setCats] = useState({})
+  const [catsLoaded, setCatsLoaded] = useState(false) // true cuando ya terminó de leer Cap_Categorias (para no mostrar "no hay categorías" mientras carga)
   const [producto, setProducto] = useState([])
   const [venSheet, setVenSheet] = useState([]) // filas guardadas en Cap_Ventas (respaldo del plan 2028)
   const [growth, setGrowth] = useState(() => { try { return JSON.parse(localStorage.getItem('ventas_growth_' + empresa) || '{}') } catch { return {} } })
@@ -4659,9 +4660,10 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [msg, setMsg] = useState(null)
 
   useEffect(() => {
-    (async () => {
+    setCatsLoaded(false)
+    ;(async () => {
       try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
-      try { const j2 = await gReadTab('Cap_Categorias'); if (j2 && j2.ok && j2.values) { const out = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
+      try { const j2 = await gReadTab('Cap_Categorias'); if (j2 && j2.ok && j2.values) { const out = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { } finally { setCatsLoaded(true) }
       try { const j3 = await gReadTab('Cap_Producto'); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
       // Recupera el plan 2028 guardado en la hoja: rellena SOLO las celdas que estén vacías en el navegador
       // (así lo guardado reaparece tras un refresh y Ventas queda consistente con lo que ve Producto).
@@ -4749,7 +4751,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   // ¿El Director activó categorías para esta marca? (lo define en su pestaña; por defecto sí)
   const catsToggle = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] !== false } catch { return true } })()
   const usarCat = catsToggle && catList.length > 0
-  const catMsg = catsToggle ? 'Aún no hay categorías definidas para ' + marca + ' (las define el Director en su pestaña Categorías y guarda). Mientras tanto, solo se ve el total por mes.' : 'Categorías desactivadas por el Director: solo el total por mes.'
+  const catMsg = !catsLoaded ? '⏳ Cargando categorías…' : (catsToggle ? 'Aún no hay categorías definidas para ' + marca + ' (las define el Director en su pestaña Categorías y guarda). Mientras tanto, solo se ve el total por mes.' : 'Categorías desactivadas por el Director: solo el total por mes.')
   // Participación de categorías por cliente (check). Sin marcar = participa en todas.
   const partOf = (cli) => { const k = cli + '|' + marca; return catPart[k] === undefined ? catList.map((c) => c.cat) : catPart[k] }
   const toggleCat = (cli, cat) => { const cur = partOf(cli); const nx = cur.includes(cat) ? cur.filter((x) => x !== cat) : [...cur, cat]; setCatPart({ ...catPart, [cli + '|' + marca]: nx }) }
@@ -4806,7 +4808,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
             <thead><tr><th className="l">Categoría</th><th style={{ whiteSpace: 'normal', lineHeight: 1.1 }}>Peso<br />pond. %</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
               <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="tot" title="La marca siempre suma 100%: es la suma del peso ponderado de todas sus categorías." style={{ cursor: BULB_CURSOR }}>{totMarcaSel > 0 ? '100.0%' : '—'}</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
-              {!usarCat && <tr><td className="l" colSpan={15} style={{ color: 'var(--muted)' }}>{catsToggle ? `Aún no hay categorías definidas para ${marca} (las define el Director).` : `Categorías desactivadas por el Director para ${marca}.`}</td></tr>}
+              {!usarCat && <tr><td className="l" colSpan={15} style={{ color: 'var(--muted)' }}>{!catsLoaded ? '⏳ Cargando categorías…' : (catsToggle ? `Aún no hay categorías definidas para ${marca} (las define el Director).` : `Categorías desactivadas por el Director para ${marca}.`)}</td></tr>}
               {usarCat && catList.map((c, i) => { const row = MESES.map((_, mi) => uCatMes(c.cat, mi)); const t = row.reduce((a, b) => a + b, 0); const pw = totMarcaSel > 0 ? (t / totMarcaSel * 100) : 0; return <tr key={i}><td className="l">{c.cat}</td><td className="tot" title={`Peso ponderado = unidades de ${c.cat} (${fmt(t)}) ÷ unidades totales de ${marca} (${fmt(totMarcaSel)}) = ${pw.toFixed(1)}%. Las unidades por categoría salen del % que el Director puso por cliente.`} style={{ cursor: BULB_CURSOR }}>{pw.toFixed(1)}%</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
             </tbody>
           </table>
