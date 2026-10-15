@@ -692,7 +692,8 @@ export default function App() {
 /* ===== RoleForm: pestañas de rubro (simple o detalle) ===== */
 function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) {
   const esTot = String(fixedMarca || '').startsWith('TOTAL::')
-  const rubros = (rubrosOverride || role.rubros).filter((rb) => !rb.gadmin || esTot) // Gastos admin solo en TOTAL SBU
+  // Los VIAJES ya no se llenan dentro de cada rol: se capturan en la pestaña "🧳 Viajes equipo". Por eso se quitan del selector VER del rol (salvo cuando se pide explícito con rubrosOverride, como en Gerencia/Finanzas/Viajes equipo).
+  const rubros = (rubrosOverride || role.rubros.filter((rb) => rb.k !== 'VIAJES')).filter((rb) => !rb.gadmin || esTot) // Gastos admin solo en TOTAL SBU
   const [tab, setTab] = useState(0)
   const [data, setData] = useState({})
   const [saving, setSaving] = useState(false)
@@ -2386,12 +2387,12 @@ function ResumenInventario({ marca, tempState, precios, empresa }) {
   return (
     <div className="panel">
       <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
-        <h3 style={{ margin: 0 }}>Resumen de inventario — {marca} {vista === 'ud' ? <span style={{ color: '#1d4ed8', fontWeight: 800 }}>· Unidades</span> : vista === '$' ? <span style={{ color: '#15803d', fontWeight: 800 }}>· Plata</span> : <><span style={{ color: '#1d4ed8', fontWeight: 800 }}>· Unidades</span> <span style={{ color: '#15803d', fontWeight: 800 }}>+ Plata</span></>} <span className="unit">(cálculo automático)</span></h3>
+        <h3 style={{ margin: 0 }}>Resumen de inventario — {marca} {vista === 'ud' ? <span style={{ color: '#1d4ed8', fontWeight: 800 }}>· Unidades</span> : vista === '$' ? <span style={{ color: '#15803d', fontWeight: 800 }}>· Valor $</span> : <><span style={{ color: '#1d4ed8', fontWeight: 800 }}>· Unidades</span> <span style={{ color: '#15803d', fontWeight: 800 }}>+ Valor $</span></>} <span className="unit">(cálculo automático)</span></h3>
         <div className="spacer"></div>
         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>VER:</span>
-        {[['ud', 'Unidades'], ['$', 'Plata'], ['ambas', 'Ambas']].map(([k, lbl]) => <button key={k} className={'seg' + (vista === k ? ' active' : '')} onClick={() => setVista(k)}>{lbl}</button>)}
+        {[['ud', 'Unidades'], ['$', 'Valor $'], ['ambas', 'Ambas']].map(([k, lbl]) => <button key={k} className={'seg' + (vista === k ? ' active' : '')} onClick={() => setVista(k)}>{lbl}</button>)}
       </div>
-      <div className="sub">De un vistazo: lo que <b>tienes disponible</b> (inicial + compras), lo que <b>vas a vender</b> (salidas) y lo que <b>te queda</b> a fin de año, por temporada y en total. Plata = unidades × AUC de compra de la temporada.</div>
+      <div className="sub">De un vistazo: lo que <b>tienes disponible</b> (inicial + compras), lo que <b>vas a vender</b> (salidas) y lo que <b>te queda</b> a fin de año, por temporada y en total. Valor $ = unidades × AUC de compra de la temporada.</div>
       <div className="kpis" style={{ marginBottom: 12 }}>
         <div className="kpi"><div className="k">Inventario disponible {vista === '$' ? '($)' : vista === 'ambas' ? '(ud · $)' : '(ud)'}</div><div className="v">{vista === '$' ? '$' + fmt(T.$disp) : fmt(T.disp)}</div><div className="s">inicial {fmt(T.ini)} + compras {fmt(T.comp)}</div></div>
         <div className="kpi"><div className="k">Total a vender (salidas)</div><div className="v">{vista === '$' ? '$' + fmt(T.$vend) : fmt(T.vend)}</div><div className="s">unidades del año</div></div>
@@ -2483,7 +2484,7 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp, precios }) {
   const RT = (arr) => arr.reduce((a, b) => a + b, 0)
   const money = (arr) => arr.map((v, m) => v * auc[m])
   function guardar() { setSaving(true); try { saveEstado(empresa, 'temp', temp); setMsg({ t: 'ok', x: 'Guardado (compras y tránsito).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
-  // Celda calculada según la vista (unidades / plata / ambas)
+  // Celda calculada según la vista (unidades / valor $ / ambas)
   const cCell = (units, m) => { const u = units[m]; const $ = u * auc[m]; if (vista === 'ud') return fmt(u); if (vista === '$') return fmt($); return <>{fmt(u)}<div className="unit" style={{ fontSize: 10 }}>${fmt($)}</div></> }
   const cTot = (units) => { const u = RT(units); const $ = RT(money(units)); if (vista === 'ud') return fmt(u); if (vista === '$') return fmt($); return <>{fmt(u)}<div className="unit" style={{ fontSize: 10 }}>${fmt($)}</div></> }
   return (
@@ -2493,19 +2494,19 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp, precios }) {
         <select className="fillin" value={temp[`TR|${marca}`] ?? '0'} onChange={(e) => setTemp((t) => ({ ...t, [`TR|${marca}`]: e.target.value }))} style={{ minWidth: 120, fontWeight: 700 }}><option value="0">Sin tránsito</option><option value="1">30 días</option><option value="1.5">45 días</option><option value="2">60 días</option><option value="3">90 días</option><option value="4">120 días</option><option value="6">180 días</option></select>
         <span className="fill-badge">✏️</span>
         <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>VER:</span>
-        {[['ud', 'Unidades'], ['$', 'Plata'], ['ambas', 'Ambas']].map(([k, lbl]) => <button key={k} className={'seg' + (vista === k ? ' active' : '')} onClick={() => setVista(k)}>{lbl}</button>)}
+        {[['ud', 'Unidades'], ['$', 'Valor $'], ['ambas', 'Ambas']].map(([k, lbl]) => <button key={k} className={'seg' + (vista === k ? ' active' : '')} onClick={() => setVista(k)}>{lbl}</button>)}
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      <div className="sub">Escribe las <b>unidades a comprar</b> por mes en la fila amarilla (fecha <b>XFD</b>): de <b>ene a jun = SS28</b>, de <b>jul a oct = FW28</b> y de <b>nov a dic = SS29</b> (ya empieza la compra de la próxima temporada). La <b>disponible</b> = XFD + <b>{tr}</b> mes(es) de tránsito. Abajo, cada mes: <b>inventario inicial del mes + compras disponibles − ventas = saldo fin de mes</b>. El inicial de enero es el saldo de todas las temporadas anteriores (Otros…FW27): <b>{fmt(ini2028)} ud</b>. Plata = unidades × AUC.</div>
+      <div className="sub">Escribe las <b>unidades a comprar</b> por mes en la fila amarilla (fecha <b>XFD</b>): de <b>ene a jun = SS28</b>, de <b>jul a oct = FW28</b> y de <b>nov a dic = SS29</b> (ya empieza la compra de la próxima temporada). La <b>disponible</b> = XFD + <b>{tr}</b> mes(es) de tránsito. Abajo, cada mes: <b>inventario inicial del mes + compras disponibles − ventas = saldo fin de mes</b>. El inicial de enero es el saldo de todas las temporadas anteriores (Otros…FW27): <b>{fmt(ini2028)} ud</b>. Valor $ = unidades × AUC.</div>
       <div className="tablewrap"><table className="vfix gridcols"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '84px' }} /></colgroup>
         <thead>
           <tr><th className="l">Concepto</th>{MESES.map((m, i) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Total</th></tr>
           <tr><th className="l" style={{ fontWeight: 600, color: 'var(--muted)' }}>Temporada de compra</th>{MESES.map((_, i) => { const lbl = i === 0 ? 'SS28' : i === 6 ? 'FW28' : i === 10 ? 'SS29' : ''; return <th key={i} style={{ fontWeight: 800, color: '#b45309' }}>{lbl}</th> })}<th></th></tr>
         </thead>
         <tbody>
-          <tr><td className="l">Compras a comprar · <b>XFD</b> <span className="unit">({vista === 'ud' ? 'unidades' : vista === '$' ? 'plata' : 'ud · $'})</span> {vista === 'ud' && <span className="fill-badge" style={{ marginLeft: 4 }}>✏️</span>}</td>{MESES.map((_, m) => vista === 'ud' ? <td key={m} className="cell"><input value={temp[cpKey(m)] ?? ''} onChange={(e) => setCP(m, e.target.value)} inputMode="decimal" style={{ width: '100%' }} /></td> : <td key={m} className="tot">{cCell(xfd, m)}</td>)}<td className="tot">{vista === 'ud' ? fmt(RT(xfd)) : cTot(xfd)}</td></tr>
+          <tr><td className="l">Compras a comprar · <b>XFD</b> <span className="unit">({vista === 'ud' ? 'unidades' : vista === '$' ? 'valor $' : 'ud · $'})</span> {vista === 'ud' && <span className="fill-badge" style={{ marginLeft: 4 }}>✏️</span>}</td>{MESES.map((_, m) => vista === 'ud' ? <td key={m} className="cell"><input value={temp[cpKey(m)] ?? ''} onChange={(e) => setCP(m, e.target.value)} inputMode="decimal" style={{ width: '100%' }} /></td> : <td key={m} className="tot">{cCell(xfd, m)}</td>)}<td className="tot">{vista === 'ud' ? fmt(RT(xfd)) : cTot(xfd)}</td></tr>
           <tr className="catrow"><td className="l">Compras · disponible <span className="unit">(XFD + tránsito)</span></td>{MESES.map((_, m) => <td key={m} className="tot">{cCell(disp, m)}</td>)}<td className="tot">{cTot(disp)}</td></tr>
           <tr className="secrow"><td colSpan={14}>Flujo de inventario 2028 (todas las temporadas)</td></tr>
           <tr><td className="l sub2">Inventario inicial del mes</td>{MESES.map((_, m) => <td key={m} className="tot help-bulb" title={m === 0 ? `Inventario inicial de enero = saldo de temporadas anteriores → ${iniCompStr} = ${fmt(ini2028)} ud` : `Saldo fin de ${MESES[m - 1].slice(0, 3).toUpperCase()}: inicial ${fmt(saldoIni[m - 1])} + compras ${fmt(disp[m - 1])} − ventas ${fmt(ventasU[m - 1])} = ${fmt(saldoIni[m])} ud`}>{cCell(saldoIni, m)}</td>)}<td className="tot"></td></tr>
@@ -2894,16 +2895,16 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
   )
 }
 
-/* ===== BLOQUE LOGÍSTICA: captura + inventario + costos, con switch Unidades/Plata (solo aquí) ===== */
+/* ===== BLOQUE LOGÍSTICA: captura + inventario + costos, con switch Unidades/Valor $ (solo aquí) ===== */
 function LogisticaBlock({ r, empresa, usuario, oneSbu, marca, noHeader }) {
-  const [vista, setVista] = useState('ambas') // 'ud' = inventario (unidades) · '$' = costos (plata)
+  const [vista, setVista] = useState('ambas') // 'ud' = inventario (unidades) · '$' = costos (valor $)
   const acc = marcaColor(marca)
   return (
     <div style={{ marginBottom: noHeader ? 0 : 18 }}>
       {!noHeader && <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>}
       <div className="toolbar" style={{ marginBottom: 10, gap: 6 }}>
         <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>Ver:</span>
-        {[['ud', '🔢 Unidades (inventario)'], ['$', '💲 Plata (costos)'], ['ambas', '🔢💲 Ambas']].map(([m, lbl]) => <button key={m} className={'seg' + (vista === m ? ' active' : '')} onClick={() => setVista(m)} style={vista === m ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{lbl}</button>)}
+        {[['ud', '🔢 Unidades (inventario)'], ['$', '💲 Valor $ (costos)'], ['ambas', '🔢💲 Ambas']].map(([m, lbl]) => <button key={m} className={'seg' + (vista === m ? ' active' : '')} onClick={() => setVista(m)} style={vista === m ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{lbl}</button>)}
       </div>
       {vista !== '$' && <TemporadaForm key={'flow' + marca} empresa={empresa} sbus={oneSbu} fixedMarca={marca} mode="flow" />}
       {vista !== 'ud' && <CostosLogisticos key={'cl' + marca} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
@@ -2957,6 +2958,9 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   const comercialRoles = ['ventas', 'producto', 'logistica'].map((id) => ROLES.find((r) => r.id === id)).filter((r) => pu(r.label))
   const puedeComercial = comercialRoles.length > 0
   const puedeDir = pu('Director')
+  // Roles que capturan viajes (Ventas, Producto, Marketing, Director). La pestaña "Viajes equipo" la ve quien pueda editar al menos uno.
+  const viajesRoles = ROLES.filter((r) => r.rubros.some((rb) => rb.k === 'VIAJES')).filter((r) => pu(r.label))
+  const canViajes = viajesRoles.length > 0
   const SECS = [
     ...(puedeComercial ? [{ id: 'comercial', icon: '🧭', label: 'Comercial' }] : []),
     ...(pu('Marketing') ? [ROLES.find((r) => r.id === 'marketing')] : []),
@@ -3046,14 +3050,14 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
             </div>
             <div className="subtabs" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 6, display: 'flex', borderTop: '1px solid var(--line)', paddingTop: 10 }}>
               {SECS.map((r) => { const on = r.id === secId; return <button key={r.id} className={'seg' + (on ? ' active' : '')} onClick={() => setSecId(r.id)} style={on ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{r.icon} {r.label}</button> })}
-              {puedeDir && <button className={'seg' + (secId === 'viajes' ? ' active' : '')} onClick={() => setSecId('viajes')} style={secId === 'viajes' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>🧳 Viajes equipo</button>}
+              {canViajes && <button className={'seg' + (secId === 'viajes' ? ' active' : '')} onClick={() => setSecId('viajes')} style={secId === 'viajes' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>🧳 Viajes equipo</button>}
               {puedeDir && <button className={'seg' + (secId === 'brand' ? ' active' : '')} onClick={() => setSecId('brand')} style={secId === 'brand' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>📊 Contribución de la SBU</button>}
             </div>
             {SECS.length === 0 && secId !== 'viajes' && secId !== 'brand' && <div className="note warn">No tienes áreas asignadas en esta SBU. Pídele a un administrador que ajuste tu acceso en Configuración → Colaboradores.</div>}
             {secId === 'brand'
               ? <BrandContribution empresa={empresa} marca={marca} />
               : secId === 'viajes'
-              ? <ViajesEquipo empresa={empresa} marca={marca} sbuName={sbuName} marcasSBU={marcasSBU} />
+              ? <ViajesEquipo empresa={empresa} marca={marca} sbuName={sbuName} marcasSBU={marcasSBU} puede={pu} usuario={usuario} sbus={sbus} />
               : secId === 'comercial'
               ? (<>
                 {comercialRoles.length > 1 && <div className="toolbar" style={{ marginBottom: 12, gap: 8, alignItems: 'center' }}>
@@ -3263,12 +3267,12 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
         {HOVERTIP}
         <div className="toolbar" style={{ marginBottom: 8 }}><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar</>)}</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
-          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}<th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th><th className="ya">FY2025</th><th className="ya">Δ25</th><th className="ya">FY2026</th><th className="ya">Δ26</th><th className="yb">ABP2027</th><th className="yb">Δ27</th></tr></thead>
+          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}<th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th><th className="yb">ABP2027</th><th className="yb">Δ 28·27</th><th className="ya">FY2026</th><th className="ya">Δ 28·26</th><th className="ya">FY2025</th><th className="ya">Δ 28·25</th></tr></thead>
           <tbody>
             {filasG.map((f) => { const cur = f.g(totAgg); return <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}{f.help && Q(f.help)}</td>{sbuList.map(({ s, a }) => <td key={s} className="tot" style={cellStyle} title={brkSBU(f, sbus[s])}>{fmt(f.g(a))}</td>)}<td className="tot help-bulb" title={'Consolidado = suma de las SBU:\n' + sbuList.map(({ s, a }) => `${s}: ${fmt(f.g(a))}`).join('\n')}>{fmt(cur)}</td>
-              <td className="tot ya">{f.fy25 != null ? fmt(f.fy25) : '—'}</td>{f.fy25 != null ? dCellG(cur, f.fy25, 'ya') : <td className="tot ya">—</td>}
-              <td className="tot ya">{f.fy26 != null ? fmt(f.fy26) : '—'}</td>{f.fy26 != null ? dCellG(cur, f.fy26, 'ya') : <td className="tot ya">—</td>}
               <td className="tot yb">{f.abp27 != null ? fmt(f.abp27) : '—'}</td>{f.abp27 != null ? dCellG(cur, f.abp27, 'yb') : <td className="tot yb">—</td>}
+              <td className="tot ya">{f.fy26 != null ? fmt(f.fy26) : '—'}</td>{f.fy26 != null ? dCellG(cur, f.fy26, 'ya') : <td className="tot ya">—</td>}
+              <td className="tot ya">{f.fy25 != null ? fmt(f.fy25) : '—'}</td>{f.fy25 != null ? dCellG(cur, f.fy25, 'ya') : <td className="tot ya">—</td>}
             </tr> })}
           </tbody>
         </table></div>
@@ -3458,9 +3462,9 @@ function BrandContribution({ empresa, marca }) {
   const fila = (lbl, val, strong, fyObj) => (
     <tr className={strong ? 'grandrow' : undefined}>
       <td className="l">{lbl}</td><td className="tot">{fmt(val)}</td><td className="ref">{pct(val)}</td>
-      <td className="tot ya">{fyObj && fyObj.fy25 != null ? fmt(fyObj.fy25) : '—'}</td>{fyObj && fyObj.fy25 != null ? dCell(val, fyObj.fy25, 'ya') : <td className="tot ya">—</td>}
-      <td className="tot ya">{fyObj && fyObj.fy26 != null ? fmt(fyObj.fy26) : '—'}</td>{fyObj && fyObj.fy26 != null ? dCell(val, fyObj.fy26, 'ya') : <td className="tot ya">—</td>}
       <td className="tot yb">{fyObj && fyObj.abp27 != null ? fmt(fyObj.abp27) : '—'}</td>{fyObj && fyObj.abp27 != null ? dCell(val, fyObj.abp27, 'yb') : <td className="tot yb">—</td>}
+      <td className="tot ya">{fyObj && fyObj.fy26 != null ? fmt(fyObj.fy26) : '—'}</td>{fyObj && fyObj.fy26 != null ? dCell(val, fyObj.fy26, 'ya') : <td className="tot ya">—</td>}
+      <td className="tot ya">{fyObj && fyObj.fy25 != null ? fmt(fyObj.fy25) : '—'}</td>{fyObj && fyObj.fy25 != null ? dCell(val, fyObj.fy25, 'ya') : <td className="tot ya">—</td>}
     </tr>
   )
 
@@ -3470,7 +3474,7 @@ function BrandContribution({ empresa, marca }) {
       {load ? <div className="sub">Cargando…</div> : (<>
         <div className="tablewrap">
           <table style={{ width: 'auto' }}>
-            <thead><tr><th className="l">Concepto</th><th>Monto</th><th>% VN</th><th className="ya">FY2025</th><th className="ya">Δ vs 25</th><th className="ya">FY2026</th><th className="ya">Δ vs 26</th><th className="yb">ABP 2027</th><th className="yb">Δ vs ABP27</th></tr></thead>
+            <thead><tr><th className="l">Concepto</th><th>Monto</th><th>% VN</th><th className="yb">ABP 2027</th><th className="yb">Δ 28 vs 27</th><th className="ya">FY2026</th><th className="ya">Δ 28 vs 26</th><th className="ya">FY2025</th><th className="ya">Δ 28 vs 25</th></tr></thead>
             <tbody>
               <tr><td className="l">Unidades</td><td className="tot">{fmt(unidades)}</td><td className="ref">—</td><td className="ya">—</td><td className="ya">—</td><td className="ya">—</td><td className="ya">—</td><td className="yb">—</td><td className="yb">—</td></tr>
               {fila('Venta Neta', ventaNeta, true, { fy25: fyVenta(2025), fy26: fyVenta(2026), abp27: abpVenta })}
@@ -3638,19 +3642,19 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
       <h3 style={{ color: sbuColor(sbuName) }}>Contribución de la SBU — {sbuName}{M$} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
       <div className="tablewrap">
         <table className="vfix" style={{ width: 'auto', minWidth: 520 }}>
-          <thead><tr><th className="l">Concepto</th>{cols.map(({ m }) => <th key={m} style={{ color: marcaColor(m) }}>{m}</th>)}<th>TOTAL 2028{Q('Consolidado: cada fila de esta columna es la suma de las marcas de la SBU (las columnas de la izquierda).')}</th><th className="ya">FY2025</th><th className="ya">Δ vs 25</th><th className="ya">FY2026</th><th className="ya">Δ vs 26</th><th className="yb">ABP 2027</th><th className="yb">Δ vs ABP27</th></tr></thead>
+          <thead><tr><th className="l">Concepto</th>{cols.map(({ m }) => <th key={m} style={{ color: marcaColor(m) }}>{m}</th>)}<th>TOTAL 2028{Q('Consolidado: cada fila de esta columna es la suma de las marcas de la SBU (las columnas de la izquierda).')}</th><th className="yb">ABP 2027</th><th className="yb">Δ 28 vs 27</th><th className="ya">FY2026</th><th className="ya">Δ 28 vs 26</th><th className="ya">FY2025</th><th className="ya">Δ 28 vs 25</th></tr></thead>
           <tbody>
             {filas.map((f) => { const cur = f.totVal != null ? f.totVal : f.get(tot); return (
               <tr key={f.k} className={f.strong ? 'grandrow' : undefined}>
                 <td className="l">{f.k}</td>
                 {cols.map(({ m, v }) => <td key={m} className="tot">{f.totVal != null ? '' : fmt(f.get(v))}</td>)}
                 <td className="tot">{fmt(cur)}</td>
-                <td className="tot ya">{f.fy25 != null ? fmt(f.fy25) : '—'}</td>
-                {f.fy25 != null ? dCell(cur, f.fy25) : <td className="tot ya">—</td>}
-                <td className="tot ya">{f.fy26 != null ? fmt(f.fy26) : '—'}</td>
-                {f.fy26 != null ? dCell(cur, f.fy26) : <td className="tot ya">—</td>}
                 <td className="tot yb">{f.abp27 != null ? fmt(f.abp27) : '—'}</td>
                 {f.abp27 != null ? dCell(cur, f.abp27) : <td className="tot yb">—</td>}
+                <td className="tot ya">{f.fy26 != null ? fmt(f.fy26) : '—'}</td>
+                {f.fy26 != null ? dCell(cur, f.fy26) : <td className="tot ya">—</td>}
+                <td className="tot ya">{f.fy25 != null ? fmt(f.fy25) : '—'}</td>
+                {f.fy25 != null ? dCell(cur, f.fy25) : <td className="tot ya">—</td>}
               </tr>
             ) })}
           </tbody>
@@ -3661,7 +3665,7 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
 }
 
 /* ===== VIAJES DEL EQUIPO: consolidado por rol/marca (vista Director) ===== */
-function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
+function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca', puede, usuario, sbus }) {
   const rolesV = ROLES.filter((r) => r.rubros.some((rb) => rb.k === 'VIAJES'))
   const [tabs, setTabs] = useState(null)
   const [vref, setVref] = useState(null) // viajes de referencia (EBP): 2025/2026 por marca y SBU
@@ -3755,8 +3759,19 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca' }) {
 
   // Vista TOTAL SBU: resumen por marca + una tabla de equipo por cada marca
   if (modo === 'total') return (<>{resumenPanel}{(marcasSBU || []).map((m) => teamPanel(m))}</>)
-  // Vista por marca: solo la tabla de equipo de esa marca
-  return teamPanel(marca)
+  // Vista por marca: el resumen del equipo (solo lectura) + la CAPTURA de viajes de cada rol que la persona puede editar.
+  const editRoles = ROLES.filter((r) => r.rubros.some((rb) => rb.k === 'VIAJES')).filter((r) => puede && puede(r.label))
+  return (<>
+    {teamPanel(marca)}
+    {editRoles.length === 0
+      ? <div className="note warn" style={{ marginTop: 10 }}>Aquí cada área captura sus viajes. Tu usuario no tiene un rol de captura asignado en esta SBU, así que solo ves el consolidado de arriba.</div>
+      : editRoles.map((r) => (
+        <div key={r.id} style={{ marginTop: 14 }}>
+          <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 10px', display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> Viajes de {r.label} — {marca}</div>
+          <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={marca} />
+        </div>
+      ))}
+  </>)
 }
 
 /* ===== RESUMEN POR MARCA: Marketing / Unidades·Venta·Costo·Margen (vista TOTAL SBU) ===== */
@@ -4819,7 +4834,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           {/* MARGEN % — dos lecturas */}
           <div className="panel">
             <h3>Margen 2028 en % — {marca}</h3>
-            <div className="sub">Dos lecturas, separadas con una línea suave: <b style={{ color: '#0f766e' }}>① Margen bruto %</b> = Margen ÷ Venta <i>de la categoría</i> (qué tan rentable es). <b style={{ color: '#1d4ed8' }}>② Peso del margen en la venta</b> = Margen $ ÷ Venta total de la marca (cuánto pesa esa plata de margen frente a toda la venta). <span className="unit">Pasa el cursor por cualquier % para ver el cálculo.</span></div>
+            <div className="sub">Dos lecturas, separadas con una línea suave: <b style={{ color: '#0f766e' }}>① Margen bruto %</b> = Margen ÷ Venta <i>de la categoría</i> (qué tan rentable es). <b style={{ color: '#1d4ed8' }}>② Peso del margen en la venta</b> = Margen $ ÷ Venta total de la marca (cuánto pesa ese margen en $ frente a toda la venta). <span className="unit">Pasa el cursor por cualquier % para ver el cálculo.</span></div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
