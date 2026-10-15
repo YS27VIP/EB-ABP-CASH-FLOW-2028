@@ -2999,7 +2999,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
     ['comercial', '🛍️ Comercial'], ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'],
     ['gastos', '💵 Gastos'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
   ]
-  const COM_TABS = [['ventas', '🏬 Ventas por tienda'], ['mapa', '🧭 Mapa de abastecimiento'], ['ucv', '💹 Unidades · Costo · Venta'], ['imp', '🚢 Importaciones']]
+  const COM_TABS = [['ventas', '🏬 Ventas por tienda'], ['mapa', '🧭 Mapa de abastecimiento'], ['ucv', '💹 Unidades · Costo · Venta']]
   // ---- Importaciones (captura mensual del COSTO de importación por marca, con referencia 2027) ----
   const [imp, setImp] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
@@ -3149,35 +3149,6 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         </select>
       </div>}
 
-      {tab === 'comercial' && comTab === 'imp' && <>
-        <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
-        {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-        <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Importaciones Retail → Wholesale</span></div>
-          <h3 style={{ color: col }}>Importaciones 2028 — Retail → Wholesale <span className="unit">(calculado · no se escribe a mano)</span></h3>
-          <div className="sub">Lo que Retail le compra a las SBU (wholesale). Se <b>calcula automáticamente</b> del <b>Mapa de abastecimiento</b>: unidades a comprar × AUC wholesale (de Producto) × factor ({fmt(factor())}). Alimenta el <b>Cash Out</b>. A la derecha, el total 2027 de referencia.</div>
-          <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '95px' }} /></colgroup>
-              <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">Ref 2027 $</th></tr></thead>
-              <tbody>
-                {wholesaleMarcas.map((m) => { const ref = RETAIL_IMP_2027[m] || {}; const an = impMarcaAnual(m); return <tr key={m}><td className="l" title={ref.c ? `Referencia 2027: ${fmt(ref.u)} ud · $${fmt(ref.c)}` : undefined}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(impMarcaMes(m, mi))}</td>)}<td className="tot">{fmt(an)}</td><td className="tot ya">{fmt(ref.c)}</td></tr> })}
-                <tr className="grandrow"><td className="l">TOTAL Retail</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(impMes(mi))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + impMes(mi), 0))}</td><td className="tot ya">{fmt(RETAIL_MARCAS.reduce((a, m) => a + (RETAIL_IMP_2027[m]?.c || 0), 0))}</td></tr>
-              </tbody>
-            </table>
-          </div>
-          {/* Detalle del costo por marca / categoría (base del cálculo) */}
-          <div className="sub" style={{ fontWeight: 700, color: col, margin: '16px 0 6px' }}>Detalle del costo por marca / categoría <span className="unit" style={{ fontWeight: 400 }}>(AUC wholesale × factor {fmt(factor())})</span></div>
-          {mapPairs.length === 0 ? <div className="sub">Aún no hay fuentes en el <b>Mapa de abastecimiento</b>. Configúralo para ver el detalle.</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table><thead><tr><th className="l">Marca</th><th className="l">Categoría wholesale</th><th>AUC wholesale /ud</th><th>× Factor</th><th>Costo /ud</th><th>Importación 2028 $</th></tr></thead>
-              <tbody>
-                {mapPairs.map(({ m, ct }) => { const auc = aucPairAvg(m, ct); return <tr key={m + '|' + ct}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td><td className="l sub2">{ct}</td><td className="tot">{fmt(auc)}</td><td className="tot ya">{fmt(factor())}</td><td className="tot">{fmt(auc * factor())}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(impPairAnual(m, ct))}</td></tr> })}
-                <tr className="grandrow"><td className="l" colSpan={5}>TOTAL importaciones</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(mapPairs.reduce((a, { m, ct }) => a + impPairAnual(m, ct), 0))}</td></tr>
-              </tbody>
-            </table>
-          </div>}
-        </div>
-      </>}
-
       {tab === 'mk' && <>
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         <RoleForm key="retail-mk" role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" />
@@ -3258,16 +3229,38 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               </table>
             </div>
           </> })()}
-          {/* Resumen de todas las tiendas */}
+          {/* Resumen de todas las tiendas: venta / costo / margen */}
           <div className="sub" style={{ fontWeight: 700, color: '#0f766e', margin: '16px 0 6px' }}>Resumen por tienda (todas)</div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table><thead><tr><th className="l">Tienda</th><th>Venta Neta</th><th>Costo</th><th>Margen $</th><th>Margen %</th></tr></thead>
               <tbody>
-                {tiendas.map((t) => { const v = tVenta(t), c = tCosto(t); return <tr key={t} onClick={() => setSelT(t)} style={{ cursor: 'pointer' }}><td className="l">{t}</td><td className="tot">{fmt(v)}</td><td className="tot">{fmt(c)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(v - c)}</td><td className="tot" style={{ color: '#0f766e' }}>{mpct(v - c, v)}</td></tr> })}
-                <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(totVenta)}</td><td className="tot">{fmt(totCosto)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(totVenta - totCosto)}</td><td className="tot" style={{ color: '#0f766e' }}>{mpct(totVenta - totCosto, totVenta)}</td></tr>
+                {tiendas.map((t) => { const v = tVenta(t), c = tCosto(t); return <tr key={t} onClick={() => setSelT(t)} style={{ cursor: 'pointer' }}><td className="l">{t}</td><td className="tot" style={{ color: '#15803d' }}>{fmt(v)}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(c)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(v - c)}</td><td className="tot" style={{ color: '#0f766e' }}>{mpct(v - c, v)}</td></tr> })}
+                <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot" style={{ color: '#15803d' }}>{fmt(totVenta)}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCosto)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(totVenta - totCosto)}</td><td className="tot" style={{ color: '#0f766e' }}>{mpct(totVenta - totCosto, totVenta)}</td></tr>
               </tbody>
             </table>
           </div>
+
+          {/* Importaciones Retail → Wholesale (calculadas del mapa) — unidas en esta misma vista */}
+          <div className="sub" style={{ fontWeight: 700, color: col, margin: '18px 0 6px', borderTop: '1px solid var(--line)', paddingTop: 12 }}>Importaciones Retail → Wholesale <span className="unit" style={{ fontWeight: 400 }}>(calculado del mapa · no se escribe a mano · alimenta el Cash Out)</span></div>
+          <div className="sub">Lo que Retail le compra a las SBU, por marca y mes = unidades a comprar × AUC wholesale (de Producto) × factor ({fmt(factor())}).</div>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '95px' }} /></colgroup>
+              <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">Ref 2027 $</th></tr></thead>
+              <tbody>
+                {wholesaleMarcas.map((m) => { const ref = RETAIL_IMP_2027[m] || {}; const an = impMarcaAnual(m); return <tr key={m}><td className="l" title={ref.c ? `Referencia 2027: ${fmt(ref.u)} ud · $${fmt(ref.c)}` : undefined}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(impMarcaMes(m, mi))}</td>)}<td className="tot">{fmt(an)}</td><td className="tot ya">{fmt(ref.c)}</td></tr> })}
+                <tr className="grandrow"><td className="l">TOTAL Retail</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(impMes(mi))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + impMes(mi), 0))}</td><td className="tot ya">{fmt(RETAIL_MARCAS.reduce((a, m) => a + (RETAIL_IMP_2027[m]?.c || 0), 0))}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="sub" style={{ fontWeight: 700, color: col, margin: '16px 0 6px' }}>Detalle del costo por marca / categoría <span className="unit" style={{ fontWeight: 400 }}>(AUC wholesale × factor {fmt(factor())})</span></div>
+          {mapPairs.length === 0 ? <div className="sub">Aún no hay fuentes en el <b>Mapa de abastecimiento</b>. Configúralo para ver el detalle.</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table><thead><tr><th className="l">Marca</th><th className="l">Categoría wholesale</th><th>AUC wholesale /ud</th><th>× Factor</th><th>Costo /ud</th><th>Importación 2028 $</th></tr></thead>
+              <tbody>
+                {mapPairs.map(({ m, ct }) => { const auc = aucPairAvg(m, ct); return <tr key={m + '|' + ct}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td><td className="l sub2">{ct}</td><td className="tot">{fmt(auc)}</td><td className="tot ya">{fmt(factor())}</td><td className="tot">{fmt(auc * factor())}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(impPairAnual(m, ct))}</td></tr> })}
+                <tr className="grandrow"><td className="l" colSpan={5}>TOTAL importaciones</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(mapPairs.reduce((a, { m, ct }) => a + impPairAnual(m, ct), 0))}</td></tr>
+              </tbody>
+            </table>
+          </div>}
         </div>
       </>}
 
@@ -3307,9 +3300,23 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Unidades · Costo · Venta</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarCF}>{saving ? 'Guardando…' : '💾 Guardar TRM'}</button></div>
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Unidades · Costo · Venta</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Proyección por tienda — 2028 <span className="unit">(resumen · se alimenta de "Ventas por tienda")</span></h3>
           <div className="sub">Unidades, ingresos (venta neta) y costo por tienda y mes, con la utilidad bruta. Las tiendas nuevas (agregadas por ti) salen marcadas con <b style={{ color: '#0e7490' }}>NUEVA</b>.</div>
+          {/* Supuestos de venta: %Margen / %Descuento por tienda y mes (generan la venta neta) */}
+          <div className="sub" style={{ fontWeight: 700, margin: '10px 0 4px', color: col }}>Supuestos de venta por tienda <span className="unit" style={{ fontWeight: 400 }}>(venta neta = costo × (1 + %margen) × (1 − %descuento))</span></div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+            {tiendas.map((t) => <button key={t} className={'seg' + (selStore === t ? ' active' : '')} onClick={() => setSelT(t)} style={selStore === t ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{t}</button>)}
+          </div>
+          {selStore && <div className="tablewrap" style={{ overflowX: 'auto', marginBottom: 14 }}>
+            <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}</colgroup>
+              <thead><tr><th className="l">{selStore} — supuesto (por mes)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}</tr></thead>
+              <tbody>
+                <tr><td className="l sub2" style={{ color: '#15803d' }}>% Margen</td>{MESES.map((_, mi) => <td key={mi} className="cell ya"><input value={vt[`${selStore}||MARGEN||${mi}`] ?? ''} onChange={(e) => setVt((d) => ({ ...d, [`${selStore}||MARGEN||${mi}`]: e.target.value }))} inputMode="decimal" /></td>)}</tr>
+                <tr><td className="l sub2" style={{ color: '#b45309' }}>% Descuento</td>{MESES.map((_, mi) => <td key={mi} className="cell ya"><input value={vt[`${selStore}||DESC||${mi}`] ?? ''} onChange={(e) => setVt((d) => ({ ...d, [`${selStore}||DESC||${mi}`]: e.target.value }))} inputMode="decimal" /></td>)}</tr>
+              </tbody>
+            </table>
+          </div>}
           {(() => {
             const nf = (v) => Math.round(v).toLocaleString('en-US')
             const uMes = (mi) => tiendas.reduce((a, t) => a + storeUnitsM(t, mi), 0)
