@@ -729,7 +729,10 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, on
   // Los VIAJES ya no se llenan dentro de cada rol: se capturan en la pestaña "🧳 Viajes equipo". Por eso se quitan del selector VER del rol (salvo cuando se pide explícito con rubrosOverride, como en Gerencia/Finanzas/Viajes equipo).
   const rubros = (rubrosOverride || role.rubros.filter((rb) => rb.k !== 'VIAJES')).filter((rb) => !rb.gadmin || esTot) // Gastos admin solo en TOTAL SBU
   const [tab, setTab] = useState(0)
-  const [data, setData] = useState({})
+  // Borrador local: lo tecleado se recuerda en el navegador aunque no se haya guardado, para no perderlo al cambiar de pestaña.
+  const draftKey = `cap_draft_${role.tab || role.label}_${empresa}_${fixedMarca || ''}`
+  const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(draftKey) || '{}') } catch { return {} } })
+  useEffect(() => { try { localStorage.setItem(draftKey, JSON.stringify(data)) } catch { } }, [data, draftKey])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   if (!rubros.length) return null
@@ -3355,18 +3358,37 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               <tbody>
                 {allSubcats.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; return <tr key={c}>
                   <td className="l sub2">{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}</td>
-                  {wholesaleMarcas.map((m) => { const p = pctOf(c, m); return <td key={m} className="cell ya" style={{ padding: 3 }}>
-                    <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={`${c} ← ${m}`} style={{ width: '100%' }} />
-                    <select value={cellOf(c, m).cat ?? ''} onChange={(e) => setCell(c, m, 'cat', e.target.value)} style={{ width: '100%', marginTop: 2, fontSize: 10, padding: '2px', border: `1px solid ${(p > 0 && !catOf(c, m)) ? '#f0a' : 'var(--line)'}`, borderRadius: 4, color: catOf(c, m) ? 'inherit' : 'var(--muted)', background: p > 0 ? '#fff' : 'transparent' }} title="Categoría wholesale de esta marca">
-                      <option value="">— categoría —</option>{(prodCats[m] || []).map((ct) => <option key={ct} value={ct}>{ct}</option>)}
-                    </select>
+                  {wholesaleMarcas.map((m) => { const p = pctOf(c, m); const faltaCat = p > 0 && !catOf(c, m); return <td key={m} className="cell ya" style={{ padding: 3 }}>
+                    <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={faltaCat ? `${c} ← ${m}: falta elegir la categoría abajo` : `${c} ← ${m}`} style={{ width: '100%', borderColor: faltaCat ? '#f0a' : undefined }} />
                   </td> })}
                   <td className="tot" style={{ fontWeight: 800, color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%{!okSum && ' ⚠'}</td>
                 </tr> })}
               </tbody>
             </table>
           </div>}
-          <div className="sub" style={{ marginTop: 6 }}>⚠ = la fila no suma 100%. Al poner un %, elige la <b>categoría</b> de esa marca (borde rosado si falta). El costo usa el <b>AUC exacto</b> de cada marca·categoría.</div>
+          <div className="sub" style={{ marginTop: 6 }}>⚠ = la fila no suma 100%. Las celdas con % y <b>sin categoría</b> salen con borde rosado; asígnalas abajo.</div>
+          {/* Asignación de categoría por cada % puesto */}
+          {(() => { const pairs = []; allSubcats.forEach((c) => wholesaleMarcas.forEach((m) => { if (pctOf(c, m) > 0) pairs.push({ c, m }) }))
+            if (!pairs.length) return <div className="sub" style={{ marginTop: 10 }}>Pon un % en la matriz para asignar su categoría aquí.</div>
+            return <div style={{ marginTop: 14 }}>
+              <div className="sub" style={{ fontWeight: 700, color: col, marginBottom: 6 }}>Categoría wholesale de cada % <span className="unit" style={{ fontWeight: 400 }}>(elige de qué categoría de esa marca se compra)</span></div>
+              <div className="tablewrap" style={{ overflowX: 'auto' }}>
+                <table><thead><tr><th className="l">Subcategoría</th><th className="l">Marca</th><th className="l">%</th><th className="l">Categoría wholesale</th><th>AUC prom.</th></tr></thead>
+                  <tbody>
+                    {pairs.map(({ c, m }) => { const ct = catOf(c, m); return <tr key={c + '||' + m}>
+                      <td className="l sub2">{c}</td>
+                      <td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 6 }}></span>{m}</td>
+                      <td className="l">{fmt(pctOf(c, m))}%</td>
+                      <td className="l"><select value={ct} onChange={(e) => setCell(c, m, 'cat', e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: `1.5px solid ${ct ? 'var(--line)' : '#f0a'}`, minWidth: 180 }}>
+                        <option value="">— elige categoría —</option>{(prodCats[m] || []).map((x) => <option key={x} value={x}>{x}</option>)}
+                      </select>{!ct && <span className="unit" style={{ color: '#b45309', marginLeft: 6 }}>⚠ falta</span>}</td>
+                      <td className="tot">{ct ? '$' + fmt(MESES.reduce((a, _, mi) => a + aucMC(m, ct, mi), 0) / 12) : '—'}</td>
+                    </tr> })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          })()}
         </div>
       </>}
 
