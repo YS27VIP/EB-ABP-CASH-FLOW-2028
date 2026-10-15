@@ -935,6 +935,21 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
   const key = (mca, id, mi) => `${rubro.k}|${mca}|${id}|${mi}`
   const idDe = (g, it) => `${g}|${it.c}|${it.n}`
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  // Recarga lo ya guardado desde el Sheet (antes se guardaba pero no se volvía a leer → al regresar se veía vacío).
+  useEffect(() => { (async () => {
+    try {
+      const j = await gReadTab(role.tab); if (!j || !j.ok || !j.values) return
+      const lookup = {}; grupos.forEach((gr) => gr.items.forEach((it) => { lookup[`${gr.g}|${it.n}`.toUpperCase()] = idDe(gr.g, it) }))
+      const next = {}
+      j.values.slice(1).forEach((row) => {
+        if (upper(row[0]) !== upper(empresa)) return
+        const rub = String(row[1] || ''); const sep = rub.indexOf(' - '); if (sep < 0) return
+        const g = rub.slice(0, sep), nm = rub.slice(sep + 3); const id = lookup[`${g}|${nm}`.toUpperCase()]; if (!id) return
+        const mca = row[3]; for (let mi = 0; mi < 12; mi++) { const v = num(row[4 + mi]); if (v) next[key(mca, id, mi)] = v }
+      })
+      if (Object.keys(next).length) setData((d) => { const m = { ...d }; Object.keys(next).forEach((k) => { if (m[k] === undefined || m[k] === '') m[k] = next[k] }); return m })
+    } catch { }
+  })() }, [empresa, role.tab, extras.length])
   const val = (mca, id, mi) => num(data[key(mca, id, mi)])
   const sbuMarcas = sbus[sbu] || []
   const valSbu = (id, mi) => sbuMarcas.reduce((s, m) => s + val(m, id, mi), 0)
@@ -1007,7 +1022,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar todo'}</button>
       </div>
-      <div className="panel" style={{ marginBottom: 8 }}>
+      {!String(fixedMarca || '').startsWith('(') && <div className="panel" style={{ marginBottom: 8 }}>
         <h3>{rubro.k} sobre la venta — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(venta viene de Comercial)</span></h3>
         <div className="sub">Cuánto pesa <b>{rubro.k}</b> sobre la <b>venta neta</b>, por mes y en total.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
@@ -1018,7 +1033,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
             <tr className="grandrow"><td className="l">% {rubro.k} / venta</td>{MESES.map((_, m) => { const v = ventaMesT(m); return <td key={m} className="tot">{v ? (totMes(m) / v * 100).toFixed(1) + '%' : '—'}</td> })}<td className="tot">{(() => { const vt = MESES.reduce((a, _, m) => a + ventaMesT(m), 0); return vt ? (totalGeneral / vt * 100).toFixed(1) + '%' : '—' })()}</td></tr>
           </tbody>
         </table></div>
-      </div>
+      </div>}
       <div className="panel">
         <div className="toolbar" style={{ alignItems: 'center', marginBottom: 2 }}>
           <h3 style={{ margin: 0 }}>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>solo lectura</span> : <Responsable empresa={empresa} seccion="Finanzas" />}</h3>
@@ -1049,7 +1064,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
                       return <td key={mi} className="cell"><input value={v} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
                     const esExtra = !it.c && extras.includes(it.n)
-                    return <tr key={id}><td className="cod">{it.c}</td><td className="l sub2">{it.n}{esExtra && !isTotal && <button title="Quitar este rubro de toda la empresa" onClick={() => { if (window.confirm('¿Quitar el rubro "' + it.n + '" de toda la empresa?')) quitarRubro(it.n) }} style={{ marginLeft: 8, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>}</td>{celdas}<td className="tot">{fmt(tot)}</td></tr>
+                    return <tr key={id}><td className="cod">{it.c}</td><td className="l sub2">{it.n}{esExtra && <span className="newbadge">NUEVO</span>}{esExtra && !isTotal && <button title="Quitar este rubro de toda la empresa" onClick={() => { if (window.confirm('¿Quitar el rubro "' + it.n + '" de toda la empresa?')) quitarRubro(it.n) }} style={{ marginLeft: 8, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>}</td>{celdas}<td className="tot">{fmt(tot)}</td></tr>
                   })}
                   {gr.g === 'ADICIONALES' && gr.items.length === 0 && <tr><td className="cod"></td><td className="l sub2" colSpan={14} style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Sin rubros adicionales. Usa ➕ Agregar rubro para añadir uno nuevo.</td></tr>}
                 </Fragment2>
@@ -3061,6 +3076,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   function delCat(t, c) { const cur = catsOf(t).filter((x) => x !== c); setCats((d) => ({ ...d, [t]: cur })) }
   // ---- Marketing y Viajes de Retail (espejo) + Producto (AUC wholesale) + categorías wholesale por marca ----
   const [capRows, setCapRows] = useState({ mk: [], vj: [] })
+  const [capVj, setCapVj] = useState({ ventas: [], producto: [], marketing: [], director: [] })
   const [producto, setProducto] = useState([])
   const [prodCats, setProdCats] = useState({}) // { marca: [categorías wholesale] }
   useEffect(() => { let on = true; (async () => {
@@ -3072,6 +3088,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
     const mk = (out['Cap_Marketing'] || []).filter((r) => isRetail(r) && !esVj(r))
     const vj = tabs.flatMap((tb) => (out[tb] || []).filter((r) => isRetail(r) && esVj(r)))
     setCapRows({ mk, vj })
+    const vjF = (tb) => (out[tb] || []).filter((r) => isRetail(r) && esVj(r))
+    setCapVj({ ventas: vjF('Cap_Ventas'), producto: vjF('Cap_Producto'), marketing: vjF('Cap_Marketing'), director: vjF('Cap_Director') })
     setProducto((out['Cap_Producto'] || []).filter((r) => upper(r[0]) === upper(empresa)))
     const pc = {}; (out['Cap_Categorias'] || []).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const cat = r[1], mar = r[3]; if (!mar || !cat) return; (pc[mar] = pc[mar] || []); if (!pc[mar].includes(cat)) pc[mar].push(cat) }); setProdCats(pc)
   })(); return () => { on = false } }, [empresa])
@@ -3156,6 +3174,29 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
 
       {tab === 'viajes' && <>
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
+        {/* Resumen por área/rol (espejo) */}
+        {(() => {
+          const areas = [['Ventas', 'ventas', '📈'], ['Producto', 'producto', '📦'], ['Marketing', 'marketing', '📣'], ['Director', 'director', '🧑‍💼']]
+          const vjAreaMes = (k, mi) => (capVj[k] || []).reduce((a, r) => a + num(r[4 + mi]), 0)
+          const totVjMes = (mi) => areas.reduce((a, [, k]) => a + vjAreaMes(k, mi), 0)
+          const vnMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
+          const pctC = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
+          const totVjAnual = MESES.reduce((a, _, mi) => a + totVjMes(mi), 0), vnAnual = MESES.reduce((a, _, mi) => a + vnMes(mi), 0)
+          return <div className="panel" style={{ marginBottom: 12 }}>
+            <h3 style={{ color: col }}>Viajes del equipo — Retail <span className="unit">(🪞 espejo · 2028)</span></h3>
+            <div className="tablewrap" style={{ overflowX: 'auto' }}>
+              <table className="vfix"><colgroup><col style={{ width: '170px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+                <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+                <tbody>
+                  {areas.map(([lbl, k, ic]) => <tr key={k}><td className="l sub2">{ic} {lbl}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(vjAreaMes(k, mi))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + vjAreaMes(k, mi), 0))}</td></tr>)}
+                  <tr className="grandrow"><td className="l">Total Retail</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totVjMes(mi))}</td>)}<td className="tot">{fmt(totVjAnual)}</td></tr>
+                  <tr><td className="l sub2" style={{ color: col }}>Venta Neta 2028</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: col }}>{fmt(vnMes(mi))}</td>)}<td className="tot" style={{ color: col }}>{fmt(vnAnual)}</td></tr>
+                  <tr className="grandrow"><td className="l" style={{ color: col }}>% viajes / venta</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: col }}>{pctC(totVjMes(mi), vnMes(mi))}</td>)}<td className="tot" style={{ color: col }}>{pctC(totVjAnual, vnAnual)}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        })()}
         <div className="sub" style={{ marginBottom: 8 }}>En Retail viajan <b>4 áreas</b>: Director, Producto, Marketing y Ventas. Cada bloque tiene su captura y su total.</div>
         {vjRoles.map((r) => (
           <div key={r.id} style={{ marginTop: 14 }}>
@@ -3170,12 +3211,12 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Gastos</span><div className="spacer"></div><button className="btn" onClick={addRubroG}>➕ Agregar rubro</button><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar gastos'}</button></div>
-          <h3 style={{ color: col }}>Gastos 2028 — Retail <span className="unit">(por rubro y mes · ref 2027 del P&L)</span></h3>
+          <h3 style={{ color: col }}>Gastos 2028 — Retail</h3>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table className="vfix"><colgroup><col style={{ width: '200px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '95px' }} /></colgroup>
               <thead><tr><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">Ref 2027</th></tr></thead>
               <tbody>
-                {gRubros.map((r) => { const esX = gRubrosX.includes(r.n); return <tr key={r.n}><td className="l sub2">{r.n}{esX && <button title="Quitar rubro" onClick={() => delRubroG(r.n)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={gastos[gk(r.n, mi)] ?? ''} onChange={(e) => setG(r.n, mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot">{fmt(gRow(r.n))}</td><td className="tot ya">{fmt(r.ref)}</td></tr> })}
+                {gRubros.map((r) => { const esX = gRubrosX.includes(r.n); return <tr key={r.n}><td className="l sub2">{r.n}{esX && <span className="newbadge">NUEVO</span>}{esX && <button title="Quitar rubro" onClick={() => delRubroG(r.n)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={gastos[gk(r.n, mi)] ?? ''} onChange={(e) => setG(r.n, mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot">{fmt(gRow(r.n))}</td><td className="tot ya">{fmt(r.ref)}</td></tr> })}
                 <tr className="grandrow"><td className="l">Total gastos</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(gCol(mi))}</td>)}<td className="tot">{fmt(gGran)}</td><td className="tot ya">{fmt(RETAIL_GASTOS.reduce((a, [, ref]) => a + ref, 0))}</td></tr>
               </tbody>
             </table>
@@ -3215,7 +3256,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                 </thead>
                 <tbody>
                   {cs.map((c) => { const sum = srcPctSum(c); const nF = srcOf(c).length; return <tr key={c}>
-                    <td className="l sub2">{c}
+                    <td className="l sub2">{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}
                       <button title="Quitar subcategoría" onClick={() => delCat(t, c)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>
                       <button title="Ir a configurar el mapa de abastecimiento" onClick={() => setComTab('mapa')} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: nF ? '#0f766e' : '#b45309', cursor: 'pointer', fontSize: 11 }}>🧭 {nF ? `${nF} fuente${nF > 1 ? 's' : ''}` : 'sin mapa'}</button>
                       {nF > 0 && Math.round(sum) !== 100 && <span className="unit" style={{ color: '#b45309', marginLeft: 4 }} title="El mapa no suma 100%">⚠ {fmt(sum)}%</span>}
@@ -3274,7 +3315,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           {allSubcats.length === 0 ? <div className="sub">No hay subcategorías. Agrégalas en "Ventas por tienda".</div> : <div style={{ marginTop: 10 }}>
             {allSubcats.map((c) => { const sum = srcPctSum(c); const okSum = Math.round(sum) === 100 || srcOf(c).length === 0; return <div key={c} style={{ border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', marginBottom: 8, background: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <b style={{ color: col, minWidth: 180 }}>{c}</b>
+                <b style={{ color: col, minWidth: 180 }}>{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}</b>
                 <span className="unit">Suma: <b style={{ color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%</b>{!okSum && ' ⚠ debe dar 100%'} · Costo wholesale prom./ud: ${fmt(whAvg(c))}</span>
                 <div className="spacer"></div>
                 <button className="btn" onClick={() => addSrc(c)} style={{ padding: '3px 10px', fontSize: 12 }}>➕ Agregar fuente</button>
