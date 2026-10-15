@@ -38,7 +38,7 @@ export function initAuth() {
 }
 // NO usamos 'hint': si hay varias sesiones de Google abiertas (una personal y una @energybrandsgroup.com),
 // el hint guardado podía forzar la cuenta equivocada y mandar al bloqueo. Sin hint, se usa la cuenta por defecto del navegador.
-export function signIn(forcePick) { if (!_tokenClient) return; let granted = false; try { granted = !!localStorage.getItem('abp_granted') } catch { } _tokenClient.requestAccessToken({ prompt: forcePick ? 'select_account' : (granted ? '' : 'consent') }) }
+export function signIn(forcePick) { if (!_tokenClient) return; let granted = false, savedEmail = ''; try { granted = !!localStorage.getItem('abp_granted'); savedEmail = localStorage.getItem('abp_email') || '' } catch { } const opts = { prompt: forcePick ? 'select_account' : (granted ? '' : 'consent') }; if (!forcePick && savedEmail) opts.login_hint = savedEmail; _tokenClient.requestAccessToken(opts) }
 // Cambiar de cuenta: olvida la cuenta recordada y fuerza el selector (para cuando entró con la cuenta equivocada).
 export function switchAccount() { try { localStorage.removeItem('abp_email'); localStorage.removeItem('abp_granted') } catch { } _token = null; _email = null; _name = null; _emit(); signIn(true) }
 export function signOut() { _token = null; _email = null; _name = null; _emit() }

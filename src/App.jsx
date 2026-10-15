@@ -4920,6 +4920,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [cats, setCats] = useState({})
   const [catsLoaded, setCatsLoaded] = useState(false) // true cuando ya terminó de leer Cap_Categorias (para no mostrar "no hay categorías" mientras carga)
   const [producto, setProducto] = useState([])
+  const [logcost, setLogcost] = useState(() => { try { return JSON.parse(localStorage.getItem('logcost_' + empresa) || '{}') } catch { return {} } })
+  useEffect(() => { try { setLogcost(JSON.parse(localStorage.getItem('logcost_' + empresa) || '{}')) } catch { } }, [empresa])
   const [venSheet, setVenSheet] = useState([]) // filas guardadas en Cap_Ventas (respaldo del plan 2028)
   const [growth, setGrowth] = useState(() => { try { return JSON.parse(localStorage.getItem('ventas_growth_' + empresa) || '{}') } catch { return {} } })
   const [catPart, setCatPart] = useState(() => { try { return JSON.parse(localStorage.getItem('catpart_' + empresa) || '{}') } catch { return {} } })
@@ -4981,7 +4983,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const aucPorCat = (mca) => { const out = {}; let marcaAuc = null; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const rub = String(r[1] || ''); if (rub.indexOf('AUC · ') === 0) out[rub.slice(6)] = MESES.map((_, j) => num(r[4 + j])); else if (upper(rub) === 'AUC') marcaAuc = MESES.map((_, j) => num(r[4 + j])) }); if (marcaAuc) catList.forEach((c) => { const cat = c.cat || c; if (!out[cat]) out[cat] = marcaAuc }); return out }
   useEffect(() => { try { localStorage.setItem('ventas_growth_' + empresa, JSON.stringify(growth)) } catch { } }, [growth, empresa])
 
-  const u2026 = {}, u2025 = {}, cliByMarca = {}
+  const u2026 = {}, u2025 = {}, cliByMarca = {}, paisByCli = {}
+  hist.forEach((r) => { const cli = r[8], pais = String(r[9] || '').trim(); if (cli && pais && !paisByCli[cli]) paisByCli[cli] = pais })
   hist.forEach((r) => { if (upper(r[3]).indexOf('UNIDAD') < 0) return; if (String(r[1]) !== '2026') return; const mi = mesIdx(r[6]); if (mi < 0) return; const mar = r[5], cli = r[8] || '(sin cliente)', k = cli + '|' + mar; (u2026[k] = u2026[k] || Array(12).fill(0))[mi] += num(r[7]); (cliByMarca[mar] = cliByMarca[mar] || new Set()).add(cli) })
   hist.forEach((r) => { if (upper(r[3]).indexOf('UNIDAD') < 0) return; if (String(r[1]) !== '2025') return; const mi = mesIdx(r[6]); if (mi < 0) return; const mar = r[5], cli = r[8] || '(sin cliente)', k = cli + '|' + mar; (u2025[k] = u2025[k] || Array(12).fill(0))[mi] += num(r[7]) })
   const histClientes = [...(cliByMarca[marca] || [])].sort((a, b) => (u2026[b + '|' + marca] || []).reduce((s, v) => s + v, 0) - (u2026[a + '|' + marca] || []).reduce((s, v) => s + v, 0))
@@ -5206,6 +5209,49 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
               </table>
             </div>
           </div>
+          {/* COSTO LANDED $ y MARGEN LANDED % (usa el % logístico de la venta que pone Logística) */}
+          {(() => {
+            const pctLog = num(logcost[`${marca}|PCT_LOGVENTA`])
+            const lcCat = (cat, mi) => coCat(cat, mi) * (1 + pctLog / 100)   // costo landed = costo × (1 + % logístico)
+            const mlCat = (cat, mi) => vnCat(cat, mi) - lcCat(cat, mi)        // margen landed = venta − costo landed
+            const lcMes = MESES.map((_, mi) => catList.reduce((a, c) => a + lcCat(c.cat, mi), 0))
+            const mlMes = MESES.map((_, mi) => catList.reduce((a, c) => a + mlCat(c.cat, mi), 0))
+            const lcTot = lcMes.reduce((a, b) => a + b, 0), mlTot = mlMes.reduce((a, b) => a + b, 0)
+            const lcCatTot = (cat) => MESES.reduce((a, _, mi) => a + lcCat(cat, mi), 0)
+            const mlCatTot = (cat) => MESES.reduce((a, _, mi) => a + mlCat(cat, mi), 0)
+            return <>
+              <div className="panel">
+                <h3>Costo landed 2028 por categoría y mes — {marca}{M$} <span className="unit">($ dinero)</span></h3>
+                <div className="sub"><b>Costo landed = Costo × (1 + % logístico de la venta)</b>. El <b>% logístico ({fmt(pctLog)}%)</b> lo define Logística.{pctLog ? '' : ' Si sale igual al costo, Logística aún no ha capturado el % logístico de ' + marca + '.'}</div>
+                <div className="tablewrap">
+                  <table className="vfix"><colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+                    <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+                    <tbody>
+                      <tr className="grandrow"><td className="l">TOTAL {marca}</td>{lcMes.map((v, i) => <td key={i} className="tot help-bulb" title={`Costo landed ${MESES[i].toUpperCase()} = Costo $${money(coCat ? catList.reduce((a, c) => a + coCat(c.cat, i), 0) : 0)} × (1 + ${fmt(pctLog)}%) = $${money(v)}`}>{fmt(v)}</td>)}<td className="tot">{fmt(lcTot)}</td></tr>
+                      {catList.map((c, i) => { const row = MESES.map((_, mi) => lcCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); return <tr key={i}><td className="l">{c.cat}</td>{row.map((v, mi) => <td key={mi} className="tot help-bulb" title={`${c.cat} · ${MESES[mi].toUpperCase()}: Costo $${money(coCat(c.cat, mi))} × (1 + ${fmt(pctLog)}%) = $${money(v)}`}>{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="panel">
+                <h3>Margen landed 2028 en % — {marca}</h3>
+                <div className="sub">Mismo criterio que el margen bruto, pero restando el <b>costo landed</b>: <b style={{ color: '#b45309' }}>① Margen landed %</b> = (Venta − Costo landed) ÷ Venta <i>de la categoría</i>. <b style={{ color: '#1d4ed8' }}>② Peso del margen landed en la venta</b> = Margen landed $ ÷ Venta total de la marca. <span className="unit">Pasa el cursor por cualquier % para ver el cálculo.</span></div>
+                <div className="tablewrap">
+                  <table className="vfix"><colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+                    <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+                    <tbody>
+                      <tr><td className="l" style={{ color: '#b45309', fontWeight: 800, paddingTop: 6 }} colSpan={14}>① Margen landed % <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= (Venta − Costo landed) ÷ Venta de la categoría</span></td></tr>
+                      <tr className="grandrow"><td className="l" style={{ color: '#b45309' }}>TOTAL {marca}</td>{mlMes.map((v, i) => <td key={i} className="tot" style={{ color: '#b45309', fontWeight: 700, cursor: BULB_CURSOR }} title={`${MESES[i].toUpperCase()}: margen landed $${fmt(v)} ÷ venta $${fmt(vnMes[i])} = ${pct(v, vnMes[i]).toFixed(1)}%`}>{vnMes[i] ? pct(v, vnMes[i]).toFixed(1) + '%' : '—'}</td>)}<td className="tot" style={{ color: '#b45309', fontWeight: 700 }}>{vnTot ? pct(mlTot, vnTot).toFixed(1) + '%' : '—'}</td></tr>
+                      {catList.map((c, i) => { const vnRt = vnCatTot(c.cat), mlRt = mlCatTot(c.cat); return <tr key={i}><td className="l">{c.cat}</td>{MESES.map((_, mi) => { const m = mlCat(c.cat, mi), v = vnCat(c.cat, mi); return <td key={mi} className="tot help-bulb" title={`${c.cat} · ${MESES[mi].toUpperCase()}: margen landed $${fmt(m)} ÷ venta $${fmt(v)} = ${pct(m, v).toFixed(1)}%`}>{v > 0.5 ? pct(m, v).toFixed(1) + '%' : '—'}</td> })}<td className="tot">{vnRt ? pct(mlRt, vnRt).toFixed(1) + '%' : '—'}</td></tr> })}
+                      <tr><td className="l" style={{ color: '#1d4ed8', fontWeight: 800, borderTop: '1px solid #f4f6f9', paddingTop: 6 }} colSpan={14}>② Peso del margen landed en la venta <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>= Margen landed $ ÷ Venta total de la marca</span></td></tr>
+                      <tr className="grandrow"><td className="l" style={{ color: '#1d4ed8' }}>TOTAL {marca}</td>{mlMes.map((v, i) => <td key={i} className="tot" style={{ color: '#1d4ed8', fontWeight: 700, cursor: BULB_CURSOR }} title={`${MESES[i].toUpperCase()}: margen landed $${fmt(v)} ÷ venta total marca $${fmt(vnMes[i])} = ${pct(v, vnMes[i]).toFixed(1)}%`}>{vnMes[i] ? pct(v, vnMes[i]).toFixed(1) + '%' : '—'}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{vnTot ? pct(mlTot, vnTot).toFixed(1) + '%' : '—'}</td></tr>
+                      {catList.map((c, i) => { const mlRt = mlCatTot(c.cat); return <tr key={i}><td className="l">{c.cat}</td>{MESES.map((_, mi) => { const m = mlCat(c.cat, mi); return <td key={mi} className="tot help-bulb" title={`${c.cat} · ${MESES[mi].toUpperCase()}: margen landed $${fmt(m)} ÷ venta total marca $${fmt(vnMes[mi])} = ${pct(m, vnMes[mi]).toFixed(1)}%`}>{vnMes[mi] ? pct(m, vnMes[mi]).toFixed(1) + '%' : '—'}</td> })}<td className="tot">{vnTot ? pct(mlRt, vnTot).toFixed(1) + '%' : '—'}</td></tr> })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          })()}
           </>
         )
       })()}
@@ -5252,7 +5298,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
               {clientes.filter((cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0).map((cli) => { const nuevo = esNuevo(cli); const obj = objetivo28(cli); const desc = !nuevo && obj != null && t28(cli) !== obj; return (
                 <Fragment2 key={cli}>
                   <tr>
-                    <td className="l" rowSpan={3}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}<label style={{ display: 'block', marginTop: 5, fontSize: 11, color: esInt(cli) ? '#b45309' : 'var(--muted)', cursor: 'pointer', fontWeight: 600 }}><input type="checkbox" checked={esInt(cli)} onChange={() => toggleInt(cli)} style={{ marginRight: 5, verticalAlign: 'middle' }} />Interno (intercompañía)</label></td>
+                    <td className="l" rowSpan={3}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}{paisByCli[cli] && <div style={{ marginTop: 2, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }} title="País del cliente (Base Clientes SF)">📍 {paisByCli[cli]}</div>}<label style={{ display: 'block', marginTop: 5, fontSize: 11, color: esInt(cli) ? '#b45309' : 'var(--muted)', cursor: 'pointer', fontWeight: 600 }}><input type="checkbox" checked={esInt(cli)} onChange={() => toggleInt(cli)} style={{ marginRight: 5, verticalAlign: 'middle' }} />Interno (intercompañía)</label></td>
                     <td className="cell" rowSpan={3} style={{ verticalAlign: 'top' }}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}
                       <div style={{ marginTop: 7, fontSize: 11, lineHeight: 1.45 }}>
                         {!nuevo && <div style={{ color: 'var(--muted)' }} title="Total objetivo = total 2026 × (1 + % crecimiento). Reparte este total en los meses de 2028.">🎯 obj <b>{fmt(obj)}</b></div>}
