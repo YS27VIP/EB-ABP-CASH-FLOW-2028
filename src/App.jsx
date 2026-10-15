@@ -1046,7 +1046,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'GRUPO', 'RUBRO', 'SBU', 'MARCA', ...MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, gr.g, it.n, sb, mca, ...MESES.map(() => 0)])))); exportXlsx(aoa, `Plantilla_${role.tab}_${rubro.k}.xlsx`) }}>📄 Plantilla</button>
         <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
-        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar todo'}</button>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       {!String(fixedMarca || '').startsWith('(') && <div className="panel" style={{ marginBottom: 8 }}>
         <h3>{rubro.k} sobre la venta — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(venta viene de Comercial)</span></h3>
@@ -3354,16 +3354,18 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           <h3 style={{ color: col }}>Mapa de abastecimiento <span className="unit">(a qué marca · categoría wholesale le compra Retail cada subcategoría)</span></h3>
           <div className="sub">En cada <b>subcategoría</b> (fila) y <b>marca</b> (columna), pon el <b>%</b> que se le compra y elige la <b>categoría</b> de esa marca. Cada fila debe sumar <b>100%</b> — si no, se marca en rojo. El costo usa el <b>AUC exacto</b> de esa marca·categoría × factor.</div>
           {allSubcats.length === 0 ? <div className="sub">No hay subcategorías. Agrégalas en "Importaciones por tienda".</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table className="vfix"><colgroup><col style={{ width: '180px' }} />{wholesaleMarcas.map((_, i) => <col key={i} style={{ width: '110px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+            <table style={{ minWidth: (250 + wholesaleMarcas.length * 118 + 70) + 'px', borderCollapse: 'collapse' }}><colgroup><col style={{ width: '180px' }} />{wholesaleMarcas.map((_, i) => <col key={i} style={{ width: '118px' }} />)}<col style={{ width: '70px' }} /></colgroup>
               <thead><tr><th className="l">Subcategoría</th>{wholesaleMarcas.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th></tr></thead>
               <tbody>
                 {allSubcats.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; return <tr key={c}>
                   <td className="l sub2">{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}</td>
-                  {wholesaleMarcas.map((m) => { const p = pctOf(c, m); const faltaCat = p > 0 && !catOf(c, m); return <td key={m} className="cell ya" style={{ padding: 3, verticalAlign: 'top' }}>
-                    <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={`${c} ← ${m}`} style={{ width: '100%' }} />
-                    <select value={cellOf(c, m).cat ?? ''} onChange={(e) => setCell(c, m, 'cat', e.target.value)} title="Categoría de esta marca" style={{ width: '100%', marginTop: 3, fontSize: 10, padding: '2px', borderRadius: 4, border: `1.5px solid ${faltaCat ? '#e11d8f' : 'var(--line)'}`, color: catOf(c, m) ? 'inherit' : 'var(--muted)' }}>
-                      <option value="">— categoría —</option>{(prodCats[m] || []).map((x) => <option key={x} value={x}>{x}</option>)}
-                    </select>
+                  {wholesaleMarcas.map((m) => { const p = pctOf(c, m); const faltaCat = p > 0 && !catOf(c, m); return <td key={m} style={{ padding: 4, verticalAlign: 'top', borderBottom: '1px solid var(--line)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={`${c} ← ${m}`} style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #f0e6c9', background: '#fdf7e3', borderRadius: 5, padding: '5px', textAlign: 'center' }} />
+                      <select value={cellOf(c, m).cat ?? ''} onChange={(e) => setCell(c, m, 'cat', e.target.value)} title="Categoría de esta marca" style={{ width: '100%', boxSizing: 'border-box', fontSize: 10.5, padding: '3px 2px', borderRadius: 4, border: `1.5px solid ${faltaCat ? '#e11d8f' : 'var(--line)'}`, color: catOf(c, m) ? 'inherit' : 'var(--muted)', background: '#fff' }}>
+                        <option value="">— categoría —</option>{(prodCats[m] || []).map((x) => <option key={x} value={x}>{x}</option>)}
+                      </select>
+                    </div>
                   </td> })}
                   <td className="tot" style={{ fontWeight: 800, color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%{!okSum && ' ⚠'}</td>
                 </tr> })}
