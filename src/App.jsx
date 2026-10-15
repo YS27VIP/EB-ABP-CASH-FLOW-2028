@@ -72,11 +72,12 @@ function saveEstado(empresa, clave, valStr) {
 const MESES = ['ene-28','feb-28','mar-28','abr-28','may-28','jun-28','jul-28','ago-28','sep-28','oct-28','nov-28','dic-28']
 
 const DEFAULT_SBUS = {
-  'SBU 1': ['ALTRA','FJALLRAVEN','HOKA','INJINJI','NORDA'],
+  'SBU 1': ['ALTRA','HOKA','INJINJI','NORDA'],
   'SBU 2': ['ARIAT','BIRKENSTOCK','BLUNDSTONE','ECCO','FLOWER MOUNTAIN','UGG'],
-  'SBU 3': ['COTOPAXI','FITFLOP','FOAMERS','GOORIN BROS','KEEN','MAMMUT'],
+  'SBU 3': ['COTOPAXI','IZIPIZI','FOAMERS','GOORIN BROS','KEEN','MAMMUT'],
 }
-const ALL_MARCAS = Object.values(DEFAULT_SBUS).flat()
+// Marcas conocidas que por defecto NO se venden (quedan disponibles para reasignar en Configuración): FJALLRAVEN y FITFLOP.
+const ALL_MARCAS = [...new Set([...Object.values(DEFAULT_SBUS).flat(), 'FJALLRAVEN', 'FITFLOP'])]
 const SBU_NAMES = ['SBU 1', 'SBU 2', 'SBU 3']
 /* Empresas del grupo (el nombre debe coincidir con la columna EMPRESA del Histórico). */
 const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO']
@@ -87,7 +88,7 @@ const sbuColor = (s) => SBU_COLORS[String(s || '').toUpperCase()] || '#0e7490'
 // Paleta sin verde ni amarillo, tonos bien separados (para marcas no fijadas)
 const MARCA_PALETTE = ['#2563eb', '#dc2626', '#9333ea', '#ea580c', '#db2777', '#b45309', '#4f46e5', '#e11d48', '#7c3aed', '#c026d3', '#475569', '#be123c']
 // Color fijo por marca conocida: garantiza que cada marca de una SBU se vea distinta
-const MARCA_FIJO = { ALTRA: '#7c3aed', FJALLRAVEN: '#db2777', HOKA: '#2563eb', NORDA: '#ea580c', ARIAT: '#dc2626', BIRKENSTOCK: '#c026d3', BLUNDSTONE: '#4f46e5', ECCO: '#475569', UGG: '#b45309' }
+const MARCA_FIJO = { ALTRA: '#7c3aed', FJALLRAVEN: '#db2777', HOKA: '#2563eb', NORDA: '#ea580c', ARIAT: '#0d9488', BIRKENSTOCK: '#c026d3', BLUNDSTONE: '#4f46e5', ECCO: '#475569', UGG: '#b45309' }
 const marcaColor = (marca) => { const u = String(marca || '').trim().toUpperCase(); if (MARCA_FIJO[u]) return MARCA_FIJO[u]; let h = 0; for (let i = 0; i < u.length; i++) h = (h * 31 + u.charCodeAt(i)) >>> 0; return MARCA_PALETTE[h % MARCA_PALETTE.length] }
 
 /* Desglose de Marketing */
@@ -416,7 +417,10 @@ export default function App() {
   const role = ROLES.find((r) => r.id === roleId)
   // EB: manda el EBP en vivo (3 SBU con sus marcas). Mientras carga, se usan las SBU por defecto
   // (NO la config vieja guardada), para que no parpadee mostrando/ocultando SBU 2 y 3.
-  const sbusFor = (emp) => emp === 'ENERGY BRANDS' ? (ebSbus || DEFAULT_SBUS) : effSBUS(emp, combos)
+  // Composición SBU↔marca: para TODAS las empresas (incl. ENERGY BRANDS) se usa lo configurado (combos) con DEFAULT_SBUS como base.
+  // Si las combinaciones guardadas son viejas/incompletas (menos de 2 SBU con marcas), se ignoran y se usa DEFAULT_SBUS.
+  const combosReales = (emp) => { const c = combos[emp]; return !!(c && SBU_NAMES.filter((s) => (c[s] || []).length).length >= 2) }
+  const sbusFor = (emp) => emp === 'ENERGY BRANDS' ? (combosReales('ENERGY BRANDS') ? effSBUS(emp, combos) : DEFAULT_SBUS) : effSBUS(emp, combos)
   const sbus = sbusFor(empresa)
 
   function nuevaEmpresa() {
@@ -4115,14 +4119,15 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
   // ENERGY BRANDS no se llena a mano: su mapeo SBU↔marca viene del EBP. Si no hay combinaciones guardadas, lo auto-rellenamos del EBP.
   useEffect(() => {
     if (empresa !== 'ENERGY BRANDS') return
-    if (!ebSbus || !Object.keys(ebSbus).length) return
-    // ENERGY BRANDS: BASE = mapeo del EBP (cada marca en su SBU). ENCIMA se aplican tus ajustes guardados (reorganización), que mandan.
-    const m = {}; [...ALL_MARCAS, ...extraMarcas, ...Object.values(ebSbus).flat()].forEach((mk) => { m[mk] = '' })
-    Object.entries(ebSbus).forEach(([s, ms]) => ms.forEach((mk) => { if (SBU_NAMES.includes(s)) m[mk] = s }))
+    // ENERGY BRANDS viene PRECONFIGURADO (DEFAULT_SBUS). Si ya guardaste una reorganización válida (≥2 SBU), se usa esa.
     const c = combos[empresa]
-    if (c) { SBU_NAMES.forEach((s) => (c[s] || []).forEach((mk) => { m[mk] = s })); (c['NO VENDE'] || []).forEach((mk) => { m[mk] = 'NO' }) }
+    const real = c && SBU_NAMES.filter((s) => (c[s] || []).length).length >= 2
+    const base = real ? c : DEFAULT_SBUS
+    const m = {}; [...ALL_MARCAS, ...extraMarcas].forEach((mk) => { m[mk] = '' })
+    SBU_NAMES.forEach((s) => (base[s] || []).forEach((mk) => { m[mk] = s }))
+    if (real) (c['NO VENDE'] || []).forEach((mk) => { m[mk] = 'NO' })
     setAsign(m)
-  }, [empresa, ebSbus, extraMarcas])
+  }, [empresa, extraMarcas, combos])
   function cargarDeEBP() {
     if (!ebSbus || !Object.keys(ebSbus).length) { setMsg({ t: 'warn', x: 'Aún no hay datos del EBP para cargar. Entra a una SBU para que cargue el histórico y vuelve.' }); return }
     const m = {}; allMarcas.forEach((mk) => { m[mk] = '' })
@@ -4188,7 +4193,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
         <button className="btn" onClick={() => abrirHistorico && abrirHistorico()}>📊 Abrir Histórico / Importar Excel</button>
       </div>
       <div className="panel">
-        <h3>Combinaciones de SBU — {empresa}{(cuenta('SBU 1') + cuenta('SBU 2') + cuenta('SBU 3')) === 0 && <span className="fill-badge">✏️ para llenar</span>}{empresa === 'ENERGY BRANDS' && <span className="unit" style={{ marginLeft: 8, fontWeight: 400 }}>· se carga automático del EBP</span>}</h3>
+        <h3>Combinaciones de SBU — {empresa}{(cuenta('SBU 1') + cuenta('SBU 2') + cuenta('SBU 3')) === 0 && <span className="fill-badge">✏️ para llenar</span>}{empresa === 'ENERGY BRANDS' && <span className="unit" style={{ marginLeft: 8, fontWeight: 400 }}>· preconfigurado (puedes ajustar y guardar)</span>}</h3>
         <div className="sub">Asigna cada marca a una SBU (o "No la vende" para excluirla de esta empresa). ({cuenta('SBU 1')} en SBU 1 · {cuenta('SBU 2')} en SBU 2 · {cuenta('SBU 3')} en SBU 3 · {cuenta('NO')} no la vende)</div>
         <div className="tablewrap">
           <table>
