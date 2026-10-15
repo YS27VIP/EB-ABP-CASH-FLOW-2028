@@ -3054,7 +3054,6 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const esTiendaNueva = (t) => !RETAIL_TIENDAS.includes(t)
   const tVenta = (t) => MESES.reduce((a, _, mi) => a + storeVentaM(t, mi), 0)
   const tCosto = (t) => MESES.reduce((a, _, mi) => a + storeCostoM(t, mi), 0)
-  const totVenta = tiendas.reduce((a, t) => a + tVenta(t), 0), totCosto = tiendas.reduce((a, t) => a + tCosto(t), 0)
   function guardarVentas() { setSaving(true); try { saveEstado(empresa, 'retail_ventas', vt); saveEstado(empresa, 'retail_cats', cats); saveEstado(empresa, 'retail_tiendas', tiendas); saveEstado(empresa, 'retail_map', smap); saveEstado(empresa, 'retail_cf', cf); setMsg({ t: 'ok', x: 'Ventas por tienda guardadas.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   function addTienda() { const n = window.prompt('Nombre de la nueva tienda:'); if (!n) return; const nm = n.trim(); if (!nm || tiendas.some((t) => t.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa tienda ya existe.' }); return } const next = [...tiendas, nm]; setTiendas(next); setSelT(nm); saveEstado(empresa, 'retail_tiendas', next) }
   function delTienda(t) { if (!window.confirm(`¿Quitar la tienda "${t}"?`)) return; const next = tiendas.filter((x) => x !== t); setTiendas(next); if (selT === t) setSelT(next[0] || null); saveEstado(empresa, 'retail_tiendas', next) }
@@ -3107,6 +3106,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const mpct = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
   const impMes = (mi) => RETAIL_MARCAS.reduce((a, m) => a + num(imp[`${m}|${mi}`]), 0)
   const gastoMes = (mi) => gRubros.reduce((a, r) => a + num(gastos[gk(r.n, mi)]), 0)
+  // totales de venta/costo (después de declarar cf/smap/producto, de los que dependen las fórmulas)
+  const totVenta = tiendas.reduce((a, t) => a + tVenta(t), 0), totCosto = tiendas.reduce((a, t) => a + tCosto(t), 0)
   const cfRows = []; let prevFin = 0
   MESES.forEach((_, mi) => {
     const ini = mi === 0 ? num(cf[fk('INI', 0)]) : prevFin
