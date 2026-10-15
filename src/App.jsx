@@ -183,6 +183,9 @@ const SEASONS = [...INV_SEASONS, ...BUY_SEASONS]
 const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n }
 const fmt = (v) => (v ? Math.round(v).toLocaleString('en-US') : '')
 const upper = (s) => String(s == null ? '' : s).trim().toUpperCase()
+// 2026 sigue en curso: mientras el EBP no tenga diciembre-2026, se muestra "YTD 2026"; cuando cierre diciembre, pasa solo a "FY2026".
+const dec26Done = (hist) => (hist || []).some((r) => String(r[1]) === '2026' && /-12-/.test(String(r[6] || '')))
+const lbl26 = (hist) => (dec26Done(hist) ? 'FY2026' : 'YTD 2026')
 const mesIdx = (v) => { const d = new Date(v); return isNaN(d.getTime()) ? -1 : d.getUTCMonth() }
 const M$ = <span className="moneytag" title="Valores en dinero ($)">$</span> // icono discreto de dinero
 const UD = <span className="unittag" title="Valores en unidades (ud)"># </span> // icono discreto de unidades
@@ -978,7 +981,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar todo'}</button>
       </div>
-      <div className="panel">
+      <div className="panel" style={{ marginBottom: 8 }}>
         <h3>{rubro.k} sobre la venta — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(venta viene de Comercial)</span></h3>
         <div className="sub">Cuánto pesa <b>{rubro.k}</b> sobre la <b>venta neta</b>, por mes y en total.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
@@ -3267,7 +3270,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
         {HOVERTIP}
         <div className="toolbar" style={{ marginBottom: 8 }}><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar</>)}</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
-          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}<th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th><th className="yb">ABP2027</th><th className="yb">Δ 28·27</th><th className="ya">FY2026</th><th className="ya">Δ 28·26</th><th className="ya">FY2025</th><th className="ya">Δ 28·25</th></tr></thead>
+          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}<th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th><th className="yb">ABP2027</th><th className="yb">Δ 28·27</th><th className="ya">{lbl26(hist)}</th><th className="ya">Δ 28·26</th><th className="ya">FY2025</th><th className="ya">Δ 28·25</th></tr></thead>
           <tbody>
             {filasG.map((f) => { const cur = f.g(totAgg); return <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}{f.help && Q(f.help)}</td>{sbuList.map(({ s, a }) => <td key={s} className="tot" style={cellStyle} title={brkSBU(f, sbus[s])}>{fmt(f.g(a))}</td>)}<td className="tot help-bulb" title={'Consolidado = suma de las SBU:\n' + sbuList.map(({ s, a }) => `${s}: ${fmt(f.g(a))}`).join('\n')}>{fmt(cur)}</td>
               <td className="tot yb">{f.abp27 != null ? fmt(f.abp27) : '—'}</td>{f.abp27 != null ? dCellG(cur, f.abp27, 'yb') : <td className="tot yb">—</td>}
@@ -3474,7 +3477,7 @@ function BrandContribution({ empresa, marca }) {
       {load ? <div className="sub">Cargando…</div> : (<>
         <div className="tablewrap">
           <table style={{ width: 'auto' }}>
-            <thead><tr><th className="l">Concepto</th><th>Monto</th><th>% VN</th><th className="yb">ABP 2027</th><th className="yb">Δ 28 vs 27</th><th className="ya">FY2026</th><th className="ya">Δ 28 vs 26</th><th className="ya">FY2025</th><th className="ya">Δ 28 vs 25</th></tr></thead>
+            <thead><tr><th className="l">Concepto</th><th>Monto</th><th>% VN</th><th className="yb">ABP 2027</th><th className="yb">Δ 28 vs 27</th><th className="ya">{lbl26(P.hist)}</th><th className="ya">Δ 28 vs 26</th><th className="ya">FY2025</th><th className="ya">Δ 28 vs 25</th></tr></thead>
             <tbody>
               <tr><td className="l">Unidades</td><td className="tot">{fmt(unidades)}</td><td className="ref">—</td><td className="ya">—</td><td className="ya">—</td><td className="ya">—</td><td className="ya">—</td><td className="yb">—</td><td className="yb">—</td></tr>
               {fila('Venta Neta', ventaNeta, true, { fy25: fyVenta(2025), fy26: fyVenta(2026), abp27: abpVenta })}
@@ -3642,7 +3645,7 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
       <h3 style={{ color: sbuColor(sbuName) }}>Contribución de la SBU — {sbuName}{M$} <span className="unit">(por marca · 2028 · solo lectura)</span></h3>
       <div className="tablewrap">
         <table className="vfix" style={{ width: 'auto', minWidth: 520 }}>
-          <thead><tr><th className="l">Concepto</th>{cols.map(({ m }) => <th key={m} style={{ color: marcaColor(m) }}>{m}</th>)}<th>TOTAL 2028{Q('Consolidado: cada fila de esta columna es la suma de las marcas de la SBU (las columnas de la izquierda).')}</th><th className="yb">ABP 2027</th><th className="yb">Δ 28 vs 27</th><th className="ya">FY2026</th><th className="ya">Δ 28 vs 26</th><th className="ya">FY2025</th><th className="ya">Δ 28 vs 25</th></tr></thead>
+          <thead><tr><th className="l">Concepto</th>{cols.map(({ m }) => <th key={m} style={{ color: marcaColor(m) }}>{m}</th>)}<th>TOTAL 2028{Q('Consolidado: cada fila de esta columna es la suma de las marcas de la SBU (las columnas de la izquierda).')}</th><th className="yb">ABP 2027</th><th className="yb">Δ 28 vs 27</th><th className="ya">{lbl26(P.hist)}</th><th className="ya">Δ 28 vs 26</th><th className="ya">FY2025</th><th className="ya">Δ 28 vs 25</th></tr></thead>
           <tbody>
             {filas.map((f) => { const cur = f.totVal != null ? f.totVal : f.get(tot); return (
               <tr key={f.k} className={f.strong ? 'grandrow' : undefined}>
@@ -3747,7 +3750,7 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca', pued
       <div className="sub">Total de viajes del equipo por cada marca de la SBU, con el total de la SBU al final.</div>
       <div className="tablewrap">
         <table>
-          <thead><tr><th className="l">Marca</th>{rolesV.map((r) => <th key={r.id}>{r.label}</th>)}<th>Total marca 2028</th><th className="ya">2025</th><th className="ya">2026</th></tr></thead>
+          <thead><tr><th className="l">Marca</th>{rolesV.map((r) => <th key={r.id}>{r.label}</th>)}<th>Total marca 2028</th><th className="ya">2025</th><th className="ya">{lbl26(histR)}</th></tr></thead>
           <tbody>
             {(marcasSBU || []).map((m) => { const cols = rolesV.map((r) => anual(r.tab, m)); const t = cols.reduce((s, v) => s + v, 0); return <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{cols.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td><td className="tot ya">{fmt(refMar(m, 2025))}</td><td className="tot ya">{fmt(refMar(m, 2026))}</td></tr> })}
             <tr className="grandrow"><td className="l">Total {sbuName}{Q('Consolidado = suma de los viajes de cada marca:\n' + (marcasSBU || []).map((m) => `${m}: ${fmt(rolesV.reduce((a, r) => a + anual(r.tab, m), 0))}`).join('\n'))}</td>{rolesV.map((r) => <td key={r.id} className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + anual(r.tab, m), 0))}</td>)}<td className="tot">{fmt((marcasSBU || []).reduce((s, m) => s + rolesV.reduce((a, r) => a + anual(r.tab, m), 0), 0))}</td><td className="tot ya">{fmt(refSbu(sbuName, 2025))}</td><td className="tot ya">{fmt(refSbu(sbuName, 2026))}</td></tr>
@@ -3861,7 +3864,7 @@ function ComparadorMarcas({ empresa, sbuName, marcasSBU }) {
       <h3 style={{ color: col }}>📊 Comparador de marcas — {sbuName} <span className="unit">(lado a lado · 2028)</span></h3>
       <div className="sub">Las marcas de la SBU comparadas en los indicadores clave: volumen, venta, precio promedio (AUP), rentabilidad y crecimiento vs 2026. Consolida en una sola vista lo que está repartido en las demás pestañas.</div>
       <div className="tablewrap"><table>
-        <thead><tr><th className="l">Marca</th><th>Unidades</th><th>Venta Neta</th><th>% de la SBU</th><th>AUP prom.</th><th>Margen $</th><th>Margen %</th><th>Crec. vs 2026</th><th>Crec. vs 2025</th><th className="ya">Venta 2025</th><th className="ya">Venta 2026</th><th className="ya">AUP prom. 2026</th></tr></thead>
+        <thead><tr><th className="l">Marca</th><th>Unidades</th><th>Venta Neta</th><th>% de la SBU</th><th>AUP prom.</th><th>Margen $</th><th>Margen %</th><th>Crec. vs {lbl26(P.hist)}</th><th>Crec. vs 2025</th><th className="ya">Venta 2025</th><th className="ya">Venta {lbl26(P.hist)}</th><th className="ya">AUP prom. {lbl26(P.hist)}</th></tr></thead>
         <tbody>
           {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td><td className="tot">{fmt(f.unidades)}</td><td className="tot">${fmt(f.venta)}</td><td className="tot">{share(f.venta).toFixed(1)}%</td><td className="tot" title="Precio promedio = Venta Neta ÷ Unidades">${fmt(f.aup)}</td><td className="tot">${fmt(f.margen)}</td><td className="tot" style={{ fontWeight: 700 }}>{f.mpct == null ? '—' : f.mpct.toFixed(1) + '%'}</td><td className={'tot ' + (f.crec == null ? '' : f.crec >= 0 ? 'pos' : 'neg')} title={f.nuevo ? 'Marca nueva (sin histórico 2026)' : (f.u26 ? `2028 ${fmt(f.unidades)} ud vs 2026 ${fmt(f.u26)} ud` : '')}>{f.nuevo ? '🆕 nuevo' : pct(f.crec)}</td><td className={'tot ' + (f.crec25 == null ? '' : f.crec25 >= 0 ? 'pos' : 'neg')} title={f.u25 ? `2028 ${fmt(f.unidades)} ud vs 2025 ${fmt(f.u25)} ud` : 'Sin histórico 2025'}>{f.u25 ? pct(f.crec25) : '—'}</td><td className="tot ya">${fmt(f.vn25)}</td><td className="tot ya">${fmt(f.vn26)}</td><td className="tot ya" title="AUP 2026 (EBP) = Venta Neta 2026 ÷ Unidades 2026">${fmt(f.aup26)}</td></tr>)}
           <tr className="grandrow"><td className="l">TOTAL {sbuName}</td><td className="tot">{fmt(T.unidades)}</td><td className="tot">${fmt(T.venta)}</td><td className="tot">100%</td><td className="tot">${fmt(T.unidades ? T.venta / T.unidades : 0)}</td><td className="tot">${fmt(T.margen)}</td><td className="tot">{T.venta ? (T.margen / T.venta * 100).toFixed(1) + '%' : '—'}</td><td className={'tot ' + (crecTot == null ? '' : crecTot >= 0 ? 'pos' : 'neg')}>{pct(crecTot)}</td><td className={'tot ' + (crecTot25 == null ? '' : crecTot25 >= 0 ? 'pos' : 'neg')}>{pct(crecTot25)}</td><td className="tot ya">${fmt(T.vn25)}</td><td className="tot ya">${fmt(T.vn26)}</td><td className="tot ya">${fmt(T.u26 ? T.vn26 / T.u26 : 0)}</td></tr>
@@ -3905,7 +3908,7 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
         <div className="tablewrap">
           <table className="vfix">
             <colgroup><col style={{ width: '160px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '90px' }} /></colgroup>
-            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">2025</th><th className="ya">2026</th></tr></thead>
+            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">2025</th><th className="ya">{lbl26(P.hist)}</th></tr></thead>
             <tbody>
               {filas.map((f) => <tr key={f.m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(f.m), marginRight: 7 }}></span>{f.m}</td>{f.mes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(f.tot)}</td><td className="tot ya">{fmt(mkRefM(f.m, 2025))}</td><td className="tot ya">{fmt(mkRefM(f.m, 2026))}</td></tr>)}
               <tr className="grandrow"><td className="l">Total {sbuName}{Q('Consolidado = suma del marketing de cada marca:\n' + filas.map((f) => `${f.m}: ${fmt(f.tot)}`).join('\n'))}</td>{totMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(gt)}</td><td className="tot ya">{fmt(mkRefS(sbuName, 2025))}</td><td className="tot ya">{fmt(mkRefS(sbuName, 2026))}</td></tr>
@@ -4088,6 +4091,15 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
   const [extraMarcas, setExtraMarcas] = useState([])
   useEffect(() => { (async () => { try { const m = await gLoadMarcas(); setExtraMarcas(m); setAsign((prev) => seedWith(combos[empresa], [...ALL_MARCAS, ...m])) } catch { } })() }, [])
   const allMarcas = [...new Set([...ALL_MARCAS, ...extraMarcas, ...(ebSbus ? Object.values(ebSbus).flat() : [])])]
+  // ENERGY BRANDS no se llena a mano: su mapeo SBU↔marca viene del EBP. Si no hay combinaciones guardadas, lo auto-rellenamos del EBP.
+  useEffect(() => {
+    if (empresa !== 'ENERGY BRANDS') return
+    if (!ebSbus || !Object.keys(ebSbus).length) return
+    if (combos[empresa] && Object.keys(combos[empresa]).length) return
+    const m = {}; [...ALL_MARCAS, ...extraMarcas, ...Object.values(ebSbus).flat()].forEach((mk) => { m[mk] = '' })
+    Object.entries(ebSbus).forEach(([s, ms]) => ms.forEach((mk) => { if (SBU_NAMES.includes(s)) m[mk] = s }))
+    setAsign(m)
+  }, [empresa, ebSbus])
   function cargarDeEBP() {
     if (!ebSbus || !Object.keys(ebSbus).length) { setMsg({ t: 'warn', x: 'Aún no hay datos del EBP para cargar. Entra a una SBU para que cargue el histórico y vuelve.' }); return }
     const m = {}; allMarcas.forEach((mk) => { m[mk] = '' })
@@ -4153,7 +4165,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
         <button className="btn" onClick={() => abrirHistorico && abrirHistorico()}>📊 Abrir Histórico / Importar Excel</button>
       </div>
       <div className="panel">
-        <h3>Combinaciones de SBU — {empresa}<span className="fill-badge">✏️ para llenar</span></h3>
+        <h3>Combinaciones de SBU — {empresa}{(cuenta('SBU 1') + cuenta('SBU 2') + cuenta('SBU 3')) === 0 && <span className="fill-badge">✏️ para llenar</span>}{empresa === 'ENERGY BRANDS' && <span className="unit" style={{ marginLeft: 8, fontWeight: 400 }}>· se carga automático del EBP</span>}</h3>
         <div className="sub">Asigna cada marca a una SBU (o "No la vende" para excluirla de esta empresa). ({cuenta('SBU 1')} en SBU 1 · {cuenta('SBU 2')} en SBU 2 · {cuenta('SBU 3')} en SBU 3 · {cuenta('NO')} no la vende)</div>
         <div className="tablewrap">
           <table>

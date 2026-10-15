@@ -136,6 +136,16 @@ async function _ebpRef(tab2026, rubroMatch) {
 }
 export const gViajesRef = () => _ebpRef('VIAJES', 'VIAJES')
 export const gMkRef = () => _ebpRef('MK', 'MK')
+// ABP 2027 por marca (de los archivos "ABP 2026_2027" por marca · hoja MK y VIAJES TOTAL): mk = marketing total, vn = venta neta, vj = viajes total.
+const ABP2027_REF = {
+  ALTRA: { mk: 49947, vn: 550520, vj: 3641 }, FJALLRAVEN: { mk: 0, vn: 0, vj: 0 }, HOKA: { mk: 506300, vn: 6497660, vj: 4367 },
+  INJINJI: { mk: 12900, vn: 76897, vj: 242 }, NORDA: { mk: 40980, vn: 309643, vj: 726 }, ARIAT: { mk: 16577, vn: 816912, vj: 0 },
+  BIRKENSTOCK: { mk: 289578, vn: 3788263, vj: 1900 }, BLUNDSTONE: { mk: 7733, vn: 45584, vj: 0 }, ECCO: { mk: 0, vn: 0, vj: 0 },
+  'FLOWER MOUNTAIN': { mk: 0, vn: 0, vj: 0 }, UGG: { mk: 131099, vn: 335607, vj: 0 }, COTOPAXI: { mk: 8150, vn: 109985, vj: 0 },
+  FITFLOP: { mk: 0, vn: 151210, vj: 0 }, FOAMERS: { mk: 11330, vn: 143414, vj: 0 }, 'GOORIN BROS': { mk: 0, vn: 657070, vj: 0 },
+  KEEN: { mk: 8600, vn: 104367, vj: 0 }, MAMMUT: { mk: 15860, vn: 217695, vj: 0 },
+}
+export const gABP2027Ref = () => ({ ok: true, val: ABP2027_REF })
 // Logística y Comisiones: 2025 vienen de la hoja "OTROS 2025" del EBP (su pestaña 2026 puede no existir; si existe, también se incluye).
 export const gLogExpRef = () => _ebpRef('LOGISTICA', 'LOGISTIC')
 export const gComisRef = () => _ebpRef('COMISIONES', 'COMISION')
