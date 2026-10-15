@@ -3065,6 +3065,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const vjAnual = MESES.reduce((a, _, mi) => a + vjMes(mi), 0)
   // ---- Líneas de Finanzas del Cash Flow (semilla Cash Inicial, Costos Financieros, Otros ing/gastos) ----
   const [cf, setCf] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_cf_${empresa}`) || '{}') } catch { return {} } })
+  const [openOper, setOpenOper] = useState(false); const [openFin, setOpenFin] = useState(false)
   useEffect(() => { try { setCf(JSON.parse(localStorage.getItem(`retail_cf_${empresa}`) || '{}')) } catch { } }, [empresa])
   const fk = (line, mi) => `${line}|${mi}`
   const setCF = (line, mi, v) => setCf((d) => ({ ...d, [fk(line, mi)]: v }))
@@ -3078,13 +3079,14 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
     const ini = mi === 0 ? num(cf[fk('INI', 0)]) : prevFin
     const cobros = tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
     const pagos = impMes(mi)
-    const oper = gastoMes(mi) + mkMes(mi) + vjMes(mi)
+    const gasto = gastoMes(mi), mk = mkMes(mi), vj = vjMes(mi)
+    const oper = gasto + mk + vj
     const fin = num(cf[fk('FIN', mi)])
     const oIng = num(cf[fk('OING', mi)])
     const oGas = num(cf[fk('OGAS', mi)])
     const flujo = cobros + oIng - pagos - oper - fin - oGas
     const final = ini + flujo
-    cfRows.push({ ini, cobros, pagos, oper, fin, oIng, oGas, flujo, final })
+    cfRows.push({ ini, cobros, pagos, gasto, mk, vj, oper, fin, oIng, oGas, flujo, final })
     prevFin = final
   })
   const cfSum = (k) => cfRows.reduce((a, r) => a + r[k], 0)
@@ -3155,12 +3157,12 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Ventas por tienda</span><div className="spacer"></div><button className="btn" onClick={addTienda}>➕ Agregar tienda</button><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Ventas por tienda</span><div className="spacer"></div><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Ventas y costo proyectados por tienda — 2028</h3>
           <div className="sub">Escoge una <b>tienda</b> y llena su proyección <b>por categoría / subcategoría</b>: unidades por mes + <b>AUC</b> (costo unitario) + <b>AUP</b> (precio sin descuento) + <b>% descuento</b>. La venta neta y el costo se calculan solos.</div>
           {/* Selector de tienda */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 4px' }}>
-            {tiendas.map((t) => <button key={t} className={'seg' + (selStore === t ? ' active' : '')} onClick={() => setSelT(t)} style={selStore === t ? { background: col, borderColor: col, color: '#fff' } : {}}>{t}</button>)}
+            {tiendas.map((t) => <button key={t} className={'seg' + (selStore === t ? ' active' : '')} onClick={() => setSelT(t)} style={selStore === t ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{t}</button>)}
           </div>
           {!selStore ? <div className="sub">No hay tiendas. Usa <b>➕ Agregar tienda</b>.</div> : (() => { const t = selStore; const cs = catsOf(t); return <>
             <div className="toolbar" style={{ margin: '12px 0 6px' }}>
@@ -3168,7 +3170,6 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               <span className="unit" style={{ marginLeft: 8 }}>Venta neta {fmt(tVenta(t))} · Costo {fmt(tCosto(t))} · Margen {mpct(tVenta(t) - tCosto(t), tVenta(t))}</span>
               <div className="spacer"></div>
               <button className="btn" onClick={() => addCat(t)}>➕ Agregar categoría</button>
-              <button className="btn" onClick={() => delTienda(t)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>
             </div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
               <table className="vfix"><colgroup><col style={{ width: '190px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}<col style={{ width: '66px' }} /><col style={{ width: '66px' }} /><col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '82px' }} /></colgroup>
@@ -3209,22 +3210,33 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div className="panel">
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Cash Flow</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarCF}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Cash Flow — Retail <span className="unit">(2028 · mismas líneas que las marcas)</span></h3>
-          <div className="sub"><b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> + <span style={{ color: '#15803d' }}>Otros ingresos</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span> − <span style={{ color: '#b91c1c' }}>Costos financieros</span> − <span style={{ color: '#b91c1c' }}>Otros gastos</span></b>. Cobros = ventas por tienda · Pagos = importaciones · Costos operativos = gastos + marketing + viajes de Retail. El <b>Cash Inicial de enero</b> (semilla) y las líneas de Finanzas se escriben a mano.</div>
+          <div className="sub"><b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> + <span style={{ color: '#15803d' }}>Otros ingresos</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span> − <span style={{ color: '#b91c1c' }}>Costos financieros</span> − <span style={{ color: '#b91c1c' }}>Otros gastos</span></b>.</div>
+          <div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre los números calculados para ver el origen. Despliega los costos con ▶.</div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '95px' }} /></colgroup>
-              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+            <table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '95px' }} /></colgroup>
+              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m} className="yb">{m}</th>)}<th>Total 2028</th></tr></thead>
               <tbody>
+                <tr className="secrow"><td colSpan={14}>CASH FLOW</td></tr>
+                {/* Cash Inicial */}
                 <tr><td className="l" style={{ fontWeight: 700 }}>Cash Inicial</td>{cfRows.map((r, mi) => mi === 0
-                  ? <td key={mi} className="cell"><input value={cf[fk('INI', 0)] ?? ''} onChange={(e) => setCF('INI', 0, e.target.value)} inputMode="decimal" title="Semilla: saldo en banco al cierre de 2027" /></td>
-                  : <td key={mi} className="tot" title="= Cash Final del mes anterior">{fmt(r.ini)}</td>)}<td className="tot">—</td></tr>
-                <tr><td className="l" style={{ color: '#15803d', fontWeight: 700 }}>Cash In (Cobros)</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: '#15803d' }}>{fmt(r.cobros)}</td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(cfSum('cobros'))}</td></tr>
-                <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Cash Out (Pagos · importaciones)</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: '#b91c1c' }}>{fmt(r.pagos)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>{fmt(cfSum('pagos'))}</td></tr>
-                <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Costos Operativos <span className="unit">(gastos+mk+viajes)</span></td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: '#b91c1c' }}>{fmt(r.oper)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>{fmt(cfSum('oper'))}</td></tr>
-                <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Costos Financieros</td>{cfRows.map((r, mi) => <td key={mi} className="cell"><input value={cf[fk('FIN', mi)] ?? ''} onChange={(e) => setCF('FIN', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot" style={{ color: '#b91c1c' }}>{fmt(cfSum('fin'))}</td></tr>
-                <tr><td className="l sub2" style={{ color: '#15803d' }}>(+) Otros ingresos</td>{cfRows.map((r, mi) => <td key={mi} className="cell"><input value={cf[fk('OING', mi)] ?? ''} onChange={(e) => setCF('OING', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(cfSum('oIng'))}</td></tr>
-                <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Otros gastos</td>{cfRows.map((r, mi) => <td key={mi} className="cell"><input value={cf[fk('OGAS', mi)] ?? ''} onChange={(e) => setCF('OGAS', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot" style={{ color: '#b91c1c' }}>{fmt(cfSum('oGas'))}</td></tr>
-                <tr className="grandrow"><td className="l">= Flujo neto del mes</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: r.flujo >= 0 ? '#15803d' : '#b91c1c', fontWeight: 800 }}>{fmt(r.flujo)}</td>)}<td className="tot" style={{ fontWeight: 800 }}>{fmt(cfSum('flujo'))}</td></tr>
-                <tr className="grandrow"><td className="l" style={{ fontWeight: 800 }}>Cash Final</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ fontWeight: 800 }}>{fmt(r.final)}</td>)}<td className="tot">—</td></tr>
+                  ? <td key={mi} className="cell yb"><input value={cf[fk('INI', 0)] ?? ''} onChange={(e) => setCF('INI', 0, e.target.value)} inputMode="decimal" title="Saldo en banco al cierre de 2027 (arranque de enero-28)" /></td>
+                  : <td key={mi} className="tot yb" style={{ cursor: BULB_CURSOR }} title="Cash Inicial = Cash Final del mes anterior">{fmt(r.ini)}</td>)}<td className="tot">—</td></tr>
+                {/* Cash In */}
+                <tr><td className="l" style={{ color: '#15803d' }}>Cash In (Cobros)</td>{cfRows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#15803d', cursor: BULB_CURSOR }} title={`Cobros = ventas por tienda del mes = ${fmt(r.cobros)}`}>{r.cobros > 0.5 ? '+ ' : ''}{fmt(r.cobros)}</td>)}<td className="tot" style={{ color: '#15803d' }}>+ {fmt(cfSum('cobros'))}</td></tr>
+                {/* Cash Out */}
+                <tr><td className="l" style={{ color: '#b91c1c' }}>Cash Out (Pagos)</td>{cfRows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#b91c1c', cursor: BULB_CURSOR }} title={`Pagos = importaciones (compras a la SBU) del mes = ${fmt(r.pagos)}`}>{r.pagos > 0.5 ? '− ' : ''}{fmt(r.pagos)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(cfSum('pagos'))}</td></tr>
+                {/* Costos Operativos (desplegable: gastos / marketing / viajes) */}
+                <tr className={'rowline ' + (openOper ? 'open' : '')} onClick={() => setOpenOper((o) => !o)} style={{ cursor: 'pointer' }}><td className="l" style={{ color: '#b91c1c' }}><span className="caret">▶</span> Costos Operativos <span className="unit" style={{ marginLeft: 6, color: 'var(--muted)' }}>({openOper ? 'ocultar' : 'ver'} detalle)</span></td>{cfRows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#b91c1c' }}>{r.oper > 0.5 ? '− ' : ''}{fmt(r.oper)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(cfSum('oper'))}</td></tr>
+                {openOper && [['Gastos', 'gasto'], ['Marketing', 'mk'], ['Viajes', 'vj']].map(([lbl, kk]) => <tr key={kk}><td className="l sub2" style={{ color: 'var(--muted)' }}>{lbl}</td>{cfRows.map((r, i) => <td key={i} className="tot yb" style={{ color: 'var(--muted)' }}>{fmt(r[kk])}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(cfSum(kk))}</td></tr>)}
+                {/* Costos Financieros (desplegable: editable) */}
+                <tr className={'rowline ' + (openFin ? 'open' : '')} onClick={() => setOpenFin((o) => !o)} style={{ cursor: 'pointer' }}><td className="l" style={{ color: '#b91c1c' }}><span className="caret">▶</span> Costos Financieros <span className="unit" style={{ marginLeft: 6, color: 'var(--muted)' }}>({openFin ? 'ocultar' : 'ver'} detalle · se escribe a mano)</span></td>{cfRows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#b91c1c' }}>{r.fin > 0.5 ? '− ' : ''}{fmt(r.fin)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(cfSum('fin'))}</td></tr>
+                {openFin && <tr onClick={(e) => e.stopPropagation()}><td className="l sub2" style={{ color: 'var(--muted)' }}>Costos financieros (editable)</td>{cfRows.map((r, mi) => <td key={mi} className="cell yb"><input value={cf[fk('FIN', mi)] ?? ''} onChange={(e) => setCF('FIN', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(cfSum('fin'))}</td></tr>}
+                {/* Otros ingresos / gastos (editables) */}
+                <tr><td className="l" style={{ color: '#15803d' }}>Otros ingresos</td>{cfRows.map((r, mi) => <td key={mi} className="cell yb"><input value={cf[fk('OING', mi)] ?? ''} onChange={(e) => setCF('OING', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot" style={{ color: '#15803d' }}>+ {fmt(cfSum('oIng'))}</td></tr>
+                <tr><td className="l" style={{ color: '#b91c1c' }}>Otros gastos</td>{cfRows.map((r, mi) => <td key={mi} className="cell yb"><input value={cf[fk('OGAS', mi)] ?? ''} onChange={(e) => setCF('OGAS', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(cfSum('oGas'))}</td></tr>
+                {/* Flujo neto + Cash Final */}
+                <tr className="grandrow"><td className="l">= Flujo neto del mes <span className="unit">(cobros + otros ingresos − pagos − costos oper. − financieros − otros gastos)</span></td>{cfRows.map((r, i) => { const s = r.flujo > 0.5 ? '+ ' : r.flujo < -0.5 ? '− ' : ''; return <td key={i} className="tot yb" style={{ color: r.flujo < -0.5 ? '#b91c1c' : r.flujo > 0.5 ? '#15803d' : undefined }}>{s}{fmt(Math.abs(r.flujo))}</td> })}<td className="tot">{fmt(cfSum('flujo'))}</td></tr>
+                <tr><td className="l" style={{ fontWeight: 700 }}>Cash Final</td>{cfRows.map((r, i) => <td key={i} className="tot yb" style={{ cursor: BULB_CURSOR, fontWeight: 700 }} title="Cash Final = Cash Inicial + Cash In + Otros ingresos − Cash Out − Costos Operativos − Costos Financieros − Otros gastos">{fmt(r.final)}</td>)}<td className="tot">—</td></tr>
               </tbody>
             </table>
           </div>
