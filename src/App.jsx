@@ -1061,7 +1061,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         <div className="toolbar" style={{ alignItems: 'center', marginBottom: 2 }}>
           <h3 style={{ margin: 0 }}>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>solo lectura</span> : <Responsable empresa={empresa} seccion="Finanzas" />}</h3>
           <div className="spacer"></div>
-          {!isTotal && <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>}
+          {!isTotal && !String(fixedMarca || '').startsWith('(') && <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>}
         </div>
         <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : <>Captura por rubro y mes. Los rubros son iguales para todas las marcas. Un rubro que agregues aquí se suma para <b>toda la empresa</b> y lo verán <b>todos los roles</b> que capturan {rubro.k.toLowerCase()}.</>} Total: <b>${fmt(totalGeneral)}</b></div>
         <div className="tablewrap">
@@ -3193,6 +3193,20 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
 
       {tab === 'mk' && <>
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
+        {/* Marketing sobre la venta (Retail): venta neta = venta por tienda */}
+        {(() => { const vnMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0); const vnAn = MESES.reduce((a, _, mi) => a + vnMes(mi), 0); const mkAn = MESES.reduce((a, _, mi) => a + mkMes(mi), 0); const pctC = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
+          return <div className="panel" style={{ marginBottom: 8 }}>
+            <h3 style={{ color: col }}>MARKETING sobre la venta — Retail <span className="unit">(venta = ventas por tienda)</span></h3>
+            <div className="sub">Cuánto pesa <b>Marketing</b> sobre la <b>venta neta</b>, por mes y en total.</div>
+            <div className="tablewrap" style={{ overflowX: 'auto' }}><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+              <tbody>
+                <tr><td className="l sub2">Venta neta ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(vnMes(mi))}</td>)}<td className="tot">{fmt(vnAn)}</td></tr>
+                <tr><td className="l sub2">MARKETING ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mkMes(mi))}</td>)}<td className="tot">{fmt(mkAn)}</td></tr>
+                <tr className="grandrow"><td className="l">% MARKETING / venta</td>{MESES.map((_, mi) => <td key={mi} className="tot">{pctC(mkMes(mi), vnMes(mi))}</td>)}<td className="tot">{pctC(mkAn, vnAn)}</td></tr>
+              </tbody>
+            </table></div>
+          </div> })()}
         <RoleForm key="retail-mk" role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} />
       </>}
 
@@ -3343,9 +3357,9 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                   <td className="l sub2">{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}</td>
                   {wholesaleMarcas.map((m) => { const p = pctOf(c, m); return <td key={m} className="cell ya" style={{ padding: 3 }}>
                     <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={`${c} ← ${m}`} style={{ width: '100%' }} />
-                    {p > 0 && <select value={cellOf(c, m).cat ?? ''} onChange={(e) => setCell(c, m, 'cat', e.target.value)} style={{ width: '100%', marginTop: 2, fontSize: 10, padding: '2px', border: `1px solid ${catOf(c, m) ? 'var(--line)' : '#f0a'}`, borderRadius: 4 }} title="Categoría wholesale de esta marca">
-                      <option value="">— cat —</option>{(prodCats[m] || []).map((ct) => <option key={ct} value={ct}>{ct}</option>)}
-                    </select>}
+                    <select value={cellOf(c, m).cat ?? ''} onChange={(e) => setCell(c, m, 'cat', e.target.value)} style={{ width: '100%', marginTop: 2, fontSize: 10, padding: '2px', border: `1px solid ${(p > 0 && !catOf(c, m)) ? '#f0a' : 'var(--line)'}`, borderRadius: 4, color: catOf(c, m) ? 'inherit' : 'var(--muted)', background: p > 0 ? '#fff' : 'transparent' }} title="Categoría wholesale de esta marca">
+                      <option value="">— categoría —</option>{(prodCats[m] || []).map((ct) => <option key={ct} value={ct}>{ct}</option>)}
+                    </select>
                   </td> })}
                   <td className="tot" style={{ fontWeight: 800, color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%{!okSum && ' ⚠'}</td>
                 </tr> })}
