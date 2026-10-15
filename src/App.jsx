@@ -2987,16 +2987,19 @@ function TeamPanel({ empresa, sbuName }) {
 }
 
 /* ===== RETAIL: tiendas propias — Importaciones, Gastos, Ventas/Costo por tienda, Marketing, Viajes, Cash Flow ===== */
-// Retail: subcategorías de ejemplo para una tienda nueva (editables, se pueden agregar/quitar).
-const RETAIL_CATS_DEF = ['CALZADO', 'ROPA', 'ACCESORIOS']
+// Retail: subcategorías Retail del Excel (Categoría / Subcategoría). Son el punto de partida de cada tienda;
+// el usuario puede borrar las que no apliquen o agregar nuevas.
+const RETAIL_CATS_DEF = ["Everyday Road", "Everyday Trail", "Training", "Road race", "Trail race", "Recovery Slides", "Recovery Shoes", "Logo wear", "Training top", "Training Bottom", "Race Top", "Race Bottom", "Outlayer", "Wearables", "Head", "Socks", "Vest", "Drinkware", "Phone storage", "Eyewear", "Insoles", "Therapy", "Compression", "Underwear", "Sunscreen", "Gaiters & Neck Gaiters", "laces", "Towels", "Others", "Daily packs", "Fanny packs", "Race packs", "Water packs", "Open-Toe Sporty", "Closed-Toe Casual", "Closed-Toe Fashion", "Closed-Toe Sporty", "Slippers", "Low-Cut Boots", "Open-Toe Casual", "Open-Toe Fashion", "Open-Toe Plattform", "Closed-Toe Plattform", "Low-Casual Socks", "High-Casual Socks", "Logowear", "Headwear", "Sport Socks", "Cleaning", "Wallets", "Keychains", "High-Cut Boots", "Tote Bags", "Work Packs", "Shopping Bags", "Pouches & Cases", "Duffel Bags", "Toiletry Bag"]
 
 function RetailWorkspace({ empresa, usuario, sbus }) {
   const col = sbuColor('Retail')
-  const [tab, setTab] = useState('imp')
+  const [tab, setTab] = useState('comercial')
+  const [comTab, setComTab] = useState('ventas') // sub-vista de Comercial
   const TABS = [
-    ['imp', '🚢 Importaciones'], ['gastos', '💵 Gastos'], ['ventas', '🏬 Ventas por tienda'],
-    ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'], ['ucv', '💹 Unidades · Costo · Venta'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
+    ['comercial', '🛍️ Comercial'], ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'],
+    ['gastos', '💵 Gastos'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
   ]
+  const COM_TABS = [['ventas', '🏬 Ventas por tienda'], ['ucv', '💹 Unidades · Costo · Venta'], ['imp', '🚢 Importaciones']]
   // ---- Importaciones (captura mensual del COSTO de importación por marca, con referencia 2027) ----
   const [imp, setImp] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
@@ -3130,7 +3133,14 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         {TABS.map(([id, lbl]) => <button key={id} className={'seg' + (tab === id ? ' active' : '')} onClick={() => setTab(id)} style={tab === id ? { background: col, borderColor: col, color: '#fff' } : {}}>{lbl}</button>)}
       </div>
 
-      {tab === 'imp' && <>
+      {tab === 'comercial' && <div className="toolbar" style={{ marginBottom: 12, gap: 8, alignItems: 'center' }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--muted)' }}>VER:</span>
+        <select value={comTab} onChange={(e) => setComTab(e.target.value)} style={{ fontWeight: 700, padding: '8px 12px', borderRadius: 8, border: `1.5px solid ${col}`, color: col, background: '#fff', minWidth: 230 }}>
+          {COM_TABS.map(([id, lbl]) => <option key={id} value={id}>{lbl}</option>)}
+        </select>
+      </div>}
+
+      {tab === 'comercial' && comTab === 'imp' && <>
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
@@ -3183,7 +3193,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         </div>
       </>}
 
-      {tab === 'ventas' && <>
+      {tab === 'comercial' && comTab === 'ventas' && <>
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
@@ -3271,7 +3281,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         </div>
       </>}
 
-      {tab === 'ucv' && <>
+      {tab === 'comercial' && comTab === 'ucv' && <>
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
