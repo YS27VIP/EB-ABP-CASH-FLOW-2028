@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -188,6 +188,15 @@ const RETAIL_IMP_2027 = {
   INJINJI: { u: 102, c: 546 }, MAMMUT: { u: 83, c: 3530 }, UGG: { u: 1848, c: 102577 },
 }
 const RETAIL_MARCAS = Object.keys(RETAIL_IMP_2027)
+// Retail: rubros de gastos del P&L con su total 2027 de referencia (USD anual).
+const RETAIL_GASTOS = [
+  ['Honorarios', 51596], ['Nómina', 641817], ['Proveedores', 11792], ['Servicios logísticos', 24474], ['Servicios de Transporte', 23635],
+  ['Servicios públicos', 22684], ['Seguridad Social', 32125], ['Impuestos', 35546], ['Servicios tecnológicos', 32370], ['Activos fijos (depreciación)', 24658],
+  ['Marketing (PTY)', 87654], ['Publicidad y eventos', 23635], ['Pólizas', 27827], ['Alquiler y administración', 830115], ['Tiquetes y viáticos', 20328],
+  ['Mantenimiento y aseo', 22690], ['Gastos bancarios', 118173], ['Gastos apertura o cierre de tiendas', 135885], ['Otros gastos', 23635],
+]
+// Retail: tiendas físicas por defecto (del P&L). Se pueden agregar nuevas en la pestaña Ventas por tienda.
+const RETAIL_TIENDAS = ['Birkenstock Andino', 'Hoka Andino', 'MUH Atlantis', 'MUH Arkadia', 'Sale Factory', 'E-Commerce', 'Mayoristas']
 const sTag = (s, buy) => buy ? '(compra 2028)' : (s === 'ANT' ? '(saldo viejo agrupado)' : '(saldo anterior)')
 
 /* ===== helpers ===== */
@@ -2995,6 +3004,41 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   function guardarImp() { setSaving(true); try { saveEstado(empresa, 'retail_imp', imp); setMsg({ t: 'ok', x: 'Importaciones guardadas. Alimentan el Cash Out del Cash Flow de Retail.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   const vjRoles = ['director', 'producto', 'marketing', 'ventas'].map((id) => ROLES.find((r) => r.id === id))
   const mkRubro = (ROLES.find((r) => r.id === 'marketing').rubros || [])[0]
+  // ---- Gastos (por rubro y mes, con ref 2027 y agregar rubro) ----
+  const [gastos, setGastos] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_gastos_${empresa}`) || '{}') } catch { return {} } })
+  const [gRubrosX, setGRubrosX] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_gastos_x_${empresa}`) || '[]') } catch { return [] } })
+  useEffect(() => { try { setGastos(JSON.parse(localStorage.getItem(`retail_gastos_${empresa}`) || '{}')) } catch { } try { setGRubrosX(JSON.parse(localStorage.getItem(`retail_gastos_x_${empresa}`) || '[]')) } catch { } }, [empresa])
+  const gRubros = [...RETAIL_GASTOS.map(([n, ref]) => ({ n, ref })), ...gRubrosX.map((n) => ({ n, ref: 0 }))]
+  const gk = (n, mi) => `G|${n}|${mi}`
+  const setG = (n, mi, v) => setGastos((d) => ({ ...d, [gk(n, mi)]: v }))
+  const gRow = (n) => MESES.reduce((a, _, mi) => a + num(gastos[gk(n, mi)]), 0)
+  const gCol = (mi) => gRubros.reduce((a, r) => a + num(gastos[gk(r.n, mi)]), 0)
+  const gGran = gRubros.reduce((a, r) => a + gRow(r.n), 0)
+  function guardarGastos() { setSaving(true); try { saveEstado(empresa, 'retail_gastos', gastos); saveEstado(empresa, 'retail_gastos_x', gRubrosX); setMsg({ t: 'ok', x: 'Gastos guardados.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function addRubroG() { const n = window.prompt('Nombre del nuevo rubro de gasto:'); if (!n) return; const nm = n.trim(); if (!nm || gRubros.some((r) => r.n.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Ese rubro ya existe.' }); return } const next = [...gRubrosX, nm]; setGRubrosX(next); saveEstado(empresa, 'retail_gastos_x', next) }
+  function delRubroG(nm) { const next = gRubrosX.filter((x) => x !== nm); setGRubrosX(next); saveEstado(empresa, 'retail_gastos_x', next) }
+  // ---- Ventas y costo por tienda (con margen) + agregar tienda ----
+  const [tiendas, setTiendas] = useState(() => { try { const t = JSON.parse(localStorage.getItem(`retail_tiendas_${empresa}`) || 'null'); return Array.isArray(t) && t.length ? t : RETAIL_TIENDAS } catch { return RETAIL_TIENDAS } })
+  const [vt, setVt] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}') } catch { return {} } })
+  useEffect(() => { try { const t = JSON.parse(localStorage.getItem(`retail_tiendas_${empresa}`) || 'null'); if (Array.isArray(t) && t.length) setTiendas(t) } catch { } try { setVt(JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}')) } catch { } }, [empresa])
+  const vk = (t, kind, mi) => `${t}|${kind}|${mi}`
+  const setVT = (t, kind, mi, v) => setVt((d) => ({ ...d, [vk(t, kind, mi)]: v }))
+  const tVenta = (t) => MESES.reduce((a, _, mi) => a + num(vt[vk(t, 'V', mi)]), 0)
+  const tCosto = (t) => MESES.reduce((a, _, mi) => a + num(vt[vk(t, 'C', mi)]), 0)
+  const totVenta = tiendas.reduce((a, t) => a + tVenta(t), 0), totCosto = tiendas.reduce((a, t) => a + tCosto(t), 0)
+  function guardarVentas() { setSaving(true); try { saveEstado(empresa, 'retail_ventas', vt); saveEstado(empresa, 'retail_tiendas', tiendas); setMsg({ t: 'ok', x: 'Ventas por tienda guardadas.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function addTienda() { const n = window.prompt('Nombre de la nueva tienda:'); if (!n) return; const nm = n.trim(); if (!nm || tiendas.some((t) => t.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa tienda ya existe.' }); return } const next = [...tiendas, nm]; setTiendas(next); saveEstado(empresa, 'retail_tiendas', next) }
+  function delTienda(t) { const next = tiendas.filter((x) => x !== t); setTiendas(next); saveEstado(empresa, 'retail_tiendas', next) }
+  // ---- Cash Flow Retail (consolida) ----
+  const mpct = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
+  const impMes = (mi) => RETAIL_MARCAS.reduce((a, m) => a + num(imp[`${m}|${mi}`]), 0)
+  const cfRows = MESES.map((_, mi) => {
+    const cashIn = tiendas.reduce((a, t) => a + num(vt[vk(t, 'V', mi)]), 0)
+    const compras = impMes(mi)
+    const gasto = gRubros.reduce((a, r) => a + num(gastos[gk(r.n, mi)]), 0)
+    const out = compras + gasto
+    return { cashIn, compras, gasto, out, neto: cashIn - out }
+  })
 
   return (
     <div>
@@ -3040,11 +3084,77 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         ))}
       </>}
 
-      {(tab === 'gastos' || tab === 'ventas' || tab === 'cf') && (
-        <div className="panel"><h3 style={{ color: col }}>{tab === 'gastos' ? '💵 Gastos de Retail' : tab === 'ventas' ? '🏬 Ventas y Costo por tienda' : '💰 Cash Flow de Retail'}</h3>
-          <div className="note warn">🚧 En construcción (próxima fase). {tab === 'gastos' ? 'Rubros del P&L con referencia 2027, editables y con "agregar rubro".' : tab === 'ventas' ? 'Ingresos y costo proyectados por tienda física (con opción de agregar tienda nueva) y su margen.' : 'Consolida importaciones (Cash Out), ventas (Cash In), gastos, marketing y viajes en el mismo formato de Cash Flow.'}</div>
+      {tab === 'gastos' && <>
+        <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
+        {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+        <div className="panel">
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Gastos</span><div className="spacer"></div><button className="btn" onClick={addRubroG}>➕ Agregar rubro</button><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar gastos'}</button></div>
+          <h3 style={{ color: col }}>Gastos 2028 — Retail <span className="unit">(por rubro y mes · ref 2027 del P&L)</span></h3>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '200px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '95px' }} /></colgroup>
+              <thead><tr><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">Ref 2027</th></tr></thead>
+              <tbody>
+                {gRubros.map((r) => { const esX = gRubrosX.includes(r.n); return <tr key={r.n}><td className="l sub2">{r.n}{esX && <button title="Quitar rubro" onClick={() => delRubroG(r.n)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={gastos[gk(r.n, mi)] ?? ''} onChange={(e) => setG(r.n, mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot">{fmt(gRow(r.n))}</td><td className="tot ya">{fmt(r.ref)}</td></tr> })}
+                <tr className="grandrow"><td className="l">Total gastos</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(gCol(mi))}</td>)}<td className="tot">{fmt(gGran)}</td><td className="tot ya">{fmt(RETAIL_GASTOS.reduce((a, [, ref]) => a + ref, 0))}</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      )}
+      </>}
+
+      {tab === 'ventas' && <>
+        <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
+        {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+        <div className="panel">
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Ventas por tienda</span><div className="spacer"></div><button className="btn" onClick={addTienda}>➕ Agregar tienda</button><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+          <h3 style={{ color: col }}>Ventas y costo proyectados por tienda — 2028</h3>
+          <div className="sub" style={{ fontWeight: 700, color: '#15803d', margin: '6px 0' }}>① Ingresos (venta neta) por tienda</div>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+              <thead><tr><th className="l">Tienda</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+              <tbody>
+                {tiendas.map((t) => <tr key={t}><td className="l sub2">{t}<button title="Quitar tienda" onClick={() => delTienda(t)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button></td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={vt[vk(t, 'V', mi)] ?? ''} onChange={(e) => setVT(t, 'V', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot">{fmt(tVenta(t))}</td></tr>)}
+                <tr className="grandrow"><td className="l">Total ingresos</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(tiendas.reduce((a, t) => a + num(vt[vk(t, 'V', mi)]), 0))}</td>)}<td className="tot">{fmt(totVenta)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="sub" style={{ fontWeight: 700, color: '#b91c1c', margin: '14px 0 6px' }}>② Costo por tienda</div>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+              <thead><tr><th className="l">Tienda</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+              <tbody>
+                {tiendas.map((t) => <tr key={t}><td className="l sub2">{t}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={vt[vk(t, 'C', mi)] ?? ''} onChange={(e) => setVT(t, 'C', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot">{fmt(tCosto(t))}</td></tr>)}
+                <tr className="grandrow"><td className="l">Total costo</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(tiendas.reduce((a, t) => a + num(vt[vk(t, 'C', mi)]), 0))}</td>)}<td className="tot">{fmt(totCosto)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="sub" style={{ fontWeight: 700, color: '#0f766e', margin: '14px 0 6px' }}>③ Margen por tienda</div>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table><thead><tr><th className="l">Tienda</th><th>Venta Neta</th><th>Costo</th><th>Margen $</th><th>Margen %</th></tr></thead>
+              <tbody>
+                {tiendas.map((t) => { const v = tVenta(t), c = tCosto(t); return <tr key={t}><td className="l">{t}</td><td className="tot">{fmt(v)}</td><td className="tot">{fmt(c)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(v - c)}</td><td className="tot" style={{ color: '#0f766e' }}>{mpct(v - c, v)}</td></tr> })}
+                <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(totVenta)}</td><td className="tot">{fmt(totCosto)}</td><td className="tot" style={{ color: '#0f766e' }}>{fmt(totVenta - totCosto)}</td><td className="tot" style={{ color: '#0f766e' }}>{mpct(totVenta - totCosto, totVenta)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>}
+
+      {tab === 'cf' && <div className="panel">
+        <h3 style={{ color: col }}>Cash Flow — Retail <span className="unit">(consolida ventas, importaciones y gastos · 2028)</span></h3>
+        <div className="sub"><b>Cash In</b> = ventas por tienda · <b>Cash Out</b> = importaciones (compras) + gastos · <b>Flujo neto</b> = Cash In − Cash Out. (Marketing y Viajes de Retail se capturan en sus pestañas y se integrarán al consolidado.)</div>
+        <div className="tablewrap" style={{ overflowX: 'auto' }}>
+          <table className="vfix"><colgroup><col style={{ width: '200px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '70px' }} />)}<col style={{ width: '95px' }} /></colgroup>
+            <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+            <tbody>
+              <tr><td className="l" style={{ color: '#15803d', fontWeight: 700 }}>Cash In (ventas)</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: '#15803d' }}>{fmt(r.cashIn)}</td>)}<td className="tot" style={{ color: '#15803d' }}>{fmt(cfRows.reduce((a, r) => a + r.cashIn, 0))}</td></tr>
+              <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Importaciones</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: '#b91c1c' }}>{fmt(r.compras)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>{fmt(cfRows.reduce((a, r) => a + r.compras, 0))}</td></tr>
+              <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Gastos</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: '#b91c1c' }}>{fmt(r.gasto)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>{fmt(cfRows.reduce((a, r) => a + r.gasto, 0))}</td></tr>
+              <tr className="grandrow"><td className="l">= Flujo neto del mes</td>{cfRows.map((r, i) => <td key={i} className="tot" style={{ color: r.neto >= 0 ? '#15803d' : '#b91c1c', fontWeight: 800 }}>{fmt(r.neto)}</td>)}<td className="tot" style={{ fontWeight: 800 }}>{fmt(cfRows.reduce((a, r) => a + r.neto, 0))}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>}
     </div>
   )
 }
