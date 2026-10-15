@@ -3359,37 +3359,18 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               <tbody>
                 {allSubcats.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; return <tr key={c}>
                   <td className="l sub2">{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}</td>
-                  {wholesaleMarcas.map((m) => { const p = pctOf(c, m); const faltaCat = p > 0 && !catOf(c, m); return <td key={m} className="cell ya" style={{ padding: 3 }}>
-                    <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={faltaCat ? `${c} ← ${m}: falta elegir la categoría abajo` : `${c} ← ${m}`} style={{ width: '100%', borderColor: faltaCat ? '#f0a' : undefined }} />
+                  {wholesaleMarcas.map((m) => { const p = pctOf(c, m); const faltaCat = p > 0 && !catOf(c, m); return <td key={m} className="cell ya" style={{ padding: 3, verticalAlign: 'top' }}>
+                    <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={`${c} ← ${m}`} style={{ width: '100%' }} />
+                    <select value={cellOf(c, m).cat ?? ''} onChange={(e) => setCell(c, m, 'cat', e.target.value)} title="Categoría de esta marca" style={{ width: '100%', marginTop: 3, fontSize: 10, padding: '2px', borderRadius: 4, border: `1.5px solid ${faltaCat ? '#e11d8f' : 'var(--line)'}`, color: catOf(c, m) ? 'inherit' : 'var(--muted)' }}>
+                      <option value="">— categoría —</option>{(prodCats[m] || []).map((x) => <option key={x} value={x}>{x}</option>)}
+                    </select>
                   </td> })}
                   <td className="tot" style={{ fontWeight: 800, color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%{!okSum && ' ⚠'}</td>
                 </tr> })}
               </tbody>
             </table>
           </div>}
-          <div className="sub" style={{ marginTop: 6 }}>⚠ = la fila no suma 100%. Las celdas con % y <b>sin categoría</b> salen con borde rosado; asígnalas abajo.</div>
-          {/* Asignación de categoría por cada % puesto */}
-          {(() => { const pairs = []; allSubcats.forEach((c) => wholesaleMarcas.forEach((m) => { if (pctOf(c, m) > 0) pairs.push({ c, m }) }))
-            if (!pairs.length) return <div className="sub" style={{ marginTop: 10 }}>Pon un % en la matriz para asignar su categoría aquí.</div>
-            return <div style={{ marginTop: 14 }}>
-              <div className="sub" style={{ fontWeight: 700, color: col, marginBottom: 6 }}>Categoría wholesale de cada % <span className="unit" style={{ fontWeight: 400 }}>(elige de qué categoría de esa marca se compra)</span></div>
-              <div className="tablewrap" style={{ overflowX: 'auto' }}>
-                <table><thead><tr><th className="l">Subcategoría</th><th className="l">Marca</th><th className="l">%</th><th className="l">Categoría wholesale</th><th>AUC prom.</th></tr></thead>
-                  <tbody>
-                    {pairs.map(({ c, m }) => { const ct = catOf(c, m); return <tr key={c + '||' + m}>
-                      <td className="l sub2">{c}</td>
-                      <td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 6 }}></span>{m}</td>
-                      <td className="l">{fmt(pctOf(c, m))}%</td>
-                      <td className="l"><select value={ct} onChange={(e) => setCell(c, m, 'cat', e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: `1.5px solid ${ct ? 'var(--line)' : '#f0a'}`, minWidth: 180 }}>
-                        <option value="">— elige categoría —</option>{(prodCats[m] || []).map((x) => <option key={x} value={x}>{x}</option>)}
-                      </select>{!ct && <span className="unit" style={{ color: '#b45309', marginLeft: 6 }}>⚠ falta</span>}</td>
-                      <td className="tot">{ct ? '$' + fmt(MESES.reduce((a, _, mi) => a + aucMC(m, ct, mi), 0) / 12) : '—'}</td>
-                    </tr> })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          })()}
+          <div className="sub" style={{ marginTop: 6 }}>En cada celda: arriba el <b>%</b>, abajo la <b>categoría</b> de esa marca. Si pones % sin categoría, el menú queda con borde rosado. El costo usa el AUC exacto de esa marca·categoría × factor.</div>
         </div>
       </>}
 
