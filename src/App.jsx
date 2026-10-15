@@ -3231,19 +3231,9 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           {!selStore ? <div className="sub">No hay tiendas. Usa <b>➕ Agregar tienda</b>.</div> : (() => { const t = selStore; const cs = catsOf(t); return <>
             <div className="toolbar" style={{ margin: '12px 0 6px' }}>
               <span style={{ fontWeight: 800, color: col, fontSize: 15 }}>🏬 {t}</span>
-              <span className="unit" style={{ marginLeft: 8 }}>Venta neta {fmt(tVenta(t))} · Costo {fmt(tCosto(t))} · Margen {mpct(tVenta(t) - tCosto(t), tVenta(t))}</span>
+              <span className="unit" style={{ marginLeft: 8 }}>Unidades {fmt(MESES.reduce((a, _, mi) => a + storeUnitsM(t, mi), 0))} · Costo {fmt(tCosto(t))}</span>
               <div className="spacer"></div>
               <button className="btn" onClick={() => addCat(t)}>➕ Agregar subcategoría</button>
-            </div>
-            {/* %margen y %descuento por mes (nivel tienda) */}
-            <div className="tablewrap" style={{ overflowX: 'auto', marginBottom: 10 }}>
-              <table className="vfix"><colgroup><col style={{ width: '190px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}</colgroup>
-                <thead><tr><th className="l">Supuesto (por mes)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}</tr></thead>
-                <tbody>
-                  <tr><td className="l sub2" style={{ color: '#15803d' }}>% Margen</td>{MESES.map((_, mi) => <td key={mi} className="cell ya"><input value={vt[`${t}||MARGEN||${mi}`] ?? ''} onChange={(e) => setVt((d) => ({ ...d, [`${t}||MARGEN||${mi}`]: e.target.value }))} inputMode="decimal" /></td>)}</tr>
-                  <tr><td className="l sub2" style={{ color: '#b45309' }}>% Descuento</td>{MESES.map((_, mi) => <td key={mi} className="cell ya"><input value={vt[`${t}||DESC||${mi}`] ?? ''} onChange={(e) => setVt((d) => ({ ...d, [`${t}||DESC||${mi}`]: e.target.value }))} inputMode="decimal" /></td>)}</tr>
-                </tbody>
-              </table>
             </div>
             {/* Captura de UNIDADES A COMPRAR por subcategoría (el costo sale del mapa) */}
             <div className="sub" style={{ fontWeight: 700, margin: '4px 0 4px' }}>Unidades a comprar <span className="unit" style={{ fontWeight: 400 }}>(cuántas unidades se comprarán por mes · el costo se calcula con el mapa)</span></div>
