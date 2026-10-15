@@ -717,7 +717,7 @@ export default function App() {
 }
 
 /* ===== RoleForm: pestañas de rubro (simple o detalle) ===== */
-function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) {
+function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, onSaved, headerChip }) {
   const esTot = String(fixedMarca || '').startsWith('TOTAL::')
   // Los VIAJES ya no se llenan dentro de cada rol: se capturan en la pestaña "🧳 Viajes equipo". Por eso se quitan del selector VER del rol (salvo cuando se pide explícito con rubrosOverride, como en Gerencia/Finanzas/Viajes equipo).
   const rubros = (rubrosOverride || role.rubros.filter((rb) => rb.k !== 'VIAJES')).filter((rb) => !rb.gadmin || esTot) // Gastos admin solo en TOTAL SBU
@@ -728,7 +728,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride }) 
   if (!rubros.length) return null
   const idx = Math.min(tab, rubros.length - 1)
   const rb = rubros[idx]
-  const common = { role, rubro: rb, usuario, empresa, sbus, data, setData, saving, setSaving, msg, setMsg, fixedMarca }
+  const common = { role, rubro: rb, usuario, empresa, sbus, data, setData, saving, setSaving, msg, setMsg, fixedMarca, onSaved, headerChip }
 
   return (
     <>
@@ -927,7 +927,7 @@ function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, sa
 }
 
 /* ===== DetalleForm: sub-rubros por marca (Marketing y Viajes) ===== */
-function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, data, setData, saving, setSaving, setMsg, fixedMarca }) {
+function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, data, setData, saving, setSaving, setMsg, fixedMarca, onSaved, headerChip }) {
   const marcas = marcasDe(sbus)
   const [marca, setMarca] = useState(fixedMarca || marcas[0].marca)
   useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
@@ -998,6 +998,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
       if (meses.some((v) => v !== 0)) rows.push({ rubro: `${gr.g} - ${it.n}`, sbu: sb, marca: mca, meses })
     })))
     await postRows(role, usuario, empresa, rows, setMsg)
+    if (onSaved) { try { await onSaved() } catch { } }
     setSaving(false)
   }
   function exportar() {
@@ -1029,6 +1030,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
             {ms.map((m) => <option key={m} value={m}>{m}</option>)}
           </optgroup>))}
         </select></>}
+        {headerChip}
         {isTotal && !fixedMarca && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
         <div className="spacer"></div>
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'GRUPO', 'RUBRO', 'SBU', 'MARCA', ...MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, gr.g, it.n, sb, mca, ...MESES.map(() => 0)])))); exportXlsx(aoa, `Plantilla_${role.tab}_${rubro.k}.xlsx`) }}>📄 Plantilla</button>
@@ -3093,10 +3095,9 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const [capVj, setCapVj] = useState({ ventas: [], producto: [], marketing: [], director: [] })
   const [producto, setProducto] = useState([])
   const [prodCats, setProdCats] = useState({}) // { marca: [categorías wholesale] }
-  useEffect(() => { let on = true; (async () => {
+  const reloadCaps = async () => {
     const tabs = ['Cap_Marketing', 'Cap_Ventas', 'Cap_Producto', 'Cap_Director', 'Cap_Categorias']
     const out = {}; for (const tb of tabs) { try { const j = await gReadTab(tb); out[tb] = (j && j.ok && j.values) ? j.values.slice(1) : [] } catch { out[tb] = [] } }
-    if (!on) return
     const isRetail = (r) => upper(r[0]) === upper(empresa) && upper(r[3]) === '(RETAIL)'
     const esVj = (r) => String(r[1] || '').toUpperCase().startsWith('VIAJES')
     const mk = (out['Cap_Marketing'] || []).filter((r) => isRetail(r) && !esVj(r))
@@ -3106,7 +3107,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
     setCapVj({ ventas: vjF('Cap_Ventas'), producto: vjF('Cap_Producto'), marketing: vjF('Cap_Marketing'), director: vjF('Cap_Director') })
     setProducto((out['Cap_Producto'] || []).filter((r) => upper(r[0]) === upper(empresa)))
     const pc = {}; (out['Cap_Categorias'] || []).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const cat = r[1], mar = r[3]; if (!mar || !cat) return; (pc[mar] = pc[mar] || []); if (!pc[mar].includes(cat)) pc[mar].push(cat) }); setProdCats(pc)
-  })(); return () => { on = false } }, [empresa])
+  }
+  useEffect(() => { reloadCaps() }, [empresa])
   // AUC wholesale por (marca, categoría, mes) desde Cap_Producto ("AUC · <cat>")
   const aucMC = (marca, cat, mi) => { const pfx = 'AUC · ' + cat; let v = 0; producto.forEach((r) => { if (upper(r[3]) !== upper(marca)) return; const rub = String(r[1] || ''); if (rub === pfx || rub === 'AUC · ' + cat) v = num(r[4 + mi]) }); return v }
   const wholesaleMarcas = marcasDe(sbus).map((m) => m.marca)
@@ -3184,7 +3186,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
 
       {tab === 'mk' && <>
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
-        <RoleForm key="retail-mk" role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" />
+        <RoleForm key="retail-mk" role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} />
       </>}
 
       {tab === 'viajes' && <>
@@ -3215,8 +3217,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div className="sub" style={{ marginBottom: 8 }}>En Retail viajan <b>4 áreas</b>: Director, Producto, Marketing y Ventas. Cada bloque tiene su captura y su total.</div>
         {vjRoles.map((r) => (
           <div key={r.id} style={{ marginTop: 14 }}>
-            <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 10px', display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> Viajes de {r.label} — Retail</div>
-            <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" />
+            <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} headerChip={<span style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 13, padding: '6px 12px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 15 }}>{r.icon}</span> Viajes de {r.label} — Retail</span>} />
           </div>
         ))}
       </>}
@@ -3338,7 +3339,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
             </select>
             <button className="btn" onClick={() => { addCol(ncMarca, ncCat); setNcCat('') }} disabled={!ncMarca || !ncCat}>➕ Agregar columna</button>
           </div>
-          {mapCols.length === 0 ? <div className="sub">Aún no hay columnas. Agrega una marca · categoría arriba.</div> : allSubcats.length === 0 ? <div className="sub">No hay subcategorías. Agrégalas en "Importaciones por tienda".</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
+          {mapCols.length === 0 && <div className="sub" style={{ color: '#b45309' }}>Aún no hay columnas. Agrega una <b>marca · categoría</b> arriba para poder poner los %.</div>}
+          {allSubcats.length === 0 ? <div className="sub">No hay subcategorías. Agrégalas en "Importaciones por tienda".</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table className="vfix"><colgroup><col style={{ width: '190px' }} />{mapCols.map((_, i) => <col key={i} style={{ width: '90px' }} />)}<col style={{ width: '80px' }} /></colgroup>
               <thead><tr><th className="l">Subcategoría</th>{mapCols.map((cl) => <th key={colKey(cl.marca, cl.cat)} title={`${cl.marca} · ${cl.cat}`}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(cl.marca), marginRight: 3 }}></span>{cl.marca.length > 6 ? cl.marca.slice(0, 6) + '…' : cl.marca}<br /><span style={{ fontWeight: 400, fontSize: 9 }}>{cl.cat.length > 11 ? cl.cat.slice(0, 11) + '…' : cl.cat}</span><br /><button onClick={() => delCol(cl)} title="Quitar columna" style={{ border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700, fontSize: 11 }}>×</button></th>)}<th>Suma</th></tr></thead>
               <tbody>
@@ -3409,7 +3411,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Cash Flow</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarCF}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
-          <h3 style={{ color: col }}>Cash Flow — Retail <span className="unit">(2028 · mismas líneas que las marcas)</span></h3>
+          <h3 style={{ color: col }}>Cash Flow — Retail</h3>
           <div className="sub"><b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> + <span style={{ color: '#15803d' }}>Otros ingresos</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span> − <span style={{ color: '#b91c1c' }}>Costos financieros</span> − <span style={{ color: '#b91c1c' }}>Otros gastos</span></b>.</div>
           <div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre los números calculados para ver el origen. Despliega los costos con ▶.</div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
@@ -3465,7 +3467,6 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               </tbody>
             </table>
           </div>
-          <div className="sub" style={{ marginTop: 8 }}>Marketing {fmt(mkAnual)} y Viajes {fmt(vjAnual)} vienen de lo capturado con marca <b>(Retail)</b> en sus pestañas.</div>
         </div>
       </>}
     </div>
