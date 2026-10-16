@@ -5641,6 +5641,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const vendOf = (cli) => (vendcli[`${marca}|${cli}`] === 1 ? 1 : 0)
   const setVendOf = (cli, i) => { const next = { ...vendcli, [`${marca}|${cli}`]: i }; setVendcli(next); saveEstado(empresa, 'vendcli', next) }
   const [vendView, setVendView] = useState(0) // 0 · 1 · 'T' (total)
+  const [cvView, setCvView] = useState('ambos') // 'bruto' · 'landed' · 'ambos' (qué costo/margen mostrar)
   const [buscar, setBuscar] = useState('')
   const topScRef = useRef(null), botScRef = useRef(null) // barra de scroll horizontal (arriba) sincronizada con la tabla
   useEffect(() => { (async () => { try { const j = await gLoadClientes(empresa); if (j && j.ok) setBaseCli(j.clientes) } catch { } })() }, [empresa])
@@ -5691,7 +5692,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const histSet = new Set(histClientes.map((c) => upper(c)))
   const addedFor = (addCli[marca] || []).filter((c) => !histSet.has(upper(c)))
   // Clientes que ya tienen plan 2028 guardado en la hoja pero no están en histórico ni agregados: también deben salir.
-  const venCli = [...new Set(venSheet.filter((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(marca)).map((r) => String(r[1] || '').trim()).filter(Boolean))]
+  const venCli = [...new Set(venSheet.filter((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(marca) && MESES.reduce((a, _, mi) => a + num(r[4 + mi]), 0) > 0).map((r) => String(r[1] || '').trim()).filter(Boolean))]
   const yaEn = new Set([...histClientes, ...addedFor].map((c) => upper(c)))
   const desdeHoja = venCli.filter((c) => !yaEn.has(upper(c)))
   // Clientes semilla por empresa (ej. TUMAR, del Excel) que aún no están en histórico/hoja/agregados.
@@ -5721,7 +5722,15 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
     if (!baseCli.some((c) => upper(c) === upper(n))) { setBaseCli([...baseCli, n].sort((a, b) => a.localeCompare(b))); try { await gAddCliente(empresa, n) } catch { } }
     setMsg({ t: 'ok', x: 'Cliente agregado a ' + marca + '. Escribe sus unidades 2028 y guarda. Finanzas ya lo verá.' })
   }
-  const quitarCliente = (cli) => { const next = { ...addCli, [marca]: (addCli[marca] || []).filter((c) => upper(c) !== upper(cli)) }; setAddCli(next); saveEstado(empresa, 'addcli', next) }
+  const quitarCliente = async (cli) => {
+    const next = { ...addCli, [marca]: (addCli[marca] || []).filter((c) => upper(c) !== upper(cli)) }; setAddCli(next); saveEstado(empresa, 'addcli', next)
+    // limpia sus unidades locales y pone su plan en cero en la hoja, y lo saca del respaldo para que no reaparezca
+    setManual((prev) => { const nx = { ...prev }; MESES.forEach((_, mi) => { delete nx[marca + '|' + cli + '|' + mi] }); return nx })
+    setGrowth((g) => { const ng = { ...g }; delete ng[cli + '|' + marca]; return ng })
+    setVenSheet((prev) => prev.filter((r) => !(upper(r[0]) === upper(empresa) && upper(r[3]) === upper(marca) && upper(String(r[1] || '').trim()) === upper(cli))))
+    try { await postToTab('Cap_Ventas', empresa, usuario, role.label, [{ rubro: cli, sbu: sbuDe(sbus, marca), marca, meses: Array(12).fill(0) }], () => { }) } catch { }
+    setMsg({ t: 'ok', x: 'Cliente quitado de ' + marca + '.' })
+  }
   const t25 = (cli) => MESES.reduce((a, _, mi) => a + u25(cli, mi), 0)
   const t26 = (cli) => MESES.reduce((a, _, mi) => a + u26(cli, mi), 0)
   const t28 = (cli) => MESES.reduce((a, _, mi) => a + u28(cli, mi), 0)
@@ -5775,6 +5784,9 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const vendUnits = (vi) => vendClientes(vi).reduce((a, cli) => a + t28(cli), 0)
   const vendVenta = (vi) => vendClientes(vi).reduce((a, cli) => a + ventaCli(cli), 0)
   const ventaTotalMarca = clientes.reduce((a, cli) => a + ventaCli(cli), 0)
+  // Venta neta por mes de los clientes que se están viendo (vendedor seleccionado o total) = Σ unidades × AUP por categoría.
+  const vistaClientes = (useVend && vendView !== 'T') ? clientes.filter((c) => vendOf(c) === vendView) : clientes
+  const ventaNetaMes = (mi) => vistaClientes.reduce((a, cli) => a + catList.reduce((s, c) => s + u28(cli, mi) * catW(cli, c.cat) * ((_aupCli[c.cat] || [])[mi] || 0), 0), 0)
 
   return (
     <>
@@ -5849,9 +5861,11 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         )
       })()}
 
-      {usarCat && <div style={{ margin: '18px 0 2px', background: '#eef4f6', borderLeft: '5px solid #0b5566', borderRadius: 8, padding: '9px 14px', fontWeight: 800, color: '#0b5566', fontSize: 14 }}>📊 BRUTO <span style={{ fontWeight: 500, fontSize: 12.5, color: 'var(--muted)' }}>— sin costo logístico (costo y margen de producto)</span></div>}
+      {usarCat && <div className="toolbar" style={{ margin: '16px 0 0', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}><span className="unit" style={{ fontWeight: 700 }}>Ver costo / margen:</span>{[['bruto', '📊 Bruto'], ['landed', '🚚 Landed'], ['ambos', 'Ambos']].map(([k, lbl]) => <button key={k} className={'seg' + (cvView === k ? ' active' : '')} onClick={() => setCvView(k)}>{lbl}</button>)}</div>}
 
-      {usarCat && (() => {
+      {usarCat && cvView !== 'landed' && <div style={{ margin: '12px 0 2px', background: '#eef4f6', borderLeft: '5px solid #0b5566', borderRadius: 8, padding: '9px 14px', fontWeight: 800, color: '#0b5566', fontSize: 14 }}>📊 BRUTO <span style={{ fontWeight: 500, fontSize: 12.5, color: 'var(--muted)' }}>— sin costo logístico (costo y margen de producto)</span></div>}
+
+      {usarCat && cvView !== 'landed' && (() => {
         const auc = aucPorCat(marca)
         const money = (v) => Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         const coCat = (cat, mi) => uCatMes(cat, mi) * ((auc[cat] || [])[mi] || 0)
@@ -5891,6 +5905,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         const mgCatTot = (cat) => MESES.reduce((a, _, mi) => a + mgCat(cat, mi), 0)
         return (
           <>
+          {cvView !== 'landed' && <>
           {/* MARGEN $ */}
           <div className="panel tight">
             <h3>Margen 2028 por categoría y mes — {marca}{M$} <span className="unit">($ dinero)</span></h3>
@@ -5925,6 +5940,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
               </table>
             </div>
           </div>
+          </>}
+          {cvView !== 'bruto' && <>
           {/* COSTO LANDED $, MARGEN LANDED $ y MARGEN LANDED % (usa el % logístico de la venta que pone Logística) */}
           <div style={{ margin: '18px 0 2px', background: '#eef4fb', borderLeft: '5px solid #1d4ed8', borderRadius: 8, padding: '9px 14px', fontWeight: 800, color: '#1d4ed8', fontSize: 14 }}>🚚 LANDED <span style={{ fontWeight: 500, fontSize: 12.5, color: 'var(--muted)' }}>— con costo logístico de la venta (incluye el % que define Logística)</span></div>
           {(() => {
@@ -5982,6 +5999,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
               </div>
             </>
           })()}
+          </>}
           </>
         )
       })()}
@@ -5998,7 +6016,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           <div>Stock disponible de temporadas anteriores de <b>{marca}</b>: <b style={{ fontSize: 15 }}>{fmt(stockViejo(marca))} ud</b>. <span className="unit">Tenlo en cuenta al proyectar: tu venta 2028 debería incluir mover este stock viejo.</span></div>
         </div>
         <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: junto al % verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)) y la <b>suma</b> de lo que llevas repartido. Luego, en las <b>celdas amarillas de 2028</b>, tú decides <b>en qué meses</b> vender esas unidades. Cuando la suma cuadra con el objetivo aparece <b style={{ color: '#15803d' }}>✓</b>; si no, sale en <b style={{ color: '#b45309' }}>ámbar ⚠</b> para que ajustes. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente.</div>
-        <div className="sub" style={{ marginTop: 4, fontWeight: 700, color: '#5b9bd5' }}>{useVend && vendView !== 'T' ? <>{vName(vendView)} — {fmt(vendUnits(vendView))} ud · Venta neta <b>${fmt(vendVenta(vendView))}</b></> : <>Total 2028 de {marca}: {fmt(totMarcaSel)} ud · Venta neta <b>${fmt(ventaTotalMarca)}</b></>}</div>
+        <div className="sub" style={{ marginTop: 4, fontWeight: 700, color: '#5b9bd5' }}>{useVend && vendView !== 'T' ? <>{vName(vendView)} — {fmt(vendUnits(vendView))} ud en 2028</> : <>Total 2028 de {marca}: {fmt(totMarcaSel)} ud</>}</div>
         <div style={{ display: 'flex', gap: 28, margin: '4px 0 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ order: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
             <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />
@@ -6019,11 +6037,6 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
             </div>
           </div>
         </div>
-        {useVend && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 14, background: '#eef4fb', border: '1px solid #cfe0f0', borderRadius: 10, padding: '8px 14px', margin: '2px 0 8px', fontWeight: 800, color: '#1d4ed8' }}>
-          <span>{vendView === 'T' ? `▣ Total ${marca}` : `🧑‍💼 ${vName(vendView)}`}</span>
-          <span>Unidades 2028: {fmt(vendView === 'T' ? totMarcaSel : vendUnits(vendView))}</span>
-          <span>Venta neta: ${fmt(vendView === 'T' ? ventaTotalMarca : vendVenta(vendView))}</span>
-        </div>}
         <div ref={topScRef} onScroll={() => { if (botScRef.current) botScRef.current.scrollLeft = topScRef.current.scrollLeft }} className="tablewrap" style={{ maxHeight: 'none', overflowY: 'hidden', border: 'none', borderRadius: 0, marginBottom: 2 }}><div style={{ width: 1228, height: 1 }} /></div>
         <div className="tablewrap" ref={botScRef} onScroll={() => { if (topScRef.current) topScRef.current.scrollLeft = botScRef.current.scrollLeft }}>
           <table className="vfix" style={{ width: 1228 }}>
@@ -6060,6 +6073,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                   </tr>
                 </Fragment2>
               ) })}
+              {clientes.length > 0 && <tr className="grandrow" style={{ background: '#eef4fb' }}><td className="l" style={{ color: '#1d4ed8' }}>💰 Venta neta{useVend && vendView !== 'T' ? ` · ${vName(vendView)}` : ''} <span className="unit" style={{ fontWeight: 400 }}>(unid × AUP)</span></td><td></td><td></td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#1d4ed8' }}>{fmt(ventaNetaMes(mi))}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(MESES.reduce((a, _, mi) => a + ventaNetaMes(mi), 0))}</td><td></td></tr>}
               {clientes.length > 0 && (!useVend || vendView === 'T') && <>
                 <tr className="grandrow"><td className="l" rowSpan={rsp} style={{ verticalAlign: 'top' }}>TOTAL {marca}</td><td rowSpan={rsp} style={{ verticalAlign: 'top', fontSize: 10, lineHeight: 1.3, whiteSpace: 'normal', overflow: 'hidden' }} title="Crecimiento del total 2028 frente a cada año histórico">{(tot26Marca || tot25Marca) ? <div style={{ color: 'var(--muted)', fontWeight: 600, marginBottom: 3 }}>Crec. 2028:</div> : null}{tot26Marca ? <div>vs 2026 <b style={{ color: crecMarca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1)}%</b></div> : null}{tot25Marca && showY25 ? <div>vs 2025 <b style={{ color: crec25Marca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crec25Marca >= 0 ? '+' : '') + crec25Marca.toFixed(1)}%</b></div> : null}{!(tot26Marca || tot25Marca) ? '—' : null}</td>{showY25 ? <><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></> : <><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></>}</tr>
                 {showY25 && <tr className="grandrow"><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>}
