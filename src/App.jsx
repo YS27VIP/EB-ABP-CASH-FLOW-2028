@@ -1096,7 +1096,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
-      {!String(fixedMarca || '').startsWith('(') && <div className="panel" style={{ marginBottom: 8 }}>
+      {!String(fixedMarca || '').startsWith('(') && (rubro.k !== 'VIAJES' || isTotal) && <div className="panel" style={{ marginBottom: 8 }}>
         <h3>{rubro.k} sobre la venta — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(venta viene de Comercial)</span></h3>
         <div className="sub">Cuánto pesa <b>{rubro.k}</b> sobre la <b>venta neta</b>, por mes y en total.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
