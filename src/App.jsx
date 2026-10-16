@@ -4752,6 +4752,10 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
   P.hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || String(r[1]) !== '2026') return; const mca = upper(r[5]); if (!marcasU.has(mca)) return; const pais = String(r[9] || '').trim(), rub = upper(r[3]), val = num(r[7]); if (rub.indexOf('UNIDAD') >= 0) addP(pais, 'u26', val); else if (rub.indexOf('VENTA') >= 0) addP(pais, 'v26', val) })
   // Agregado por cliente
   const cliAgg = {}; const allCli = new Set([...Object.keys(cliU28), ...Object.keys(cliU26), ...Object.keys(cliV26)]); allCli.forEach((cli) => { cliAgg[cli] = { u28: cliU28[cli] || 0, v28: cliV28[cli] || 0, u26: cliU26[cli] || 0, v26: cliV26[cli] || 0 } })
+  // Cliente principal 2026 por país (para el comentario)
+  const paisTopCli = {}; Object.keys(cliU26).forEach((cli) => { const p = paisByCli[cli] || 'Sin país'; const v = met === 'v' ? (cliV26[cli] || 0) : (cliU26[cli] || 0); if (!paisTopCli[p] || v > paisTopCli[p].v) paisTopCli[p] = { cli, v } })
+  // Marcas activas 2026 por país (cuántas marcas se vendieron)
+  const paisMarcas = {}; P.hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || String(r[1]) !== '2026') return; const mca = upper(r[5]); if (!marcasU.has(mca)) return; const p = String(r[9] || '').trim() || 'Sin país'; (paisMarcas[p] = paisMarcas[p] || new Set()).add(mca) })
   // Agregado por categoría (distribuye el total de cada marca entre sus categorías por peso)
   const catAgg = {}; const addC = (c, k, val) => { (catAgg[c] = catAgg[c] || { u28: 0, v28: 0, u26: 0, v26: 0 })[k] += val }
   marcas.forEach((m) => {
@@ -4778,12 +4782,27 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
     const rows = Object.entries(agg).map(([k, o]) => ({ k, o, c: crec(o) })).sort((a, b) => { const d = keyVal(a.o) - keyVal(b.o); return sortDir === 'desc' ? -d : d })
     const mx = maxV(agg)
     const th = (k, lbl) => <th style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }} onClick={() => clickSort(k)} title="Clic para ordenar">{lbl}{arrow(k)}</th>
+    const comentario = (k, o, c) => {
+      const w26 = p26(o), w28 = p28(o)
+      const mix = (w26 > 0 && Math.abs(w28 - w26) >= 3) ? (w28 > w26 ? ` Gana peso en el mix (${w26.toFixed(0)}%→${w28.toFixed(0)}%).` : ` Pierde peso en el mix (${w26.toFixed(0)}%→${w28.toFixed(0)}%).`) : ''
+      let base
+      if ((o.v28 === 0 && o.u28 === 0) && (o.v26 > 0 || o.u26 > 0)) base = `Pesaba ${w26.toFixed(0)}% en 2026 pero aún no tiene plan 2028 cargado — revisar con Ventas.`
+      else if (met === 'v' && o.v28 === 0 && o.u28 > 0) base = `Ya hay unidades 2028, pero falta el AUP en Producto para valorizar la venta.`
+      else if (c == null) base = `Apertura nueva: sin base 2026, todo el 2028 es crecimiento desde cero.`
+      else if (c <= -50) base = `Caída fuerte (${pctc(c)}) frente a 2026; revisar si se despriorizó.`
+      else if (c < 0) base = `Leve caída vs 2026 (${pctc(c)}).`
+      else if (c < 25) base = `Crecimiento moderado (${pctc(c)}).`
+      else base = `Crecimiento alto (${pctc(c)}).`
+      let extra = ''
+      if (dim === 'pais') { if (paisTopCli[k]) extra += ` Cliente principal 2026: ${paisTopCli[k].cli}.`; if (paisMarcas[k]) extra += ` ${paisMarcas[k].size} marca(s) activa(s) en 2026.` }
+      return base + mix + extra
+    }
     return (
       <div className="tablewrap" style={{ marginTop: 10 }}><table style={{ width: '100%' }}>
-        <thead><tr><th className="l">{label}</th>{th('26', '2026')}{th('p26', 'Peso 26')}{th('28', '2028')}{th('p28', 'Peso 28')}{th('crec', 'Crec.')}<th className="l" style={{ width: '24%' }}>2028</th></tr></thead>
+        <thead><tr><th className="l">{label}</th>{th('26', '2026')}{th('p26', 'Peso 26')}{th('28', '2028')}{th('p28', 'Peso 28')}{th('crec', 'Crec.')}<th className="l" style={{ width: '34%' }}>💡 Comentario</th></tr></thead>
         <tbody>
           {rows.length === 0 && <tr><td className="l" colSpan={7}>Sin datos.</td></tr>}
-          {rows.map(({ k, o, c }) => <tr key={k}><td className="l">{k}</td><td className="tot" style={{ color: 'var(--muted)' }}>{money(val26(o))}</td><td className="tot" style={{ color: 'var(--muted)' }}>{p26(o).toFixed(1)}%</td><td className="tot" style={{ fontWeight: 700 }}>{money(val28(o))}</td><td className="tot" style={{ fontWeight: 700 }}>{p28(o).toFixed(1)}%</td><td className="tot" style={{ fontWeight: 800, color: crecCol(c) }} title={c == null ? 'Nuevo (sin 2026)' : `2028 ${money(val28(o))} vs 2026 ${money(val26(o))}`}>{pctc(c)}</td><td><div style={{ background: '#eef2f6', borderRadius: 5, height: 16 }}><div style={{ width: Math.max(2, val28(o) / mx * 100) + '%', height: '100%', borderRadius: 5, background: col }}></div></div></td></tr>)}
+          {rows.map(({ k, o, c }) => <tr key={k}><td className="l">{k}</td><td className="tot" style={{ color: 'var(--muted)' }}>{money(val26(o))}</td><td className="tot" style={{ color: 'var(--muted)' }}>{p26(o).toFixed(1)}%</td><td className="tot" style={{ fontWeight: 700 }}>{money(val28(o))}</td><td className="tot" style={{ fontWeight: 700 }}>{p28(o).toFixed(1)}%</td><td className="tot" style={{ fontWeight: 800, color: crecCol(c) }} title={c == null ? 'Nuevo (sin 2026)' : `2028 ${money(val28(o))} vs 2026 ${money(val26(o))}`}>{pctc(c)}</td><td className="l" style={{ fontSize: 11.5, color: '#475569', lineHeight: 1.3, whiteSpace: 'normal' }}>{comentario(k, o, c)}</td></tr>)}
         </tbody>
       </table></div>
     )
