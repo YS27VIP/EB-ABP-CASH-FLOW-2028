@@ -157,6 +157,15 @@ export async function gTumarClientes() {
   const clientesByMarca = {}; Object.keys(clientes).forEach((m) => { clientesByMarca[m] = Object.keys(clientes[m]).sort((a, b) => clientes[m][b].reduce((s, v) => s + v, 0) - clientes[m][a].reduce((s, v) => s + v, 0)) })
   return { ok: true, clientes, clientesByMarca, mesesConDatos: mesesSet.size, decDone: mesesSet.has(11) }
 }
+/* TUMAR: gasto real 2026 por concepto (de COMPRAS + TESORERIA), en USD. Clave = concepto normalizado (sin acentos, mayúsculas). */
+export async function gTumarGastos() {
+  const [compras, tesor] = await Promise.all([_tmRead('COMPRAS'), _tmRead('TESORERIA')])
+  const ref = {}, mesesSet = new Set()
+  const add = (k, v) => { const n = _norm(k); if (!n) return; ref[n] = (ref[n] || 0) + v }
+  if (compras.length > 1) { const iCon = _hidx(compras, 'Concepto'), iImp = _hidx(compras, 'Importe'), iMes = _hidx(compras, 'MES'), iTC = _hidx(compras, 'TIPO DE CAMBIO'); compras.slice(1).forEach((r) => { const mi = _tmMonth(r[iMes]); if (mi < 0) return; const tc = _tmNum(r[iTC]) || 1; add(r[iCon], _tmNum(r[iImp]) / tc); mesesSet.add(mi) }) }
+  if (tesor.length > 1) { const iCon = _hidx(tesor, 'Desc. cuenta'), iImp = _hidx(tesor, 'Debe (CTE) (renglón)'), iMes = _hidx(tesor, 'MES'), iTC = _hidx(tesor, 'TIPO DE CAMBIO'); tesor.slice(1).forEach((r) => { const mi = _tmMonth(r[iMes]); if (mi < 0) return; const tc = _tmNum(r[iTC]) || 1; add(r[iCon], _tmNum(r[iImp]) / tc); mesesSet.add(mi) }) }
+  return { ok: true, ref, mesesConDatos: mesesSet.size, decDone: mesesSet.has(11) }
+}
 // Extrae el año de una celda de fecha en cualquier formato del EBP: "may-25", "ene-26", "2026-01-01", "25/5/2026", serial, etc.
 function _yearOf(cell) {
   const s = String(cell || '').trim()

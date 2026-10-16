@@ -47,7 +47,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal, gTumarClientes } from './google'
+import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal, gTumarClientes, gTumarGastos } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -171,6 +171,29 @@ function refCat(marca, cli, cat) {
 const DEFAULT_GADMIN = [
   ['101', 'SALARIO'], ['103', 'PERFORMANCE BONO'], ['104', 'CARGA SOCIAL Y PASIVO LABORAL'], ['105', 'CAPACITACIONES'], ['106', 'SELECCIÓN DE PERSONAL'], ['107', 'ATENCIONES / CLIENTES / PROVEEDORES'], ['108', 'MEMBRESÍA TARJETA DE CRÉDITO'], ['109', 'PLAN CELULAR'], ['110', 'BENEFICIOS - SEGURO DE SALUD'], ['111', 'SEGURIDAD'], ['112', 'BENEFICIO - GIFT CARD ANNUAL'], ['114', 'GASTOS DE OFICINA'], ['115', 'ALQUILER OFICINA'], ['116', 'AGUA / LUZ'], ['117', 'INTERNET'], ['118', 'TELÉFONO OFICINA'], ['119', 'CARRIER / MENSAJERÍA'], ['120', 'LIMPIEZA'], ['121', 'REPARACIONES Y MANTENIMIENTOS'], ['122', 'CAFETERÍA - INSUMOS'], ['123', 'ACARREO / TRANSFERENCIA DE INVENTARIO'], ['124', 'SEGUROS'], ['125', 'CONTABLE - MICROSOFT 365 / LICENCIAS ADOBE'], ['126', 'SALESFORCE'], ['127', 'SISTEMA DE FACTURACIÓN ELECTRÓNICA'], ['128', 'ASESORÍA LEGAL'], ['129', 'ASESORÍA CONTABLE'], ['130', 'ASESORÍA FISCALES'], ['131', 'SERVICIOS DE RRHH'], ['132', 'SERVICIOS DE IT'], ['133', 'HONORARIOS PROFESIONALES'], ['134', 'OTROS'],
 ].map(([cod, sub]) => ({ cod, sub }))
+
+// TUMAR: rubros de gasto reales de TUMAR Performance (MASTER GASTOS), con su categoría. El 2026 de referencia sale de COMPRAS+TESORERIA.
+const TUMAR_GADMIN = [
+  ['201', 'Sueldos a Pagar', 'SUELDOS'], ['202', 'SUSS a Pagar', 'SUELDOS'], ['203', 'Ret. De Ganancias 4ta Cat.', 'SUELDOS'], ['204', 'Comisiones', 'SUELDOS'],
+  ['205', 'Honorarios', 'HONORARIOS'], ['206', 'Instalaciones', 'HONORARIOS'], ['207', 'Gastos de Importación', 'HONORARIOS'], ['208', 'Serv. informaticos Ecommerce', 'HONORARIOS'],
+  ['209', 'Alquileres', 'GASTOS OFICINA'], ['210', 'Expensas', 'GASTOS OFICINA'], ['211', 'Luz y Agua', 'GASTOS OFICINA'], ['212', 'Luz y Agua Ex', 'GASTOS OFICINA'], ['213', 'Internet', 'GASTOS OFICINA'], ['214', 'Software', 'GASTOS OFICINA'], ['215', 'Servicio de Hosting', 'GASTOS OFICINA'], ['216', 'Seguros', 'GASTOS OFICINA'], ['217', 'Imp. Municipal', 'GASTOS OFICINA'], ['218', 'Papelería y Utiles de Oficina', 'GASTOS OFICINA'], ['219', 'Gastos Varios Oficina', 'GASTOS OFICINA'], ['220', 'Gastos Varios', 'GASTOS OFICINA'], ['221', 'Cheques Diferidos Banco ICBC', 'GASTOS OFICINA'],
+  ['222', 'Gastos Bancarios y Comisiones', 'GASTOS BANCARIOS'],
+  ['223', 'Marketing', 'MARKETING'],
+  ['224', 'Logistica', 'LOGISTICA'],
+  ['225', 'Gastos de Representacion', 'GASTOS REPRESENTACION'], ['226', 'Gastos de viajes', 'GASTOS REPRESENTACION'], ['227', 'Gastos Viajes', 'GASTOS REPRESENTACION'], ['228', 'Viaticos', 'GASTOS REPRESENTACION'], ['229', 'Medicina Prepaga', 'GASTOS REPRESENTACION'],
+].map(([cod, sub, cat]) => ({ cod, sub, cat }))
+// Categorías de TUMAR que ya tienen su propia pantalla (no se suman en la línea de Gastos del P&L para no duplicar).
+const TUMAR_GADMIN_SKIP = new Set(['MARKETING', 'LOGISTICA', 'GASTOS REPRESENTACION'])
+// Gasto admin anual (línea del P&L). En TUMAR excluye las categorías que ya vienen de sus pantallas (Marketing/Logística/Viajes).
+function gadminAnualOf(empresa) {
+  try {
+    const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')
+    let cfg = empresa === 'TUMAR' ? TUMAR_GADMIN : DEFAULT_GADMIN
+    try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { }
+    const skip = empresa === 'TUMAR'
+    return cfg.reduce((a, it) => (skip && TUMAR_GADMIN_SKIP.has(upper(it.cat || '')) ? a : a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0)), 0)
+  } catch { return 0 }
+}
 
 /* Comisiones: marcas con comisión corporativa por compra (XFD) */
 const CORP_MARCAS = ['HOKA', 'UGG']
@@ -2993,9 +3016,16 @@ function AprobacionesForm({ empresa, sbus }) {
 /* ===== GASTOS ADMINISTRATIVOS: detalle por centro de costo, compartido por TODAS las SBU ===== */
 function GastosAdminForm({ empresa }) {
   const cfgKey = `gadmin_cfg_${empresa}`, stKey = `gadmin_${empresa}`
-  const [lista, setLista] = useState(() => { try { const s = JSON.parse(localStorage.getItem(cfgKey) || 'null'); return Array.isArray(s) && s.length ? s : DEFAULT_GADMIN } catch { return DEFAULT_GADMIN } })
+  const defCfg = empresa === 'TUMAR' ? TUMAR_GADMIN : DEFAULT_GADMIN
+  const [lista, setLista] = useState(() => { try { const s = JSON.parse(localStorage.getItem(cfgKey) || 'null'); return Array.isArray(s) && s.length ? s : defCfg } catch { return defCfg } })
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [edit, setEdit] = useState(false)
+  const [tpRef, setTpRef] = useState(null) // TUMAR: gasto real 2026 por concepto (TUMAR Performance)
+  useEffect(() => { if (empresa === 'TUMAR') { (async () => { try { setTpRef(await gTumarGastos()) } catch { } })() } }, [empresa])
+  const esT = empresa === 'TUMAR'
+  const normC = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase()
+  const ref26 = (it) => (esT && tpRef && tpRef.ref) ? (tpRef.ref[normC(it.sub)] || 0) : null
+  const ref26Tot = esT && tpRef ? lista.reduce((a, it) => a + (ref26(it) || 0), 0) : 0
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
   const g = (k) => num(data[k]); const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   const key = (cod, m) => `${cod}|${m}`
@@ -3045,19 +3075,20 @@ function GastosAdminForm({ empresa }) {
       </div>
       <div className="panel">
         <h3>Gastos administrativos <span className="unit">(detalle · compartido por todas las SBU)</span>{M$}<Responsable empresa={empresa} seccion="Finanzas" /></h3>
-        <div className="sub">Captura por centro de costo y mes. Con <b>Editar centros de costo</b> puedes cambiar códigos/nombres o agregar rubros; el cambio <b>aplica a todas las SBU</b>. El SUB-TOTAL alimenta la línea Gastos administrativos del Cash Flow.<br /><b>Importar desde Excel:</b> descarga la plantilla (columnas CÓD · SUB RUBRO · ENE-28…DIC-28), llénala y súbela con <b>📥 Importar Excel</b>. Se cruza por código; los rubros nuevos se agregan solos. Luego pulsa 💾 Guardar.</div>
+        <div className="sub">Captura por centro de costo y mes. Con <b>Editar centros de costo</b> puedes cambiar códigos/nombres o agregar rubros; el cambio <b>aplica a todas las SBU</b>. El SUB-TOTAL alimenta la línea Gastos administrativos del Cash Flow.<br /><b>Importar desde Excel:</b> descarga la plantilla (columnas CÓD · SUB RUBRO · ENE-28…DIC-28), llénala y súbela con <b>📥 Importar Excel</b>. Se cruza por código; los rubros nuevos se agregan solos. Luego pulsa 💾 Guardar.{esT && <><br /><b>Referencia 2026:</b> es el gasto real 2026 de TUMAR Performance (USD) por concepto. <b>Marketing, Logística y Representación</b> aparecen aquí como referencia, pero en el <b>P&L</b> esas líneas vienen de sus propias pantallas (Marketing, Logística, Viajes) para <b>no duplicar</b>; la línea de Gastos administrativos suma el resto.</>}</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '270px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-          <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+          <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th>{esT && <th style={{ background: '#fffdf2', color: '#8a6d1a' }} title="Gasto real 2026 de TUMAR Performance (USD) — referencia">2026 (ref)</th>}</tr></thead>
           <tbody>
             {lista.map((it, i) => (
               <tr key={i}>
                 <td>{edit ? <input value={it.cod} onChange={(e) => editar(i, 'cod', e.target.value)} style={{ width: 52, padding: 4, border: '1px solid var(--line)', borderRadius: 5, textAlign: 'center' }} /> : it.cod}</td>
-                <td className="l">{edit ? <span style={{ display: 'flex', gap: 4 }}><input value={it.sub} onChange={(e) => editar(i, 'sub', e.target.value)} style={{ width: '90%', padding: 4, border: '1px solid var(--line)', borderRadius: 5 }} /><button className="btn" onClick={() => quitar(i)} style={{ padding: '2px 8px' }}>✕</button></span> : it.sub}</td>
+                <td className="l">{edit ? <span style={{ display: 'flex', gap: 4 }}><input value={it.sub} onChange={(e) => editar(i, 'sub', e.target.value)} style={{ width: '90%', padding: 4, border: '1px solid var(--line)', borderRadius: 5 }} /><button className="btn" onClick={() => quitar(i)} style={{ padding: '2px 8px' }}>✕</button></span> : <>{it.sub}{esT && it.cat && <span className="unit" style={{ marginLeft: 6, fontSize: 10 }}>· {it.cat}</span>}</>}</td>
                 {MESES.map((_, m) => { const k = key(it.cod, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}
                 <td className="tot">{fmt(filaTot(it.cod))}</td>
+                {esT && <td className="tot" style={{ background: '#fffdf2', color: '#8a6d1a' }}>{ref26(it) != null ? fmt(ref26(it)) : '—'}</td>}
               </tr>
             ))}
-            <tr className="grandrow"><td className="l" colSpan={2}>SUB-TOTAL gastos administrativos</td>{subtot.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(subtot.reduce((a, b) => a + b, 0))}</td></tr>
+            <tr className="grandrow"><td className="l" colSpan={2}>SUB-TOTAL gastos administrativos</td>{subtot.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(subtot.reduce((a, b) => a + b, 0))}</td>{esT && <td className="tot" style={{ background: '#fffdf2', color: '#8a6d1a' }}>{fmt(ref26Tot)}</td>}</tr>
           </tbody>
         </table></div>
       </div>
@@ -3901,7 +3932,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
     return { unidades, ventaNeta, costo, comisiones, logistica, marketing, viajes, margenBruto, brand }
   }
   const sbuAgg = (ms) => (ms || []).reduce((a, m) => { const c = fullCalc(m); Object.keys(c).forEach((k) => a[k] = (a[k] || 0) + c[k]); return a }, {})
-  const gadminAnual = (() => { try { const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } return cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { return 0 } })()
+  const gadminAnual = gadminAnualOf(empresa)
   const [ppt, setPpt] = useState(false)
   async function descargarPptx() {
     setPpt(true)
@@ -4082,7 +4113,7 @@ function HoldingScreen({ empresas, sbusFor }) {
     const allM = Object.values(sbus).flat()
     const tot = allM.reduce((a, m) => { const c = fullCalc(m); Object.keys(c).forEach((k) => a[k] = (a[k] || 0) + c[k]); return a }, {})
     let gadmin = 0
-    try { const d = JSON.parse(localStorage.getItem(`gadmin_${emp}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${emp}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } gadmin = cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { }
+    gadmin = gadminAnualOf(emp)
     return { ...tot, gadmin, resultado: (tot.brand || 0) - gadmin }
   }
   const byEmp = empresas.map((e) => ({ e, v: calcEmp(e) }))
@@ -4241,7 +4272,7 @@ function SbuResultDownload({ empresa, sbuName, marcasSBU }) {
       setP({ ven, prod, cats, mk, log, dir })
     })()
   }, [empresa, sbuName])
-  const gadminAnual = (() => { try { const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } return cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { return 0 } })()
+  const gadminAnual = gadminAnualOf(empresa)
   const calc = (mca) => {
     if (!P) return { unidades: 0, ventaNeta: 0, costo: 0, logistica: 0, marketing: 0, viajes: 0, margenBruto: 0, brand: 0 }
     const sumTab = (rows, filt) => { let s = 0; rows.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
@@ -4347,7 +4378,7 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   const comisS = (y) => { const v = (((P.comisRef || {}).sbu || {})[upper(sbuName)] || {})[y] || 0; return v || null }
   const gadminS = (y) => { const v = (((P.gadminRef || {}).sbu || {})[upper(sbuName)] || {})[y] || 0; return v || null }
   // Gastos administrativos (compartidos por toda la empresa) — total anual
-  const gadminAnual = (() => { try { const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } return cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { return 0 } })()
+  const gadminAnual = gadminAnualOf(empresa)
 
   // TUMAR: el Real 2026 (YTD) viene de TUMAR Performance (gTumarReal, en USD), no del EBP.
   const sum12 = (a) => (a || []).reduce((x, y) => x + y, 0)
