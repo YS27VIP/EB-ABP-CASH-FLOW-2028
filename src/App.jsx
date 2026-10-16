@@ -4710,10 +4710,18 @@ const LATAM_TILES = {
   'ESTADOS UNIDOS': [-1, 1], 'USA': [-1, 1],
 }
 const _paisNorm = (s) => { const n = upper(String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim()); const alias = { 'EEUU': 'ESTADOS UNIDOS', 'U.S.A.': 'USA', 'US': 'USA', 'REP DOMINICANA': 'REPUBLICA DOMINICANA', 'REP. DOMINICANA': 'REPUBLICA DOMINICANA', 'RD': 'REPUBLICA DOMINICANA' }; return alias[n] || n }
+// Bandera (emoji) por país — para la vista de HIGHLIGHTS · País.
+const PAIS_FLAG = {
+  'MEXICO': '🇲🇽', 'GUATEMALA': '🇬🇹', 'EL SALVADOR': '🇸🇻', 'HONDURAS': '🇭🇳', 'NICARAGUA': '🇳🇮', 'COSTA RICA': '🇨🇷', 'PANAMA': '🇵🇦', 'BELICE': '🇧🇿',
+  'COLOMBIA': '🇨🇴', 'VENEZUELA': '🇻🇪', 'ECUADOR': '🇪🇨', 'PERU': '🇵🇪', 'BOLIVIA': '🇧🇴', 'CHILE': '🇨🇱', 'ARGENTINA': '🇦🇷', 'PARAGUAY': '🇵🇾', 'URUGUAY': '🇺🇾', 'BRASIL': '🇧🇷', 'GUYANA': '🇬🇾', 'SURINAM': '🇸🇷',
+  'REPUBLICA DOMINICANA': '🇩🇴', 'PUERTO RICO': '🇵🇷', 'CUBA': '🇨🇺', 'HAITI': '🇭🇹', 'JAMAICA': '🇯🇲', 'ESTADOS UNIDOS': '🇺🇸', 'USA': '🇺🇸', 'CANADA': '🇨🇦', 'ESPANA': '🇪🇸',
+}
+const paisFlag = (p) => PAIS_FLAG[_paisNorm(p)] || '🌎'
 function HighlightsView({ empresa, sbuName, marcasSBU }) {
   const [P, setP] = useState(null)
   const [met, setMet] = useState('v') // 'v' = venta $ · 'u' = unidades
   const [dim, setDim] = useState(empresa === 'TUMAR' ? 'cli' : 'pais') // dimensión activa
+  const [sortK, setSortK] = useState('28'); const [sortDir, setSortDir] = useState('desc') // orden de la tabla
   useEffect(() => {
     (async () => {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
@@ -4759,39 +4767,44 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
   const money = (v) => (met === 'v' ? '$' : '') + fmt(v)
   const pctc = (x) => x == null ? '🆕' : (x >= 0 ? '+' : '') + x.toFixed(0) + '%'
   const crecCol = (x) => x == null ? '#0e7490' : x >= 0 ? 'var(--ok)' : 'var(--bad)'
-  const rank = (agg) => Object.entries(agg).map(([k, o]) => ({ k, o, c: crec(o) })).sort((a, b) => val28(b.o) - val28(a.o))
   const maxV = (agg) => Math.max(1, ...Object.values(agg).map((o) => val28(o)))
-  // Tabla + barras para una dimensión
-  const Ranking = ({ agg, label }) => { const rows = rank(agg), mx = maxV(agg); return (
-    <div className="tablewrap" style={{ marginTop: 10 }}><table style={{ width: '100%' }}>
-      <thead><tr><th className="l">{label}</th><th>2026</th><th>2028</th><th>Crec.</th><th className="l" style={{ width: '32%' }}>2028</th></tr></thead>
-      <tbody>
-        {rows.length === 0 && <tr><td className="l" colSpan={5}>Sin datos.</td></tr>}
-        {rows.map(({ k, o, c }) => <tr key={k}><td className="l">{k}</td><td className="tot" style={{ color: 'var(--muted)' }}>{money(val26(o))}</td><td className="tot" style={{ fontWeight: 700 }}>{money(val28(o))}</td><td className="tot" style={{ fontWeight: 800, color: crecCol(c) }} title={c == null ? 'Nuevo (sin 2026)' : `2028 ${money(val28(o))} vs 2026 ${money(val26(o))}`}>{pctc(c)}</td><td><div style={{ background: '#eef2f6', borderRadius: 5, height: 16 }}><div style={{ width: Math.max(2, val28(o) / mx * 100) + '%', height: '100%', borderRadius: 5, background: col }}></div></div></td></tr>)}
-      </tbody>
-    </table></div>
-  ) }
-  // Mapa de mosaicos (solo EB · país)
-  const mapColor = (c) => c == null ? '#0e7490' : c >= 50 ? '#15803d' : c >= 0 ? '#86c79a' : c >= -25 ? '#f0b8b8' : '#b91c1c'
-  const paisMap = (() => {
-    const rows = 11, cols = 5, cell = 58, gap = 6
-    const placed = {}; Object.entries(paisAgg).forEach(([p]) => { const key = _paisNorm(p); if (LATAM_TILES[key]) placed[key] = p })
+  const clickSort = (k) => { if (sortK === k) setSortDir((d) => d === 'desc' ? 'asc' : 'desc'); else { setSortK(k); setSortDir('desc') } }
+  const arrow = (k) => <span style={{ opacity: sortK === k ? 1 : 0.3, fontSize: 9, marginLeft: 3 }}>{sortK === k ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}</span>
+  // Tabla + barras ordenable (incluye peso % 2026 y 2028)
+  const Ranking = ({ agg, label }) => {
+    const t28 = Object.values(agg).reduce((a, o) => a + val28(o), 0), t26 = Object.values(agg).reduce((a, o) => a + val26(o), 0)
+    const p26 = (o) => t26 ? val26(o) / t26 * 100 : 0, p28 = (o) => t28 ? val28(o) / t28 * 100 : 0
+    const keyVal = (o) => sortK === '26' ? val26(o) : sortK === 'p26' ? p26(o) : sortK === '28' ? val28(o) : sortK === 'p28' ? p28(o) : (crec(o) == null ? Infinity : crec(o))
+    const rows = Object.entries(agg).map(([k, o]) => ({ k, o, c: crec(o) })).sort((a, b) => { const d = keyVal(a.o) - keyVal(b.o); return sortDir === 'desc' ? -d : d })
+    const mx = maxV(agg)
+    const th = (k, lbl) => <th style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }} onClick={() => clickSort(k)} title="Clic para ordenar">{lbl}{arrow(k)}</th>
     return (
-      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <svg width={cols * (cell + gap)} height={(rows + 1) * (cell + gap)} style={{ flex: '0 0 auto' }}>
-          {Object.entries(LATAM_TILES).filter(([k]) => k !== 'USA').map(([k, [rw, cl]]) => {
-            const nombre = placed[k]; const o = nombre ? paisAgg[nombre] : null; const c = o ? crec(o) : undefined
-            const x = cl * (cell + gap), y = (rw + 1) * (cell + gap)
-            return <g key={k}>
-              <rect x={x} y={y} width={cell} height={cell} rx={8} fill={o ? mapColor(c) : '#eef2f6'} stroke={o ? '#fff' : '#e3e8ee'} strokeWidth={o ? 2 : 1}>
-                {o && <title>{`${nombre}\n2026: ${money(val26(o))}\n2028: ${money(val28(o))}\nCrec: ${pctc(c)}`}</title>}
-              </rect>
-              <text x={x + cell / 2} y={y + cell / 2 - 4} textAnchor="middle" fontSize="8.5" fontWeight="700" fill={o ? '#fff' : '#9aa5b1'}>{k.slice(0, 7)}</text>
-              {o && <text x={x + cell / 2} y={y + cell / 2 + 9} textAnchor="middle" fontSize="9" fontWeight="800" fill="#fff">{pctc(c)}</text>}
-            </g>
-          })}
-        </svg>
-        <div style={{ flex: 1, minWidth: 260 }}><Ranking agg={paisAgg} label="País" /></div>
+      <div className="tablewrap" style={{ marginTop: 10 }}><table style={{ width: '100%' }}>
+        <thead><tr><th className="l">{label}</th>{th('26', '2026')}{th('p26', 'Peso 26')}{th('28', '2028')}{th('p28', 'Peso 28')}{th('crec', 'Crec.')}<th className="l" style={{ width: '24%' }}>2028</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td className="l" colSpan={7}>Sin datos.</td></tr>}
+          {rows.map(({ k, o, c }) => <tr key={k}><td className="l">{k}</td><td className="tot" style={{ color: 'var(--muted)' }}>{money(val26(o))}</td><td className="tot" style={{ color: 'var(--muted)' }}>{p26(o).toFixed(1)}%</td><td className="tot" style={{ fontWeight: 700 }}>{money(val28(o))}</td><td className="tot" style={{ fontWeight: 700 }}>{p28(o).toFixed(1)}%</td><td className="tot" style={{ fontWeight: 800, color: crecCol(c) }} title={c == null ? 'Nuevo (sin 2026)' : `2028 ${money(val28(o))} vs 2026 ${money(val26(o))}`}>{pctc(c)}</td><td><div style={{ background: '#eef2f6', borderRadius: 5, height: 16 }}><div style={{ width: Math.max(2, val28(o) / mx * 100) + '%', height: '100%', borderRadius: 5, background: col }}></div></div></td></tr>)}
+        </tbody>
+      </table></div>
+    )
+  }
+  // Tarjetas con bandera por país (coloreadas por crecimiento), ordenadas por la métrica activa.
+  const cardColor = (c) => c == null ? { bg: '#ecfeff', bd: '#0e7490', tx: '#0e7490' } : c >= 25 ? { bg: '#eaf7ee', bd: '#15803d', tx: '#15803d' } : c >= 0 ? { bg: '#f1faf4', bd: '#86c79a', tx: '#2f7d4e' } : c >= -25 ? { bg: '#fdf1f1', bd: '#e39a9a', tx: '#b45309' } : { bg: '#fdeaea', bd: '#b91c1c', tx: '#b91c1c' }
+  const paisMap = (() => {
+    const cards = Object.entries(paisAgg).map(([p, o]) => ({ p, o, c: crec(o) })).sort((a, b) => val28(b.o) - val28(a.o))
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, margin: '12px 0 4px' }}>
+        {cards.map(({ p, o, c }) => { const cc = cardColor(c); return (
+          <div key={p} title={`${p}\n2026: ${money(val26(o))} (${(val26(o) && Object.values(paisAgg).reduce((a, x) => a + val26(x), 0) ? (val26(o) / Object.values(paisAgg).reduce((a, x) => a + val26(x), 0) * 100).toFixed(1) : 0)}%)\n2028: ${money(val28(o))}\nCrecimiento: ${pctc(c)}`} style={{ width: 148, background: cc.bg, border: '1px solid ' + cc.bd, borderLeft: '5px solid ' + cc.bd, borderRadius: 10, padding: '10px 12px', cursor: BULB_CURSOR }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 26, lineHeight: 1 }}>{paisFlag(p)}</span><span style={{ fontWeight: 800, fontSize: 12.5, lineHeight: 1.15 }}>{p}</span></div>
+            <div style={{ marginTop: 8, fontWeight: 800, fontSize: 15 }}>{money(val28(o))}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 }}>
+              <span className="unit">2026: {money(val26(o))}</span>
+              <span style={{ fontWeight: 800, fontSize: 12.5, color: cc.tx }}>{pctc(c)}</span>
+            </div>
+          </div>
+        ) })}
+        {cards.length === 0 && <div className="sub">Sin datos de país todavía.</div>}
       </div>
     )
   })()
@@ -4809,8 +4822,9 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
         {tabs.map(([k, lbl]) => <button key={k} className={'seg' + (dim === k ? ' active' : '')} onClick={() => setDim(k)} style={dim === k ? { background: col, borderColor: col, color: '#fff' } : {}}>{lbl}</button>)}
       </div>
       {dim === 'pais' && <>
-        <div className="sub">Crecimiento por <b>país</b> (plan 2028 vs real 2026). El color del mosaico va de rojo (cae) a verde (crece). Pasa el cursor por cada país para ver el detalle. Los países sin mosaico salen en la tabla de la derecha.</div>
+        <div className="sub">Crecimiento por <b>país</b> (plan 2028 vs real 2026). Las tarjetas van de rojo (cae) a verde (crece); pasa el cursor por cada bandera para ver el detalle. Abajo, la tabla ordenable con el peso de cada país.</div>
         {paisMap}
+        <Ranking agg={paisAgg} label="País" />
       </>}
       {dim === 'cli' && <>
         <div className="sub">Crecimiento por <b>cliente</b> (plan 2028 vs real 2026{esT ? ', de TUMAR Performance' : ''}). <b>🆕</b> = cliente nuevo sin 2026.</div>
