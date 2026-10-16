@@ -2766,12 +2766,16 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp, precios }) {
   const setCP = (m, v) => setTemp((t) => ({ ...t, [cpKey(m)]: v }))
   const xfd = MESES.map((_, m) => num(temp[cpKey(m)]))
   const disp = MESES.map((_, m) => (m - tr >= 0 ? xfd[m - tr] : 0))
-  // Inventario inicial 2028 = saldo de arranque de TODAS las temporadas anteriores ya cargadas (Otros…FW27).
-  const ini2028 = INV_SEASONS.reduce((a, s) => a + num(temp[`II|${marca}|${s}`]), 0)
+  // Compras de fin de 2027 (Nov/Dic) que llegan y quedan disponibles para el arranque de 2028 (SS28).
+  const cp27 = (k) => `CP2027|${marca}|${k}`
+  const v27N = num(temp[cp27('N')]), v27D = num(temp[cp27('D')])
+  // Inventario inicial 2028 = saldo de temporadas anteriores (Otros…FW27) + compras de Nov/Dic 2027.
+  const ini2028 = INV_SEASONS.reduce((a, s) => a + num(temp[`II|${marca}|${s}`]), 0) + v27N + v27D
   const aucEff = MESES.map((_, m) => { let v = 0; producto.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca) || upper(r[1]) !== 'AUC') return; v = num(r[4 + m]) }); return v })
   // AUC de compra por temporada (de la matriz de Producto · Paso 1, ponderado por peso de categoría). Valoriza las compras aunque no haya ventas ese mes.
   const seasonAUCbuy = (s) => { let n = 0, d = 0; catList.forEach(({ cat, peso }) => { const a = num((precios || {})[`PAUC|${marca}|${s}|${cat}`]); const w = (num(peso) || 0) + 0.0001; if (a > 0) { n += a * w; d += w } }); return d ? n / d : 0 }
   const auc = MESES.map((_, m) => seasonAUCbuy(seasonOf(m)) || aucEff[m])
+  const auc27 = seasonAUCbuy('SS28') || aucEff[0] || 0 // AUC de las compras de fin de 2027 (temporada SS28)
   const ventasU = MESES.map((_, m) => { let s = 0; ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; s += num(r[4 + m]) }); return s })
   const saldoIni = []; const saldoFin = []; { let prev = ini2028; MESES.forEach((_, m) => { const ini = prev; const fin = ini + disp[m] - ventasU[m]; saldoIni.push(ini); saldoFin.push(fin); prev = fin }) }
   // Composición del inventario inicial de enero (por temporada anterior) para el tooltip.
@@ -2783,6 +2787,7 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp, precios }) {
   // Celda calculada según la vista (unidades / valor $ / ambas)
   const cCell = (units, m) => { const u = units[m]; const $ = u * auc[m]; if (vista === 'ud') return fmt(u); if (vista === '$') return fmt($); return <>{fmt(u)}<div className="unit" style={{ fontSize: 10 }}>${fmt($)}</div></> }
   const cTot = (units) => { const u = RT(units); const $ = RT(money(units)); if (vista === 'ud') return fmt(u); if (vista === '$') return fmt($); return <>{fmt(u)}<div className="unit" style={{ fontSize: 10 }}>${fmt($)}</div></> }
+  const cell27 = (u) => { const $ = u * auc27; if (vista === 'ud') return fmt(u); if (vista === '$') return fmt($); return <>{fmt(u)}<div className="unit" style={{ fontSize: 10 }}>${fmt($)}</div></> }
   return (
     <div>
       <div className="toolbar" style={{ marginBottom: 8, gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -2795,20 +2800,22 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp, precios }) {
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-      <div className="sub">Escribe las <b>unidades a comprar</b> por mes en la fila amarilla (fecha <b>XFD</b>): de <b>ene a jun = SS28</b>, de <b>jul a oct = FW28</b> y de <b>nov a dic = SS29</b> (ya empieza la compra de la próxima temporada). La <b>disponible</b> = XFD + <b>{tr}</b> mes(es) de tránsito. Abajo, cada mes: <b>inventario inicial del mes + compras disponibles − ventas = saldo fin de mes</b>. El inicial de enero es el saldo de todas las temporadas anteriores (Otros…FW27): <b>{fmt(ini2028)} ud</b>. Valor $ = unidades × AUC.</div>
-      <div className="tablewrap"><table className="vfix gridcols"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '84px' }} /></colgroup>
+      <div className="sub">Coloca tus <b>compras del 2028</b> en la fecha del <b>XFD</b>. No olvides colocar compras que vayan a <b>ocurrir en este período de tiempo pero que lleguen el año siguiente</b>.</div>
+      <div className="tablewrap"><table className="vfix gridcols" style={{ width: 1258 }}><colgroup><col style={{ width: '250px' }} /><col style={{ width: '66px' }} /><col style={{ width: '66px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '84px' }} /></colgroup>
         <thead>
-          <tr><th className="l">Concepto</th>{MESES.map((m, i) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Total</th></tr>
-          <tr><th className="l" style={{ fontWeight: 600, color: 'var(--muted)' }}>Temporada de compra</th>{MESES.map((_, i) => { const lbl = i === 0 ? 'SS28' : i === 6 ? 'FW28' : i === 10 ? 'SS29' : ''; return <th key={i} style={{ fontWeight: 800, color: '#b45309' }}>{lbl}</th> })}<th></th></tr>
+          <tr><th className="l">Concepto</th><th style={{ color: '#9a6a1a' }}>NOV-27</th><th style={{ color: '#9a6a1a' }}>DIC-27</th>{MESES.map((m, i) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Total</th></tr>
         </thead>
         <tbody>
-          <tr><td className="l">Compras a comprar · <b>XFD</b> <span className="unit">({vista === 'ud' ? 'unidades' : vista === '$' ? 'valor $' : 'ud · $'})</span> {vista === 'ud' && <span className="fill-badge" style={{ marginLeft: 4 }}>✏️</span>}</td>{MESES.map((_, m) => vista === 'ud' ? <td key={m} className="cell"><input value={temp[cpKey(m)] ?? ''} onChange={(e) => setCP(m, e.target.value)} inputMode="decimal" style={{ width: '100%' }} /></td> : <td key={m} className="tot">{cCell(xfd, m)}</td>)}<td className="tot">{vista === 'ud' ? fmt(RT(xfd)) : cTot(xfd)}</td></tr>
-          <tr className="catrow"><td className="l">Compras · disponible <span className="unit">(XFD + tránsito)</span></td>{MESES.map((_, m) => <td key={m} className="tot">{cCell(disp, m)}</td>)}<td className="tot">{cTot(disp)}</td></tr>
-          <tr className="secrow"><td colSpan={14}>Flujo de inventario 2028 (todas las temporadas)</td></tr>
-          <tr><td className="l sub2">Inventario inicial del mes</td>{MESES.map((_, m) => <td key={m} className="tot help-bulb" title={m === 0 ? `Inventario inicial de enero = saldo de temporadas anteriores → ${iniCompStr} = ${fmt(ini2028)} ud` : `Saldo fin de ${MESES[m - 1].slice(0, 3).toUpperCase()}: inicial ${fmt(saldoIni[m - 1])} + compras ${fmt(disp[m - 1])} − ventas ${fmt(ventasU[m - 1])} = ${fmt(saldoIni[m])} ud`}>{cCell(saldoIni, m)}</td>)}<td className="tot"></td></tr>
-          <tr><td className="l sub2" style={{ color: '#15803d' }}>(+) Compras disponibles</td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: '#15803d' }}>{cCell(disp, m)}</td>)}<td className="tot" style={{ color: '#15803d' }}>{cTot(disp)}</td></tr>
-          <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Ventas 2028</td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: '#b91c1c' }}>{cCell(ventasU, m)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>{cTot(ventasU)}</td></tr>
-          <tr className="grandrow"><td className="l">= Saldo inventario fin de mes</td>{MESES.map((_, m) => <td key={m} className="tot">{cCell(saldoFin, m)}</td>)}<td className="tot">{vista === '$' ? fmt(saldoFin[11] * (auc[11] || 0)) : fmt(saldoFin[11])}</td></tr>
+          <tr><td className="l">Compras a comprar · <b>XFD</b> <span className="unit">({vista === 'ud' ? 'unidades' : vista === '$' ? 'valor $' : 'ud · $'})</span> {vista === 'ud' && <span className="fill-badge" style={{ marginLeft: 4 }}>✏️</span>}</td>
+            {['N', 'D'].map((k) => vista === 'ud' ? <td key={k} className="cell" style={{ background: '#fffdf2' }}><input value={temp[cp27(k)] ?? ''} onChange={(e) => setTemp((t) => ({ ...t, [cp27(k)]: e.target.value }))} inputMode="decimal" style={{ width: '100%' }} title="Compra de fin de 2027 (SS28) que llega para arrancar 2028" /></td> : <td key={k} className="tot" style={{ background: '#fffdf2', color: '#9a6a1a' }}>{cell27(num(temp[cp27(k)]))}</td>)}
+            {MESES.map((_, m) => vista === 'ud' ? <td key={m} className="cell"><input value={temp[cpKey(m)] ?? ''} onChange={(e) => setCP(m, e.target.value)} inputMode="decimal" style={{ width: '100%' }} /></td> : <td key={m} className="tot">{cCell(xfd, m)}</td>)}
+            <td className="tot">{vista === 'ud' ? fmt(RT(xfd) + v27N + v27D) : vista === '$' ? fmt(RT(money(xfd)) + (v27N + v27D) * auc27) : <>{fmt(RT(xfd) + v27N + v27D)}<div className="unit" style={{ fontSize: 10 }}>${fmt(RT(money(xfd)) + (v27N + v27D) * auc27)}</div></>}</td></tr>
+          <tr className="catrow"><td className="l">Compras · disponible <span className="unit">(XFD + tránsito)</span></td><td className="tot" style={{ background: '#fffdf2', color: '#c0a060' }}>—</td><td className="tot" style={{ background: '#fffdf2', color: '#c0a060' }}>—</td>{MESES.map((_, m) => <td key={m} className="tot">{cCell(disp, m)}</td>)}<td className="tot">{cTot(disp)}</td></tr>
+          <tr className="secrow"><td colSpan={16}>Flujo de inventario 2028 (todas las temporadas)</td></tr>
+          <tr><td className="l sub2">Inventario inicial del mes</td><td className="tot" style={{ color: '#c0a060' }}>—</td><td className="tot" style={{ color: '#c0a060' }}>—</td>{MESES.map((_, m) => <td key={m} className="tot help-bulb" title={m === 0 ? `Inventario inicial de enero = temporadas anteriores (${iniCompStr})${(v27N + v27D) ? ` + compras Nov/Dic 2027 ${fmt(v27N + v27D)}` : ''} = ${fmt(ini2028)} ud` : `Saldo fin de ${MESES[m - 1].slice(0, 3).toUpperCase()}: inicial ${fmt(saldoIni[m - 1])} + compras ${fmt(disp[m - 1])} − ventas ${fmt(ventasU[m - 1])} = ${fmt(saldoIni[m])} ud`}>{cCell(saldoIni, m)}</td>)}<td className="tot"></td></tr>
+          <tr><td className="l sub2" style={{ color: '#15803d' }}>(+) Compras disponibles</td><td className="tot" style={{ color: '#c0a060' }}>—</td><td className="tot" style={{ color: '#c0a060' }}>—</td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: '#15803d' }}>{cCell(disp, m)}</td>)}<td className="tot" style={{ color: '#15803d' }}>{cTot(disp)}</td></tr>
+          <tr><td className="l sub2" style={{ color: '#b91c1c' }}>(−) Ventas 2028</td><td className="tot" style={{ color: '#c0a060' }}>—</td><td className="tot" style={{ color: '#c0a060' }}>—</td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: '#b91c1c' }}>{cCell(ventasU, m)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>{cTot(ventasU)}</td></tr>
+          <tr className="grandrow"><td className="l">= Saldo inventario fin de mes</td><td className="tot" style={{ color: '#c0a060' }}>—</td><td className="tot" style={{ color: '#c0a060' }}>—</td>{MESES.map((_, m) => <td key={m} className="tot">{cCell(saldoFin, m)}</td>)}<td className="tot">{vista === '$' ? fmt(saldoFin[11] * (auc[11] || 0)) : fmt(saldoFin[11])}</td></tr>
         </tbody>
       </table></div>
       {RT(xfd) === 0 && <div className="sub" style={{ marginTop: 8 }}>Aún no hay compras. Escribe las unidades a comprar por mes en la fila <b>XFD</b> y pulsa 💾 Guardar.</div>}
