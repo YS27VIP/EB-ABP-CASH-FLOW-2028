@@ -5783,7 +5783,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>Venta Neta 2028 por categoría y mes — {marca}{M$} <span className="unit">(dinero $)</span></h3>
-            <div className="sub"><b>Venta Neta del mes = unidades del mes × AUP efectivo de ese mes</b> (por categoría). El <b>precio (AUP) de cada categoría y temporada lo define Producto</b>: el cliente no cambia el precio, solo decide <b>cuántas unidades</b> compra y <b>en qué categorías</b>. Cada mes se vende una <b>mezcla de temporadas</b>, así que el <b>AUP efectivo del mes</b> es el promedio de los AUP de esas temporadas, <b>ponderado por las unidades</b> que rota cada temporada ese mes (una temporada con más unidades pesa más).</div><div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
+            <div className="sub"><b>Venta neta = Unidades × AUP ponderado.</b> <span style={{ color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre un número para ver el cálculo.</span></div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
@@ -5799,6 +5799,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         )
       })()}
 
+      {usarCat && <div style={{ margin: '18px 0 2px', background: '#eef4f6', borderLeft: '5px solid #0b5566', borderRadius: 8, padding: '9px 14px', fontWeight: 800, color: '#0b5566', fontSize: 14 }}>📊 BRUTO <span style={{ fontWeight: 500, fontSize: 12.5, color: 'var(--muted)' }}>— sin costo logístico (costo y margen de producto)</span></div>}
+
       {usarCat && (() => {
         const auc = aucPorCat(marca)
         const money = (v) => Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -5808,7 +5810,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         return (
           <div className="panel">
             <h3>Costo 2028 por categoría y mes — {marca}{M$} <span className="unit">(dinero $)</span></h3>
-            <div className="sub"><b>Costo del mes = unidades del mes × AUC efectivo de ese mes</b> (por categoría). El <b>AUC lo define Producto por categoría y temporada</b>, igual que el AUP. Como cada mes se vende una <b>mezcla de temporadas</b>, el AUC efectivo del mes es el <b>promedio ponderado</b> de las temporadas que rotan ese mes.</div><div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
+            <div className="sub"><b>Costo = Unidades × AUC ponderado.</b> <span style={{ color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre un número para ver el cálculo.</span></div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
@@ -5873,7 +5875,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
               </table>
             </div>
           </div>
-          {/* COSTO LANDED $ y MARGEN LANDED % (usa el % logístico de la venta que pone Logística) */}
+          {/* COSTO LANDED $, MARGEN LANDED $ y MARGEN LANDED % (usa el % logístico de la venta que pone Logística) */}
+          <div style={{ margin: '18px 0 2px', background: '#eef4fb', borderLeft: '5px solid #1d4ed8', borderRadius: 8, padding: '9px 14px', fontWeight: 800, color: '#1d4ed8', fontSize: 14 }}>🚚 LANDED <span style={{ fontWeight: 500, fontSize: 12.5, color: 'var(--muted)' }}>— con costo logístico de la venta (incluye el % que define Logística)</span></div>
           {(() => {
             const pctLog = num(logcost[`${marca}|PCT_LOGVENTA`])
             const lcCat = (cat, mi) => coCat(cat, mi) * (1 + pctLog / 100)   // costo landed = costo × (1 + % logístico)
@@ -5893,6 +5896,19 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                     <tbody>
                       <tr className="grandrow"><td className="l">TOTAL {marca}</td>{lcMes.map((v, i) => <td key={i} className="tot help-bulb" title={`Costo landed ${MESES[i].toUpperCase()} = Costo $${money(coCat ? catList.reduce((a, c) => a + coCat(c.cat, i), 0) : 0)} × (1 + ${fmt(pctLog)}%) = $${money(v)}`}>{fmt(v)}</td>)}<td className="tot">{fmt(lcTot)}</td></tr>
                       {catList.map((c, i) => { const row = MESES.map((_, mi) => lcCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); return <tr key={i}><td className="l">{c.cat}</td>{row.map((v, mi) => <td key={mi} className="tot help-bulb" title={`${c.cat} · ${MESES[mi].toUpperCase()}: Costo $${money(coCat(c.cat, mi))} × (1 + ${fmt(pctLog)}%) = $${money(v)}`}>{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="panel">
+                <h3>Margen landed 2028 por categoría y mes — {marca}{M$} <span className="unit">($ dinero)</span></h3>
+                <div className="sub"><b>Margen landed = Venta Neta − Costo landed</b> (por categoría).</div>
+                <div className="tablewrap">
+                  <table className="vfix"><colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+                    <thead><tr><th className="l">Categoría</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+                    <tbody>
+                      <tr className="grandrow"><td className="l">TOTAL {marca}</td>{mlMes.map((v, i) => <td key={i} className="tot help-bulb" title={`Margen landed ${MESES[i].toUpperCase()} = Venta $${money(vnMes[i])} − Costo landed $${money(lcMes[i])} = $${money(v)}`}>{fmt(v)}</td>)}<td className="tot">{fmt(mlTot)}</td></tr>
+                      {catList.map((c, i) => { const row = MESES.map((_, mi) => mlCat(c.cat, mi)); const rt = row.reduce((s, x) => s + x, 0); return <tr key={i}><td className="l">{c.cat}</td>{row.map((v, mi) => <td key={mi} className="tot help-bulb" title={`${c.cat} · ${MESES[mi].toUpperCase()}: Venta $${money(vnCat(c.cat, mi))} − Costo landed $${money(lcCat(c.cat, mi))} = $${money(v)}`}>{fmt(v)}</td>)}<td className="tot">{fmt(rt)}</td></tr> })}
                     </tbody>
                   </table>
                 </div>
