@@ -4727,9 +4727,9 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
       const [ven, prod, cap] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias')])
       let hist = []; try { const jh = await gHistorico(); if (jh && jh.ok && jh.values) hist = jh.values.slice(1) } catch { }
-      let tp = null; if (empresa === 'TUMAR') { try { tp = await gTumarClientes() } catch { } }
+      let tp = null, tr = null; if (empresa === 'TUMAR') { try { tp = await gTumarClientes() } catch { } try { tr = await gTumarReal() } catch { } }
       const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
-      setP({ ven, prod, cats, hist, tp })
+      setP({ ven, prod, cats, hist, tp, tr })
     })()
   }, [empresa])
   const col = sbuColor(sbuName)
@@ -4758,10 +4758,13 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
   const paisMarcas = {}; P.hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || String(r[1]) !== '2026') return; const mca = upper(r[5]); if (!marcasU.has(mca)) return; const p = String(r[9] || '').trim() || 'Sin país'; (paisMarcas[p] = paisMarcas[p] || new Set()).add(mca) })
   // Agregado por categoría (distribuye el total de cada marca entre sus categorías por peso)
   const catAgg = {}; const addC = (c, k, val) => { (catAgg[c] = catAgg[c] || { u28: 0, v28: 0, u26: 0, v26: 0 })[k] += val }
+  const marcaAgg = {}
   marcas.forEach((m) => {
     const r = realAupAuc(empresa, m, P.ven, P.prod, (P.cats[m] || []).map((c) => c.cat))
     const u28 = r.totalUnits.reduce((a, b) => a + b, 0), v28 = r.ventaMes.reduce((a, b) => a + b, 0)
-    const u26 = histAgg(m, 2026, 'UNID'), v26 = histAgg(m, 2026, 'VENTA')
+    let u26 = histAgg(m, 2026, 'UNID'), v26 = histAgg(m, 2026, 'VENTA')
+    if (esT && P.tr && P.tr.marcas && P.tr.marcas[upper(m)]) { const mm = P.tr.marcas[upper(m)]; u26 = mm.unid.reduce((a, b) => a + b, 0); v26 = mm.venta.reduce((a, b) => a + b, 0) }
+    marcaAgg[m] = { u28, v28, u26, v26 }
     const cs = P.cats[m] || []; const tot = cs.reduce((a, c) => a + (num(c.peso) || 0), 0)
     if (!cs.length) { addC('(Sin categoría)', 'u28', u28); addC('(Sin categoría)', 'v28', v28); addC('(Sin categoría)', 'u26', u26); addC('(Sin categoría)', 'v26', v26); return }
     cs.forEach((c) => { const w = tot > 0 ? (num(c.peso) || 0) / tot : 1 / cs.length; addC(c.cat, 'u28', u28 * w); addC(c.cat, 'v28', v28 * w); addC(c.cat, 'u26', u26 * w); addC(c.cat, 'v26', v26 * w) })
@@ -4775,7 +4778,7 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
   const clickSort = (k) => { if (sortK === k) setSortDir((d) => d === 'desc' ? 'asc' : 'desc'); else { setSortK(k); setSortDir('desc') } }
   const arrow = (k) => <span style={{ opacity: sortK === k ? 1 : 0.3, fontSize: 9, marginLeft: 3 }}>{sortK === k ? (sortDir === 'desc' ? '▼' : '▲') : '⇅'}</span>
   // Tabla + barras ordenable (incluye peso % 2026 y 2028)
-  const Ranking = ({ agg, label }) => {
+  const Ranking = ({ agg, label, nameCell, kind }) => {
     const t28 = Object.values(agg).reduce((a, o) => a + val28(o), 0), t26 = Object.values(agg).reduce((a, o) => a + val26(o), 0)
     const p26 = (o) => t26 ? val26(o) / t26 * 100 : 0, p28 = (o) => t28 ? val28(o) / t28 * 100 : 0
     const keyVal = (o) => sortK === '26' ? val26(o) : sortK === 'p26' ? p26(o) : sortK === '28' ? val28(o) : sortK === 'p28' ? p28(o) : (crec(o) == null ? Infinity : crec(o))
@@ -4794,7 +4797,7 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
       else if (c < 25) base = `Crecimiento moderado (${pctc(c)}).`
       else base = `Crecimiento alto (${pctc(c)}).`
       let extra = ''
-      if (dim === 'pais') { if (paisTopCli[k]) extra += ` Cliente principal 2026: ${paisTopCli[k].cli}.`; if (paisMarcas[k]) extra += ` ${paisMarcas[k].size} marca(s) activa(s) en 2026.` }
+      if (kind === 'pais') { if (paisTopCli[k]) extra += ` Cliente principal 2026: ${paisTopCli[k].cli}.`; if (paisMarcas[k]) extra += ` ${paisMarcas[k].size} marca(s) activa(s) en 2026.` }
       return base + mix + extra
     }
     return (
@@ -4802,32 +4805,20 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
         <thead><tr><th className="l">{label}</th>{th('26', '2026')}{th('p26', 'Peso 26')}{th('28', '2028')}{th('p28', 'Peso 28')}{th('crec', 'Crec.')}<th className="l" style={{ width: '34%' }}>💡😊 Tips</th></tr></thead>
         <tbody>
           {rows.length === 0 && <tr><td className="l" colSpan={7}>Sin datos.</td></tr>}
-          {rows.map(({ k, o, c }) => <tr key={k}><td className="l">{k}</td><td className="tot" style={{ color: 'var(--muted)' }}>{money(val26(o))}</td><td className="tot" style={{ color: 'var(--muted)' }}>{p26(o).toFixed(1)}%</td><td className="tot" style={{ fontWeight: 700 }}>{money(val28(o))}</td><td className="tot" style={{ fontWeight: 700 }}>{p28(o).toFixed(1)}%</td><td className="tot" style={{ fontWeight: 800, color: crecCol(c) }} title={c == null ? 'Nuevo (sin 2026)' : `2028 ${money(val28(o))} vs 2026 ${money(val26(o))}`}>{pctc(c)}</td><td className="l" style={{ fontSize: 11.5, color: '#475569', lineHeight: 1.3, whiteSpace: 'normal' }}>{comentario(k, o, c)}</td></tr>)}
+          {rows.map(({ k, o, c }) => <tr key={k}><td className="l">{nameCell ? nameCell(k) : k}</td><td className="tot" style={{ color: 'var(--muted)' }}>{money(val26(o))}</td><td className="tot" style={{ color: 'var(--muted)' }}>{p26(o).toFixed(1)}%</td><td className="tot" style={{ fontWeight: 700 }}>{money(val28(o))}</td><td className="tot" style={{ fontWeight: 700 }}>{p28(o).toFixed(1)}%</td><td className="tot" style={{ fontWeight: 800, color: crecCol(c) }} title={c == null ? 'Nuevo (sin 2026)' : `2028 ${money(val28(o))} vs 2026 ${money(val26(o))}`}>{pctc(c)}</td><td className="l" style={{ fontSize: 11.5, color: '#475569', lineHeight: 1.3, whiteSpace: 'normal' }}>{comentario(k, o, c)}</td></tr>)}
         </tbody>
       </table></div>
     )
   }
-  // Tarjetas con bandera por país (coloreadas por crecimiento), ordenadas por la métrica activa.
-  const cardColor = (c) => c == null ? { bg: '#ecfeff', bd: '#0e7490', tx: '#0e7490' } : c >= 25 ? { bg: '#eaf7ee', bd: '#15803d', tx: '#15803d' } : c >= 0 ? { bg: '#f1faf4', bd: '#86c79a', tx: '#2f7d4e' } : c >= -25 ? { bg: '#fdf1f1', bd: '#e39a9a', tx: '#b45309' } : { bg: '#fdeaea', bd: '#b91c1c', tx: '#b91c1c' }
-  const paisMap = (() => {
-    const cards = Object.entries(paisAgg).map(([p, o]) => ({ p, o, c: crec(o) })).sort((a, b) => val28(b.o) - val28(a.o))
-    return (
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, margin: '12px 0 4px' }}>
-        {cards.map(({ p, o, c }) => { const cc = cardColor(c); return (
-          <div key={p} title={`${p}\n2026: ${money(val26(o))} (${(val26(o) && Object.values(paisAgg).reduce((a, x) => a + val26(x), 0) ? (val26(o) / Object.values(paisAgg).reduce((a, x) => a + val26(x), 0) * 100).toFixed(1) : 0)}%)\n2028: ${money(val28(o))}\nCrecimiento: ${pctc(c)}`} style={{ width: 148, background: cc.bg, border: '1px solid ' + cc.bd, borderLeft: '5px solid ' + cc.bd, borderRadius: 10, padding: '10px 12px', cursor: BULB_CURSOR }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 26, lineHeight: 1 }}>{paisFlag(p)}</span><span style={{ fontWeight: 800, fontSize: 12.5, lineHeight: 1.15 }}>{p}</span></div>
-            <div style={{ marginTop: 8, fontWeight: 800, fontSize: 15 }}>{money(val28(o))}</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 }}>
-              <span className="unit">2026: {money(val26(o))}</span>
-              <span style={{ fontWeight: 800, fontSize: 12.5, color: cc.tx }}>{pctc(c)}</span>
-            </div>
-          </div>
-        ) })}
-        {cards.length === 0 && <div className="sub">Sin datos de país todavía.</div>}
-      </div>
-    )
-  })()
-  const tabs = esT ? [['cli', '👥 Clientes']] : [['pais', '🗺️ País'], ['cli', '👥 Clientes'], ['cat', '🏷️ Categorías']]
+  const flagName = (p) => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><span style={{ fontSize: 17 }}>{paisFlag(p)}</span>{p}</span>
+  const marcaName = (m) => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><span style={{ display: 'inline-block', width: 11, height: 11, borderRadius: 3, background: marcaColor(m) }}></span><b>{m}</b></span>
+  const Section = ({ icon, title, desc, agg, label, nameCell, kind }) => (
+    <div style={{ marginTop: 18, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+      <h3 style={{ color: col, margin: '0 0 2px' }}>{icon} {title}</h3>
+      <div className="sub">{desc}</div>
+      <Ranking agg={agg} label={label} nameCell={nameCell} kind={kind} />
+    </div>
+  )
   return (
     <div className="panel">
       <div className="toolbar" style={{ alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
@@ -4837,22 +4828,10 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
         <button className={'seg' + (met === 'v' ? ' active' : '')} onClick={() => setMet('v')} style={met === 'v' ? { background: col, borderColor: col, color: '#fff' } : {}}>Venta $</button>
         <button className={'seg' + (met === 'u' ? ' active' : '')} onClick={() => setMet('u')} style={met === 'u' ? { background: col, borderColor: col, color: '#fff' } : {}}>Unidades</button>
       </div>
-      <div className="toolbar" style={{ marginBottom: 6, gap: 6, flexWrap: 'wrap' }}>
-        {tabs.map(([k, lbl]) => <button key={k} className={'seg' + (dim === k ? ' active' : '')} onClick={() => setDim(k)} style={dim === k ? { background: col, borderColor: col, color: '#fff' } : {}}>{lbl}</button>)}
-      </div>
-      {dim === 'pais' && <>
-        <div className="sub">Crecimiento por <b>país</b> (plan 2028 vs real 2026). Las tarjetas van de rojo (cae) a verde (crece); pasa el cursor por cada bandera para ver el detalle. Abajo, la tabla ordenable con el peso de cada país.</div>
-        {paisMap}
-        <Ranking agg={paisAgg} label="País" />
-      </>}
-      {dim === 'cli' && <>
-        <div className="sub">Crecimiento por <b>cliente</b> (plan 2028 vs real 2026{esT ? ', de TUMAR Performance' : ''}). <b>🆕</b> = cliente nuevo sin 2026.</div>
-        <Ranking agg={cliAgg} label="Cliente" />
-      </>}
-      {dim === 'cat' && <>
-        <div className="sub">Crecimiento por <b>categoría</b> (plan 2028 vs real 2026). El total de cada marca se reparte entre sus categorías según el <b>peso</b> que definió el Director.</div>
-        <Ranking agg={catAgg} label="Categoría" />
-      </>}
+      <Section icon="🏷️" title="Por marca" desc={<>Crecimiento por <b>marca</b> (plan 2028 vs real 2026{esT ? ' de TUMAR Performance' : ' del EBP'}). Cada marca con su color; en <b>Tips</b>, el análisis automático.</>} agg={marcaAgg} label="Marca" nameCell={marcaName} kind="marca" />
+      {!esT && <Section icon="🌎" title="Por país" desc={<>Crecimiento por <b>país</b> (plan 2028 vs real 2026). La bandera va junto al país; <b>Tips</b> explica el porqué.</>} agg={paisAgg} label="País" nameCell={flagName} kind="pais" />}
+      <Section icon="👥" title="Por cliente" desc={<>Crecimiento por <b>cliente</b> (plan 2028 vs real 2026{esT ? ' de TUMAR Performance' : ''}). <b>🆕</b> = cliente nuevo sin 2026.</>} agg={cliAgg} label="Cliente" kind="cli" />
+      {!esT && <Section icon="🧩" title="Por categoría" desc={<>Crecimiento por <b>categoría</b> (plan 2028 vs real 2026). El total de cada marca se reparte por el <b>peso</b> que definió el Director.</>} agg={catAgg} label="Categoría" kind="cat" />}
     </div>
   )
 }
