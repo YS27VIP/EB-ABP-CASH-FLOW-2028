@@ -135,6 +135,28 @@ export async function gTumarReal() {
   const decDone = mesesSet.has(11)
   return { ok: true, marcas, lines, totalVenta, totalCosto, totalUnid, mesesConDatos: mesesSet.size, decDone }
 }
+/* TUMAR: clientes reales + unidades 2026 por marca y mes (de VENTAS POR CLIENTE; la marca sale del artículo en UNIDADES COSTO VENTAS). */
+export async function gTumarClientes() {
+  const [ucv, vpc] = await Promise.all([_tmRead('UNIDADES COSTO VENTAS'), _tmRead('VENTAS POR CLIENTE')])
+  const art2m = {}
+  if (ucv.length > 1) {
+    const iArt = _hidx(ucv, 'Cód. Artículo'), iMar = _hidx(ucv, 'MARCA')
+    ucv.slice(1).forEach((r) => { const a = String(r[iArt] == null ? '' : r[iArt]).trim(); const m = String(r[iMar] || '').trim().toUpperCase(); if (a && m) art2m[a] = m })
+  }
+  const clientes = {}, mesesSet = new Set() // clientes[MARCA][CLIENTE] = [12] unidades 2026
+  if (vpc.length > 1) {
+    const iCli = _hidx(vpc, 'Razón social'), iArt = _hidx(vpc, 'Cód. Artículo'), iQty = _hidx(vpc, 'Cantidad'), iMes = _hidx(vpc, 'MES')
+    vpc.slice(1).forEach((r) => {
+      const mi = _tmMonth(r[iMes]); if (mi < 0) return
+      const cli = String(r[iCli] || '').trim(); if (!cli) return
+      const art = String(r[iArt] == null ? '' : r[iArt]).trim(); const mar = art2m[art]; if (!mar || mar === 'SIN MARCA') return
+      const qty = _tmNum(r[iQty]); const bucket = clientes[mar] || (clientes[mar] = {}); const arr = bucket[cli] || (bucket[cli] = _tmZ())
+      arr[mi] += qty; mesesSet.add(mi)
+    })
+  }
+  const clientesByMarca = {}; Object.keys(clientes).forEach((m) => { clientesByMarca[m] = Object.keys(clientes[m]).sort((a, b) => clientes[m][b].reduce((s, v) => s + v, 0) - clientes[m][a].reduce((s, v) => s + v, 0)) })
+  return { ok: true, clientes, clientesByMarca, mesesConDatos: mesesSet.size, decDone: mesesSet.has(11) }
+}
 // Extrae el año de una celda de fecha en cualquier formato del EBP: "may-25", "ene-26", "2026-01-01", "25/5/2026", serial, etc.
 function _yearOf(cell) {
   const s = String(cell || '').trim()

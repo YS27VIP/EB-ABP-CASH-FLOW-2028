@@ -47,7 +47,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal } from './google'
+import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal, gTumarClientes } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -732,7 +732,7 @@ export default function App() {
 function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, onSaved, headerChip }) {
   const esTot = String(fixedMarca || '').startsWith('TOTAL::')
   // Los VIAJES ya no se llenan dentro de cada rol: se capturan en la pestaña "🧳 Viajes equipo". Por eso se quitan del selector VER del rol (salvo cuando se pide explícito con rubrosOverride, como en Gerencia/Finanzas/Viajes equipo).
-  const rubros = (rubrosOverride || role.rubros.filter((rb) => rb.k !== 'VIAJES')).filter((rb) => !rb.gadmin || esTot) // Gastos admin solo en TOTAL SBU
+  const rubros = (rubrosOverride || role.rubros.filter((rb) => rb.k !== 'VIAJES')).filter((rb) => !rb.gadmin || esTot).filter((rb) => !(empresa === 'TUMAR' && rb.muestras)) // Gastos admin solo en TOTAL SBU · Muestras no aplica en TUMAR
   const [tab, setTab] = useState(0)
   // Borrador local: lo tecleado se recuerda en el navegador aunque no se haya guardado, para no perderlo al cambiar de pestaña.
   const draftKey = `cap_draft_${role.tab || role.label}_${empresa}_${fixedMarca || ''}`
@@ -1129,6 +1129,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
   const [hist, setHist] = useState([])
   const [ventas, setVentas] = useState([])
+  const [tpCli, setTpCli] = useState(null) // TUMAR: clientes reales de TUMAR Performance
   const [producto, setProducto] = useState([])
   const [cats, setCats] = useState({})
   const [temp, setTemp] = useState({})
@@ -5371,6 +5372,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const esInt = (cli) => !!interno[marca + '|' + cli]
   const toggleInt = (cli) => { const next = { ...interno, [marca + '|' + cli]: !esInt(cli) }; setInterno(next); saveEstado(empresa, 'interno', next) }
   const [baseCli, setBaseCli] = useState([]) // catálogo Base_Clientes (copia del EBP)
+  const [tpCli, setTpCli] = useState(null) // TUMAR: clientes + unidades 2026 reales de TUMAR Performance
+  useEffect(() => { if (empresa === 'TUMAR') { (async () => { try { setTpCli(await gTumarClientes()) } catch { } })() } }, [empresa])
   const [nuevoCli, setNuevoCli] = useState('')
   const [buscar, setBuscar] = useState('')
   const topScRef = useRef(null), botScRef = useRef(null) // barra de scroll horizontal (arriba) sincronizada con la tabla
@@ -5414,6 +5417,10 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   hist.forEach((r) => { const cli = r[8], pais = String(r[9] || '').trim(); if (cli && pais && !paisByCli[cli]) paisByCli[cli] = pais })
   hist.forEach((r) => { if (upper(r[3]).indexOf('UNIDAD') < 0) return; if (String(r[1]) !== '2026') return; const mi = mesIdx(r[6]); if (mi < 0) return; const mar = r[5], cli = r[8] || '(sin cliente)', k = cli + '|' + mar; (u2026[k] = u2026[k] || Array(12).fill(0))[mi] += num(r[7]); (cliByMarca[mar] = cliByMarca[mar] || new Set()).add(cli) })
   hist.forEach((r) => { if (upper(r[3]).indexOf('UNIDAD') < 0) return; if (String(r[1]) !== '2025') return; const mi = mesIdx(r[6]); if (mi < 0) return; const mar = r[5], cli = r[8] || '(sin cliente)', k = cli + '|' + mar; (u2025[k] = u2025[k] || Array(12).fill(0))[mi] += num(r[7]) })
+  // TUMAR: el histórico 2026 por cliente viene de TUMAR Performance (unidades reales por marca/mes), no del EBP.
+  if (empresa === 'TUMAR' && tpCli && tpCli.clientes) {
+    Object.entries(tpCli.clientes).forEach(([mar, cls]) => { Object.entries(cls).forEach(([cli, arr]) => { u2026[cli + '|' + mar] = arr.slice(); (cliByMarca[mar] = cliByMarca[mar] || new Set()).add(cli) }) })
+  }
   const histClientes = [...(cliByMarca[marca] || [])].sort((a, b) => (u2026[b + '|' + marca] || []).reduce((s, v) => s + v, 0) - (u2026[a + '|' + marca] || []).reduce((s, v) => s + v, 0))
   const histSet = new Set(histClientes.map((c) => upper(c)))
   const addedFor = (addCli[marca] || []).filter((c) => !histSet.has(upper(c)))
@@ -5429,6 +5436,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const g = (cli) => num(growth[cli + '|' + marca])
   const u26 = (cli, mi) => (u2026[cli + '|' + marca] || [])[mi] || 0
   const u25 = (cli, mi) => (u2025[cli + '|' + marca] || [])[mi] || 0
+  const showY25 = empresa !== 'TUMAR' // TUMAR no usa histórico 2025 (su referencia es el 2026 real del TP)
+  const rsp = showY25 ? 3 : 2 // filas por cliente: 2025+2026+2028 (EB) o solo 2026+2028 (TUMAR)
   const mKey = (cli, mi) => marca + '|' + cli + '|' + mi
   // 2028 = el % de crecimiento define el TOTAL objetivo (sobre 2026). Los meses arrancan VACÍOS:
   // el vendedor decide cómo repartir ese total por mes (celdas amarillas). Debe completarlo.
@@ -5728,24 +5737,23 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
               {clientes.filter((cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0).map((cli) => { const nuevo = esNuevo(cli); const obj = objetivo28(cli); const desc = !nuevo && obj != null && t28(cli) !== obj; return (
                 <Fragment2 key={cli}>
                   <tr>
-                    <td className="l" rowSpan={3}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}{paisByCli[cli] && <div style={{ marginTop: 2, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }} title="País del cliente (Base Clientes SF)">📍 {paisByCli[cli]}</div>}<label style={{ display: 'block', marginTop: 5, fontSize: 11, color: esInt(cli) ? '#b45309' : 'var(--muted)', cursor: 'pointer', fontWeight: 600 }}><input type="checkbox" checked={esInt(cli)} onChange={() => toggleInt(cli)} style={{ marginRight: 5, verticalAlign: 'middle' }} />Interno (intercompañía)</label></td>
-                    <td className="cell" rowSpan={3} style={{ verticalAlign: 'top' }}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}
+                    <td className="l" rowSpan={rsp}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}{paisByCli[cli] && <div style={{ marginTop: 2, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }} title="País del cliente (Base Clientes SF)">📍 {paisByCli[cli]}</div>}<label style={{ display: 'block', marginTop: 5, fontSize: 11, color: esInt(cli) ? '#b45309' : 'var(--muted)', cursor: 'pointer', fontWeight: 600 }}><input type="checkbox" checked={esInt(cli)} onChange={() => toggleInt(cli)} style={{ marginRight: 5, verticalAlign: 'middle' }} />Interno (intercompañía)</label></td>
+                    <td className="cell" rowSpan={rsp} style={{ verticalAlign: 'top' }}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}
                       <div style={{ marginTop: 7, fontSize: 11, lineHeight: 1.45 }}>
                         {!nuevo && <div style={{ color: 'var(--muted)' }} title="Total objetivo = total 2026 × (1 + % crecimiento). Reparte este total en los meses de 2028.">🎯 obj <b>{fmt(obj)}</b></div>}
                         <div style={{ color: desc ? '#b45309' : (t28(cli) > 0 ? '#15803d' : 'var(--muted)'), fontWeight: 700 }} title={nuevo ? 'Total 2028 que llevas repartido por mes.' : (desc ? 'Lo repartido por mes NO cuadra con el objetivo del %. Ajusta los meses.' : 'El reparto por mes cuadra con el objetivo ✓')}><span style={{ fontWeight: 600, color: 'var(--muted)' }}>suma </span><b>{fmt(t28(cli))}</b>{!nuevo && (desc ? ' ⚠' : (t28(cli) > 0 ? ' ✓' : ''))}</div>
                       </div>
                     </td>
-                    <td className="yl">2025</td>
-                    {MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u25(cli, mi))}</td>)}
-                    <td className="ref"><b>{nuevo ? '—' : fmt(t25(cli))}</b></td>
-                    <td className="ref">{nuevo ? '—' : (tot25Marca ? (t25(cli) / tot25Marca * 100).toFixed(1) + '%' : '—')}</td>
+                    {showY25
+                      ? <><td className="yl">2025</td>{MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u25(cli, mi))}</td>)}<td className="ref"><b>{nuevo ? '—' : fmt(t25(cli))}</b></td><td className="ref">{nuevo ? '—' : (tot25Marca ? (t25(cli) / tot25Marca * 100).toFixed(1) + '%' : '—')}</td></>
+                      : <><td className="yl">2026</td>{MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u26(cli, mi))}</td>)}<td className="ref"><b>{nuevo ? '—' : fmt(t26(cli))}</b></td><td className="ref">{nuevo ? '—' : (tot26Marca ? (t26(cli) / tot26Marca * 100).toFixed(1) + '%' : '—')}</td></>}
                   </tr>
-                  <tr>
+                  {showY25 && <tr>
                     <td className="yl">2026</td>
                     {MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u26(cli, mi))}</td>)}
                     <td className="ref"><b>{nuevo ? '—' : fmt(t26(cli))}</b></td>
                     <td className="ref">{nuevo ? '—' : (tot26Marca ? (t26(cli) / tot26Marca * 100).toFixed(1) + '%' : '—')}</td>
-                  </tr>
+                  </tr>}
                   <tr className="proy2028">
                     <td className="yl proyl">2028</td>
                     {MESES.map((_, mi) => { const raw = manual[mKey(cli, mi)]; const show = (raw == null || raw === '' || num(raw) < 0) ? '' : raw; return <td key={mi} className="cell"><input value={show} onChange={(e) => setMan(cli, mi, e.target.value)} inputMode="decimal" placeholder="0" /></td> })}
@@ -5755,8 +5763,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                 </Fragment2>
               ) })}
               {clientes.length > 0 && <>
-                <tr className="grandrow"><td className="l" rowSpan={3} style={{ verticalAlign: 'top' }}>TOTAL {marca}</td><td rowSpan={3} style={{ verticalAlign: 'top', fontSize: 10.5, lineHeight: 1.4, whiteSpace: 'nowrap' }} title="Crecimiento del total 2028 frente a cada año histórico">{(tot26Marca || tot25Marca) ? <div style={{ color: 'var(--muted)', fontWeight: 600, marginBottom: 3 }}>Crec. 2028:</div> : null}{tot26Marca ? <div>vs 2026 <b style={{ color: crecMarca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1)}%</b></div> : null}{tot25Marca ? <div>vs 2025 <b style={{ color: crec25Marca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crec25Marca >= 0 ? '+' : '') + crec25Marca.toFixed(1)}%</b></div> : null}{!(tot26Marca || tot25Marca) ? '—' : null}</td><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></tr>
-                <tr className="grandrow"><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>
+                <tr className="grandrow"><td className="l" rowSpan={rsp} style={{ verticalAlign: 'top' }}>TOTAL {marca}</td><td rowSpan={rsp} style={{ verticalAlign: 'top', fontSize: 10.5, lineHeight: 1.4, whiteSpace: 'nowrap' }} title="Crecimiento del total 2028 frente a cada año histórico">{(tot26Marca || tot25Marca) ? <div style={{ color: 'var(--muted)', fontWeight: 600, marginBottom: 3 }}>Crec. 2028:</div> : null}{tot26Marca ? <div>vs 2026 <b style={{ color: crecMarca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1)}%</b></div> : null}{tot25Marca && showY25 ? <div>vs 2025 <b style={{ color: crec25Marca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crec25Marca >= 0 ? '+' : '') + crec25Marca.toFixed(1)}%</b></div> : null}{!(tot26Marca || tot25Marca) ? '—' : null}</td>{showY25 ? <><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></> : <><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></>}</tr>
+                {showY25 && <tr className="grandrow"><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>}
                 <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td><td className="tot">100%</td></tr>
               </>}
             </tbody>
