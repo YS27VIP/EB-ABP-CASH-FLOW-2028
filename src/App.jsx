@@ -2041,13 +2041,31 @@ function TumarLogistica({ empresa }) {
   const marcas = TUMAR_MARCAS
   const [marca, setMarca] = useState(marcas[0])
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { return {} } })
+  const [ventas, setVentas] = useState([]); const [producto, setProducto] = useState([]); const [cats, setCats] = useState({}); const [tumar, setTumar] = useState(null)
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null); const [savedAt, setSavedAt] = useState(null)
+  useEffect(() => {
+    (async () => {
+      try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
+      try { const j = await gReadTab('Cap_Producto'); if (j && j.ok && j.values) setProducto(j.values.slice(1)) } catch { }
+      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const o = {}; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const c = r[1], mar = r[3]; if (!mar || !c) return; (o[mar] = o[mar] || []).push(c) }); setCats(o) } } catch { }
+      try { setTumar(await gTumarReal()) } catch { }
+    })()
+  }, [empresa])
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   const g = (k) => num(data[k])
   const lineTot = (lk) => MESES.reduce((a, _, m) => a + g(`T|${marca}|${lk}|${m}`), 0)
   const totMes = (m) => TUMAR_LOG_LINES.reduce((a, l) => a + g(`T|${marca}|${l.k}|${m}`), 0)
   const marcaTot = (mca) => MESES.reduce((a, _, m) => a + TUMAR_LOG_LINES.reduce((s, l) => s + g(`T|${mca}|${l.k}|${m}`), 0), 0)
   const granTot = marcas.reduce((a, mca) => a + marcaTot(mca), 0)
+  // Venta neta 2028 (plan) por marca — para el peso del costo logístico sobre la venta.
+  const vn28 = (mca) => { try { return realAupAuc(empresa, mca, ventas, producto, cats[mca] || []).ventaMes.reduce((a, b) => a + b, 0) } catch { return 0 } }
+  const granVN28 = marcas.reduce((a, mca) => a + vn28(mca), 0)
+  const peso = (cost, vn) => vn > 0 ? (cost / vn * 100).toFixed(1) + '%' : '—'
+  // Real 2026 (TUMAR Performance, USD): logística total y venta neta 2026.
+  const sum12 = (a) => (a || []).reduce((x, y) => x + y, 0)
+  const log26 = tumar ? sum12(tumar.lines.logistica) : 0
+  const vn26 = tumar ? sum12(tumar.totalVenta) : 0
+  const lbl26 = tumar ? (tumar.decDone ? 'FY2026' : 'YTD 2026') : 'Real 2026'
   async function guardar() {
     setSaving(true)
     try { await gSaveEstado(empresa, 'logcost', data); try { localStorage.setItem(`logcost_${empresa}`, JSON.stringify(data)) } catch { }; const t = new Date(); setSavedAt(t.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (costos logísticos).' }) }
@@ -2074,16 +2092,26 @@ function TumarLogistica({ empresa }) {
           {TUMAR_LOG_LINES.map((l) => (
             <tr key={l.k}><td className="l" style={{ color: l.color, fontWeight: 700 }}>{l.label}</td>{MESES.map((_, m) => <td key={m} className="cell"><input className="fillin" value={data[`T|${marca}|${l.k}|${m}`] ?? ''} onChange={(e) => set(`T|${marca}|${l.k}|${m}`, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot" style={{ color: l.color, fontWeight: 700 }}>{fmt(lineTot(l.k))}</td></tr>
           ))}
-          <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">= Total logístico {marca}</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(totMes(m))}</td>)}<td className="tot">{fmt(marcaTot(marca))}</td></tr>
+          <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">= Total costo logístico {marca}</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(totMes(m))}</td>)}<td className="tot">{fmt(marcaTot(marca))}</td></tr>
         </tbody>
       </table></div>
 
-      <h3 style={{ marginTop: 22 }}>Consolidado logístico — {empresa} <span className="unit">(total por marca · impacta Cash Flow y P&L)</span></h3>
-      <div className="tablewrap"><table style={{ width: 'auto', minWidth: 360 }}>
-        <thead><tr><th className="l">Marca</th><th>Total logístico ($)</th></tr></thead>
+      <h3 style={{ marginTop: 22 }}>Consolidado logístico — {empresa} <span className="unit">(total por marca · peso sobre la venta neta)</span></h3>
+      <div className="sub">El <b>gran total</b> es lo que impacta el <b>Cash Flow</b> y el <b>P&L</b>. El <b>peso</b> es el costo logístico 2028 sobre la venta neta 2028, comparado con el real <b>{lbl26}</b> de TUMAR Performance.</div>
+      <div className="tablewrap"><table style={{ width: 'auto', minWidth: 560 }}>
+        <thead><tr><th className="l">Marca</th><th>Total logístico 2028 ($)</th><th>Venta neta 2028 ($)</th><th title="Costo logístico 2028 ÷ venta neta 2028">Peso % 2028</th></tr></thead>
         <tbody>
-          {marcas.map((mca) => <tr key={mca}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td className="tot">{fmt(marcaTot(mca))}</td></tr>)}
-          <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">GRAN TOTAL</td><td className="tot">{fmt(granTot)}</td></tr>
+          {marcas.map((mca) => { const t = marcaTot(mca), v = vn28(mca); return <tr key={mca}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td className="tot">{fmt(t)}</td><td className="tot" style={{ color: 'var(--muted)' }}>{fmt(v)}</td><td className="tot help-bulb" style={{ color: '#1d4ed8' }} title={`$${fmt(t)} ÷ $${fmt(v)} = ${peso(t, v)}`}>{peso(t, v)}</td></tr> })}
+          <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">GRAN TOTAL</td><td className="tot">{fmt(granTot)}</td><td className="tot">{fmt(granVN28)}</td><td className="tot help-bulb" title={`$${fmt(granTot)} ÷ $${fmt(granVN28)} = ${peso(granTot, granVN28)}`}>{peso(granTot, granVN28)}</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3 style={{ marginTop: 22 }}>Peso logístico vs venta neta — 2028 vs {lbl26} <span className="unit">(🪞 real de TUMAR Performance, USD)</span></h3>
+      <div className="tablewrap"><table style={{ width: 'auto', minWidth: 520 }}>
+        <thead><tr><th className="l">Período</th><th>Costo logístico ($)</th><th>Venta neta ($)</th><th>Peso % s/venta</th></tr></thead>
+        <tbody>
+          <tr><td className="l" style={{ fontWeight: 700, color: '#1d4ed8' }}>Plan 2028</td><td className="tot">{fmt(granTot)}</td><td className="tot">{fmt(granVN28)}</td><td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{peso(granTot, granVN28)}</td></tr>
+          <tr style={{ background: '#fffdf2' }}><td className="l" style={{ fontWeight: 700, color: '#8a6d1a' }}>Real {lbl26}</td><td className="tot">{log26 ? fmt(log26) : '—'}</td><td className="tot">{vn26 ? fmt(vn26) : '—'}</td><td className="tot" style={{ color: '#8a6d1a', fontWeight: 700 }}>{peso(log26, vn26)}</td></tr>
         </tbody>
       </table></div>
     </div>
@@ -3791,7 +3819,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   const [producto, setProducto] = useState([])
   const [cats, setCats] = useState({})
   const [mk, setMk] = useState([]); const [log, setLog] = useState([]); const [dir, setDir] = useState([]); const [finR, setFinR] = useState([])
-  const [hist, setHist] = useState([]); const [plan, setPlan] = useState({})
+  const [hist, setHist] = useState([]); const [plan, setPlan] = useState({}); const [tumar, setTumar] = useState(null)
   const [cfSbu, setCfSbu] = useState(() => Object.keys(sbus)[0] || '')
   const [cargando, setCargando] = useState(true)
   useEffect(() => {
@@ -3804,9 +3832,12 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
       setMk(await g('Cap_Marketing')); setLog(await g('Cap_Logistica')); setDir(await g('Cap_Director')); setFinR(await g('Cap_Finanzas'))
       try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
       try { const jp = await gPlan2027(); if (jp && jp.map) setPlan(jp.map) } catch { }
+      if (empresa === 'TUMAR') { try { setTumar(await gTumarReal()) } catch { } }
       setCargando(false)
     })()
   }, [empresa])
+  const sum12 = (a) => (a || []).reduce((x, y) => x + y, 0)
+  const T = empresa === 'TUMAR' && tumar ? tumar : null
   // FY (histórico) y ABP2027 (PLAN) para un conjunto de marcas
   const fySet = (ms, year, tipo) => { let s = 0; hist.forEach((r) => { if (String(r[1]) !== String(year)) return; if (!ms.some((m) => upper(m) === upper(r[5]))) return; if (String(r[3] || '').toUpperCase().indexOf(tipo) < 0) return; s += num(r[7]) }); return s }
   const abpSet = (ms, campo) => ms.reduce((a, m) => { const o = plan[upper(m)]; return a + (o ? o[campo] || 0 : 0) }, 0)
@@ -3875,6 +3906,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   // Energy Brands: Retail es una 4ª unidad (tiendas propias · venta intercompañía). Aún sin datos (pendiente), va en cero.
   if (!soloSBU && empresa === 'ENERGY BRANDS') sbuList.push({ s: 'Retail', a: { unidades: 0, ventaNeta: 0, costo: 0, comisiones: 0, logistica: 0, marketing: 0, viajes: 0, margenBruto: 0, brand: 0 }, pend: true })
   const totAgg = sbuList.reduce((acc, { a }) => { Object.keys(a).forEach((k) => acc[k] = (acc[k] || 0) + a[k]); return acc }, {})
+  const multiSBU = sbuList.length > 1 // con una sola SBU, la columna TOTAL duplicaría a la SBU → se omite
   const ventaTot = totAgg.ventaNeta || 0
   const gastosDe = (a) => ventaTot > 0 ? gadminAnual * (a.ventaNeta || 0) / ventaTot : (a === totAgg ? gadminAnual : 0)
   // Otros gastos de empresa (no SBU ni Retail): viajes de Finanzas + Admin + Procesos (los captura Gerencia). Se prorratean por peso de venta.
@@ -3882,17 +3914,22 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   const otrosAnual = finR.reduce((a, r) => (upper(r[0]) === upper(empresa) && GVIAJES_MARCAS.includes(String(r[3] || '').toUpperCase()) && esVi(String(r[1] || ''))) ? a + MESES.reduce((s, _, m) => s + num(r[4 + m]), 0) : a, 0)
   const otrosDe = (a) => ventaTot > 0 ? otrosAnual * (a.ventaNeta || 0) / ventaTot : (a === totAgg ? otrosAnual : 0)
   const allM = sbuList.flatMap(({ s }) => sbus[s] || [])
+  // TUMAR: la columna de Real 2026 viene de TUMAR Performance (gTumarReal, en USD), no del EBP.
+  const v26 = T ? sum12(T.totalVenta) : fySet(allM, 2026, 'VENTA')
+  const c26 = T ? sum12(T.totalCosto) : fySet(allM, 2026, 'COSTO')
+  const com26 = T ? sum12(T.lines.comisiones) : null
+  const log26 = T ? sum12(T.lines.logistica) : null
   const filasG = [
-    { k: 'Unidades', g: (a) => a.unidades },
-    { k: 'Venta Neta', g: (a) => a.ventaNeta, strong: true, fy26: fySet(allM, 2026, 'VENTA'), fy25: fySet(allM, 2025, 'VENTA'), abp27: abpSet(allM, 'venta') },
-    { k: '(−) Costo', g: (a) => a.costo, fy26: fySet(allM, 2026, 'COSTO'), fy25: fySet(allM, 2025, 'COSTO'), abp27: abpSet(allM, 'costo') },
-    { k: '(−) Comisiones', g: (a) => a.comisiones },
-    { k: '(−) Logística', g: (a) => a.logistica },
-    { k: '= Margen Bruto', g: (a) => a.margenBruto, strong: true, fy26: fySet(allM, 2026, 'VENTA') - fySet(allM, 2026, 'COSTO'), fy25: fySet(allM, 2025, 'VENTA') - fySet(allM, 2025, 'COSTO'), abp27: abpSet(allM, 'venta') - abpSet(allM, 'costo') },
-    { k: '(−) Marketing', g: (a) => a.marketing },
-    { k: '(−) Viajes', g: (a) => a.viajes },
+    { k: 'Unidades', g: (a) => a.unidades, fy26: T ? sum12(T.totalUnid) : null },
+    { k: 'Venta Neta', g: (a) => a.ventaNeta, strong: true, fy26: v26, fy25: fySet(allM, 2025, 'VENTA'), abp27: abpSet(allM, 'venta') },
+    { k: '(−) Costo', g: (a) => a.costo, fy26: c26, fy25: fySet(allM, 2025, 'COSTO'), abp27: abpSet(allM, 'costo') },
+    { k: '(−) Comisiones', g: (a) => a.comisiones, fy26: com26 },
+    { k: '(−) Logística', g: (a) => a.logistica, fy26: log26 },
+    { k: '= Margen Bruto', g: (a) => a.margenBruto, strong: true, fy26: T ? (v26 - c26 - (com26 || 0) - (log26 || 0)) : (fySet(allM, 2026, 'VENTA') - fySet(allM, 2026, 'COSTO')), fy25: fySet(allM, 2025, 'VENTA') - fySet(allM, 2025, 'COSTO'), abp27: abpSet(allM, 'venta') - abpSet(allM, 'costo') },
+    { k: '(−) Marketing', g: (a) => a.marketing, fy26: T ? sum12(T.lines.marketing) : null },
+    { k: '(−) Viajes', g: (a) => a.viajes, fy26: T ? sum12(T.lines.viajes) : null },
     { k: '= Contribución de la SBU', g: (a) => a.brand, strong: true },
-    { k: '(−) Gastos administrativos', g: (a) => gastosDe(a) },
+    { k: '(−) Gastos administrativos', g: (a) => gastosDe(a), fy26: T ? sum12(T.lines.admin) : null },
     { k: '(−) Otros gastos', g: (a) => otrosDe(a), help: 'Viajes de Finanzas + Admin + Procesos (nivel empresa, no SBU ni Retail). Prorrateados por peso de venta de cada SBU.' },
     { k: '🎯 = Resultado Operativo', g: (a) => (a.brand || 0) - gastosDe(a) - otrosDe(a), strong: true },
   ]
@@ -3909,9 +3946,9 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
         {HOVERTIP}
         <div className="toolbar" style={{ marginBottom: 8 }}><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar</>)}</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
-          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}<th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th><th className="yb">ABP2027</th><th className="yb">Δ 28·27</th><th className="ya">{lbl26(hist)}</th><th className="ya">Δ 28·26</th><th className="ya">FY2025</th><th className="ya">Δ 28·25</th></tr></thead>
+          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}{multiSBU && <th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th>}<th className="yb">ABP2027</th><th className="yb">Δ 28·27</th><th className="ya">{T ? (T.decDone ? 'FY2026' : 'YTD 2026') : lbl26(hist)}</th><th className="ya">Δ 28·26</th><th className="ya">FY2025</th><th className="ya">Δ 28·25</th></tr></thead>
           <tbody>
-            {filasG.map((f) => { const cur = f.g(totAgg); return <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}{f.help && Q(f.help)}</td>{sbuList.map(({ s, a }) => <td key={s} className="tot" style={cellStyle} title={brkSBU(f, sbus[s])}>{fmt(f.g(a))}</td>)}<td className="tot help-bulb" title={'Consolidado = suma de las SBU:\n' + sbuList.map(({ s, a }) => `${s}: ${fmt(f.g(a))}`).join('\n')}>{fmt(cur)}</td>
+            {filasG.map((f) => { const cur = f.g(totAgg); return <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}{f.help && Q(f.help)}</td>{sbuList.map(({ s, a }) => <td key={s} className="tot" style={cellStyle} title={brkSBU(f, sbus[s])}>{fmt(f.g(a))}</td>)}{multiSBU && <td className="tot help-bulb" title={'Consolidado = suma de las SBU:\n' + sbuList.map(({ s, a }) => `${s}: ${fmt(f.g(a))}`).join('\n')}>{fmt(cur)}</td>}
               <td className="tot yb">{f.abp27 != null ? fmt(f.abp27) : '—'}</td>{f.abp27 != null ? dCellG(cur, f.abp27, 'yb') : <td className="tot yb">—</td>}
               <td className="tot ya">{f.fy26 != null ? fmt(f.fy26) : '—'}</td>{f.fy26 != null ? dCellG(cur, f.fy26, 'ya') : <td className="tot ya">—</td>}
               <td className="tot ya">{f.fy25 != null ? fmt(f.fy25) : '—'}</td>{f.fy25 != null ? dCellG(cur, f.fy25, 'ya') : <td className="tot ya">—</td>}
@@ -3929,7 +3966,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
         {cfSbu && <CashFlowForm key={'gcf' + cfSbu} role={{ label: 'Cash Flow', tab: 'Cap_Finanzas' }} rubro={{ k: 'CASH FLOW', cash: true }} usuario="" empresa={empresa} sbus={cfSbu === '__ALL__' ? sbus : { [cfSbu]: sbus[cfSbu] || [] }} fixedMarca={`TOTAL::${cfSbu}`} />}
       </div>}
 
-      {!soloSBU && !cargando && <div className="panel" style={{ marginTop: 10 }}>
+      {!soloSBU && !cargando && empresa !== 'TUMAR' && <div className="panel" style={{ marginTop: 10 }}>
         <h3>🧳 Viajes de Gerencia — {empresa} <span className="unit">(nivel empresa · impactan el Cash Flow ▣ TODAS)</span></h3>
         <div className="sub">Captura los <b>viajes admin</b> y <b>viajes de procesos</b> (misma vista que cada equipo). Los <b>viajes de Finanzas</b> se llenan en Finanzas y salen como <b>espejo</b> aquí. Todos — más los de cada SBU y Retail (cuando se cree) — impactan el <b>Cash Flow ▣ TODAS</b> de arriba.</div>
         <div style={{ fontWeight: 800, margin: '12px 0 2px', color: '#6b21a8', fontSize: 14 }}>① Viajes admin</div>
