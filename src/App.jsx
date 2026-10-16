@@ -1222,7 +1222,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     if (concepto === 'Gastos administrativos generales') return 0 // PENDIENTE: definir la captura de gastos administrativos generales (corporativos, prorrateados por venta)
     if (concepto === 'Viajes') { const base = isTotal ? sbuMarcas.reduce((s, m) => s + viajesMes(m)[mi], 0) : viajesMes(marca)[mi]; return base + ((isTotal && sbu === '__ALL__') ? gViajesMes(mi) : 0) } // en el consolidado de EMPRESA (TODAS) se suman los viajes de Gerencia (Finanzas/Admin/Procesos)
     if (concepto === 'Marketing') return isTotal ? sbuMarcas.reduce((s, m) => s + marketingMes(m)[mi], 0) : marketingMes(marca)[mi]
-    if (concepto === 'Logística') { if (empresa === 'TUMAR') return isTotal ? tumarLogMesArr(logcost)[mi] : 0; return isTotal ? sbuMarcas.reduce((s, m) => s + logisticaMes(m)[mi], 0) : logisticaMes(marca)[mi] } // TUMAR: logística es un total de empresa (3 líneas manuales), no por marca
+    if (concepto === 'Logística') { if (empresa === 'TUMAR') return isTotal ? tumarLogAllArr(logcost, sbuMarcas)[mi] : tumarLogMarcaArr(logcost, marca)[mi]; return isTotal ? sbuMarcas.reduce((s, m) => s + logisticaMes(m)[mi], 0) : logisticaMes(marca)[mi] } // TUMAR: logística por marca (3 líneas manuales); el total suma las marcas
     return isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
   }
   // Comisiones (del Director): venta externa (Unid×AUP) × % + corporativa (compras × $/ud en HOKA/UGG).
@@ -2025,23 +2025,29 @@ function ReporteScreen({ empresa, sbus }) {
 }
 
 /* ===== LOGÍSTICA (menú): detalle consolidado por SBU y marca + referencia ABP y real 2026 del EBP ===== */
-/* ===== TUMAR · Logística: 3 líneas editables (se llenan a mano, en amarillo) + total que impacta Cash Flow y P&L ===== */
+/* ===== TUMAR · Logística: por MARCA, 3 líneas editables (en amarillo) + total; el gran total impacta Cash Flow y P&L ===== */
 const TUMAR_LOG_LINES = [
   { k: 'VTA', label: 'Costo logístico de la venta', color: '#1d4ed8' },
   { k: 'MUE', label: 'Costo de muestras', color: '#0f766e' },
   { k: 'MANT', label: 'Costo de mantenimiento de stock', color: '#b45309' },
 ]
-// Total logístico mensual de TUMAR (suma de las 3 líneas) — fuente única para Cash Flow y P&L.
-function tumarLogMesArr(logcost) { return MESES.map((_, m) => TUMAR_LOG_LINES.reduce((a, l) => a + num(logcost[`T|${l.k}|${m}`]), 0)) }
-function tumarLogTotal() { try { const d = JSON.parse(localStorage.getItem('logcost_TUMAR') || '{}'); return tumarLogMesArr(d).reduce((a, b) => a + b, 0) } catch { return 0 } }
+// Total logístico mensual de UNA marca (suma de las 3 líneas de esa marca).
+function tumarLogMarcaArr(logcost, mca) { return MESES.map((_, m) => TUMAR_LOG_LINES.reduce((a, l) => a + num(logcost[`T|${mca}|${l.k}|${m}`]), 0)) }
+// Total anual de UNA marca (lee localStorage) — para el P&L por marca.
+function tumarLogMarcaTotal(mca) { try { const d = JSON.parse(localStorage.getItem('logcost_TUMAR') || '{}'); return tumarLogMarcaArr(d, mca).reduce((a, b) => a + b, 0) } catch { return 0 } }
+// Total logístico mensual de TODAS las marcas (gran total) — para el Cash Flow.
+function tumarLogAllArr(logcost, marcas) { return MESES.map((_, m) => (marcas || []).reduce((a, mca) => a + TUMAR_LOG_LINES.reduce((s, l) => s + num(logcost[`T|${mca}|${l.k}|${m}`]), 0), 0)) }
 function TumarLogistica({ empresa }) {
+  const marcas = TUMAR_MARCAS
+  const [marca, setMarca] = useState(marcas[0])
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null); const [savedAt, setSavedAt] = useState(null)
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   const g = (k) => num(data[k])
-  const lineTot = (lk) => MESES.reduce((a, _, m) => a + g(`T|${lk}|${m}`), 0)
-  const totMes = (m) => TUMAR_LOG_LINES.reduce((a, l) => a + g(`T|${l.k}|${m}`), 0)
-  const granTot = MESES.reduce((a, _, m) => a + totMes(m), 0)
+  const lineTot = (lk) => MESES.reduce((a, _, m) => a + g(`T|${marca}|${lk}|${m}`), 0)
+  const totMes = (m) => TUMAR_LOG_LINES.reduce((a, l) => a + g(`T|${marca}|${l.k}|${m}`), 0)
+  const marcaTot = (mca) => MESES.reduce((a, _, m) => a + TUMAR_LOG_LINES.reduce((s, l) => s + g(`T|${mca}|${l.k}|${m}`), 0), 0)
+  const granTot = marcas.reduce((a, mca) => a + marcaTot(mca), 0)
   async function guardar() {
     setSaving(true)
     try { await gSaveEstado(empresa, 'logcost', data); try { localStorage.setItem(`logcost_${empresa}`, JSON.stringify(data)) } catch { }; const t = new Date(); setSavedAt(t.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (costos logísticos).' }) }
@@ -2050,7 +2056,7 @@ function TumarLogistica({ empresa }) {
   }
   return (
     <div className="panel">
-      <div className="toolbar" style={{ marginBottom: 8, alignItems: 'center' }}>
+      <div className="toolbar" style={{ marginBottom: 8, alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
         <span className="empchip" style={{ marginLeft: 0, background: '#b45309' }}>🚚 Logística</span>
         <div className="spacer"></div>
         {savedAt && <span className="empchip" style={{ background: 'var(--ok)', marginRight: 8, fontSize: 11.5 }}>✓ Guardado {savedAt}</span>}
@@ -2058,14 +2064,26 @@ function TumarLogistica({ empresa }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <h3>Costos logísticos — {empresa}{M$}</h3>
-      <div className="sub">Llena a mano cada mes las <b>tres líneas</b> de costo logístico (en <b style={{ color: '#8a6d1a' }}>amarillo</b>). La última fila es el <b>total logístico</b> (la suma de las tres) y es lo que impacta el <b>Cash Flow</b> y el <b>P&L</b>.</div>
+      <div className="sub">El costo logístico se carga <b>por marca</b>: elige la marca y llena a mano cada mes sus <b>tres líneas</b> (en <b style={{ color: '#8a6d1a' }}>amarillo</b>). El <b>total de la marca</b> se suma solo, y el <b>gran total</b> de todas las marcas es lo que impacta el <b>Cash Flow</b> y el <b>P&L</b>.</div>
+      <div className="toolbar" style={{ margin: '10px 0', flexWrap: 'wrap', gap: 6 }}>
+        {marcas.map((mca) => { const on = mca === marca; const c = marcaColor(mca); return <button key={mca} className="btn" onClick={() => setMarca(mca)} style={on ? { background: c, color: '#fff', borderColor: c } : { borderColor: c }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: on ? '#fff' : c, marginRight: 6, verticalAlign: 'middle' }}></span>{mca} <span style={{ opacity: .8, fontWeight: 400 }}>· {fmt(marcaTot(mca))}</span></button> })}
+      </div>
       <div className="tablewrap"><table className="vfix logcost-tbl"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-        <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+        <thead><tr><th className="l">Concepto — {marca}</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
           {TUMAR_LOG_LINES.map((l) => (
-            <tr key={l.k}><td className="l" style={{ color: l.color, fontWeight: 700 }}>{l.label}</td>{MESES.map((_, m) => <td key={m} className="cell"><input className="fillin" value={data[`T|${l.k}|${m}`] ?? ''} onChange={(e) => set(`T|${l.k}|${m}`, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot" style={{ color: l.color, fontWeight: 700 }}>{fmt(lineTot(l.k))}</td></tr>
+            <tr key={l.k}><td className="l" style={{ color: l.color, fontWeight: 700 }}>{l.label}</td>{MESES.map((_, m) => <td key={m} className="cell"><input className="fillin" value={data[`T|${marca}|${l.k}|${m}`] ?? ''} onChange={(e) => set(`T|${marca}|${l.k}|${m}`, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot" style={{ color: l.color, fontWeight: 700 }}>{fmt(lineTot(l.k))}</td></tr>
           ))}
-          <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">= TOTAL costo logístico <span className="unit" style={{ fontWeight: 400 }}>(impacta Cash Flow y P&L)</span></td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(totMes(m))}</td>)}<td className="tot">{fmt(granTot)}</td></tr>
+          <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">= Total logístico {marca}</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(totMes(m))}</td>)}<td className="tot">{fmt(marcaTot(marca))}</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3 style={{ marginTop: 22 }}>Consolidado logístico — {empresa} <span className="unit">(total por marca · impacta Cash Flow y P&L)</span></h3>
+      <div className="tablewrap"><table style={{ width: 'auto', minWidth: 360 }}>
+        <thead><tr><th className="l">Marca</th><th>Total logístico ($)</th></tr></thead>
+        <tbody>
+          {marcas.map((mca) => <tr key={mca}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mca), marginRight: 7 }}></span>{mca}</td><td className="tot">{fmt(marcaTot(mca))}</td></tr>)}
+          <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">GRAN TOTAL</td><td className="tot">{fmt(granTot)}</td></tr>
         </tbody>
       </table></div>
     </div>
@@ -3798,12 +3816,12 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
     const catNames = (cats[mca] || []).map((c) => c.cat)
     const r = realAupAuc(empresa, mca, ventas, producto, catNames)
     const unidades = r.totalUnits.reduce((a, b) => a + b, 0), ventaNeta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0)
-    const logistica = sumTabG(log, mca), marketing = sumTabG(mk, mca)
+    const logistica = empresa === 'TUMAR' ? tumarLogMarcaTotal(mca) : sumTabG(log, mca), marketing = sumTabG(mk, mca)
     const viajes = [ventas, producto, mk, log, dir].reduce((t, rows) => t + sumTabG(rows, mca, esVi), 0)
     const comisiones = 0, margenBruto = ventaNeta - costo - comisiones - logistica, brand = margenBruto - marketing - viajes
     return { unidades, ventaNeta, costo, comisiones, logistica, marketing, viajes, margenBruto, brand }
   }
-  const sbuAgg = (ms) => { const a = (ms || []).reduce((acc, m) => { const c = fullCalc(m); Object.keys(c).forEach((k) => acc[k] = (acc[k] || 0) + c[k]); return acc }, {}); if (empresa === 'TUMAR') { a.logistica = tumarLogTotal(); a.margenBruto = (a.ventaNeta || 0) - (a.costo || 0) - (a.comisiones || 0) - a.logistica; a.brand = a.margenBruto - (a.marketing || 0) - (a.viajes || 0) } return a }
+  const sbuAgg = (ms) => (ms || []).reduce((a, m) => { const c = fullCalc(m); Object.keys(c).forEach((k) => a[k] = (a[k] || 0) + c[k]); return a }, {})
   const gadminAnual = (() => { try { const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } return cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { return 0 } })()
   const [ppt, setPpt] = useState(false)
   async function descargarPptx() {
@@ -4221,7 +4239,7 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
     const catNames = (P.cats[mca] || []).map((c) => c.cat)
     const r = realAupAuc(empresa, mca, P.ven, P.prod, catNames)
     const unidades = r.totalUnits.reduce((a, b) => a + b, 0), ventaNeta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0)
-    const comisiones = 0, logistica = sumTab(P.log, mca), marketing = sumTab(P.mk, mca)
+    const comisiones = 0, logistica = empresa === 'TUMAR' ? tumarLogMarcaTotal(mca) : sumTab(P.log, mca), marketing = sumTab(P.mk, mca)
     const viajes = [P.ven, P.prod, P.mk, P.log, P.dir].reduce((t, rows) => t + sumTab(rows, mca, esViaje), 0)
     const margenBruto = ventaNeta - costo - comisiones - logistica
     const brand = margenBruto - marketing - viajes
@@ -4229,8 +4247,6 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   }
   const cols = (marcasSBU || []).map((m) => ({ m, v: calc(m) }))
   const tot = cols.reduce((acc, { v }) => { Object.keys(v).forEach((k) => acc[k] = (acc[k] || 0) + v[k]); return acc }, {})
-  // TUMAR: la logística del plan es el total de empresa (3 líneas que llena Logística), no la suma por marca.
-  if (empresa === 'TUMAR') { tot.logistica = tumarLogTotal(); tot.margenBruto = (tot.ventaNeta || 0) - (tot.costo || 0) - (tot.comisiones || 0) - tot.logistica; tot.brand = tot.margenBruto - (tot.marketing || 0) - (tot.viajes || 0) }
 
   // FY histórico (solo Venta/Costo/Margen): suma de las marcas de la SBU por año
   const fy = (year, tipo) => { let s = 0; P.hist.forEach((r) => { if (String(r[1]) !== String(year)) return; if (!(marcasSBU || []).some((m) => upper(m) === upper(r[5]))) return; if (String(r[3] || '').toUpperCase().indexOf(tipo) < 0) return; s += num(r[7]) }); return s }
