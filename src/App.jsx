@@ -5815,7 +5815,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         const coMes = MESES.map((_, mi) => catList.reduce((a, c) => a + coCat(c.cat, mi), 0))
         const coTot = coMes.reduce((a, b) => a + b, 0)
         return (
-          <div className="panel">
+          <div className="panel tight">
             <h3>Costo 2028 por categoría y mes — {marca}{M$} <span className="unit">(dinero $)</span></h3>
             <div className="sub"><b>Costo = Unidades × AUC ponderado.</b> <span style={{ color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre un número para ver el cálculo.</span></div>
             <div className="tablewrap">
@@ -5849,7 +5849,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         return (
           <>
           {/* MARGEN $ */}
-          <div className="panel">
+          <div className="panel tight">
             <h3>Margen 2028 por categoría y mes — {marca}{M$} <span className="unit">($ dinero)</span></h3>
             <div className="sub"><b>Margen del mes = Venta Neta − Costo</b> (por categoría).</div><div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
             <div className="tablewrap">
@@ -5864,7 +5864,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
             </div>
           </div>
           {/* MARGEN % — dos lecturas */}
-          <div className="panel">
+          <div className="panel tight">
             <h3>Margen 2028 en % — {marca}</h3>
             <div className="sub">Dos lecturas, separadas con una línea suave: <b style={{ color: '#0f766e' }}>① Margen bruto %</b> = Margen ÷ Venta <i>de la categoría</i> (qué tan rentable es). <b style={{ color: '#1d4ed8' }}>② Peso del margen en la venta</b> = Margen $ ÷ Venta total de la marca (cuánto pesa ese margen en $ frente a toda la venta). <span className="unit">Pasa el cursor por cualquier % para ver el cálculo.</span></div>
             <div className="tablewrap">
@@ -5894,7 +5894,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
             const lcCatTot = (cat) => MESES.reduce((a, _, mi) => a + lcCat(cat, mi), 0)
             const mlCatTot = (cat) => MESES.reduce((a, _, mi) => a + mlCat(cat, mi), 0)
             return <>
-              <div className="panel">
+              <div className="panel tight">
                 <h3>Costo landed 2028 por categoría y mes — {marca}{M$} <span className="unit">($ dinero)</span></h3>
                 <div className="sub"><b>Costo landed = Costo × (1 + % logístico de la venta)</b>. El <b>% logístico ({fmt(pctLog)}%)</b> lo define Logística.{pctLog ? '' : ' Si sale igual al costo, Logística aún no ha capturado el % logístico de ' + marca + '.'}</div>
                 <div className="tablewrap">
@@ -5907,7 +5907,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                   </table>
                 </div>
               </div>
-              <div className="panel">
+              <div className="panel tight">
                 <h3>Margen landed 2028 por categoría y mes — {marca}{M$} <span className="unit">($ dinero)</span></h3>
                 <div className="sub"><b>Margen landed = Venta Neta − Costo landed</b> (por categoría).</div>
                 <div className="tablewrap">
@@ -5920,7 +5920,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                   </table>
                 </div>
               </div>
-              <div className="panel">
+              <div className="panel tight">
                 <h3>Margen landed 2028 en % — {marca}</h3>
                 <div className="sub">Mismo criterio que el margen bruto, pero restando el <b>costo landed</b>: <b style={{ color: '#b45309' }}>① Margen landed %</b> = (Venta − Costo landed) ÷ Venta <i>de la categoría</i>. <b style={{ color: '#1d4ed8' }}>② Peso del margen landed en la venta</b> = Margen landed $ ÷ Venta total de la marca. <span className="unit">Pasa el cursor por cualquier % para ver el cálculo.</span></div>
                 <div className="tablewrap">

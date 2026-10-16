@@ -34,6 +34,8 @@ select:focus{border-color:var(--odoo);outline:none}
 .kpi .s{font-size:12px;color:var(--muted);margin-top:2px}
 
 .panel{background:var(--card);border:1.5px solid #c4ccd4;border-left:6px solid var(--accent,var(--odoo));border-radius:12px;padding:16px 18px;margin-bottom:26px;box-shadow:0 3px 14px rgba(0,0,0,.09)}
+/* Bloques que pertenecen a un mismo sub-grupo (ej. Bruto / Landed): van pegados para leerse como uno solo. */
+.panel.tight{margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,.06);border-color:#dbe1e8}
 .panel h3{margin:0 0 6px;font-size:15px;padding:2px 0 8px 0;border-bottom:1px solid var(--line)}
 .panel .sub{color:var(--muted);font-size:12.5px;margin-bottom:14px}
 /* Grupo de un rol en Comercial: la línea continua de la izquierda identifica a la persona; los paneles internos no llevan borde de color */
