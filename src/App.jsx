@@ -4799,7 +4799,7 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
     }
     return (
       <div className="tablewrap" style={{ marginTop: 10 }}><table style={{ width: '100%' }}>
-        <thead><tr><th className="l">{label}</th>{th('26', '2026')}{th('p26', 'Peso 26')}{th('28', '2028')}{th('p28', 'Peso 28')}{th('crec', 'Crec.')}<th className="l" style={{ width: '34%' }}>💡 Comentario</th></tr></thead>
+        <thead><tr><th className="l">{label}</th>{th('26', '2026')}{th('p26', 'Peso 26')}{th('28', '2028')}{th('p28', 'Peso 28')}{th('crec', 'Crec.')}<th className="l" style={{ width: '34%' }}>💡😊 Tips</th></tr></thead>
         <tbody>
           {rows.length === 0 && <tr><td className="l" colSpan={7}>Sin datos.</td></tr>}
           {rows.map(({ k, o, c }) => <tr key={k}><td className="l">{k}</td><td className="tot" style={{ color: 'var(--muted)' }}>{money(val26(o))}</td><td className="tot" style={{ color: 'var(--muted)' }}>{p26(o).toFixed(1)}%</td><td className="tot" style={{ fontWeight: 700 }}>{money(val28(o))}</td><td className="tot" style={{ fontWeight: 700 }}>{p28(o).toFixed(1)}%</td><td className="tot" style={{ fontWeight: 800, color: crecCol(c) }} title={c == null ? 'Nuevo (sin 2026)' : `2028 ${money(val28(o))} vs 2026 ${money(val26(o))}`}>{pctc(c)}</td><td className="l" style={{ fontSize: 11.5, color: '#475569', lineHeight: 1.3, whiteSpace: 'normal' }}>{comentario(k, o, c)}</td></tr>)}
