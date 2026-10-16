@@ -6004,7 +6004,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         )
       })()}
 
-      <div className="panel">
+      <div className="panel" style={{ marginTop: 28 }}>
         <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
           <h3 style={{ margin: 0 }}>Ventas · Unidades 2028 — {marca}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Ventas" /></h3>
           {useVend && <div style={{ display: 'flex', gap: 6, marginLeft: 10, flexWrap: 'wrap' }}>{[[0, vName(0)], [1, vName(1)], ['T', '▣ Total']].map(([k, lbl]) => <button key={k} className={'seg' + (vendView === k ? ' active' : '')} onClick={() => setVendView(k)}>{lbl}</button>)}</div>}
@@ -6073,7 +6073,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                   </tr>
                 </Fragment2>
               ) })}
-              {clientes.length > 0 && <tr className="grandrow" style={{ background: '#eef4fb' }}><td className="l" style={{ color: '#1d4ed8' }}>💰 Venta neta{useVend && vendView !== 'T' ? ` · ${vName(vendView)}` : ''} <span className="unit" style={{ fontWeight: 400 }}>(unid × AUP)</span></td><td></td><td></td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#1d4ed8' }}>{fmt(ventaNetaMes(mi))}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(MESES.reduce((a, _, mi) => a + ventaNetaMes(mi), 0))}</td><td></td></tr>}
+              {clientes.length > 0 && <tr className="grandrow" style={{ background: '#eef4fb' }}><td className="l" style={{ color: '#1d4ed8', whiteSpace: 'normal', overflow: 'visible', lineHeight: 1.2 }}>💰 Venta neta{useVend && vendView !== 'T' ? ` · ${vName(vendView)}` : ''}</td><td></td><td></td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#1d4ed8' }}>{fmt(ventaNetaMes(mi))}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(MESES.reduce((a, _, mi) => a + ventaNetaMes(mi), 0))}</td><td></td></tr>}
               {clientes.length > 0 && (!useVend || vendView === 'T') && <>
                 <tr className="grandrow"><td className="l" rowSpan={rsp} style={{ verticalAlign: 'top' }}>TOTAL {marca}</td><td rowSpan={rsp} style={{ verticalAlign: 'top', fontSize: 10, lineHeight: 1.3, whiteSpace: 'normal', overflow: 'hidden' }} title="Crecimiento del total 2028 frente a cada año histórico">{(tot26Marca || tot25Marca) ? <div style={{ color: 'var(--muted)', fontWeight: 600, marginBottom: 3 }}>Crec. 2028:</div> : null}{tot26Marca ? <div>vs 2026 <b style={{ color: crecMarca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1)}%</b></div> : null}{tot25Marca && showY25 ? <div>vs 2025 <b style={{ color: crec25Marca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crec25Marca >= 0 ? '+' : '') + crec25Marca.toFixed(1)}%</b></div> : null}{!(tot26Marca || tot25Marca) ? '—' : null}</td>{showY25 ? <><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></> : <><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></>}</tr>
                 {showY25 && <tr className="grandrow"><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>}
