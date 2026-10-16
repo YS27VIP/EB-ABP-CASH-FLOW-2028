@@ -2156,12 +2156,26 @@ function TumarLogistica({ empresa }) {
 /* TUMAR · Logística de UNA marca (3 líneas editables + total) — se usa dentro de la vista comercial por marca. */
 function TumarLogMarca({ empresa, marca }) {
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { return {} } })
+  const [ventas, setVentas] = useState([]); const [producto, setProducto] = useState([]); const [cats, setCats] = useState({}); const [tumar, setTumar] = useState(null)
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null); const [savedAt, setSavedAt] = useState(null)
+  useEffect(() => {
+    (async () => {
+      try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
+      try { const j = await gReadTab('Cap_Producto'); if (j && j.ok && j.values) setProducto(j.values.slice(1)) } catch { }
+      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const o = {}; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const c = r[1], mar = r[3]; if (!mar || !c) return; (o[mar] = o[mar] || []).push(c) }); setCats(o) } } catch { }
+      try { setTumar(await gTumarReal()) } catch { }
+    })()
+  }, [empresa, marca])
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
   const g = (k) => num(data[k])
   const lineTot = (lk) => MESES.reduce((a, _, m) => a + g(`T|${marca}|${lk}|${m}`), 0)
   const totMes = (m) => TUMAR_LOG_LINES.reduce((a, l) => a + g(`T|${marca}|${l.k}|${m}`), 0)
   const marcaTot = MESES.reduce((a, _, m) => a + totMes(m), 0)
+  const sum12 = (a) => (a || []).reduce((x, y) => x + y, 0)
+  const vn28Mes = (() => { try { return realAupAuc(empresa, marca, ventas, producto, cats[marca] || []).ventaMes } catch { return MESES.map(() => 0) } })()
+  const vn28 = sum12(vn28Mes)
+  const venta26Mes = (tumar && tumar.marcas && tumar.marcas[upper(marca)]) ? tumar.marcas[upper(marca)].venta : MESES.map(() => 0)
+  const peso = (c, v) => v > 0 ? (c / v * 100).toFixed(1) + '%' : '—'
   async function guardar() {
     setSaving(true)
     try { await gSaveEstado(empresa, 'logcost', data); try { localStorage.setItem(`logcost_${empresa}`, JSON.stringify(data)) } catch { }; setSavedAt(new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (costos logísticos).' }) }
@@ -2186,6 +2200,9 @@ function TumarLogMarca({ empresa, marca }) {
             <tr key={l.k}><td className="l" style={{ color: l.color, fontWeight: 700 }}>{l.label}</td>{MESES.map((_, m) => <td key={m} className="cell"><input className="fillin" value={data[`T|${marca}|${l.k}|${m}`] ?? ''} onChange={(e) => set(`T|${marca}|${l.k}|${m}`, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot" style={{ color: l.color, fontWeight: 700 }}>{fmt(lineTot(l.k))}</td></tr>
           ))}
           <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">= Total costo logístico {marca}</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(totMes(m))}</td>)}<td className="tot">{fmt(marcaTot)}</td></tr>
+          <tr style={{ background: '#f7faf7' }}><td className="l" style={{ color: '#334155' }}>Venta neta 2028 (plan)</td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(vn28Mes[m] || 0)}</td>)}<td className="tot">{fmt(vn28)}</td></tr>
+          <tr style={{ background: '#eef4fb' }}><td className="l" style={{ color: '#1d4ed8', fontWeight: 700 }}>= Peso logístico % <span className="unit" style={{ fontWeight: 400 }}>(s/ venta neta)</span></td>{MESES.map((_, m) => { const v = vn28Mes[m] || 0; return <td key={m} className="tot" style={{ color: '#1d4ed8' }}>{v > 0 ? (totMes(m) / v * 100).toFixed(1) + '%' : '—'}</td> })}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{peso(marcaTot, vn28)}</td></tr>
+          <tr style={{ background: '#fffdf2' }}><td className="l" style={{ color: '#8a6d1a' }}>🪞 Venta neta 2026 <span className="unit" style={{ fontWeight: 400 }}>(TP · USD)</span></td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: '#8a6d1a' }}>{fmt(venta26Mes[m] || 0)}</td>)}<td className="tot" style={{ color: '#8a6d1a', fontWeight: 700 }}>{fmt(sum12(venta26Mes))}</td></tr>
         </tbody>
       </table></div>
     </div>

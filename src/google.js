@@ -127,7 +127,9 @@ export async function gTumarReal() {
     })
   }
   // Gastos por línea (COMPRAS + TESORERIA), en USD
-  const addGastos = (rows, impName) => { if (rows.length < 2) return; const iImp = _hidx(rows, impName), iMes = _hidx(rows, 'MES'), iTC = _hidx(rows, 'TIPO DE CAMBIO'), iCon = _hidx(rows, 'CONCEPTO'); rows.slice(1).forEach((r) => { const mi = _tmMonth(r[iMes]); if (mi < 0) return; const tc = _tmNum(r[iTC]) || 1; const usd = _tmNum(r[iImp]) / tc; const line = _tmLineOf(r[iCon]); (lines[line] || lines.admin)[mi] += usd; mesesSet.add(mi) }) }
+  // Columna de CATEGORÍA: en COMPRAS existen 'Concepto' (específico) y 'CONCEPTO' (categoría). Hay que usar la categoría (match exacto en MAYÚSCULAS), no la primera que haga _hidx.
+  const _catIdx = (rows) => { const h = (rows[0] || []).map((x) => String(x == null ? '' : x).trim()); const i = h.indexOf('CONCEPTO'); return i >= 0 ? i : _hidx(rows, 'CONCEPTO') }
+  const addGastos = (rows, impName) => { if (rows.length < 2) return; const iImp = _hidx(rows, impName), iMes = _hidx(rows, 'MES'), iTC = _hidx(rows, 'TIPO DE CAMBIO'), iCon = _catIdx(rows); rows.slice(1).forEach((r) => { const mi = _tmMonth(r[iMes]); if (mi < 0) return; const tc = _tmNum(r[iTC]) || 1; const usd = _tmNum(r[iImp]) / tc; const line = _tmLineOf(r[iCon]); (lines[line] || lines.admin)[mi] += usd; mesesSet.add(mi) }) }
   addGastos(compras, 'Importe')
   addGastos(tesor, 'Debe (CTE) (renglón)')
   const totalVenta = _tmZ(), totalCosto = _tmZ(), totalUnid = _tmZ()
