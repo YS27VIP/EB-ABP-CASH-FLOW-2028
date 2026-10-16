@@ -2118,6 +2118,45 @@ function TumarLogistica({ empresa }) {
   )
 }
 
+/* TUMAR · Logística de UNA marca (3 líneas editables + total) — se usa dentro de la vista comercial por marca. */
+function TumarLogMarca({ empresa, marca }) {
+  const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { return {} } })
+  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null); const [savedAt, setSavedAt] = useState(null)
+  const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  const g = (k) => num(data[k])
+  const lineTot = (lk) => MESES.reduce((a, _, m) => a + g(`T|${marca}|${lk}|${m}`), 0)
+  const totMes = (m) => TUMAR_LOG_LINES.reduce((a, l) => a + g(`T|${marca}|${l.k}|${m}`), 0)
+  const marcaTot = MESES.reduce((a, _, m) => a + totMes(m), 0)
+  async function guardar() {
+    setSaving(true)
+    try { await gSaveEstado(empresa, 'logcost', data); try { localStorage.setItem(`logcost_${empresa}`, JSON.stringify(data)) } catch { }; setSavedAt(new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (costos logísticos).' }) }
+    catch { setMsg({ t: 'bad', x: 'No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.' }) }
+    setSaving(false)
+  }
+  if (!TUMAR_MARCAS.includes(marca)) return <div className="note warn">Selecciona una marca para cargar su costo logístico.</div>
+  return (
+    <div className="panel" style={{ marginTop: 0 }}>
+      <div className="toolbar" style={{ marginBottom: 8, alignItems: 'center' }}>
+        <span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span>
+        <div className="spacer"></div>
+        {savedAt && <span className="empchip" style={{ background: 'var(--ok)', marginRight: 8, fontSize: 11.5 }}>✓ Guardado {savedAt}</span>}
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+      </div>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <div className="sub">Costo logístico de <b>{marca}</b>: llena a mano cada mes las <b>tres líneas</b> (en <b style={{ color: '#8a6d1a' }}>amarillo</b>). El total se suma solo e impacta el <b>Cash Flow</b> y el <b>P&L</b>.</div>
+      <div className="tablewrap"><table className="vfix logcost-tbl"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+        <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+        <tbody>
+          {TUMAR_LOG_LINES.map((l) => (
+            <tr key={l.k}><td className="l" style={{ color: l.color, fontWeight: 700 }}>{l.label}</td>{MESES.map((_, m) => <td key={m} className="cell"><input className="fillin" value={data[`T|${marca}|${l.k}|${m}`] ?? ''} onChange={(e) => set(`T|${marca}|${l.k}|${m}`, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot" style={{ color: l.color, fontWeight: 700 }}>{fmt(lineTot(l.k))}</td></tr>
+          ))}
+          <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">= Total costo logístico {marca}</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(totMes(m))}</td>)}<td className="tot">{fmt(marcaTot)}</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  )
+}
+
 function LogisticaHome({ empresa, sbus }) {
   if (empresa === 'TUMAR') return <TumarLogistica empresa={empresa} />
   const [ventas, setVentas] = useState([]); const [producto, setProducto] = useState([])
@@ -3741,7 +3780,9 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
                   <div key={r.id} className="role-group" style={{ borderLeft: '7px solid ' + r.color, borderRadius: '0 12px 12px 0', paddingLeft: 14, marginBottom: 34, background: 'linear-gradient(90deg, ' + r.color + '11, transparent 60px)' }}>
                     <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 12px', display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
                     {r.id === 'logistica'
-                      ? <LogisticaBlock key={sbuName + 'log' + marca} r={r} empresa={empresa} usuario={usuario} oneSbu={oneSbu} marca={marca} noHeader />
+                      ? (empresa === 'TUMAR'
+                        ? <TumarLogMarca key={sbuName + 'tlog' + marca} empresa={empresa} marca={marca} />
+                        : <LogisticaBlock key={sbuName + 'log' + marca} r={r} empresa={empresa} usuario={usuario} oneSbu={oneSbu} marca={marca} noHeader />)
                       : <RoleForm key={sbuName + r.id + marca} role={r} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
                   </div>))}
               </>)
