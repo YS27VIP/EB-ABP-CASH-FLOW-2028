@@ -6019,6 +6019,11 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
             </div>
           </div>
         </div>
+        {useVend && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 14, background: '#eef4fb', border: '1px solid #cfe0f0', borderRadius: 10, padding: '8px 14px', margin: '2px 0 8px', fontWeight: 800, color: '#1d4ed8' }}>
+          <span>{vendView === 'T' ? `▣ Total ${marca}` : `🧑‍💼 ${vName(vendView)}`}</span>
+          <span>Unidades 2028: {fmt(vendView === 'T' ? totMarcaSel : vendUnits(vendView))}</span>
+          <span>Venta neta: ${fmt(vendView === 'T' ? ventaTotalMarca : vendVenta(vendView))}</span>
+        </div>}
         <div ref={topScRef} onScroll={() => { if (botScRef.current) botScRef.current.scrollLeft = topScRef.current.scrollLeft }} className="tablewrap" style={{ maxHeight: 'none', overflowY: 'hidden', border: 'none', borderRadius: 0, marginBottom: 2 }}><div style={{ width: 1228, height: 1 }} /></div>
         <div className="tablewrap" ref={botScRef} onScroll={() => { if (topScRef.current) topScRef.current.scrollLeft = botScRef.current.scrollLeft }}>
           <table className="vfix" style={{ width: 1228 }}>
@@ -6056,7 +6061,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                 </Fragment2>
               ) })}
               {clientes.length > 0 && (!useVend || vendView === 'T') && <>
-                <tr className="grandrow"><td className="l" rowSpan={rsp} style={{ verticalAlign: 'top' }}>TOTAL {marca}</td><td rowSpan={rsp} style={{ verticalAlign: 'top', fontSize: 10.5, lineHeight: 1.4, whiteSpace: 'nowrap' }} title="Crecimiento del total 2028 frente a cada año histórico">{(tot26Marca || tot25Marca) ? <div style={{ color: 'var(--muted)', fontWeight: 600, marginBottom: 3 }}>Crec. 2028:</div> : null}{tot26Marca ? <div>vs 2026 <b style={{ color: crecMarca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1)}%</b></div> : null}{tot25Marca && showY25 ? <div>vs 2025 <b style={{ color: crec25Marca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crec25Marca >= 0 ? '+' : '') + crec25Marca.toFixed(1)}%</b></div> : null}{!(tot26Marca || tot25Marca) ? '—' : null}</td>{showY25 ? <><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></> : <><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></>}</tr>
+                <tr className="grandrow"><td className="l" rowSpan={rsp} style={{ verticalAlign: 'top' }}>TOTAL {marca}</td><td rowSpan={rsp} style={{ verticalAlign: 'top', fontSize: 10, lineHeight: 1.3, whiteSpace: 'normal', overflow: 'hidden' }} title="Crecimiento del total 2028 frente a cada año histórico">{(tot26Marca || tot25Marca) ? <div style={{ color: 'var(--muted)', fontWeight: 600, marginBottom: 3 }}>Crec. 2028:</div> : null}{tot26Marca ? <div>vs 2026 <b style={{ color: crecMarca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1)}%</b></div> : null}{tot25Marca && showY25 ? <div>vs 2025 <b style={{ color: crec25Marca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crec25Marca >= 0 ? '+' : '') + crec25Marca.toFixed(1)}%</b></div> : null}{!(tot26Marca || tot25Marca) ? '—' : null}</td>{showY25 ? <><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></> : <><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></>}</tr>
                 {showY25 && <tr className="grandrow"><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>}
                 <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td><td className="tot">100%</td></tr>
               </>}
