@@ -3824,7 +3824,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
               {puedeDir && <button className={'seg' + (totTabEf === 'log' ? ' active' : '')} onClick={() => setTotTab('log')} style={totTabEf === 'log' ? { background: col, borderColor: col, color: '#fff' } : {}}>🚚 Logística</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'mk' ? ' active' : '')} onClick={() => setTotTab('mk')} style={totTabEf === 'mk' ? { background: col, borderColor: col, color: '#fff' } : {}}>📣 Marketing</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'viajes' ? ' active' : '')} onClick={() => setTotTab('viajes')} style={totTabEf === 'viajes' ? { background: col, borderColor: col, color: '#fff' } : {}}>🧳 Viajes</button>}
-              {puedeDir && <button className={'seg' + (totTabEf === 'mivista' ? ' active' : '')} onClick={() => setTotTab('mivista')} style={totTabEf === 'mivista' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>📊 Comparador</button>}
+              {puedeDir && empresa !== 'TAHO' && <button className={'seg' + (totTabEf === 'mivista' ? ' active' : '')} onClick={() => setTotTab('mivista')} style={totTabEf === 'mivista' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>✨ HIGHLIGHTS</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'avance' ? ' active' : '')} onClick={() => setTotTab('avance')} style={totTabEf === 'avance' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>✅ Progreso</button>}
               {puedeDir && <><div style={{ flex: 1 }}></div><SbuResultDownload empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} /></>}
             </div>
@@ -3833,7 +3833,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
               : totTabEf === 'avance'
               ? <AvanceSBU empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />
               : totTabEf === 'mivista'
-              ? <ComparadorMarcas empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />
+              ? <HighlightsView empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />
               : totTabEf === 'cash'
               ? <CashFlowForm key={'cftot' + sbuName} role={cashRole} rubro={cashRubro} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={`TOTAL::${sbuName}`} />
               : totTabEf === 'viajes'
@@ -4548,16 +4548,11 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca', pued
               <tr className="grandrow"><td className="l">Total {mca}</td>{totMarcaMes.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarca)}</td></tr>
               <tr><td className="l" style={{ color: '#0e7490' }}>Venta Neta 2028</td>{vnMes.map((v, i) => <td key={i} className="tot" style={{ color: '#0e7490' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: '#0e7490' }}>{fmt(vnTot)}</td></tr>
               <tr><td className="l" style={{ color: acc, fontWeight: 700 }}>% viajes / venta</td>{MESES.map((_, i) => <td key={i} className="tot" style={{ color: acc }}>{pct(totMarcaMes[i], vnMes[i])}</td>)}<td className="tot" style={{ color: acc, fontWeight: 700 }}>{pct(totMarca, vnTot)}</td></tr>
+              {(() => { const vj = a27v(mca).vj, vn = a27v(mca).vn; return <tr style={{ background: '#f6eef9' }}><td className="l" style={{ color: '#8f4b7e', fontWeight: 700 }}>ABP 2027 <span className="unit" style={{ fontWeight: 400 }}>($ · % s/venta)</span></td>{MESES.map((_, i) => <td key={i} className="tot" style={{ color: 'var(--muted)' }}>—</td>)}<td className="tot" style={{ color: '#8f4b7e', fontWeight: 700 }}>${fmt(vj)}{vn > 0 ? ` · ${pesoVj(vj, vn)}` : ''}</td></tr> })()}
+              {(() => { const vj = refMar(mca, 2026), vn = vnAnual(mca, 2026); return <tr style={{ background: '#eef4fb' }}><td className="l" style={{ color: '#2b5c9b', fontWeight: 700 }}>Real 2026 <span className="unit" style={{ fontWeight: 400 }}>($ · % s/venta)</span></td>{MESES.map((_, i) => <td key={i} className="tot" style={{ color: 'var(--muted)' }}>—</td>)}<td className="tot" style={{ color: '#2b5c9b', fontWeight: 700 }}>${fmt(vj)}{vn > 0 ? ` · ${pesoVj(vj, vn)}` : ''}</td></tr> })()}
+              {(() => { const vj = refMar(mca, 2025), vn = vnAnual(mca, 2025); return <tr style={{ background: '#f4f7fa' }}><td className="l" style={{ color: '#475569', fontWeight: 700 }}>Real 2025 <span className="unit" style={{ fontWeight: 400 }}>($ · % s/venta)</span></td>{MESES.map((_, i) => <td key={i} className="tot" style={{ color: 'var(--muted)' }}>—</td>)}<td className="tot" style={{ color: '#475569', fontWeight: 700 }}>${fmt(vj)}{vn > 0 ? ` · ${pesoVj(vj, vn)}` : ''}</td></tr> })()}
             </tbody>
           </table>
-        </div>
-        <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {[2025, 2026].map((y) => { const vj = refMar(mca, y); const vn = vnAnual(mca, y); return (
-            <span key={y} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: acc + '18', border: '1px solid ' + acc + '55', borderRadius: 14, padding: '3px 11px', fontSize: 12.5 }}>
-              <b style={{ color: acc }}>{y}</b><span style={{ fontWeight: 700 }}>${fmt(vj)}</span>{vn > 0 && <span className="unit" title="Viajes ÷ Venta Neta de ese año (EBP)">({pct(vj, vn)} de la venta)</span>}
-            </span>
-          ) })}
-          {cargando && <span className="unit">(cargando…)</span>}
         </div>
       </div>
     )
@@ -4700,6 +4695,131 @@ function ComparadorMarcas({ empresa, sbuName, marcasSBU }) {
           <tr className="grandrow"><td className="l">TOTAL {sbuName}</td><td className="tot">{fmt(T.unidades)}</td><td className="tot">${fmt(T.venta)}</td><td className="tot">100%</td><td className="tot">${fmt(T.unidades ? T.venta / T.unidades : 0)}</td><td className="tot">${fmt(T.margen)}</td><td className="tot">{T.venta ? (T.margen / T.venta * 100).toFixed(1) + '%' : '—'}</td><td className={'tot ' + (crecTot == null ? '' : crecTot >= 0 ? 'pos' : 'neg')}>{pct(crecTot)}</td><td className={'tot ' + (crecTot25 == null ? '' : crecTot25 >= 0 ? 'pos' : 'neg')}>{pct(crecTot25)}</td><td className="tot ya">${fmt(T.vn26)}</td><td className="tot ya">${fmt(T.u26 ? T.vn26 / T.u26 : 0)}</td><td className="tot ya">${fmt(T.vn25)}</td></tr>
         </tbody>
       </table></div>
+    </div>
+  )
+}
+
+/* ===== HIGHLIGHTS: crecimiento 2028 vs 2026 por país (mapa interactivo), cliente y categoría ===== */
+// Posición aproximada (fila, col) de cada país de Latinoamérica para el mapa de mosaicos.
+const LATAM_TILES = {
+  'MEXICO': [0, 1], 'CUBA': [0, 3], 'REPUBLICA DOMINICANA': [0, 4], 'PUERTO RICO': [1, 4],
+  'GUATEMALA': [1, 0], 'BELICE': [1, 1], 'HONDURAS': [2, 1], 'EL SALVADOR': [2, 0],
+  'NICARAGUA': [3, 1], 'COSTA RICA': [4, 0], 'PANAMA': [4, 1], 'VENEZUELA': [3, 3],
+  'COLOMBIA': [5, 1], 'ECUADOR': [6, 0], 'GUYANA': [4, 3], 'PERU': [7, 1], 'BRASIL': [6, 3],
+  'BOLIVIA': [8, 2], 'PARAGUAY': [9, 2], 'CHILE': [9, 1], 'URUGUAY': [10, 3], 'ARGENTINA': [10, 2],
+  'ESTADOS UNIDOS': [-1, 1], 'USA': [-1, 1],
+}
+const _paisNorm = (s) => { const n = upper(String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim()); const alias = { 'EEUU': 'ESTADOS UNIDOS', 'U.S.A.': 'USA', 'US': 'USA', 'REP DOMINICANA': 'REPUBLICA DOMINICANA', 'REP. DOMINICANA': 'REPUBLICA DOMINICANA', 'RD': 'REPUBLICA DOMINICANA' }; return alias[n] || n }
+function HighlightsView({ empresa, sbuName, marcasSBU }) {
+  const [P, setP] = useState(null)
+  const [met, setMet] = useState('v') // 'v' = venta $ · 'u' = unidades
+  const [dim, setDim] = useState(empresa === 'TUMAR' ? 'cli' : 'pais') // dimensión activa
+  useEffect(() => {
+    (async () => {
+      const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
+      const [ven, prod, cap] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias')])
+      let hist = []; try { const jh = await gHistorico(); if (jh && jh.ok && jh.values) hist = jh.values.slice(1) } catch { }
+      let tp = null; if (empresa === 'TUMAR') { try { tp = await gTumarClientes() } catch { } }
+      const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+      setP({ ven, prod, cats, hist, tp })
+    })()
+  }, [empresa])
+  const col = sbuColor(sbuName)
+  if (!P) return <div className="panel"><h3 style={{ color: col }}>✨ HIGHLIGHTS — {sbuName}</h3><div className="sub">Cargando…</div></div>
+  const marcas = marcasSBU || [], marcasU = new Set(marcas.map((m) => upper(m)))
+  const esT = empresa === 'TUMAR'
+  // AUP por marca y mes (para valorizar las unidades 2028 del plan)
+  const aupM = {}; marcas.forEach((m) => { const r = realAupAuc(empresa, m, P.ven, P.prod, (P.cats[m] || []).map((c) => c.cat)); aupM[upper(m)] = MESES.map((_, i) => r.totalUnits[i] ? r.ventaMes[i] / r.totalUnits[i] : 0) })
+  const histAgg = (mca, y, kind) => { let s = 0; (P.hist || []).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca) || String(r[1]) !== String(y)) return; const rub = upper(r[3]); const ok = kind === 'UNID' ? rub.indexOf('UNIDAD') >= 0 : rub.indexOf('VENTA') >= 0; if (ok) s += num(r[7]) }); return s }
+  // 2028 por cliente (unidades del plan + venta = unidades × AUP de su marca)
+  const cliU28 = {}, cliV28 = {}, paisByCli = {}
+  P.ven.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const mca = upper(r[3]); if (!marcasU.has(mca)) return; const cli = String(r[1] || '').trim(); if (!cli || cli.toUpperCase().startsWith('VIAJES')) return; const aup = aupM[mca] || []; let u = 0, v = 0; for (let m = 0; m < 12; m++) { const q = Math.max(0, num(r[4 + m])); u += q; v += q * (aup[m] || 0) } cliU28[cli] = (cliU28[cli] || 0) + u; cliV28[cli] = (cliV28[cli] || 0) + v })
+  // 2028 por cliente para TUMAR también sale de Cap_Ventas (arriba). País solo aplica a EB (viene del histórico).
+  const cliU26 = {}, cliV26 = {}
+  if (esT && P.tp && P.tp.clientes) { Object.values(P.tp.clientes).forEach((bucket) => Object.entries(bucket).forEach(([cli, arr]) => { cliU26[cli] = (cliU26[cli] || 0) + arr.reduce((a, b) => a + b, 0) })) }
+  P.hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || String(r[1]) !== '2026') return; const mca = upper(r[5]); if (!marcasU.has(mca)) return; const cli = String(r[8] || '').trim(), pais = String(r[9] || '').trim(), rub = upper(r[3]), val = num(r[7]); if (cli && pais && !paisByCli[cli]) paisByCli[cli] = pais; if (!cli) return; if (rub.indexOf('UNIDAD') >= 0) cliU26[cli] = (cliU26[cli] || 0) + val; else if (rub.indexOf('VENTA') >= 0) cliV26[cli] = (cliV26[cli] || 0) + val })
+  // Agregado por país (EB): 2028 por cliente→país · 2026 directo del histórico
+  const paisAgg = {}; const addP = (p0, k, val) => { const p = p0 || 'Sin país'; (paisAgg[p] = paisAgg[p] || { u28: 0, v28: 0, u26: 0, v26: 0 })[k] += val }
+  Object.keys(cliU28).forEach((cli) => { const p = paisByCli[cli] || 'Sin país'; addP(p, 'u28', cliU28[cli]); addP(p, 'v28', cliV28[cli]) })
+  P.hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || String(r[1]) !== '2026') return; const mca = upper(r[5]); if (!marcasU.has(mca)) return; const pais = String(r[9] || '').trim(), rub = upper(r[3]), val = num(r[7]); if (rub.indexOf('UNIDAD') >= 0) addP(pais, 'u26', val); else if (rub.indexOf('VENTA') >= 0) addP(pais, 'v26', val) })
+  // Agregado por cliente
+  const cliAgg = {}; const allCli = new Set([...Object.keys(cliU28), ...Object.keys(cliU26), ...Object.keys(cliV26)]); allCli.forEach((cli) => { cliAgg[cli] = { u28: cliU28[cli] || 0, v28: cliV28[cli] || 0, u26: cliU26[cli] || 0, v26: cliV26[cli] || 0 } })
+  // Agregado por categoría (distribuye el total de cada marca entre sus categorías por peso)
+  const catAgg = {}; const addC = (c, k, val) => { (catAgg[c] = catAgg[c] || { u28: 0, v28: 0, u26: 0, v26: 0 })[k] += val }
+  marcas.forEach((m) => {
+    const r = realAupAuc(empresa, m, P.ven, P.prod, (P.cats[m] || []).map((c) => c.cat))
+    const u28 = r.totalUnits.reduce((a, b) => a + b, 0), v28 = r.ventaMes.reduce((a, b) => a + b, 0)
+    const u26 = histAgg(m, 2026, 'UNID'), v26 = histAgg(m, 2026, 'VENTA')
+    const cs = P.cats[m] || []; const tot = cs.reduce((a, c) => a + (num(c.peso) || 0), 0)
+    if (!cs.length) { addC('(Sin categoría)', 'u28', u28); addC('(Sin categoría)', 'v28', v28); addC('(Sin categoría)', 'u26', u26); addC('(Sin categoría)', 'v26', v26); return }
+    cs.forEach((c) => { const w = tot > 0 ? (num(c.peso) || 0) / tot : 1 / cs.length; addC(c.cat, 'u28', u28 * w); addC(c.cat, 'v28', v28 * w); addC(c.cat, 'u26', u26 * w); addC(c.cat, 'v26', v26 * w) })
+  })
+  const val28 = (o) => met === 'v' ? o.v28 : o.u28, val26 = (o) => met === 'v' ? o.v26 : o.u26
+  const crec = (o) => { const a = val26(o), b = val28(o); return a > 0 ? (b - a) / a * 100 : (b > 0 ? null : 0) }
+  const money = (v) => (met === 'v' ? '$' : '') + fmt(v)
+  const pctc = (x) => x == null ? '🆕' : (x >= 0 ? '+' : '') + x.toFixed(0) + '%'
+  const crecCol = (x) => x == null ? '#0e7490' : x >= 0 ? 'var(--ok)' : 'var(--bad)'
+  const rank = (agg) => Object.entries(agg).map(([k, o]) => ({ k, o, c: crec(o) })).sort((a, b) => val28(b.o) - val28(a.o))
+  const maxV = (agg) => Math.max(1, ...Object.values(agg).map((o) => val28(o)))
+  // Tabla + barras para una dimensión
+  const Ranking = ({ agg, label }) => { const rows = rank(agg), mx = maxV(agg); return (
+    <div className="tablewrap" style={{ marginTop: 10 }}><table style={{ width: '100%' }}>
+      <thead><tr><th className="l">{label}</th><th>2026</th><th>2028</th><th>Crec.</th><th className="l" style={{ width: '32%' }}>2028</th></tr></thead>
+      <tbody>
+        {rows.length === 0 && <tr><td className="l" colSpan={5}>Sin datos.</td></tr>}
+        {rows.map(({ k, o, c }) => <tr key={k}><td className="l">{k}</td><td className="tot" style={{ color: 'var(--muted)' }}>{money(val26(o))}</td><td className="tot" style={{ fontWeight: 700 }}>{money(val28(o))}</td><td className="tot" style={{ fontWeight: 800, color: crecCol(c) }} title={c == null ? 'Nuevo (sin 2026)' : `2028 ${money(val28(o))} vs 2026 ${money(val26(o))}`}>{pctc(c)}</td><td><div style={{ background: '#eef2f6', borderRadius: 5, height: 16 }}><div style={{ width: Math.max(2, val28(o) / mx * 100) + '%', height: '100%', borderRadius: 5, background: col }}></div></div></td></tr>)}
+      </tbody>
+    </table></div>
+  ) }
+  // Mapa de mosaicos (solo EB · país)
+  const mapColor = (c) => c == null ? '#0e7490' : c >= 50 ? '#15803d' : c >= 0 ? '#86c79a' : c >= -25 ? '#f0b8b8' : '#b91c1c'
+  const paisMap = (() => {
+    const rows = 11, cols = 5, cell = 58, gap = 6
+    const placed = {}; Object.entries(paisAgg).forEach(([p]) => { const key = _paisNorm(p); if (LATAM_TILES[key]) placed[key] = p })
+    return (
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <svg width={cols * (cell + gap)} height={(rows + 1) * (cell + gap)} style={{ flex: '0 0 auto' }}>
+          {Object.entries(LATAM_TILES).filter(([k]) => k !== 'USA').map(([k, [rw, cl]]) => {
+            const nombre = placed[k]; const o = nombre ? paisAgg[nombre] : null; const c = o ? crec(o) : undefined
+            const x = cl * (cell + gap), y = (rw + 1) * (cell + gap)
+            return <g key={k}>
+              <rect x={x} y={y} width={cell} height={cell} rx={8} fill={o ? mapColor(c) : '#eef2f6'} stroke={o ? '#fff' : '#e3e8ee'} strokeWidth={o ? 2 : 1}>
+                {o && <title>{`${nombre}\n2026: ${money(val26(o))}\n2028: ${money(val28(o))}\nCrec: ${pctc(c)}`}</title>}
+              </rect>
+              <text x={x + cell / 2} y={y + cell / 2 - 4} textAnchor="middle" fontSize="8.5" fontWeight="700" fill={o ? '#fff' : '#9aa5b1'}>{k.slice(0, 7)}</text>
+              {o && <text x={x + cell / 2} y={y + cell / 2 + 9} textAnchor="middle" fontSize="9" fontWeight="800" fill="#fff">{pctc(c)}</text>}
+            </g>
+          })}
+        </svg>
+        <div style={{ flex: 1, minWidth: 260 }}><Ranking agg={paisAgg} label="País" /></div>
+      </div>
+    )
+  })()
+  const tabs = esT ? [['cli', '👥 Clientes']] : [['pais', '🗺️ País'], ['cli', '👥 Clientes'], ['cat', '🏷️ Categorías']]
+  return (
+    <div className="panel">
+      <div className="toolbar" style={{ alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
+        <h3 style={{ color: col, margin: 0 }}>✨ HIGHLIGHTS — {sbuName} <span className="unit">(crecimiento 2028 vs 2026)</span></h3>
+        <div className="spacer"></div>
+        <span className="unit">Ver en:</span>
+        <button className={'seg' + (met === 'v' ? ' active' : '')} onClick={() => setMet('v')} style={met === 'v' ? { background: col, borderColor: col, color: '#fff' } : {}}>Venta $</button>
+        <button className={'seg' + (met === 'u' ? ' active' : '')} onClick={() => setMet('u')} style={met === 'u' ? { background: col, borderColor: col, color: '#fff' } : {}}>Unidades</button>
+      </div>
+      <div className="toolbar" style={{ marginBottom: 6, gap: 6, flexWrap: 'wrap' }}>
+        {tabs.map(([k, lbl]) => <button key={k} className={'seg' + (dim === k ? ' active' : '')} onClick={() => setDim(k)} style={dim === k ? { background: col, borderColor: col, color: '#fff' } : {}}>{lbl}</button>)}
+      </div>
+      {dim === 'pais' && <>
+        <div className="sub">Crecimiento por <b>país</b> (plan 2028 vs real 2026). El color del mosaico va de rojo (cae) a verde (crece). Pasa el cursor por cada país para ver el detalle. Los países sin mosaico salen en la tabla de la derecha.</div>
+        {paisMap}
+      </>}
+      {dim === 'cli' && <>
+        <div className="sub">Crecimiento por <b>cliente</b> (plan 2028 vs real 2026{esT ? ', de TUMAR Performance' : ''}). <b>🆕</b> = cliente nuevo sin 2026.</div>
+        <Ranking agg={cliAgg} label="Cliente" />
+      </>}
+      {dim === 'cat' && <>
+        <div className="sub">Crecimiento por <b>categoría</b> (plan 2028 vs real 2026). El total de cada marca se reparte entre sus categorías según el <b>peso</b> que definió el Director.</div>
+        <Ranking agg={catAgg} label="Categoría" />
+      </>}
     </div>
   )
 }
