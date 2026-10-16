@@ -3756,7 +3756,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
 function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   const pu = puede || (() => true)
   // Acceso por rol: solo se ven las áreas asignadas al colaborador.
-  const comercialRoles = ['ventas', 'producto', 'logistica'].map((id) => ROLES.find((r) => r.id === id)).filter((r) => pu(r.label))
+  // Orden del flujo comercial: 1) Director (define categorías) → 2) Ventas → 3) Producto → 4) Logística.
+  const comercialRoles = ['director', 'ventas', 'producto', 'logistica'].map((id) => ROLES.find((r) => r.id === id)).filter((r) => pu(r.label))
   const puedeComercial = comercialRoles.length > 0
   const puedeDir = pu('Director')
   // Roles que capturan viajes (Ventas, Producto, Marketing, Director). La pestaña "Viajes equipo" la ve quien pueda editar al menos uno.
@@ -3765,7 +3766,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   const SECS = [
     ...(puedeComercial ? [{ id: 'comercial', icon: '🧭', label: 'Comercial' }] : []),
     ...(pu('Marketing') ? [ROLES.find((r) => r.id === 'marketing')] : []),
-    ...(puedeDir ? [ROLES.find((r) => r.id === 'director')] : []),
+    // Director se movió al dropdown de Comercial (1º del flujo), ya no es pestaña aparte.
   ]
   const [secId, setSecId] = useState(SECS[0] ? SECS[0].id : 'comercial')
   const [comSub, setComSub] = useState('all') // sub-selector dentro de Comercial
@@ -3865,13 +3866,13 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
                 {comercialRoles.length > 1 && <div className="toolbar" style={{ marginBottom: 12, gap: 8, alignItems: 'center' }}>
                   <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 800 }}>IR A:</span>
                   <select value={comSub} onChange={(e) => setComSub(e.target.value)} style={{ fontWeight: 700, padding: '8px 12px', borderRadius: 8, border: '1.5px solid ' + acc, color: acc, background: '#fff', minWidth: 200 }}>
-                    <option value="all">📋 Todos</option>
-                    {comercialRoles.map((r) => <option key={r.id} value={r.id}>{r.icon} {r.label}</option>)}
+                    <option value="all">📋 Todos (en orden)</option>
+                    {comercialRoles.map((r, i) => <option key={r.id} value={r.id}>{i + 1}. {r.icon} {r.label}</option>)}
                   </select>
                 </div>}
                 {comercialRoles.filter((r) => comSub === 'all' || r.id === comSub).map((r) => (
                   <div key={r.id} className="role-group" style={{ borderLeft: '7px solid ' + r.color, borderRadius: '0 12px 12px 0', paddingLeft: 14, marginBottom: 34, background: 'linear-gradient(90deg, ' + r.color + '11, transparent 60px)' }}>
-                    <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 12px', display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
+                    <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 12px', display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ background: 'rgba(255,255,255,.25)', borderRadius: 20, width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>{comercialRoles.indexOf(r) + 1}</span><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
                     {r.id === 'logistica'
                       ? (LOG_SIMPLE(empresa)
                         ? <TumarLogMarca key={sbuName + 'tlog' + marca} empresa={empresa} marca={marca} />
