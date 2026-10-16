@@ -2429,7 +2429,7 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
       <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
       <div className="panel">
         <h3>Cálculo de comisiones — {marca}{M$}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Director" /></h3>
-        <div className="sub">El Director pone los <b>% mensuales</b>. La <b>venta externa</b> viene de Comercial (Unid×AUP); la <b>intercompañía</b> viene de Retail (pendiente). El <b>pago de comisión de venta externa</b> alimenta directamente la línea <b>Comisiones</b> del Cash Flow (parte de Costos Operativos).</div>
+        <div className="sub">El Director pone los <b>% mensuales</b>. La <b>venta externa</b> viene de Comercial (Unid×AUP){empresa === 'ENERGY BRANDS' ? <>; la <b>intercompañía</b> viene de Retail (pendiente)</> : null}. El <b>pago de comisión de venta externa</b> alimenta directamente la línea <b>Comisiones</b> del Cash Flow (parte de Costos Operativos).</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
@@ -2437,10 +2437,10 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
             <tr><td className="l sub2">Venta externa ($) <span className="unit">(Comercial)</span></td>{ventaExt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(ventaExt))}</td></tr>
             <tr><td className="l sub2">% comisión venta externa</td>{pctRow((m) => `PCTEXT|${marca}|${m}`, '%')}<td></td></tr>
             <tr className="catrow"><td className="l">Pago comisión venta externa → Cash Flow</td>{c.pagoExt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.pagoExt))}</td></tr>
-            <tr className="secrow"><td colSpan={14}>VENTA INTERCOMPAÑÍA (RETAIL)</td></tr>
+            {empresa === 'ENERGY BRANDS' && <><tr className="secrow"><td colSpan={14}>VENTA INTERCOMPAÑÍA (RETAIL)</td></tr>
             <tr><td className="l sub2">Venta intercompañía ($) <span className="unit">(Retail · pendiente)</span></td>{c.ventaInt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">0</td></tr>
             <tr><td className="l sub2">% comisión venta interna</td>{pctRow((m) => `PCTINT|${marca}|${m}`, '%')}<td></td></tr>
-            <tr className="catrow"><td className="l">Pago comisión venta interna</td>{c.pagoInt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.pagoInt))}</td></tr>
+            <tr className="catrow"><td className="l">Pago comisión venta interna</td>{c.pagoInt.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.pagoInt))}</td></tr></>}
             {esCorpMarca(marca) && <tr><td className="l" colSpan={14} style={{ color: 'var(--muted)', fontSize: 12 }}>ℹ️ La <b>comisión corporativa $/ud</b> sobre compras (HOKA/UGG) se movió a <b>Finanzas → Compras y pagos</b> y ahora es un <b>pago (Cash Out)</b>, no una comisión.</td></tr>}
             <tr className="grandrow"><td className="l">TOTAL comisiones</td>{c.total.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(rowTot(c.total))}</td></tr>
           </tbody>
@@ -3645,7 +3645,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
                 </div>}
                 {comercialRoles.filter((r) => comSub === 'all' || r.id === comSub).map((r) => (
                   <div key={r.id} className="role-group" style={{ borderLeft: '7px solid ' + r.color, borderRadius: '0 12px 12px 0', paddingLeft: 14, marginBottom: 34, background: 'linear-gradient(90deg, ' + r.color + '11, transparent 60px)' }}>
-                    <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
+                    <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 12px', display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
                     {r.id === 'logistica'
                       ? <LogisticaBlock key={sbuName + 'log' + marca} r={r} empresa={empresa} usuario={usuario} oneSbu={oneSbu} marca={marca} noHeader />
                       : <RoleForm key={sbuName + r.id + marca} role={r} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
@@ -4357,8 +4357,7 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca', pued
       ? <div className="note warn" style={{ marginTop: 10 }}>Aquí cada área captura sus viajes. Tu usuario no tiene un rol de captura asignado en esta SBU, así que solo ves el consolidado de arriba.</div>
       : editRoles.map((r) => (
         <div key={r.id} style={{ marginTop: 14 }}>
-          <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 10px', display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 18 }}>{r.icon}</span> Viajes de {r.label} — {marca}</div>
-          <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={marca} />
+          <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={marca} headerChip={<span style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 13, padding: '6px 12px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 15 }}>{r.icon}</span> Viajes de {r.label} — {marca}</span>} />
         </div>
       ))}
   </>)
@@ -5326,7 +5325,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   // ¿El Director activó categorías para esta marca? (lo define en su pestaña; por defecto sí)
   const catsToggle = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] === undefined ? (empresa !== 'TUMAR') : (u[marca] !== false) } catch { return empresa !== 'TUMAR' } })()
   const usarCat = catsToggle && catList.length > 0
-  const catMsg = !catsLoaded ? '⏳ Cargando categorías…' : (catsToggle ? 'Aún no hay categorías definidas para ' + marca + ' (las define el Director en su pestaña Categorías y guarda). Mientras tanto, solo se ve el total por mes.' : 'Categorías desactivadas por el Director: solo el total por mes.')
+  const catMsg = !catsLoaded ? '⏳ Cargando categorías…' : (catsToggle ? 'Aún no hay categorías definidas para ' + marca + ' (las define el Director en su pestaña Categorías y guarda). Mientras tanto, solo se ve el total por mes.' : 'Esta marca trabaja sin categorías: solo el total por mes.')
   // Participación de categorías por cliente (check). Sin marcar = participa en todas.
   const partOf = (cli) => { const k = cli + '|' + marca; return catPart[k] === undefined ? catList.map((c) => c.cat) : catPart[k] }
   const toggleCat = (cli, cat) => { const cur = partOf(cli); const nx = cur.includes(cat) ? cur.filter((x) => x !== cat) : [...cur, cat]; setCatPart({ ...catPart, [cli + '|' + marca]: nx }) }
@@ -5383,7 +5382,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
             <thead><tr><th className="l">Categoría</th><th style={{ whiteSpace: 'normal', lineHeight: 1.1 }}>Peso<br />pond. %</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
               <tr className="grandrow"><td className="l">TOTAL {marca}</td><td className="tot" title="La marca siempre suma 100%: es la suma del peso ponderado de todas sus categorías." style={{ cursor: BULB_CURSOR }}>{totMarcaSel > 0 ? '100.0%' : '—'}</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(totMarcaSel)}</td></tr>
-              {!usarCat && <tr><td className="l" colSpan={15} style={{ color: 'var(--muted)' }}>{!catsLoaded ? '⏳ Cargando categorías…' : (catsToggle ? `Aún no hay categorías definidas para ${marca} (las define el Director).` : `Categorías desactivadas por el Director para ${marca}.`)}</td></tr>}
+              {!usarCat && catsToggle && <tr><td className="l" colSpan={15} style={{ color: 'var(--muted)' }}>{!catsLoaded ? '⏳ Cargando categorías…' : `Aún no hay categorías definidas para ${marca} (las define el Director).`}</td></tr>}
               {usarCat && catList.map((c, i) => { const row = MESES.map((_, mi) => uCatMes(c.cat, mi)); const t = row.reduce((a, b) => a + b, 0); const pw = totMarcaSel > 0 ? (t / totMarcaSel * 100) : 0; return <tr key={i}><td className="l">{c.cat}</td><td className="tot" title={`Peso ponderado = unidades de ${c.cat} (${fmt(t)}) ÷ unidades totales de ${marca} (${fmt(totMarcaSel)}) = ${pw.toFixed(1)}%. Las unidades por categoría salen del % que el Director puso por cliente.`} style={{ cursor: BULB_CURSOR }}>{pw.toFixed(1)}%</td>{row.map((v, mi) => <td key={mi} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(t)}</td></tr> })}
             </tbody>
           </table>
