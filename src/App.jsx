@@ -47,7 +47,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente } from './google'
+import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -1222,7 +1222,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     if (concepto === 'Gastos administrativos generales') return 0 // PENDIENTE: definir la captura de gastos administrativos generales (corporativos, prorrateados por venta)
     if (concepto === 'Viajes') { const base = isTotal ? sbuMarcas.reduce((s, m) => s + viajesMes(m)[mi], 0) : viajesMes(marca)[mi]; return base + ((isTotal && sbu === '__ALL__') ? gViajesMes(mi) : 0) } // en el consolidado de EMPRESA (TODAS) se suman los viajes de Gerencia (Finanzas/Admin/Procesos)
     if (concepto === 'Marketing') return isTotal ? sbuMarcas.reduce((s, m) => s + marketingMes(m)[mi], 0) : marketingMes(marca)[mi]
-    if (concepto === 'Logística') return isTotal ? sbuMarcas.reduce((s, m) => s + logisticaMes(m)[mi], 0) : logisticaMes(marca)[mi]
+    if (concepto === 'Logística') { if (empresa === 'TUMAR') return isTotal ? tumarLogMesArr(logcost)[mi] : 0; return isTotal ? sbuMarcas.reduce((s, m) => s + logisticaMes(m)[mi], 0) : logisticaMes(marca)[mi] } // TUMAR: logística es un total de empresa (3 líneas manuales), no por marca
     return isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
   }
   // Comisiones (del Director): venta externa (Unid×AUP) × % + corporativa (compras × $/ud en HOKA/UGG).
@@ -2025,7 +2025,55 @@ function ReporteScreen({ empresa, sbus }) {
 }
 
 /* ===== LOGÍSTICA (menú): detalle consolidado por SBU y marca + referencia ABP y real 2026 del EBP ===== */
+/* ===== TUMAR · Logística: 3 líneas editables (se llenan a mano, en amarillo) + total que impacta Cash Flow y P&L ===== */
+const TUMAR_LOG_LINES = [
+  { k: 'VTA', label: 'Costo logístico de la venta', color: '#1d4ed8' },
+  { k: 'MUE', label: 'Costo de muestras', color: '#0f766e' },
+  { k: 'MANT', label: 'Costo de mantenimiento de stock', color: '#b45309' },
+]
+// Total logístico mensual de TUMAR (suma de las 3 líneas) — fuente única para Cash Flow y P&L.
+function tumarLogMesArr(logcost) { return MESES.map((_, m) => TUMAR_LOG_LINES.reduce((a, l) => a + num(logcost[`T|${l.k}|${m}`]), 0)) }
+function tumarLogTotal() { try { const d = JSON.parse(localStorage.getItem('logcost_TUMAR') || '{}'); return tumarLogMesArr(d).reduce((a, b) => a + b, 0) } catch { return 0 } }
+function TumarLogistica({ empresa }) {
+  const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { return {} } })
+  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null); const [savedAt, setSavedAt] = useState(null)
+  const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  const g = (k) => num(data[k])
+  const lineTot = (lk) => MESES.reduce((a, _, m) => a + g(`T|${lk}|${m}`), 0)
+  const totMes = (m) => TUMAR_LOG_LINES.reduce((a, l) => a + g(`T|${l.k}|${m}`), 0)
+  const granTot = MESES.reduce((a, _, m) => a + totMes(m), 0)
+  async function guardar() {
+    setSaving(true)
+    try { await gSaveEstado(empresa, 'logcost', data); try { localStorage.setItem(`logcost_${empresa}`, JSON.stringify(data)) } catch { }; const t = new Date(); setSavedAt(t.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (costos logísticos).' }) }
+    catch { setMsg({ t: 'bad', x: 'No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.' }) }
+    setSaving(false)
+  }
+  return (
+    <div className="panel">
+      <div className="toolbar" style={{ marginBottom: 8, alignItems: 'center' }}>
+        <span className="empchip" style={{ marginLeft: 0, background: '#b45309' }}>🚚 Logística</span>
+        <div className="spacer"></div>
+        {savedAt && <span className="empchip" style={{ background: 'var(--ok)', marginRight: 8, fontSize: 11.5 }}>✓ Guardado {savedAt}</span>}
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+      </div>
+      {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
+      <h3>Costos logísticos — {empresa}{M$}</h3>
+      <div className="sub">Llena a mano cada mes las <b>tres líneas</b> de costo logístico (en <b style={{ color: '#8a6d1a' }}>amarillo</b>). La última fila es el <b>total logístico</b> (la suma de las tres) y es lo que impacta el <b>Cash Flow</b> y el <b>P&L</b>.</div>
+      <div className="tablewrap"><table className="vfix logcost-tbl"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+        <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+        <tbody>
+          {TUMAR_LOG_LINES.map((l) => (
+            <tr key={l.k}><td className="l" style={{ color: l.color, fontWeight: 700 }}>{l.label}</td>{MESES.map((_, m) => <td key={m} className="cell"><input className="fillin" value={data[`T|${l.k}|${m}`] ?? ''} onChange={(e) => set(`T|${l.k}|${m}`, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot" style={{ color: l.color, fontWeight: 700 }}>{fmt(lineTot(l.k))}</td></tr>
+          ))}
+          <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">= TOTAL costo logístico <span className="unit" style={{ fontWeight: 400 }}>(impacta Cash Flow y P&L)</span></td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(totMes(m))}</td>)}<td className="tot">{fmt(granTot)}</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  )
+}
+
 function LogisticaHome({ empresa, sbus }) {
+  if (empresa === 'TUMAR') return <TumarLogistica empresa={empresa} />
   const [ventas, setVentas] = useState([]); const [producto, setProducto] = useState([])
   const [cats, setCats] = useState({}) // marca -> [catNames]
   const [logcost, setLogcost] = useState(() => { try { return JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { return {} } })
@@ -3755,7 +3803,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
     const comisiones = 0, margenBruto = ventaNeta - costo - comisiones - logistica, brand = margenBruto - marketing - viajes
     return { unidades, ventaNeta, costo, comisiones, logistica, marketing, viajes, margenBruto, brand }
   }
-  const sbuAgg = (ms) => (ms || []).reduce((a, m) => { const c = fullCalc(m); Object.keys(c).forEach((k) => a[k] = (a[k] || 0) + c[k]); return a }, {})
+  const sbuAgg = (ms) => { const a = (ms || []).reduce((acc, m) => { const c = fullCalc(m); Object.keys(c).forEach((k) => acc[k] = (acc[k] || 0) + c[k]); return acc }, {}); if (empresa === 'TUMAR') { a.logistica = tumarLogTotal(); a.margenBruto = (a.ventaNeta || 0) - (a.costo || 0) - (a.comisiones || 0) - a.logistica; a.brand = a.margenBruto - (a.marketing || 0) - (a.viajes || 0) } return a }
   const gadminAnual = (() => { try { const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } return cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { return 0 } })()
   const [ppt, setPpt] = useState(false)
   async function descargarPptx() {
@@ -4155,7 +4203,8 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
       try { comisRef = await gComisRef() } catch { }
       let gadminRef = null; try { gadminRef = await gGAdminRef() } catch { }
       const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
-      setP({ ven, prod, cats, mk, log, dir, hist, plan, vjRef, mkRef, logRef26, logExp, comisRef, gadminRef })
+      let tumar = null; if (empresa === 'TUMAR') { try { tumar = await gTumarReal() } catch { } }
+      setP({ ven, prod, cats, mk, log, dir, hist, plan, vjRef, mkRef, logRef26, logExp, comisRef, gadminRef, tumar })
     })()
   }, [empresa])
 
@@ -4180,6 +4229,8 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   }
   const cols = (marcasSBU || []).map((m) => ({ m, v: calc(m) }))
   const tot = cols.reduce((acc, { v }) => { Object.keys(v).forEach((k) => acc[k] = (acc[k] || 0) + v[k]); return acc }, {})
+  // TUMAR: la logística del plan es el total de empresa (3 líneas que llena Logística), no la suma por marca.
+  if (empresa === 'TUMAR') { tot.logistica = tumarLogTotal(); tot.margenBruto = (tot.ventaNeta || 0) - (tot.costo || 0) - (tot.comisiones || 0) - tot.logistica; tot.brand = tot.margenBruto - (tot.marketing || 0) - (tot.viajes || 0) }
 
   // FY histórico (solo Venta/Costo/Margen): suma de las marcas de la SBU por año
   const fy = (year, tipo) => { let s = 0; P.hist.forEach((r) => { if (String(r[1]) !== String(year)) return; if (!(marcasSBU || []).some((m) => upper(m) === upper(r[5]))) return; if (String(r[3] || '').toUpperCase().indexOf(tipo) < 0) return; s += num(r[7]) }); return s }
@@ -4197,15 +4248,21 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
   // Gastos administrativos (compartidos por toda la empresa) — total anual
   const gadminAnual = (() => { try { const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}'); let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { } return cfg.reduce((a, it) => a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0), 0) } catch { return 0 } })()
 
+  // TUMAR: el Real 2026 (YTD) viene de TUMAR Performance (gTumarReal, en USD), no del EBP.
+  const sum12 = (a) => (a || []).reduce((x, y) => x + y, 0)
+  const T = empresa === 'TUMAR' && P.tumar ? P.tumar : null
+  const v26 = T ? sum12(T.totalVenta) : fyVenta(2026), c26 = T ? sum12(T.totalCosto) : fyCosto(2026)
+  const com26 = T ? sum12(T.lines.comisiones) : comisS(2026), log26 = T ? sum12(T.lines.logistica) : (logRef26S || logExpS(2026))
+  const mk26 = T ? sum12(T.lines.marketing) : mkRefS(2026), vj26 = T ? sum12(T.lines.viajes) : vjRefS(2026)
   const filas = [
-    { k: 'Unidades', get: (v) => v.unidades },
-    { k: 'Venta Neta', get: (v) => v.ventaNeta, strong: true, fy26: fyVenta(2026), fy25: fyVenta(2025), abp27: abpVenta },
-    { k: '(−) Costo', get: (v) => v.costo, fy26: fyCosto(2026), fy25: fyCosto(2025), abp27: abpCosto },
-    { k: '(−) Comisiones', get: (v) => v.comisiones, fy26: comisS(2026), fy25: comisS(2025), abp27: null },
-    { k: '(−) Logística', get: (v) => v.logistica, fy26: logRef26S || logExpS(2026), fy25: logExpS(2025), abp27: null },
-    { k: '= Margen Bruto', get: (v) => v.margenBruto, strong: true, fy26: fyMargen(2026), fy25: fyMargen(2025), abp27: abpMargen },
-    { k: '(−) Marketing', get: (v) => v.marketing, fy26: mkRefS(2026), fy25: mkRefS(2025), abp27: null },
-    { k: '(−) Viajes', get: (v) => v.viajes, fy26: vjRefS(2026), fy25: vjRefS(2025), abp27: null },
+    { k: 'Unidades', get: (v) => v.unidades, fy26: T ? sum12(T.totalUnid) : null },
+    { k: 'Venta Neta', get: (v) => v.ventaNeta, strong: true, fy26: v26, fy25: fyVenta(2025), abp27: abpVenta },
+    { k: '(−) Costo', get: (v) => v.costo, fy26: c26, fy25: fyCosto(2025), abp27: abpCosto },
+    { k: '(−) Comisiones', get: (v) => v.comisiones, fy26: com26, fy25: comisS(2025), abp27: null },
+    { k: '(−) Logística', get: (v) => v.logistica, fy26: log26, fy25: logExpS(2025), abp27: null },
+    { k: '= Margen Bruto', get: (v) => v.margenBruto, strong: true, fy26: T ? (v26 - c26 - (com26 || 0) - (log26 || 0)) : fyMargen(2026), fy25: fyMargen(2025), abp27: abpMargen },
+    { k: '(−) Marketing', get: (v) => v.marketing, fy26: mk26, fy25: mkRefS(2025), abp27: null },
+    { k: '(−) Viajes', get: (v) => v.viajes, fy26: vj26, fy25: vjRefS(2025), abp27: null },
     { k: '= CONTRIBUCIÓN DE LA BU', get: (v) => v.brand, strong: true },
     { k: '(−) Gastos administrativos', get: () => 0, totVal: gadminAnual, fy26: gadminS(2026), fy25: gadminS(2025), abp27: null },
     { k: '🎯 = RESULTADO OPERATIVO', get: () => 0, totVal: (tot.brand || 0) - gadminAnual, strong: true },

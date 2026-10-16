@@ -104,6 +104,37 @@ async function readValuesFrom(sheetId, tab) {
 }
 // Normaliza texto para comparar rubros del EBP: mayúsculas y SIN acentos (ej. "LOGÍSTICO" → "LOGISTICO").
 function _norm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase() }
+
+/* ===== TUMAR PERFORMANCE: real 2026 (ventas/costo/unidades por marca + gastos por línea), en USD (÷ TIPO DE CAMBIO del mes) ===== */
+const TUMAR_SHEET_ID = '1kGWUjkDN32LGrMkhCqIvj9lEOg8ghn-yqkb8CD8817I'
+function _tmZ() { return Array(12).fill(0) }
+function _tmNum(v) { if (typeof v === 'number') return v; const n = parseFloat(String(v || '').replace(/\./g, '').replace(',', '.').replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n }
+function _tmMonth(v) { if (v == null || v === '') return -1; if (typeof v === 'number') { const d = new Date(Math.round((v - 25569) * 86400000)); return isNaN(d) ? -1 : d.getUTCMonth() } const m = String(v).match(/(\d{4})-(\d{2})/); if (m) return +m[2] - 1; const d = new Date(v); return isNaN(d) ? -1 : d.getUTCMonth() }
+function _tmLineOf(concepto) { const c = _norm(concepto); if (c.includes('MARKETING')) return 'marketing'; if (c.includes('LOGISTICA')) return 'logistica'; if (c.includes('REPRESENTACION')) return 'viajes'; return 'admin' }
+function _hidx(rows, name) { const h = (rows[0] || []).map((x) => String(x == null ? '' : x).trim().toUpperCase()); return h.indexOf(String(name).toUpperCase()) }
+async function _tmRead(tab) { try { const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + TUMAR_SHEET_ID + '/values/' + encodeURIComponent(A1(tab)) + '?valueRenderOption=UNFORMATTED_VALUE', { headers: { Authorization: 'Bearer ' + _token } }); if (!r.ok) return []; const j = await r.json(); return j.values || [] } catch { return [] } }
+export async function gTumarReal() {
+  const [ucv, compras, tesor] = await Promise.all([_tmRead('UNIDADES COSTO VENTAS'), _tmRead('COMPRAS'), _tmRead('TESORERIA')])
+  const marcas = {}, lines = { marketing: _tmZ(), viajes: _tmZ(), logistica: _tmZ(), comisiones: _tmZ(), admin: _tmZ() }
+  const mesesSet = new Set()
+  // Ventas / Costo / Unidades por marca y mes (USD = ARS ÷ TC)
+  if (ucv.length > 1) {
+    const iMonto = _hidx(ucv, 'Monto Vendido'), iCant = _hidx(ucv, 'Cantidad Vendida'), iCosto = _hidx(ucv, 'Costo de Venta'), iMar = _hidx(ucv, 'MARCA'), iMes = _hidx(ucv, 'MES'), iTC = _hidx(ucv, 'TIPO DE CAMBIO')
+    ucv.slice(1).forEach((r) => {
+      const mi = _tmMonth(r[iMes]); if (mi < 0) return; const tc = _tmNum(r[iTC]) || 1; const mar = String(r[iMar] || '').trim().toUpperCase(); if (!mar || mar === 'SIN MARCA') return
+      const m = marcas[mar] || (marcas[mar] = { venta: _tmZ(), costo: _tmZ(), unid: _tmZ() })
+      m.venta[mi] += _tmNum(r[iMonto]) / tc; m.costo[mi] += _tmNum(r[iCosto]) / tc; m.unid[mi] += _tmNum(r[iCant]); mesesSet.add(mi)
+    })
+  }
+  // Gastos por línea (COMPRAS + TESORERIA), en USD
+  const addGastos = (rows, impName) => { if (rows.length < 2) return; const iImp = _hidx(rows, impName), iMes = _hidx(rows, 'MES'), iTC = _hidx(rows, 'TIPO DE CAMBIO'), iCon = _hidx(rows, 'CONCEPTO'); rows.slice(1).forEach((r) => { const mi = _tmMonth(r[iMes]); if (mi < 0) return; const tc = _tmNum(r[iTC]) || 1; const usd = _tmNum(r[iImp]) / tc; const line = _tmLineOf(r[iCon]); (lines[line] || lines.admin)[mi] += usd; mesesSet.add(mi) }) }
+  addGastos(compras, 'Importe')
+  addGastos(tesor, 'Debe (CTE) (renglón)')
+  const totalVenta = _tmZ(), totalCosto = _tmZ(), totalUnid = _tmZ()
+  Object.values(marcas).forEach((m) => { for (let i = 0; i < 12; i++) { totalVenta[i] += m.venta[i]; totalCosto[i] += m.costo[i]; totalUnid[i] += m.unid[i] } })
+  const decDone = mesesSet.has(11)
+  return { ok: true, marcas, lines, totalVenta, totalCosto, totalUnid, mesesConDatos: mesesSet.size, decDone }
+}
 // Extrae el año de una celda de fecha en cualquier formato del EBP: "may-25", "ene-26", "2026-01-01", "25/5/2026", serial, etc.
 function _yearOf(cell) {
   const s = String(cell || '').trim()
