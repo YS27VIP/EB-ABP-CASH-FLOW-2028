@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'vendedores', 'vendcli']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -5080,6 +5080,12 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
 
   const [extraMarcas, setExtraMarcas] = useState([])
   useEffect(() => { (async () => { try { const m = await gLoadMarcas(); setExtraMarcas(m); setAsign((prev) => seedWith(combos[empresa], [...ALL_MARCAS, ...m])) } catch { } })() }, [])
+  // Vendedores por marca (2 por marca): sus nombres salen en Ventas.
+  const [vend, setVend] = useState({})
+  const [savingV, setSavingV] = useState(false); const [msgV, setMsgV] = useState(null)
+  useEffect(() => { try { setVend(JSON.parse(localStorage.getItem(`vendedores_${empresa}`) || '{}')) } catch { setVend({}) } }, [empresa])
+  const setVendName = (mca, i, v) => setVend((d) => { const cur = (d[mca] || ['', '']).slice(); cur[i] = v; return { ...d, [mca]: cur } })
+  async function guardarVend() { setSavingV(true); setMsgV(null); try { await gSaveEstado(empresa, 'vendedores', vend); try { localStorage.setItem(`vendedores_${empresa}`, JSON.stringify(vend)) } catch { }; setMsgV({ t: 'ok', x: 'Vendedores guardados. Ya salen en Ventas.' }) } catch { setMsgV({ t: 'bad', x: 'No se pudo guardar.' }) } setSavingV(false) }
   const allMarcas = empresa === 'TUMAR' ? [...new Set([...TUMAR_MARCAS, ...extraMarcas])] : [...new Set([...ALL_MARCAS, ...extraMarcas, ...(ebSbus ? Object.values(ebSbus).flat() : [])])].filter((m) => !(empresa === 'ENERGY BRANDS' && EB_RETIRADAS.has(upper(m))))
   // TUMAR: sus marcas vienen todas en SBU 1 (una sola unidad). Si no hay nada guardado, se auto-asignan a SBU 1.
   useEffect(() => {
@@ -5185,6 +5191,24 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="panel">
+        <h3>Vendedores por marca — {empresa} <span className="unit">(2 por marca · sus nombres salen en Ventas)</span></h3>
+        <div className="sub">Asigna el nombre del <b>Vendedor 1</b> y <b>Vendedor 2</b> de cada marca. En Ventas, los clientes se reparten en esos dos bloques y la suma da el total de la marca. Si lo dejas vacío, sale "Vendedor 1 / Vendedor 2".</div>
+        <div className="tablewrap"><table style={{ width: 'auto', minWidth: 460 }}>
+          <thead><tr><th className="l">Marca</th><th className="l">Vendedor 1</th><th className="l">Vendedor 2</th></tr></thead>
+          <tbody>
+            {allMarcas.filter((mk) => SBU_NAMES.includes(asign[mk])).map((mk) => (
+              <tr key={mk}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mk), marginRight: 7 }}></span>{mk}</td>
+                <td><input className="fillin" value={(vend[mk] || [])[0] || ''} onChange={(e) => setVendName(mk, 0, e.target.value)} placeholder="Vendedor 1" style={{ minWidth: 160 }} /></td>
+                <td><input className="fillin" value={(vend[mk] || [])[1] || ''} onChange={(e) => setVendName(mk, 1, e.target.value)} placeholder="Vendedor 2" style={{ minWidth: 160 }} /></td></tr>
+            ))}
+            {allMarcas.filter((mk) => SBU_NAMES.includes(asign[mk])).length === 0 && <tr><td className="l" colSpan={3}>Primero asigna marcas a una SBU arriba.</td></tr>}
+          </tbody>
+        </table></div>
+        <div className="toolbar" style={{ marginTop: 8 }}><div className="spacer"></div><button className="btn primary" disabled={savingV} onClick={guardarVend}>{savingV ? 'Guardando…' : '💾 Guardar vendedores'}</button></div>
+        {msgV && <div className={'note ' + msgV.t}>{msgV.x}</div>}
       </div>
 
       <div className="toolbar">
@@ -5607,6 +5631,15 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [tpCli, setTpCli] = useState(null) // TUMAR: clientes + unidades 2026 reales de TUMAR Performance
   useEffect(() => { if (empresa === 'TUMAR') { (async () => { try { setTpCli(await gTumarClientes()) } catch { } })() } }, [empresa])
   const [nuevoCli, setNuevoCli] = useState('')
+  // 2 vendedores por marca (Energy Brands): nombres de Config + asignación cliente→vendedor.
+  const useVend = empresa === 'ENERGY BRANDS'
+  const [vendcli, setVendcli] = useState(() => { try { return JSON.parse(localStorage.getItem('vendcli_' + empresa) || '{}') } catch { return {} } })
+  const [vendNames, setVendNames] = useState([])
+  useEffect(() => { try { const v = JSON.parse(localStorage.getItem('vendedores_' + empresa) || '{}'); setVendNames(v[marca] || []) } catch { setVendNames([]) } }, [empresa, marca])
+  useEffect(() => { try { localStorage.setItem('vendcli_' + empresa, JSON.stringify(vendcli)) } catch { } }, [vendcli, empresa])
+  const vName = (i) => (vendNames[i] && String(vendNames[i]).trim()) ? vendNames[i] : `Vendedor ${i + 1}`
+  const vendOf = (cli) => (vendcli[`${marca}|${cli}`] === 1 ? 1 : 0)
+  const setVendOf = (cli, i) => { const next = { ...vendcli, [`${marca}|${cli}`]: i }; setVendcli(next); saveEstado(empresa, 'vendcli', next) }
   const [buscar, setBuscar] = useState('')
   const topScRef = useRef(null), botScRef = useRef(null) // barra de scroll horizontal (arriba) sincronizada con la tabla
   useEffect(() => { (async () => { try { const j = await gLoadClientes(empresa); if (j && j.ok) setBaseCli(j.clientes) } catch { } })() }, [empresa])
@@ -5663,7 +5696,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   // Clientes semilla por empresa (ej. TUMAR, del Excel) que aún no están en histórico/hoja/agregados.
   const yaEn2 = new Set([...histClientes, ...addedFor, ...desdeHoja].map((c) => upper(c)))
   const seedCli = (SEED_CLIENTES[empresa] || []).filter((c) => !yaEn2.has(upper(c)))
-  const clientes = [...histClientes, ...addedFor, ...desdeHoja, ...seedCli]
+  let clientes = [...histClientes, ...addedFor, ...desdeHoja, ...seedCli]
+  if (useVend) clientes = clientes.slice().sort((a, b) => vendOf(a) - vendOf(b)) // agrupa por vendedor (V1 arriba, V2 abajo)
   const esNuevo = (cli) => !histSet.has(upper(cli)) // sin histórico 2026 → unidades 2028 manuales
   const g = (cli) => num(growth[cli + '|' + marca])
   const u26 = (cli, mi) => (u2026[cli + '|' + marca] || [])[mi] || 0
@@ -5982,10 +6016,11 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
             <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Total</th><th>% Peso</th></tr></thead>
             <tbody>
               {clientes.length === 0 && <tr><td className="l" colSpan={17}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico, o agrega un cliente con el buscador de arriba.</td></tr>}
-              {clientes.filter((cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0).map((cli) => { const nuevo = esNuevo(cli); const obj = objetivo28(cli); const desc = !nuevo && obj != null && t28(cli) !== obj; return (
+              {clientes.filter((cli) => !buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0).map((cli, _idx, _arr) => { const nuevo = esNuevo(cli); const obj = objetivo28(cli); const desc = !nuevo && obj != null && t28(cli) !== obj; return (
                 <Fragment2 key={cli}>
+                  {useVend && (_idx === 0 || vendOf(_arr[_idx - 1]) !== vendOf(cli)) && (() => { const vi = vendOf(cli); const grp = _arr.filter((c) => vendOf(c) === vi); const uSub = grp.reduce((a, c) => a + t28(c), 0); return <tr className="secrow"><td className="l" colSpan={17}>🧑‍💼 {vName(vi)} <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>· {grp.length} cliente(s) · {fmt(uSub)} ud en 2028</span></td></tr> })()}
                   <tr>
-                    <td className="l" rowSpan={rsp}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}{paisByCli[cli] && <div style={{ marginTop: 2, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }} title="País del cliente (Base Clientes SF)">📍 {paisByCli[cli]}</div>}<label style={{ display: 'block', marginTop: 5, fontSize: 11, color: esInt(cli) ? '#b45309' : 'var(--muted)', cursor: 'pointer', fontWeight: 600 }}><input type="checkbox" checked={esInt(cli)} onChange={() => toggleInt(cli)} style={{ marginRight: 5, verticalAlign: 'middle' }} />Interno (intercompañía)</label></td>
+                    <td className="l" rowSpan={rsp}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}{paisByCli[cli] && <div style={{ marginTop: 2, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }} title="País del cliente (Base Clientes SF)">📍 {paisByCli[cli]}</div>}<label style={{ display: 'block', marginTop: 5, fontSize: 11, color: esInt(cli) ? '#b45309' : 'var(--muted)', cursor: 'pointer', fontWeight: 600 }}><input type="checkbox" checked={esInt(cli)} onChange={() => toggleInt(cli)} style={{ marginRight: 5, verticalAlign: 'middle' }} />Interno (intercompañía)</label>{useVend && <div style={{ marginTop: 5 }}><span className="unit" style={{ marginRight: 4 }}>Vendedor:</span><select value={vendOf(cli)} onChange={(e) => setVendOf(cli, Number(e.target.value))} style={{ fontSize: 11, padding: '2px 4px', borderRadius: 5, border: '1px solid var(--line)' }}><option value={0}>{vName(0)}</option><option value={1}>{vName(1)}</option></select></div>}</td>
                     <td className="cell" rowSpan={rsp} style={{ verticalAlign: 'top' }}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}
                       <div style={{ marginTop: 7, fontSize: 11, lineHeight: 1.45 }}>
                         {!nuevo && <div style={{ color: 'var(--muted)' }} title="Total objetivo = total 2026 × (1 + % crecimiento). Reparte este total en los meses de 2028.">🎯 obj <b>{fmt(obj)}</b></div>}
