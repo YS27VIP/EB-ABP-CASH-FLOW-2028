@@ -1166,6 +1166,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       try { const j6 = await gReadTab('Cap_Logistica'); if (j6 && j6.ok && j6.values) setLogRows(j6.values.slice(1)) } catch { }
       try { const j7 = await gReadTab('Cap_Director'); if (j7 && j7.ok && j7.values) setDirRows(j7.values.slice(1)) } catch { }
       try { const j8 = await gReadTab('Cap_Finanzas'); if (j8 && j8.ok && j8.values) setFinRows(j8.values.slice(1)) } catch { }
+      if (empresa === 'TUMAR') { try { setTpCli(await gTumarClientes()) } catch { } }
     })()
   }, [empresa, cfVer])
   // Espejo de Costos Operativos: Marketing (equipo Marketing) y Viajes (rubros VIAJES de todas las áreas), por mes.
@@ -1195,6 +1196,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) set.add(cli) })
     ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (cli) set.add(cli) })
     try { const add = JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}'); (add[mca] || []).forEach((c) => { if (c) set.add(c) }) } catch { }
+    if (empresa === 'TUMAR' && tpCli && tpCli.clientes && tpCli.clientes[upper(mca)]) Object.keys(tpCli.clientes[upper(mca)]).forEach((c) => { if (c) set.add(c) }) // clientes reales de TUMAR Performance
     return [...set].sort((a, b) => a.localeCompare(b))
   }
 
@@ -1513,7 +1515,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                     return (
                       <tr key={cli} style={nuevo ? { background: '#eff6ff' } : undefined}>
                         <td className="l" style={inc ? { color: '#b91c1c' } : undefined}>{cli}{nuevo && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 800, color: '#fff', background: '#f97316', borderRadius: 5, padding: '2px 7px', verticalAlign: 'middle', letterSpacing: '.3px', boxShadow: '0 1px 2px rgba(249,115,22,.4)' }} title="Cliente NUEVO: sin histórico ni plazo de Salesforce. El Director define su plazo.">NUEVO</span>}{inc && <span className="unit" style={{ marginLeft: 6, color: '#b91c1c', fontWeight: 700 }}>⛔ incobrable</span>}</td>
-                        <td>{nuevo
+                        <td>{empresa === 'TUMAR'
+                          ? (soloVer
+                            ? <span title="Plazo de cobro: lo define Finanzas (TUMAR no tiene Salesforce).">{data[tk] || '—'}</span>
+                            : <select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)} title="TUMAR no tiene Salesforce: Finanzas define el plazo de cobro" className="fillin" style={{ padding: '4px 6px' }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>)
+                          : nuevo
                           ? (esDirector
                             ? <select value={data[tk] ?? ''} onChange={(e) => set(tk, e.target.value)} title="Cliente NUEVO: tú (Director) defines el plazo" style={{ background: '#fff7e0', border: '1px solid #e6c34d', borderRadius: 6, padding: '4px 6px' }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select>
                             : <span title="Plazo del cliente nuevo: lo define el Director; aquí es espejo.">{data[tk] || '—'} {ESP('Cliente nuevo: el plazo lo define el Director. Aquí Finanzas solo lo ve.')}</span>)
