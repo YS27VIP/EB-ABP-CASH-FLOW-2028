@@ -86,6 +86,11 @@ const DEFAULT_SBUS = {
 // Marcas conocidas que por defecto NO se venden (quedan disponibles para reasignar en Configuración): FJALLRAVEN y FITFLOP.
 const ALL_MARCAS = [...new Set([...Object.values(DEFAULT_SBUS).flat(), 'FJALLRAVEN', 'FITFLOP'])]
 const SBU_NAMES = ['SBU 1', 'SBU 2', 'SBU 3']
+// TUMAR: empresa aparte, una sola unidad con sus 7 marcas (no usa SBU 1/2/3).
+const TUMAR_MARCAS = ['OSPREY', 'BLUNDSTONE', 'FJALLRAVEN', 'KEEN', 'ARIAT', 'HYDRO FLASK', 'VEJA']
+const TUMAR_SBUS = { 'SBU 1': TUMAR_MARCAS }
+// Clientes semilla por empresa (TUMAR, del Excel de facturación · sin país).
+const SEED_CLIENTES = { 'TUMAR': ['LA LOMITA OUTDOORS SRL', 'HERNANDEZ ISMAEL MARIA', 'RIVAROLA MARIA ESTELA', 'MARTHA HEADWEAR SA S. A.', 'WILBERGER NOELIA MARILINA', 'GIGENA JUAN MANUEL', 'UNIAVENTURA S.A.', 'FOURCANS MARTIN OSCAR', 'MORIS CESAR OSVALDO', 'SCALZO OSVALDO NESTOR', 'ANGLER S AVENTURAS SOCIEDAD DE RESPONSABILIDAD LIMITADA', 'CRISTOBAL COLON S. R. L.', 'GROUP MOBILE S.A.', 'EL VIAJERO CAMPING S.R.L.', 'RANCHOCAVALIER S.R.L.', 'BASSI JUAN PABLO', 'PARALELO 42 S. CAP I SECC IV', 'PLACE IT S.A'] }
 /* Empresas del grupo (el nombre debe coincidir con la columna EMPRESA del Histórico). */
 const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO']
 
@@ -446,7 +451,7 @@ export default function App() {
   // Composición SBU↔marca: para TODAS las empresas (incl. ENERGY BRANDS) se usa lo configurado (combos) con DEFAULT_SBUS como base.
   // Si las combinaciones guardadas son viejas/incompletas (menos de 2 SBU con marcas), se ignoran y se usa DEFAULT_SBUS.
   const combosReales = (emp) => { const c = combos[emp]; return !!(c && SBU_NAMES.filter((s) => (c[s] || []).length).length >= 2) }
-  const sbusFor = (emp) => emp === 'ENERGY BRANDS' ? (combosReales('ENERGY BRANDS') ? effSBUS(emp, combos) : DEFAULT_SBUS) : effSBUS(emp, combos)
+  const sbusFor = (emp) => emp === 'TUMAR' ? TUMAR_SBUS : (emp === 'ENERGY BRANDS' ? (combosReales('ENERGY BRANDS') ? effSBUS(emp, combos) : DEFAULT_SBUS) : effSBUS(emp, combos))
   const sbus = sbusFor(empresa)
 
   function nuevaEmpresa() {
@@ -534,10 +539,10 @@ export default function App() {
                 <span className="applabel">{s}</span>
               </button>
             ))}
-            <button className="app" onClick={() => setRoleId('sbu:Retail')}>
+            {empresa === 'ENERGY BRANDS' && <button className="app" onClick={() => setRoleId('sbu:Retail')}>
               <span className="appicon" style={{ background: sbuColor('Retail') }}>🏬</span>
               <span className="applabel">Retail</span>
-            </button>
+            </button>}
             {puede('Finanzas') && <button className="app" onClick={() => setRoleId('finanzas')}>
               <span className="appicon" style={{ background: '#2e7d32' }}>💰</span>
               <span className="applabel">Finanzas</span>
@@ -946,10 +951,12 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
   useEffect(() => { try { setExtras(JSON.parse(localStorage.getItem(`${extrasKey}_${empresa}`) || '[]')) } catch { setExtras([]) } }, [empresa, extrasKey])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
-  const multi = groups.length > 1
+  // TUMAR no usa el detalle de viajes de Energy Brands: una sola línea "VIAJES".
+  const groupsEff = (empresa === 'TUMAR' && rubro.k === 'VIAJES') ? [{ g: 'VIAJES', items: [{ c: '201', n: 'VIAJES' }] }] : groups
+  const multi = groupsEff.length > 1
 
   const extraItems = extras.map((e) => ({ c: '', n: e }))
-  const grupos = multi ? [...groups, { g: 'ADICIONALES', items: extraItems }] : [{ g: groups[0].g, items: [...groups[0].items, ...extraItems] }]
+  const grupos = multi ? [...groupsEff, { g: 'ADICIONALES', items: extraItems }] : [{ g: groupsEff[0].g, items: [...groupsEff[0].items, ...extraItems] }]
   // Venta neta (de Comercial) para saber cuánto pesa este rubro (Marketing/Viajes) sobre la venta
   const [vd, setVd] = useState({ ventas: [], producto: [], cats: {} })
   useEffect(() => { (async () => { const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }; const [ventas, producto, cap] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias')]); const cats = {}; cap.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const c = r[1], mar = r[3], peso = num(r[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) }); setVd({ ventas, producto, cats }) })() }, [empresa])
@@ -3046,13 +3053,26 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   // ---- Importaciones (captura mensual del COSTO de importación por marca, con referencia 2027) ----
   const [imp, setImp] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  const [savedAt, setSavedAt] = useState(null) // hora del último guardado exitoso (confirmación persistente)
+  const SavedBadge = () => savedAt ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: '#15803d', background: '#eafaf1', border: '1px solid #bfe3c9', borderRadius: 8, padding: '4px 10px' }} title="Confirmación de que el último guardado se escribió en el Google Sheet">✓ Guardado {savedAt}</span> : null
+  const marcarGuardado = () => { try { setSavedAt(new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' })) } catch { setSavedAt('ok') } }
+  // Guarda a localStorage (inmediato) y ESPERA la escritura al Google Sheet para confirmar de verdad.
+  async function guardarKeys(pairs, okMsg) {
+    setSaving(true); setMsg(null)
+    try {
+      pairs.forEach(([k, v]) => { try { localStorage.setItem(`${k}_${empresa}`, JSON.stringify(v)) } catch { } })
+      for (const [k, v] of pairs) await gSaveEstado(empresa, k, JSON.stringify(v))
+      marcarGuardado(); setMsg({ t: 'ok', x: okMsg || 'Guardado en el Google Sheet ✓' })
+    } catch (e) { setMsg({ t: 'bad', x: 'No se pudo guardar en el Sheet: ' + (e && e.message || e) + '. (Quedó en tu navegador; vuelve a intentar en un momento.)' }) }
+    setSaving(false)
+  }
   useEffect(() => { try { setImp(JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}')) } catch { } }, [empresa])
   const ik = (m, mi) => `${m}|${mi}`
   const setI = (m, mi, v) => setImp((d) => ({ ...d, [ik(m, mi)]: v }))
   const rowTotM = (m) => MESES.reduce((a, _, mi) => a + num(imp[ik(m, mi)]), 0)
   const colTotM = (mi) => RETAIL_MARCAS.reduce((a, m) => a + num(imp[ik(m, mi)]), 0)
   const granTot = RETAIL_MARCAS.reduce((a, m) => a + rowTotM(m), 0)
-  function guardarImp() { setSaving(true); try { saveEstado(empresa, 'retail_imp', imp); setMsg({ t: 'ok', x: 'Importaciones guardadas. Alimentan el Cash Out del Cash Flow de Retail.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  const guardarImp = () => guardarKeys([['retail_imp', imp]], 'Importaciones guardadas en el Sheet ✓')
   const vjRoles = ['director', 'producto', 'marketing', 'ventas'].map((id) => ROLES.find((r) => r.id === id))
   const mkRubro = (ROLES.find((r) => r.id === 'marketing').rubros || [])[0]
   // ---- Gastos (por rubro y mes, con ref 2027 y agregar rubro) ----
@@ -3065,7 +3085,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const gRow = (n) => MESES.reduce((a, _, mi) => a + num(gastos[gk(n, mi)]), 0)
   const gCol = (mi) => gRubros.reduce((a, r) => a + num(gastos[gk(r.n, mi)]), 0)
   const gGran = gRubros.reduce((a, r) => a + gRow(r.n), 0)
-  function guardarGastos() { setSaving(true); try { saveEstado(empresa, 'retail_gastos', gastos); saveEstado(empresa, 'retail_gastos_x', gRubrosX); setMsg({ t: 'ok', x: 'Gastos guardados.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  const guardarGastos = () => guardarKeys([['retail_gastos', gastos], ['retail_gastos_x', gRubrosX]], 'Gastos guardados en el Sheet ✓')
   function addRubroG() { const n = window.prompt('Nombre del nuevo rubro de gasto:'); if (!n) return; const nm = n.trim(); if (!nm || gRubros.some((r) => r.n.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Ese rubro ya existe.' }); return } const next = [...gRubrosX, nm]; setGRubrosX(next); saveEstado(empresa, 'retail_gastos_x', next) }
   function delRubroG(nm) { const next = gRubrosX.filter((x) => x !== nm); setGRubrosX(next); saveEstado(empresa, 'retail_gastos_x', next) }
   // ---- Ventas por tienda: se ESCOGE una tienda y se llena por categoría/subcategoría ----
@@ -3097,7 +3117,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const esTiendaNueva = (t) => !RETAIL_TIENDAS.includes(t)
   const tVenta = (t) => MESES.reduce((a, _, mi) => a + storeVentaM(t, mi), 0)
   const tCosto = (t) => MESES.reduce((a, _, mi) => a + storeCostoM(t, mi), 0)
-  function guardarVentas() { setSaving(true); try { saveEstado(empresa, 'retail_ventas', vt); saveEstado(empresa, 'retail_cats', cats); saveEstado(empresa, 'retail_tiendas', tiendas); saveEstado(empresa, 'retail_map', smap); saveEstado(empresa, 'retail_cf', cf); setMsg({ t: 'ok', x: 'Guardado.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  const guardarVentas = () => guardarKeys([['retail_ventas', vt], ['retail_cats', cats], ['retail_tiendas', tiendas], ['retail_map', smap], ['retail_cf', cf]], 'Guardado en el Google Sheet ✓')
   function addTienda() { const n = window.prompt('Nombre de la nueva tienda:'); if (!n) return; const nm = n.trim(); if (!nm || tiendas.some((t) => t.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa tienda ya existe.' }); return } const next = [...tiendas, nm]; setTiendas(next); setSelT(nm); saveEstado(empresa, 'retail_tiendas', next) }
   function delTienda(t) { if (!window.confirm(`¿Quitar la tienda "${t}"?`)) return; const next = tiendas.filter((x) => x !== t); setTiendas(next); if (selT === t) setSelT(next[0] || null); saveEstado(empresa, 'retail_tiendas', next) }
   function addCat(t) { const n = window.prompt('Subcategoría Retail (ej: "CORRER", "SENDERISMO"):'); if (!n) return; const nm = n.trim(); const cur = catsOf(t); if (!nm || cur.some((c) => c.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa subcategoría ya existe en la tienda.' }); return } setCats((d) => ({ ...d, [t]: [...cur, nm] })) }
@@ -3156,7 +3176,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   useEffect(() => { try { setCf(JSON.parse(localStorage.getItem(`retail_cf_${empresa}`) || '{}')) } catch { } }, [empresa])
   const fk = (line, mi) => `${line}|${mi}`
   const setCF = (line, mi, v) => setCf((d) => ({ ...d, [fk(line, mi)]: v }))
-  function guardarCF() { setSaving(true); try { saveEstado(empresa, 'retail_cf', cf); setMsg({ t: 'ok', x: 'Cash Flow guardado.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  const guardarCF = () => guardarKeys([['retail_cf', cf]], 'Cash Flow guardado en el Sheet ✓')
   // ---- Cash Flow Retail: mismas líneas que las marcas, Cash Final encadenado ----
   const mpct = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
   // Importaciones DERIVADAS del mapa: por (marca,categoría)/mes = Σ(tiendas, subcats) unidades × %marca × AUC(marca, categoría de la celda) × factor.
@@ -3259,7 +3279,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Gastos</span><div className="spacer"></div><button className="btn" onClick={addRubroG}>➕ Agregar rubro</button><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar gastos'}</button></div>
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Gastos</span><div className="spacer"></div><button className="btn" onClick={addRubroG}>➕ Agregar rubro</button><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar gastos'}</button></div>
           <h3 style={{ color: col }}>Gastos 2028 — Retail</h3>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table className="vfix"><colgroup><col style={{ width: '200px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '95px' }} /></colgroup>
@@ -3277,7 +3297,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Importaciones por tienda</span><div className="spacer"></div><button className="btn" onClick={() => setComTab('mapa')}>🧭 Mapa de abastecimiento</button><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Importaciones por tienda</span><div className="spacer"></div><button className="btn" onClick={() => setComTab('mapa')}>🧭 Mapa de abastecimiento</button><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Importaciones y costo proyectados por tienda — 2028 <span className="unit">(unidades a comprar · Retail → Wholesale)</span></h3>
           <div className="sub">Escoge una <b>tienda</b> y captura por <b>subcategoría Retail</b>: las <b>unidades por mes</b>. El <b>costo</b> sale del <b>mapa de abastecimiento</b> (de qué marca/categoría wholesale se compra cada subcategoría) × el <b>factor</b> global.</div>
           <div className="toolbar" style={{ margin: '8px 0 2px', gap: 8, alignItems: 'center' }}>
@@ -3358,7 +3378,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Mapa de abastecimiento</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Mapa de abastecimiento</span><div className="spacer"></div><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Mapa de abastecimiento <span className="unit">(a qué marca · categoría wholesale le compra Retail cada subcategoría)</span></h3>
           <div className="sub">En cada <b>subcategoría</b> (fila) y <b>marca</b> (columna), pon el <b>%</b> que se le compra y elige la <b>categoría</b> de esa marca. Cada fila debe sumar <b>100%</b> — si no, se marca en rojo. El costo usa el <b>AUC exacto</b> de esa marca·categoría × factor.</div>
           {allSubcats.length === 0 ? <div className="sub">No hay subcategorías. Agrégalas en "Importaciones por tienda".</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
@@ -3388,7 +3408,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Ventas por tienda</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Ventas por tienda</span><div className="spacer"></div><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Ventas por tienda — 2028 <span className="unit">(unidades · costo · venta · se alimenta de las importaciones y el margen)</span></h3>
           <div className="sub">Unidades, ingresos (venta neta) y costo por tienda y mes, con la utilidad bruta. Las tiendas nuevas (agregadas por ti) salen marcadas con <b style={{ color: '#0e7490' }}>NUEVA</b>.</div>
           {/* Supuestos de venta: %Margen / %Descuento por tienda y mes (generan la venta neta) */}
@@ -3438,7 +3458,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Cash Flow</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardarCF}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Cash Flow</span><div className="spacer"></div><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarCF}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Cash Flow — Retail</h3>
           <div className="sub"><b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> + <span style={{ color: '#15803d' }}>Otros ingresos</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span> − <span style={{ color: '#b91c1c' }}>Costos financieros</span> − <span style={{ color: '#b91c1c' }}>Otros gastos</span></b>.</div>
           <div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre los números calculados para ver el origen. Despliega los costos con ▶.</div>
@@ -4677,7 +4697,16 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
 
   const [extraMarcas, setExtraMarcas] = useState([])
   useEffect(() => { (async () => { try { const m = await gLoadMarcas(); setExtraMarcas(m); setAsign((prev) => seedWith(combos[empresa], [...ALL_MARCAS, ...m])) } catch { } })() }, [])
-  const allMarcas = [...new Set([...ALL_MARCAS, ...extraMarcas, ...(ebSbus ? Object.values(ebSbus).flat() : [])])]
+  const allMarcas = empresa === 'TUMAR' ? [...new Set([...TUMAR_MARCAS, ...extraMarcas])] : [...new Set([...ALL_MARCAS, ...extraMarcas, ...(ebSbus ? Object.values(ebSbus).flat() : [])])]
+  // TUMAR: sus marcas vienen todas en SBU 1 (una sola unidad). Si no hay nada guardado, se auto-asignan a SBU 1.
+  useEffect(() => {
+    if (empresa !== 'TUMAR') return
+    const c = combos[empresa]
+    const real = c && SBU_NAMES.some((s) => (c[s] || []).length)
+    const m = {}; [...TUMAR_MARCAS, ...extraMarcas].forEach((mk) => { m[mk] = 'SBU 1' })
+    if (real) { Object.keys(m).forEach((mk) => { m[mk] = '' }); SBU_NAMES.forEach((s) => (c[s] || []).forEach((mk) => { m[mk] = s })); (c['NO VENDE'] || []).forEach((mk) => { m[mk] = 'NO' }) }
+    setAsign(m)
+  }, [empresa, extraMarcas, combos])
   // ENERGY BRANDS no se llena a mano: su mapeo SBU↔marca viene del EBP. Si no hay combinaciones guardadas, lo auto-rellenamos del EBP.
   useEffect(() => {
     if (empresa !== 'ENERGY BRANDS') return
@@ -5071,7 +5100,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   const [, setTick] = useState(0)
-  const usarCat = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] !== false } catch { return true } })()
+  const usarCat = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] === undefined ? (empresa !== 'TUMAR') : (u[marca] !== false) } catch { return empresa !== 'TUMAR' } })()
   function setUsarCat(v) { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); u[marca] = v; saveEstado(empresa, 'usarcat', u) } catch { } setTick((t) => t + 1) }
   // Tipo de producto por categoría (ROPA / CALZADO / etc.) — clasifica cada categoría. Se guarda por marca+categoría.
   const TIPOS = ['ROPA', 'CALZADO / ZAPATILLAS', 'ACCESORIOS', 'MOCHILAS GRANDES', 'MOCHILAS PEQUEÑAS']
@@ -5242,7 +5271,10 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const venCli = [...new Set(venSheet.filter((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(marca)).map((r) => String(r[1] || '').trim()).filter(Boolean))]
   const yaEn = new Set([...histClientes, ...addedFor].map((c) => upper(c)))
   const desdeHoja = venCli.filter((c) => !yaEn.has(upper(c)))
-  const clientes = [...histClientes, ...addedFor, ...desdeHoja]
+  // Clientes semilla por empresa (ej. TUMAR, del Excel) que aún no están en histórico/hoja/agregados.
+  const yaEn2 = new Set([...histClientes, ...addedFor, ...desdeHoja].map((c) => upper(c)))
+  const seedCli = (SEED_CLIENTES[empresa] || []).filter((c) => !yaEn2.has(upper(c)))
+  const clientes = [...histClientes, ...addedFor, ...desdeHoja, ...seedCli]
   const esNuevo = (cli) => !histSet.has(upper(cli)) // sin histórico 2026 → unidades 2028 manuales
   const g = (cli) => num(growth[cli + '|' + marca])
   const u26 = (cli, mi) => (u2026[cli + '|' + marca] || [])[mi] || 0
@@ -5292,7 +5324,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   }
   const catList = cats[marca] || []
   // ¿El Director activó categorías para esta marca? (lo define en su pestaña; por defecto sí)
-  const catsToggle = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] !== false } catch { return true } })()
+  const catsToggle = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] === undefined ? (empresa !== 'TUMAR') : (u[marca] !== false) } catch { return empresa !== 'TUMAR' } })()
   const usarCat = catsToggle && catList.length > 0
   const catMsg = !catsLoaded ? '⏳ Cargando categorías…' : (catsToggle ? 'Aún no hay categorías definidas para ' + marca + ' (las define el Director en su pestaña Categorías y guarda). Mientras tanto, solo se ve el total por mes.' : 'Categorías desactivadas por el Director: solo el total por mes.')
   // Participación de categorías por cliente (check). Sin marcar = participa en todas.
