@@ -2088,8 +2088,10 @@ function TumarLogistica({ empresa }) {
   const marcaTot = (mca) => MESES.reduce((a, _, m) => a + TUMAR_LOG_LINES.reduce((s, l) => s + g(`T|${mca}|${l.k}|${m}`), 0), 0)
   const granTot = marcas.reduce((a, mca) => a + marcaTot(mca), 0)
   // Venta neta 2028 (plan) por marca — para el peso del costo logístico sobre la venta.
-  const vn28 = (mca) => { try { return realAupAuc(empresa, mca, ventas, producto, cats[mca] || []).ventaMes.reduce((a, b) => a + b, 0) } catch { return 0 } }
+  const vn28Mes = (mca) => { try { return realAupAuc(empresa, mca, ventas, producto, cats[mca] || []).ventaMes } catch { return MESES.map(() => 0) } }
+  const vn28 = (mca) => vn28Mes(mca).reduce((a, b) => a + b, 0)
   const granVN28 = marcas.reduce((a, mca) => a + vn28(mca), 0)
+  const venta26Mes = (mca) => (tumar && tumar.marcas && tumar.marcas[upper(mca)]) ? tumar.marcas[upper(mca)].venta : MESES.map(() => 0) // venta neta 2026 real de esa marca (TP, USD)
   const peso = (cost, vn) => vn > 0 ? (cost / vn * 100).toFixed(1) + '%' : '—'
   // Real 2026 (TUMAR Performance, USD): logística total y venta neta 2026.
   const sum12 = (a) => (a || []).reduce((x, y) => x + y, 0)
@@ -2123,6 +2125,9 @@ function TumarLogistica({ empresa }) {
             <tr key={l.k}><td className="l" style={{ color: l.color, fontWeight: 700 }}>{l.label}</td>{MESES.map((_, m) => <td key={m} className="cell"><input className="fillin" value={data[`T|${marca}|${l.k}|${m}`] ?? ''} onChange={(e) => set(`T|${marca}|${l.k}|${m}`, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot" style={{ color: l.color, fontWeight: 700 }}>{fmt(lineTot(l.k))}</td></tr>
           ))}
           <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">= Total costo logístico {marca}</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(totMes(m))}</td>)}<td className="tot">{fmt(marcaTot(marca))}</td></tr>
+          <tr style={{ background: '#f7faf7' }}><td className="l" style={{ color: '#334155' }}>Venta neta 2028 (plan)</td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(vn28Mes(marca)[m] || 0)}</td>)}<td className="tot">{fmt(vn28(marca))}</td></tr>
+          <tr style={{ background: '#eef4fb' }}><td className="l" style={{ color: '#1d4ed8', fontWeight: 700 }}>= Peso logístico % <span className="unit" style={{ fontWeight: 400 }}>(s/ venta neta)</span></td>{MESES.map((_, m) => { const v = vn28Mes(marca)[m] || 0; return <td key={m} className="tot" style={{ color: '#1d4ed8' }}>{v > 0 ? (totMes(m) / v * 100).toFixed(1) + '%' : '—'}</td> })}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 700 }}>{peso(marcaTot(marca), vn28(marca))}</td></tr>
+          <tr style={{ background: '#fffdf2' }}><td className="l" style={{ color: '#8a6d1a' }}>🪞 Venta neta 2026 <span className="unit" style={{ fontWeight: 400 }}>(TP · USD)</span></td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: '#8a6d1a' }}>{fmt(venta26Mes(marca)[m] || 0)}</td>)}<td className="tot" style={{ color: '#8a6d1a', fontWeight: 700 }}>{fmt(sum12(venta26Mes(marca)))}</td></tr>
         </tbody>
       </table></div>
 
