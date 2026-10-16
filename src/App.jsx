@@ -83,8 +83,10 @@ const DEFAULT_SBUS = {
   'SBU 2': ['ARIAT','BIRKENSTOCK','BLUNDSTONE','ECCO','FLOWER MOUNTAIN','UGG'],
   'SBU 3': ['COTOPAXI','IZIPIZI','FOAMERS','GOORIN BROS','KEEN','MAMMUT'],
 }
-// Marcas conocidas que por defecto NO se venden (quedan disponibles para reasignar en Configuración): FJALLRAVEN y FITFLOP.
-const ALL_MARCAS = [...new Set([...Object.values(DEFAULT_SBUS).flat(), 'FJALLRAVEN', 'FITFLOP'])]
+// Universo de marcas de Energy Brands = las de las SBU. (FJALLRAVEN y FITFLOP se retiraron: ya no se venden.)
+const ALL_MARCAS = [...new Set([...Object.values(DEFAULT_SBUS).flat()])]
+// Marcas que Energy Brands dejó de vender: se excluyen de todas las vistas y de Configuración.
+const EB_RETIRADAS = new Set(['FJALLRAVEN', 'FITFLOP'])
 const SBU_NAMES = ['SBU 1', 'SBU 2', 'SBU 3']
 // TUMAR: empresa aparte, una sola unidad con sus 7 marcas (no usa SBU 1/2/3).
 const TUMAR_MARCAS = ['OSPREY', 'BLUNDSTONE', 'FJALLRAVEN', 'KEEN', 'ARIAT', 'HYDRO FLASK', 'VEJA']
@@ -269,6 +271,7 @@ const PasoH = ({ n, children }) => (
 function effSBUS(empresa, combos) {
   const c = combos[empresa]
   const excl = new Set((c && c['NO VENDE']) || [])
+  if (empresa === 'ENERGY BRANDS') EB_RETIRADAS.forEach((m) => excl.add(m)) // marcas retiradas: nunca aparecen
   if (!c || !SBU_NAMES.some((s) => (c[s] || []).length)) {
     if (!excl.size) return DEFAULT_SBUS
     const out = {}
@@ -985,6 +988,21 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
   useEffect(() => { (async () => { const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }; const [ventas, producto, cap] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias')]); const cats = {}; cap.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const c = r[1], mar = r[3], peso = num(r[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) }); setVd({ ventas, producto, cats }) })() }, [empresa])
   const ventaNetaMesG = (mca) => realAupAuc(empresa, mca, vd.ventas, vd.producto, (vd.cats[mca] || []).map((c) => c.cat)).ventaMes
   const ventaMesT = (mi) => isTotal ? sbuMarcas.reduce((a, m) => a + ventaNetaMesG(m)[mi], 0) : ventaNetaMesG(marca)[mi]
+  // Referencias EBP (solo Energy Brands, Marketing/Viajes): ABP 2027 y Real 2026 — para comparar el peso sobre la venta.
+  const esRef = empresa === 'ENERGY BRANDS' && (rubro.k === 'MARKETING' || rubro.k === 'VIAJES')
+  const [ref26, setRef26] = useState(null); const [abp27, setAbp27] = useState(null); const [histR, setHistR] = useState([])
+  useEffect(() => { if (!esRef) return; (async () => {
+    try { setRef26(rubro.k === 'VIAJES' ? await gViajesRef() : await gMkRef()) } catch { }
+    try { const a = await gABP2027Ref(); if (a && a.ok) setAbp27(a.val) } catch { }
+    try { const j = await gHistorico(); if (j && j.ok && j.values) setHistR(j.values.slice(1)) } catch { }
+  })() }, [empresa, rubro.k])
+  const refMes26 = (mca) => (((ref26 || {}).marca || {})[upper(mca)] || {})[2026] || 0
+  const abpField = rubro.k === 'VIAJES' ? 'vj' : 'mk'
+  const abpRubro = (mca) => (abp27 || {})[upper(mca)] ? ((abp27[upper(mca)][abpField]) || 0) : 0
+  const abpVn = (mca) => (abp27 || {})[upper(mca)] ? ((abp27[upper(mca)].vn) || 0) : 0
+  const histVnY = (mca, y) => { let s = 0; histR.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca)) return; if (String(r[1]) !== String(y)) return; if (String(r[3] || '').toUpperCase().indexOf('VENTA') < 0) return; s += num(r[7]) }); return s }
+  const refMcas = isTotal ? sbuMarcas : [marca]
+  const sumRef = (f) => refMcas.reduce((a, m) => a + f(m), 0)
 
   const key = (mca, id, mi) => `${rubro.k}|${mca}|${id}|${mi}`
   const idDe = (g, it) => `${g}|${it.c}|${it.n}`
@@ -1087,6 +1105,8 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
             <tr><td className="l sub2">Venta neta ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(ventaMesT(m))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, m) => a + ventaMesT(m), 0))}</td></tr>
             <tr><td className="l sub2">{rubro.k} ($)</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(totMes(m))}</td>)}<td className="tot">{fmt(totalGeneral)}</td></tr>
             <tr className="grandrow"><td className="l">% {rubro.k} / venta</td>{MESES.map((_, m) => { const v = ventaMesT(m); return <td key={m} className="tot">{v ? (totMes(m) / v * 100).toFixed(1) + '%' : '—'}</td> })}<td className="tot">{(() => { const vt = MESES.reduce((a, _, m) => a + ventaMesT(m), 0); return vt ? (totalGeneral / vt * 100).toFixed(1) + '%' : '—' })()}</td></tr>
+            {esRef && (() => { const a = sumRef(abpRubro), avn = sumRef(abpVn); return <tr style={{ background: '#f6eef9' }}><td className="l sub2" style={{ color: '#8f4b7e', fontWeight: 700 }}>ABP 2027 <span className="unit" style={{ fontWeight: 400 }}>($ · % s/venta)</span></td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>—</td>)}<td className="tot" style={{ color: '#8f4b7e', fontWeight: 700 }}>{fmt(a)}{avn ? ` · ${(a / avn * 100).toFixed(1)}%` : ''}</td></tr> })()}
+            {esRef && (() => { const r = sumRef(refMes26), rvn = sumRef((m) => histVnY(m, 2026)); return <tr style={{ background: '#eef4fb' }}><td className="l sub2" style={{ color: '#2b5c9b', fontWeight: 700 }}>Real 2026 <span className="unit" style={{ fontWeight: 400 }}>($ · % s/venta)</span></td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>—</td>)}<td className="tot" style={{ color: '#2b5c9b', fontWeight: 700 }}>{fmt(r)}{rvn ? ` · ${(r / rvn * 100).toFixed(1)}%` : ''}</td></tr> })()}
           </tbody>
         </table></div>
       </div>}
@@ -1986,7 +2006,6 @@ function ReporteScreen({ empresa, sbus }) {
           ) })}
         </div>
         {fTerm && <div className="sub" style={{ marginTop: 6 }}>Filtrando: <b>{fTerm}</b> · <button className="btn" style={{ padding: '2px 8px' }} onClick={() => setFTerm('')}>✕ quitar filtro</button></div>}
-      </div>
       {(() => {
         const pieSVG = (cnt, tot, size) => {
           const r = size / 2, cx = r, cy = r
@@ -1999,7 +2018,7 @@ function ReporteScreen({ empresa, sbus }) {
         const pieData = []
         Object.entries(sbus).forEach(([sbu, marcas]) => marcas.forEach((mca) => { const cnt = {}; [...BUCKETS, 'Sin plazo'].forEach((b) => cnt[b] = 0); let tot = 0; clientesDe(mca).forEach((cli) => { const t = term(mca, cli); const key = BUCKETS.includes(t) ? t : 'Sin plazo'; cnt[key]++; tot++ }); if (tot > 0) pieData.push({ sbu, mca, cnt, tot }) }))
         return (
-          <div className="panel">
+          <div style={{ marginTop: 22 }}>
             <h3>% por término de pago — por marca <span className="unit">(pastel del universo de clientes de cada marca)</span></h3>
             <div className="sub">Cada marca: cómo se reparte su universo de clientes entre los plazos de cobro. Pasa el cursor por cada porción para ver el detalle.</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '8px 0 14px' }}>
@@ -2018,6 +2037,32 @@ function ReporteScreen({ empresa, sbus }) {
           </div>
         )
       })()}
+        <div style={{ marginTop: 22 }}>
+          <h3>Detalle de clientes por plazo <span className="unit">(cliente × marca · ventas 2028)</span></h3>
+          <div className="toolbar" style={{ marginBottom: 8 }}>
+            <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />
+            {buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}
+            <div className="spacer"></div>
+            <span className="unit">{visibles.length} de {totalAsign}</span>
+          </div>
+          <div className="tablewrap" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+            <table>
+              <thead><tr><th className="l">SBU</th><th className="l">Marca</th><th className="l">Cliente</th><th>Plazo</th></tr></thead>
+              <tbody>
+                {visibles.length === 0 && <tr><td className="l" colSpan={4}>Sin clientes para el filtro.</td></tr>}
+                {visibles.map((r, i) => (
+                  <tr key={i} style={r.nuevo ? { background: '#eff6ff' } : undefined}>
+                    <td className="l" style={{ color: sbuColor(r.sbu), fontWeight: 600 }}>{r.sbu}</td>
+                    <td className="l"><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(r.mca), marginRight: 6 }}></span>{r.mca}</td>
+                    <td className="l">{r.cli}{r.nuevo && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 800, color: '#fff', background: '#f97316', borderRadius: 5, padding: '2px 7px', letterSpacing: '.3px', boxShadow: '0 1px 2px rgba(249,115,22,.4)' }} title="Cliente nuevo (sin histórico ni plazo de SF)">NUEVO</span>}</td>
+                    <td className="tot" style={{ fontWeight: 700, color: BCOL[BUCKETS.includes(r.t) ? r.t : 'Sin plazo'] }}>{r.t}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
       <div className="panel">
         <h3>Términos de pago a proveedor — por marca <span className="unit">(cuándo la marca le paga a su proveedor)</span></h3>
         <div className="sub">El plazo que cada marca cargó para <b>pagar a su proveedor</b> (Cash, 30, 60… días); define cuándo la compra 2028 se vuelve <b>pago (Cash Out)</b>.</div>
@@ -2032,30 +2077,6 @@ function ReporteScreen({ empresa, sbus }) {
                   <td className="tot" style={{ fontWeight: 700, color: pt ? '#0b5566' : 'var(--muted)' }}>{pt || '— sin definir'}</td>
                 </tr>
               ) }))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div className="panel">
-        <div className="toolbar" style={{ marginBottom: 8 }}>
-          <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />
-          {buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}
-          <div className="spacer"></div>
-          <span className="unit">{visibles.length} de {totalAsign}</span>
-        </div>
-        <div className="tablewrap" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-          <table>
-            <thead><tr><th className="l">SBU</th><th className="l">Marca</th><th className="l">Cliente</th><th>Plazo</th></tr></thead>
-            <tbody>
-              {visibles.length === 0 && <tr><td className="l" colSpan={4}>Sin clientes para el filtro.</td></tr>}
-              {visibles.map((r, i) => (
-                <tr key={i} style={r.nuevo ? { background: '#eff6ff' } : undefined}>
-                  <td className="l" style={{ color: sbuColor(r.sbu), fontWeight: 600 }}>{r.sbu}</td>
-                  <td className="l"><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(r.mca), marginRight: 6 }}></span>{r.mca}</td>
-                  <td className="l">{r.cli}{r.nuevo && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 800, color: '#fff', background: '#f97316', borderRadius: 5, padding: '2px 7px', letterSpacing: '.3px', boxShadow: '0 1px 2px rgba(249,115,22,.4)' }} title="Cliente nuevo (sin histórico ni plazo de SF)">NUEVO</span>}</td>
-                  <td className="tot" style={{ fontWeight: 700, color: BCOL[BUCKETS.includes(r.t) ? r.t : 'Sin plazo'] }}>{r.t}</td>
-                </tr>
-              ))}
             </tbody>
           </table>
         </div>
@@ -4919,7 +4940,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
 
   const [extraMarcas, setExtraMarcas] = useState([])
   useEffect(() => { (async () => { try { const m = await gLoadMarcas(); setExtraMarcas(m); setAsign((prev) => seedWith(combos[empresa], [...ALL_MARCAS, ...m])) } catch { } })() }, [])
-  const allMarcas = empresa === 'TUMAR' ? [...new Set([...TUMAR_MARCAS, ...extraMarcas])] : [...new Set([...ALL_MARCAS, ...extraMarcas, ...(ebSbus ? Object.values(ebSbus).flat() : [])])]
+  const allMarcas = empresa === 'TUMAR' ? [...new Set([...TUMAR_MARCAS, ...extraMarcas])] : [...new Set([...ALL_MARCAS, ...extraMarcas, ...(ebSbus ? Object.values(ebSbus).flat() : [])])].filter((m) => !(empresa === 'ENERGY BRANDS' && EB_RETIRADAS.has(upper(m))))
   // TUMAR: sus marcas vienen todas en SBU 1 (una sola unidad). Si no hay nada guardado, se auto-asignan a SBU 1.
   useEffect(() => {
     if (empresa !== 'TUMAR') return
