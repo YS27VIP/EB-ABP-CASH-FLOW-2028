@@ -3430,7 +3430,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
     const nvj = tabs.flatMap((tb) => (out[tb] || []).filter((r) => isRetail(r) && esVj(r)))
     const nVjArea = { ventas: vjF('Cap_Ventas'), producto: vjF('Cap_Producto'), marketing: vjF('Cap_Marketing'), director: vjF('Cap_Director') }
     const nprod = (out['Cap_Producto'] || []).filter((r) => upper(r[0]) === upper(empresa))
-    const pc = {}; (out['Cap_Categorias'] || []).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const cat = r[1], mar = r[3]; if (!mar || !cat) return; (pc[mar] = pc[mar] || []); if (!pc[mar].includes(cat)) pc[mar].push(cat) })
+    const pc = {}; (out['Cap_Categorias'] || []).forEach((r) => { if (!catRowOk(r, empresa)) return; const cat = r[1], mar = r[3]; if (!mar || !cat) return; (pc[mar] = pc[mar] || []); if (!pc[mar].includes(cat)) pc[mar].push(cat) })
     // Cada campo: si lo nuevo viene vacío pero ya teníamos datos, se conserva lo anterior (no se borra la pantalla).
     const keep = (nv, pv) => (nv.length || !(pv || []).length) ? nv : pv
     setCapRows((p) => ({ mk: keep(nmk, p.mk), vj: keep(nvj, p.vj) }))
@@ -4219,7 +4219,7 @@ function HoldingScreen({ empresas, sbusFor }) {
   if (!data) return <div className="panel"><div className="banner">⏳ Consolidando las {empresas.length} empresas del holding…</div></div>
   const calcEmp = (emp) => {
     const { ventas, producto, capCat, mk, log, dir } = data
-    const cats = {}; capCat.forEach((row) => { if (upper(row[0]) !== upper(emp)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+    const cats = {}; capCat.forEach((row) => { if (!catRowOk(row, emp)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
     const esVi = (rub) => rub.toUpperCase().startsWith('VIAJES')
     const sumTabG = (rows, mca, filt) => { let s = 0; rows.forEach((r) => { if (upper(r[0]) !== upper(emp) || upper(r[3]) !== upper(mca)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
     const fullCalc = (mca) => {
@@ -4299,7 +4299,7 @@ function BrandContribution({ empresa, marca }) {
       try { logRef26 = await gLogRef2026() } catch { }
       try { logExp = await gLogExpRef() } catch { }
       try { comisRef = await gComisRef() } catch { }
-      const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+      const cats = {}; cap.forEach((row) => { if (!catRowOk(row, empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
       setP({ ven, prod, cats, mk, log, dir, hist, plan, vjRef, mkRef, logRef26, logExp, comisRef }); setLoad(false)
     })()
   }, [empresa])
@@ -4390,7 +4390,7 @@ function SbuResultDownload({ empresa, sbuName, marcasSBU }) {
     (async () => {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
       const [ven, prod, cap, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
-      const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+      const cats = {}; cap.forEach((row) => { if (!catRowOk(row, empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
       setP({ ven, prod, cats, mk, log, dir })
     })()
   }, [empresa, sbuName])
@@ -4458,7 +4458,7 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
       try { logExp = await gLogExpRef() } catch { }
       try { comisRef = await gComisRef() } catch { }
       let gadminRef = null; try { gadminRef = await gGAdminRef() } catch { }
-      const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+      const cats = {}; cap.forEach((row) => { if (!catRowOk(row, empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
       let tumar = null; if (empresa === 'TUMAR') { try { tumar = await gTumarReal() } catch { } }
       setP({ ven, prod, cats, mk, log, dir, hist, plan, vjRef, mkRef, logRef26, logExp, comisRef, gadminRef, tumar })
     })()
@@ -4567,7 +4567,7 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca', pued
       try { const a = await gABP2027Ref(); if (!cancel && a && a.ok) setAbp27v(a.val) } catch { }
       try { const jv = await gReadTab('Cap_Ventas'); if (!cancel && jv && jv.ok && jv.values) setVtas(jv.values.slice(1)) } catch { }
       try { const jp = await gReadTab('Cap_Producto'); if (!cancel && jp && jp.ok && jp.values) setProd(jp.values.slice(1)) } catch { }
-      try { const jc = await gReadTab('Cap_Categorias'); if (!cancel && jc && jc.ok && jc.values) { const c = {}; jc.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const cat = r[1], mar = r[3]; if (!mar || !cat) return; (c[upper(mar)] = c[upper(mar)] || []).push(cat) }); setCats(c) } } catch { }
+      try { const jc = await gReadTab('Cap_Categorias'); if (!cancel && jc && jc.ok && jc.values) { const c = {}; jc.values.slice(1).forEach((r) => { if (!catRowOk(r, empresa)) return; const cat = r[1], mar = r[3]; if (!mar || !cat) return; (c[upper(mar)] = c[upper(mar)] || []).push(cat) }); setCats(c) } } catch { }
       try { const jh = await gHistorico(); if (!cancel && jh && jh.ok && jh.values) setHistR(jh.values.slice(1)) } catch { }
     })()
     return () => { cancel = true }
@@ -4795,7 +4795,7 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
       const [ven, prod, cap] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias')])
       let hist = []; try { const jh = await gHistorico(); if (jh && jh.ok && jh.values) hist = jh.values.slice(1) } catch { }
       let tp = null, tr = null; if (empresa === 'TUMAR') { try { tp = await gTumarClientes() } catch { } try { tr = await gTumarReal() } catch { } }
-      const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+      const cats = {}; cap.forEach((row) => { if (!catRowOk(row, empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
       setP({ ven, prod, cats, hist, tp, tr })
     })()
   }, [empresa])
