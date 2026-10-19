@@ -3831,7 +3831,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                       {nF > 0 && Math.round(sum) !== 100 && <span className="unit" style={{ color: '#b45309', marginLeft: 4 }} title="El mapa no suma 100%">⚠ {fmt(sum)}%</span>}
                     </td>
                     <td className="cell"><input value={vt[uaKey(t, c)] ?? ''} onChange={(e) => setUA(t, c, e.target.value)} inputMode="decimal" title={`${c} · unidades a comprar (año)`} style={{ width: '100%', textAlign: 'center' }} /></td>
-                    <td className="tot ya" title="Costo por unidad = costo wholesale ponderado (del mapa) × factor">{whAvg(c) > 0 ? fmt(whAvg(c) * factor()) : '—'}</td>
+                    <td className="tot ya help-bulb" title={whAvg(c) > 0 ? `Costo/ud = $${whAvg(c).toFixed(2)} wholesale (ponderado del mapa) × ${factor().toFixed(2)} factor = $${(whAvg(c) * factor()).toFixed(2)}` : 'Sin mapa: define de qué marca/categoría se compra esta subcategoría.'}>{whAvg(c) > 0 ? (whAvg(c) * factor()).toFixed(2) : '—'}</td>
                     <td className="tot" style={{ color: '#b91c1c' }}>{fmt(rowCosto(t, c))}</td>
                   </tr> })}
                   <tr className="grandrow"><td className="l">Total {t}</td><td className="tot">{fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))}</td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCosto(t))}</td></tr>
@@ -3866,7 +3866,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           {mapPairs.length === 0 ? <div className="sub">Aún no hay % en el <b>Mapa de abastecimiento</b>. Configúralo para ver el detalle.</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table><thead><tr><th className="l">Marca</th><th className="l">Categoría wholesale</th><th>AUC /ud</th><th>× Factor</th><th>Costo /ud</th><th>Importación 2028 $</th></tr></thead>
               <tbody>
-                {mapPairs.map(({ m, ct }) => { const auc = aucPairAvg(m, ct); return <tr key={m + '||' + ct}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td><td className="l sub2">{ct}</td><td className="tot">{fmt(auc)}</td><td className="tot ya">{fmt(factor())}</td><td className="tot">{fmt(auc * factor())}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(impPairAnual(m, ct))}</td></tr> })}
+                {mapPairs.map(({ m, ct }) => { const auc = aucPairAvg(m, ct); return <tr key={m + '||' + ct}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td><td className="l sub2">{ct}</td><td className="tot">{auc.toFixed(2)}</td><td className="tot ya">{factor().toFixed(2)}</td><td className="tot">{(auc * factor()).toFixed(2)}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(impPairAnual(m, ct))}</td></tr> })}
                 <tr className="grandrow"><td className="l" colSpan={5}>TOTAL importaciones</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(mapPairs.reduce((a, { m, ct }) => a + impPairAnual(m, ct), 0))}</td></tr>
               </tbody>
             </table>
@@ -3941,8 +3941,6 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '72px' }} />)}<col style={{ width: '92px' }} /></colgroup>
                 <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
                 <tbody>
-                  {/* TRM editable */}
-                  <tr><td className="l" style={{ fontWeight: 700 }}>TRM <span className="unit">(tipo de cambio)</span></td>{MESES.map((_, mi) => <td key={mi} className="cell ya"><input value={cf[fk('TRM', mi)] ?? ''} onChange={(e) => setCF('TRM', mi, e.target.value)} inputMode="decimal" placeholder="—" /></td>)}<td className="tot">—</td></tr>
                   <Section title="UNIDADES PROYECTADAS" perStore={storeUnitsM} totalFn={uMes} bold="Total unidades" />
                   <Section title="INGRESOS PROYECTADOS (venta neta)" color="#15803d" perStore={storeVentaM} totalFn={vMes} bold="Total ingresos" />
                   <Section title="COSTOS PROYECTADOS" color="#b91c1c" perStore={storeCostoM} totalFn={cMes} bold="Total costos" />
