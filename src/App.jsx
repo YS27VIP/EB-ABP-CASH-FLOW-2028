@@ -2097,25 +2097,32 @@ function ReporteScreen({ empresa, sbus }) {
 }
 
 /* ===== ESPEJO: lo que TAHO planea comprarle a Energy Brands / TUMAR (solo lectura) ===== */
-function TahoEspejo({ empresa }) {
+function TahoEspejo({ empresa, marca }) {
   const prov = empresa === 'ENERGY BRANDS' ? 'EB' : empresa === 'TUMAR' ? 'TU' : null
   const [d, setD] = useState(null)
   useEffect(() => { if (!prov) return; (async () => { try { const r = await gTahoCompras(); setD((r && r[prov]) || null) } catch { } })() }, [empresa])
   if (!prov) return null
-  const totU = d ? d.unid.reduce((a, b) => a + b, 0) : 0, totUsd = d ? d.usd.reduce((a, b) => a + b, 0) : 0
-  const marcas = d ? Object.keys(d.marcas).filter((m) => d.marcas[m].unid.some((x) => x > 0)) : []
+  // Si se pasa una marca, solo se muestra esa marca (detalle de logística por marca).
+  const oneMarca = marca && !String(marca).startsWith('TOTAL') && !String(marca).startsWith('(')
+  const marcasAll = d ? Object.keys(d.marcas).filter((m) => d.marcas[m].unid.some((x) => x > 0)) : []
+  const marcas = oneMarca ? marcasAll.filter((m) => upper(m) === upper(marca)) : marcasAll
+  const monthU = (mi) => oneMarca ? marcas.reduce((a, m) => a + d.marcas[m].unid[mi], 0) : d.unid[mi]
+  const monthUsd = (mi) => oneMarca ? marcas.reduce((a, m) => a + d.marcas[m].usd[mi], 0) : d.usd[mi]
+  const totU = d ? MESES.reduce((a, _, mi) => a + monthU(mi), 0) : 0, totUsd = d ? MESES.reduce((a, _, mi) => a + monthUsd(mi), 0) : 0
+  const title = oneMarca ? `🪞 Compras TAHO — ${marca}` : '🪞 Compras TAHO — espejo'
   return (
     <div className="panel">
-      <h3>🪞 Compras TAHO — espejo{M$} <span className="unit">(lo que TAHO planea comprarle a {empresa} · solo lectura)</span></h3>
+      <h3>{title} <span className="unit">(lo que TAHO planea comprarle a {empresa} · solo lectura)</span></h3>
       {(!d || totU === 0)
-        ? <div className="sub">TAHO aún no ha cargado compras para {empresa}. Cuando las cargue en su Producto, aquí aparecerán como espejo (no afecta tus totales).</div>
+        ? <div className="sub">TAHO aún no ha cargado compras {oneMarca ? `de ${marca} ` : ''}para {empresa}. Cuando las cargue en su Producto, aquí aparecerán como espejo (no afecta tus totales).</div>
         : <>
-          <div className="sub">Unidades y valor (× AUC de TAHO) que <b>TAHO planea comprarle a {empresa}</b> en 2028. Es un <b>espejo informativo</b>: no cambia tus totales.</div>
-          <div className="tablewrap"><table className="vfix logcost-tbl"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '96px' }} /></colgroup>
-            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+          <div className="sub">Lo que <b>TAHO planea comprarle a {empresa}</b> en 2028: <b>unidades</b> por mes y su <b>valor ($ = unidades × AUC de TAHO)</b>. Es un <b>espejo informativo</b>: no cambia tus totales.</div>
+          <div className="tablewrap"><table className="vfix logcost-tbl"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '96px' }} /></colgroup>
+            <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
-              <tr className="grandrow"><td className="l">TOTAL (unidades)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(d.unid[mi])}</td>)}<td className="tot">{fmt(totU)} ud<div className="unit">${fmt(totUsd)}</div></td></tr>
-              {marcas.map((m) => { const mm = d.marcas[m]; return <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mm.unid[mi])}</td>)}<td className="tot">{fmt(mm.unid.reduce((a, b) => a + b, 0))} ud<div className="unit">${fmt(mm.usd.reduce((a, b) => a + b, 0))}</div></td></tr> })}
+              <tr className="grandrow"><td className="l">Unidades a comprar</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(monthU(mi))}</td>)}<td className="tot">{fmt(totU)}</td></tr>
+              <tr style={{ background: '#f1faf4' }}><td className="l" style={{ color: '#15803d', fontWeight: 700 }}>Valor ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#15803d' }}>{fmt(monthUsd(mi))}</td>)}<td className="tot" style={{ color: '#15803d', fontWeight: 700 }}>${fmt(totUsd)}</td></tr>
+              {!oneMarca && marcas.map((m) => { const mm = d.marcas[m]; return <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m} <span className="unit">(ud)</span></td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mm.unid[mi])}</td>)}<td className="tot">{fmt(mm.unid.reduce((a, b) => a + b, 0))}</td></tr> })}
             </tbody>
           </table></div>
         </>}
@@ -2277,6 +2284,7 @@ function TumarLogMarca({ empresa, marca }) {
           <tr style={{ background: '#fffdf2' }}><td className="l" style={{ color: '#8a6d1a' }}>🪞 Venta neta 2026 <span className="unit" style={{ fontWeight: 400 }}>(TP · USD)</span></td>{MESES.map((_, m) => <td key={m} className="tot" style={{ color: '#8a6d1a' }}>{fmt(venta26Mes[m] || 0)}</td>)}<td className="tot" style={{ color: '#8a6d1a', fontWeight: 700 }}>{fmt(sum12(venta26Mes))}</td></tr>
         </tbody>
       </table></div>
+      <div style={{ marginTop: 18 }}><TahoEspejo empresa={empresa} marca={marca} /></div>
     </div>
   )
 }
@@ -2566,6 +2574,8 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
           </div>
         )
       })()}
+
+      <div style={{ marginTop: 20 }}><TahoEspejo empresa={empresa} marca={marca} /></div>
 
       <div className="toolbar" style={{ marginTop: 18, alignItems: 'center' }}>
         <div className="spacer"></div>
