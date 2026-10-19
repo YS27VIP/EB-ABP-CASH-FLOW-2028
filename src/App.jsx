@@ -3806,7 +3806,19 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           return <>
             {gBlock('🏬 Gastos EB Directos', col, gastosEB, setGEB, gRowEB, gColEB, gGranEB, true)}
             {gBlock('🤝 Gastos Sinergy', '#be185d', gastos, setG, gRow, gCol, gGran, true)}
-            {gBlock('🧾 Gastos TOTAL (EB + Sinergy)', '#7c3aed', null, null, (n) => gRowEB(n) + gRow(n), (mi) => gColEB(mi) + gCol(mi), gGranEB + gGran, false)}
+            <div className="panel" style={{ borderLeftColor: '#7c3aed', marginBottom: 12 }}>
+              <div className="toolbar"><span className="empchip" style={{ background: '#7c3aed', marginLeft: 0 }}>🧾 Gastos TOTAL (EB + Sinergy)</span><div className="spacer"></div><span className="empchip" style={{ background: '#64748b' }}>solo lectura · sin desglose</span></div>
+              <div className="tablewrap" style={{ overflowX: 'auto' }}>
+                <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+                  <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+                  <tbody>
+                    <tr><td className="l sub2" style={{ color: col }}>🏬 Gastos EB Directos</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(gColEB(mi))}</td>)}<td className="tot" style={{ color: col, fontWeight: 800 }}>{fmt(gGranEB)}</td></tr>
+                    <tr><td className="l sub2" style={{ color: '#be185d' }}>🤝 Gastos Sinergy</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(gCol(mi))}</td>)}<td className="tot" style={{ color: '#be185d', fontWeight: 800 }}>{fmt(gGran)}</td></tr>
+                    <tr className="grandrow"><td className="l">TOTAL gastos</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(gColEB(mi) + gCol(mi))}</td>)}<td className="tot">{fmt(gGranEB + gGran)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </>
         })()}
       </>}
@@ -3956,17 +3968,16 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '92px' }} /></colgroup>
                 <thead><tr><th className="l">🏬 {t}</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
                 <tbody>
-                  <tr className="secrow"><td colSpan={14}>SUPUESTOS (editables)</td></tr>
-                  <tr><td className="l sub2" style={{ color: '#15803d' }}>% Margen</td>{cell((mi) => vt[`${t}||MARGEN||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||MARGEN||${mi}`]: v })), '#15803d')}<td className="tot">—</td></tr>
-                  <tr><td className="l sub2" style={{ color: '#b45309' }}>% Descuento</td>{cell((mi) => vt[`${t}||DESC||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||DESC||${mi}`]: v })), '#b45309')}<td className="tot">—</td></tr>
-                  <tr><td className="l sub2" style={{ color: '#1d4ed8', fontWeight: 700 }}>Unidades 2028 (manual)</td>{cell((mi) => vt[`${t}||SU||${mi}`] ?? '', (mi, v) => setSell(t, mi, v), '#1d4ed8')}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(sum((mi) => sellU(t, mi)))}</td></tr>
-                  <tr className="secrow"><td colSpan={14}>REFERENCIA 2026 (🪞 · aún sin datos)</td></tr>
-                  <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Unidades 2026</td>{cell((mi) => vt[`${t}||U26||${mi}`] ?? '', (mi, v) => setU26(t, mi, v))}<td className="tot">{fmt(sum((mi) => u26m(t, mi)))}</td></tr>
-                  <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Venta neta 2026 ($)</td>{cell((mi) => vt[`${t}||VN26||${mi}`] ?? '', (mi, v) => setVN26(t, mi, v))}<td className="tot">{fmt(sum((mi) => vn26m(t, mi)))}</td></tr>
-                  <tr className="secrow"><td colSpan={14}>RESULTADO 2028 (calculado)</td></tr>
+                  <tr className="secrow"><td colSpan={14}>2028 · venta neta = costo × (1 + %margen) × (1 − %descuento)</td></tr>
+                  <tr><td className="l sub2" style={{ color: '#1d4ed8', fontWeight: 700 }}>① Unidades 2028 (manual)</td>{cell((mi) => vt[`${t}||SU||${mi}`] ?? '', (mi, v) => setSell(t, mi, v), '#1d4ed8')}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(sum((mi) => sellU(t, mi)))}</td></tr>
+                  {calcRow('② Costo ($) · de Compras', costo28, '#b91c1c')}
+                  <tr><td className="l sub2" style={{ color: '#b45309' }}>③ % Descuento (se llena)</td>{cell((mi) => vt[`${t}||DESC||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||DESC||${mi}`]: v })), '#b45309')}<td className="tot">—</td></tr>
+                  <tr><td className="l sub2" style={{ color: '#15803d' }}>④ % Margen (se llena)</td>{cell((mi) => vt[`${t}||MARGEN||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||MARGEN||${mi}`]: v })), '#15803d')}<td className="tot">—</td></tr>
                   {calcRow('= Venta neta 2028 ($)', venta28, '#15803d', true)}
-                  {calcRow('(−) Costo 2028 ($)', costo28, '#b91c1c')}
                   {calcRow('= Utilidad bruta ($)', (mi) => venta28(mi) - costo28(mi), '#0f766e', true)}
+                  <tr className="secrow"><td colSpan={14}>REFERENCIA 2026 (🪞)</td></tr>
+                  <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Unidades 2026</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(u26m(t, mi))}</td>)}<td className="tot">{fmt(sum((mi) => u26m(t, mi)))}</td></tr>
+                  <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Venta neta 2026 ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(vn26m(t, mi))}</td>)}<td className="tot">{fmt(sum((mi) => vn26m(t, mi)))}</td></tr>
                 </tbody>
               </table>
             </div>
