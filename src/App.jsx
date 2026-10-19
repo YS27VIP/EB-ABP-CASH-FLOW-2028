@@ -245,9 +245,9 @@ const RETAIL_IMP_2027 = {
 const RETAIL_MARCAS = Object.keys(RETAIL_IMP_2027)
 // Retail: rubros de gastos del P&L con su total 2027 de referencia (USD anual).
 const RETAIL_GASTOS = [
-  ['Honorarios', 51596], ['Nómina', 641817], ['Proveedores', 11792], ['Servicios logísticos', 24474], ['Servicios de Transporte', 23635],
+  ['Honorarios', 51596], ['Nómina', 641817], ['Proveedores', 11792], ['Servicios de Transporte', 23635],
   ['Servicios públicos', 22684], ['Seguridad Social', 32125], ['Impuestos', 35546], ['Servicios tecnológicos', 32370], ['Activos fijos (depreciación)', 24658],
-  ['Marketing (PTY)', 87654], ['Publicidad y eventos', 23635], ['Pólizas', 27827], ['Alquiler y administración', 830115], ['Tiquetes y viáticos', 20328],
+  ['Publicidad y eventos', 23635], ['Pólizas', 27827], ['Alquiler y administración', 830115], ['Tiquetes y viáticos', 20328],
   ['Mantenimiento y aseo', 22690], ['Gastos bancarios', 118173], ['Gastos apertura o cierre de tiendas', 135885], ['Otros gastos', 23635],
 ]
 // Retail: tiendas físicas por defecto (del P&L). Se pueden agregar nuevas en la pestaña Ventas por tienda.
@@ -260,7 +260,7 @@ function retailPLTotales() {
   try {
     const d = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null'); if (!d) return null
     const sum = (a) => (a || []).reduce((x, y) => x + (Number(y) || 0), 0)
-    const blk = (b) => { if (!b) return null; const venta = sum(b.venta), costo = sum(b.costo), gastos = sum(b.gastos), mk = sum(b.mk), vj = sum(b.vj); const margenBruto = venta - costo; return { ventaNeta: venta, costo, gastos, marketing: mk, viajes: vj, margenBruto, brand: margenBruto - mk - vj } }
+    const blk = (b) => { if (!b) return null; const venta = sum(b.venta), costo = sum(b.costo), gastos = sum(b.gastos), mk = sum(b.mk), vj = sum(b.vj), logistica = sum(b.logistica); const margenBruto = venta - costo - logistica; return { ventaNeta: venta, costo, logistica, gastos, marketing: mk, viajes: vj, margenBruto, brand: margenBruto - mk - vj } }
     return { EB: blk(d.EB), SIN: blk(d.SIN) }
   } catch { return null }
 }
@@ -269,7 +269,7 @@ function retailEBNetMensual() {
   try {
     const d = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null'); const e = d && d.EB; if (!e) return null
     const g = (a, i) => Number((a || [])[i]) || 0
-    return Array.from({ length: 12 }, (_, i) => g(e.venta, i) - g(e.costo, i) - g(e.gastos, i) - g(e.mk, i) - g(e.vj, i))
+    return Array.from({ length: 12 }, (_, i) => g(e.venta, i) - g(e.costo, i) - g(e.logistica, i) - g(e.gastos, i) - g(e.mk, i) - g(e.vj, i))
   } catch { return null }
 }
 const sTag = (s, buy) => buy ? '(compra 2028)' : (s === 'ANT' ? '(saldo viejo agrupado)' : '(saldo anterior)')
@@ -3363,7 +3363,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const [comTab, setComTab] = useState('mapa') // sub-vista de Comercial (paso 1 = mapa)
   const TABS = [
     ['comercial', '🛍️ Comercial'], ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'],
-    ['gastos', '💵 Gastos'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
+    ['logistica', '🚚 Logística'], ['gastos', '💵 Gastos'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
   ]
   const COM_TABS = [['mapa', '1. 🧭 Mapa de abastecimiento'], ['ventas', '2. 🚢 Importaciones por tienda'], ['ucv', '3. 🏬 Ventas por tienda']]
   // ---- Importaciones (captura mensual del COSTO de importación por marca, con referencia 2027) ----
@@ -3501,6 +3501,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const guardarSin = () => guardarKeys([['retail_sin', sin], ['retail_pl', plSummary()]], 'Captura SINERGY guardada en el Sheet ✓')
   const sinVjAnual = MESES.reduce((a, _, mi) => a + sg('VJDIR', mi) + sg('VJMK', mi), 0)
   const sinMkAnual = MESES.reduce((a, _, mi) => a + sg('MK', mi), 0)
+  const sinLogAnual = MESES.reduce((a, _, mi) => a + sg('LOG', mi), 0)
   // ---- Cash Flow Retail: mismas líneas que las marcas, Cash Final encadenado ----
   const mpct = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
   // Importaciones DERIVADAS del mapa: por (marca,categoría)/mes = Σ(tiendas, subcats) unidades × %marca × AUC(marca, categoría de la celda) × factor.
@@ -3533,12 +3534,12 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   // ---- Resumen del P&L Retail (EB vs SINERGY), arreglos mensuales, para el Holding y el P&L/Cash Flow de Energy Brands ----
   const plSummary = () => {
     const z = () => Array(12).fill(0)
-    const EB = { venta: z(), costo: z(), gastos: z(), mk: z(), vj: z() }
-    const SIN = { venta: z(), costo: z(), gastos: z(), mk: z(), vj: z() }
+    const EB = { venta: z(), costo: z(), gastos: z(), mk: z(), vj: z(), logistica: z() }
+    const SIN = { venta: z(), costo: z(), gastos: z(), mk: z(), vj: z(), logistica: z() }
     MESES.forEach((_, mi) => {
       tiendas.forEach((t) => { const v = storeVentaM(t, mi), c = storeCostoM(t, mi); const B = esTiendaSinergy(t) ? SIN : EB; B.venta[mi] += v; B.costo[mi] += c })
       EB.gastos[mi] = gastoMes(mi); EB.mk[mi] = mkMes(mi); EB.vj[mi] = vjMes(mi)
-      SIN.mk[mi] = sg('MK', mi); SIN.vj[mi] = sg('VJDIR', mi) + sg('VJMK', mi)
+      SIN.mk[mi] = sg('MK', mi); SIN.vj[mi] = sg('VJDIR', mi) + sg('VJMK', mi); SIN.logistica[mi] = sg('LOG', mi)
     })
     return { EB, SIN }
   }
@@ -3645,6 +3646,26 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                   <tr key={k}><td className="l sub2">{lbl}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={sin[`${k}|${mi}`] ?? ''} onChange={(e) => setSIN(k, mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + sg(k, mi), 0))}</td></tr>
                 ))}
                 <tr className="grandrow"><td className="l">Total viajes SINERGY</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(sg('VJDIR', mi) + sg('VJMK', mi))}</td>)}<td className="tot">{fmt(sinVjAnual)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>}
+
+      {tab === 'logistica' && <>
+        <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
+        <div className="panel" style={{ borderLeftColor: '#be185d' }}>
+          <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
+            <span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🚚 Logística SINERGY</span>
+            <div className="spacer"></div>
+            <SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarSin}>{saving ? 'Guardando…' : '💾 Guardar SINERGY'}</button>
+          </div>
+          <div className="sub" style={{ marginBottom: 6 }}>Costo logístico de <b>SINERGY</b> por mes (se llena a mano). Alimenta <b>solo</b> el P&L SINERGY (línea Logística). Total: <b>${fmt(sinLogAnual)}</b></div>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '85px' }} /></colgroup>
+              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+              <tbody>
+                <tr><td className="l sub2" style={{ color: '#be185d', fontWeight: 700 }}>LOGÍSTICA SINERGY ($)</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={sin[`LOG|${mi}`] ?? ''} onChange={(e) => setSIN('LOG', mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot">{fmt(sinLogAnual)}</td></tr>
               </tbody>
             </table>
           </div>
@@ -3880,8 +3901,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           const R27 = { venta: 2363461, costo: 1360521, margen: 1002941, gastos: 2193944, resultado: -1191004 }
           const r27 = (v) => v == null ? '—' : fmt(v)
           const dCell = (v28, v27) => v27 == null ? <td className="tot ya">—</td> : <td className="tot ya" style={{ color: (v28 - v27) >= 0 ? '#15803d' : '#b91c1c' }}>{(v28 - v27) >= 0 ? '+' : ''}{fmt(v28 - v27)}</td>
-          const bloque = ({ title, sub, venta, costo, gastos, marketing, viajes, showRef, accent }) => {
-            const mb = venta - costo, res = mb - (gastos || 0) - marketing - viajes
+          const bloque = ({ title, sub, venta, costo, logistica, gastos, marketing, viajes, showRef, accent }) => {
+            const lg = logistica || 0, mb = venta - costo - lg, res = mb - (gastos || 0) - marketing - viajes
             const pc = (a) => venta > 0 ? <span className="unit"> · {(a / venta * 100).toFixed(1)}%</span> : null
             const row = (lbl, v28, v27, opts = {}) => <tr className={opts.grand ? 'grandrow' : undefined}><td className={'l' + (opts.sub ? ' sub2' : '')} style={opts.color ? { color: opts.color } : undefined}>{lbl}</td><td className="tot" style={{ color: opts.color, fontWeight: opts.grand ? 800 : undefined }}>{fmt(v28)}{opts.pctOf ? pc(v28) : null}</td><td className="tot ya">{r27(v27)}</td>{dCell(v28, v27)}</tr>
             return <div className="panel">
@@ -3891,6 +3912,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                   <tbody>
                     {row('Venta Neta', venta, showRef ? R27.venta : null)}
                     {row('(−) Costo', costo, showRef ? R27.costo : null, { sub: true, color: '#b91c1c' })}
+                    {logistica != null && row('(−) Logística', lg, null, { sub: true, color: '#b91c1c' })}
                     {row('= Margen Bruto', mb, showRef ? R27.margen : null, { grand: true, pctOf: true })}
                     {gastos != null && row('(−) Gastos', gastos, showRef ? R27.gastos : null, { sub: true, color: '#b91c1c' })}
                     {row('(−) Marketing', marketing, null, { sub: true, color: '#b91c1c' })}
@@ -3903,9 +3925,9 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           }
           return <>
             <div className="sub" style={{ marginBottom: 6 }}>El P&L de Retail se compone de dos: <b>P&L Retail EB</b> (suma al P&L y Cash Flow de Energy Brands) y <b>P&L SINERGY</b> (solo suma a la columna SINERGY del Holding). El <b>TOTAL</b> es la suma de los dos. La columna <b>2027</b> es la referencia del ABP (solo aplica a EB; SINERGY es nueva).</div>
-            {bloque({ title: '🧾 P&L Retail — TOTAL', sub: '(EB + SINERGY · 2028)', venta: ventaEB + ventaSIN, costo: costoEB + costoSIN, gastos: gGran, marketing: mkAnual + mkSinAnual, viajes: vjAnual + vjSinAnual, showRef: true, accent: '#7c3aed' })}
-            {bloque({ title: '🏬 P&L RETAIL EB', sub: '(alimenta P&L y Cash Flow de Energy Brands)', venta: ventaEB, costo: costoEB, gastos: gGran, marketing: mkAnual, viajes: vjAnual, showRef: true, accent: col })}
-            {bloque({ title: '🤝 P&L SINERGY', sub: '(solo suma a la columna SINERGY del Holding)', venta: ventaSIN, costo: costoSIN, gastos: null, marketing: mkSinAnual, viajes: vjSinAnual, showRef: false, accent: '#be185d' })}
+            {bloque({ title: '🧾 P&L Retail — TOTAL', sub: '(EB + SINERGY · 2028)', venta: ventaEB + ventaSIN, costo: costoEB + costoSIN, logistica: sinLogAnual, gastos: gGran, marketing: mkAnual + mkSinAnual, viajes: vjAnual + vjSinAnual, showRef: true, accent: '#7c3aed' })}
+            {bloque({ title: '🏬 P&L RETAIL EB', sub: '(alimenta P&L y Cash Flow de Energy Brands)', venta: ventaEB, costo: costoEB, logistica: null, gastos: gGran, marketing: mkAnual, viajes: vjAnual, showRef: true, accent: col })}
+            {bloque({ title: '🤝 P&L SINERGY', sub: '(solo suma a la columna SINERGY del Holding)', venta: ventaSIN, costo: costoSIN, logistica: sinLogAnual, gastos: null, marketing: mkSinAnual, viajes: vjSinAnual, showRef: false, accent: '#be185d' })}
           </>
         })()}
       </>}
@@ -4317,7 +4339,7 @@ function HoldingScreen({ empresas, sbusFor }) {
     // SINERGY: su P&L sale del bloque SINERGY del Retail (tienda SINERGY + capturas), no de marcas propias.
     if (upper(emp) === 'SINERGY') {
       const pl = retailPLTotales(); const s = pl && pl.SIN
-      if (s) return { unidades: 0, ventaNeta: s.ventaNeta, costo: s.costo, comisiones: 0, logistica: 0, marketing: s.marketing, viajes: s.viajes, margenBruto: s.margenBruto, brand: s.brand, gadmin: 0, resultado: s.brand }
+      if (s) return { unidades: 0, ventaNeta: s.ventaNeta, costo: s.costo, comisiones: 0, logistica: s.logistica || 0, marketing: s.marketing, viajes: s.viajes, margenBruto: s.margenBruto, brand: s.brand, gadmin: 0, resultado: s.brand }
       return { unidades: 0, ventaNeta: 0, costo: 0, comisiones: 0, logistica: 0, marketing: 0, viajes: 0, margenBruto: 0, brand: 0, gadmin: 0, resultado: 0 }
     }
     const { ventas, producto, capCat, mk, log, dir } = data
@@ -4341,7 +4363,7 @@ function HoldingScreen({ empresas, sbusFor }) {
     // Energy Brands: suma el P&L Retail EB (venta/costo/mkt/viajes a sus líneas; los gastos de tienda van a gastos administrativos).
     if (upper(emp) === 'ENERGY BRANDS') {
       const pl = retailPLTotales(); const e = pl && pl.EB
-      if (e) { tot.ventaNeta = (tot.ventaNeta || 0) + e.ventaNeta; tot.costo = (tot.costo || 0) + e.costo; tot.marketing = (tot.marketing || 0) + e.marketing; tot.viajes = (tot.viajes || 0) + e.viajes; tot.margenBruto = (tot.margenBruto || 0) + e.margenBruto; tot.brand = (tot.brand || 0) + e.brand; gadmin += e.gastos }
+      if (e) { tot.ventaNeta = (tot.ventaNeta || 0) + e.ventaNeta; tot.costo = (tot.costo || 0) + e.costo; tot.logistica = (tot.logistica || 0) + (e.logistica || 0); tot.marketing = (tot.marketing || 0) + e.marketing; tot.viajes = (tot.viajes || 0) + e.viajes; tot.margenBruto = (tot.margenBruto || 0) + e.margenBruto; tot.brand = (tot.brand || 0) + e.brand; gadmin += e.gastos }
     }
     return { ...tot, gadmin, resultado: (tot.brand || 0) - gadmin }
   }
