@@ -269,7 +269,8 @@ function retailEBNetMensual() {
   try {
     const d = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null'); const e = d && d.EB; if (!e) return null
     const g = (a, i) => Number((a || [])[i]) || 0
-    return Array.from({ length: 12 }, (_, i) => g(e.venta, i) - g(e.costo, i) - g(e.logistica, i) - g(e.gastos, i) - g(e.mk, i) - g(e.vj, i))
+    // Flujo neto de caja = operativo (venta−costo−logística−gastos−mkt−viajes) + otros ingresos − costos financieros − otros gastos; el Cash Inicial de Retail entra en enero.
+    return Array.from({ length: 12 }, (_, i) => g(e.venta, i) - g(e.costo, i) - g(e.logistica, i) - g(e.gastos, i) - g(e.mk, i) - g(e.vj, i) + g(e.oIng, i) - g(e.fin, i) - g(e.oGas, i) + (i === 0 ? (Number(e.ini) || 0) : 0))
   } catch { return null }
 }
 const sTag = (s, buy) => buy ? '(compra 2028)' : (s === 'ANT' ? '(saldo viejo agrupado)' : '(saldo anterior)')
@@ -3558,12 +3559,14 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   // ---- Resumen del P&L Retail (EB vs SINERGY), arreglos mensuales, para el Holding y el P&L/Cash Flow de Energy Brands ----
   const plSummary = () => {
     const z = () => Array(12).fill(0)
-    const EB = { venta: z(), costo: z(), gastos: z(), mk: z(), vj: z(), logistica: z() }
-    const SIN = { venta: z(), costo: z(), gastos: z(), mk: z(), vj: z(), logistica: z() }
+    const EB = { venta: z(), costo: z(), gastos: z(), mk: z(), vj: z(), logistica: z(), fin: z(), oIng: z(), oGas: z(), ini: num(cf[fk('INI', 0)]) }
+    const SIN = { venta: z(), costo: z(), gastos: z(), mk: z(), vj: z(), logistica: z(), fin: z(), oIng: z(), oGas: z(), ini: num(sin['CFINI|0']) }
     MESES.forEach((_, mi) => {
       tiendas.forEach((t) => { const v = storeVentaM(t, mi), c = storeCostoM(t, mi); const B = esTiendaSinergy(t) ? SIN : EB; B.venta[mi] += v; B.costo[mi] += c })
       EB.gastos[mi] = gastoMes(mi); EB.mk[mi] = mkMes(mi); EB.vj[mi] = vjMes(mi)
+      EB.fin[mi] = num(cf[fk('FIN', mi)]); EB.oIng[mi] = num(cf[fk('OING', mi)]); EB.oGas[mi] = num(cf[fk('OGAS', mi)])
       SIN.mk[mi] = sg('MK', mi); SIN.vj[mi] = sg('VJDIR', mi) + sg('VJMK', mi); SIN.logistica[mi] = sg('LOG', mi)
+      SIN.fin[mi] = num(sin[`CFFIN|${mi}`]); SIN.oIng[mi] = num(sin[`CFOING|${mi}`]); SIN.oGas[mi] = num(sin[`CFOGAS|${mi}`])
     })
     return { EB, SIN }
   }
@@ -4166,6 +4169,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   const [mk, setMk] = useState([]); const [log, setLog] = useState([]); const [dir, setDir] = useState([]); const [finR, setFinR] = useState([])
   const [hist, setHist] = useState([]); const [plan, setPlan] = useState({}); const [tumar, setTumar] = useState(null)
   const [cfSbu, setCfSbu] = useState(() => Object.keys(sbus)[0] || '')
+  const [gtab, setGtab] = useState('pl') // sub-pestaña de Gerencia: P&L / Cash Flow / Viajes (para no mezclarlos)
   const [cargando, setCargando] = useState(true)
   useEffect(() => {
     (async () => {
@@ -4285,7 +4289,10 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   const cellStyle = { cursor: BULB_CURSOR }
   return (
     <>
-      {!soloSBU && !cargando && <div className="panel">
+      {!soloSBU && !cargando && <div className="subtabs" style={{ marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {[['pl', '📊 Resultado / P&L'], ['cf', '💵 Cash Flow'], ...(empresa !== 'TUMAR' ? [['viajes', '🧳 Viajes']] : [])].map(([id, lbl]) => <button key={id} className={'seg' + (gtab === id ? ' active' : '')} onClick={() => setGtab(id)} style={gtab === id ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : {}}>{lbl}</button>)}
+      </div>}
+      {!soloSBU && !cargando && gtab === 'pl' && <div className="panel">
         <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
         <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno.</div>
         {HOVERTIP}
@@ -4301,7 +4308,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
           </tbody>
         </table></div>
       </div>}
-      {!soloSBU && !cargando && <div style={{ marginTop: 4 }}>
+      {!soloSBU && !cargando && gtab === 'cf' && <div style={{ marginTop: 4 }}>
         <div className="toolbar" style={{ marginBottom: 6 }}>
           <span style={{ fontWeight: 800, fontSize: 15 }}>💵 Cash Flow total</span>
           <label style={{ marginLeft: 10 }}>Ver</label>
@@ -4311,9 +4318,9 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
         {cfSbu && <CashFlowForm key={'gcf' + cfSbu} role={{ label: 'Cash Flow', tab: 'Cap_Finanzas' }} rubro={{ k: 'CASH FLOW', cash: true }} usuario="" empresa={empresa} sbus={cfSbu === '__ALL__' ? sbus : { [cfSbu]: sbus[cfSbu] || [] }} fixedMarca={`TOTAL::${cfSbu}`} />}
       </div>}
 
-      {!soloSBU && !cargando && <TahoEspejo empresa={empresa} />}
+      {!soloSBU && !cargando && gtab === 'pl' && <TahoEspejo empresa={empresa} />}
 
-      {!soloSBU && !cargando && empresa !== 'TUMAR' && <div className="panel" style={{ marginTop: 10 }}>
+      {!soloSBU && !cargando && gtab === 'viajes' && empresa !== 'TUMAR' && <div className="panel" style={{ marginTop: 10 }}>
         <h3>🧳 Viajes de Gerencia — {empresa} <span className="unit">(nivel empresa · impactan el Cash Flow ▣ TODAS)</span></h3>
         <div className="sub">Captura los <b>viajes admin</b> y <b>viajes de procesos</b> (misma vista que cada equipo). Los <b>viajes de Finanzas</b> se llenan en Finanzas y salen como <b>espejo</b> aquí. Todos — más los de cada SBU y Retail (cuando se cree) — impactan el <b>Cash Flow ▣ TODAS</b> de arriba.</div>
         <div style={{ fontWeight: 800, margin: '12px 0 2px', color: '#6b21a8', fontSize: 14 }}>① Viajes admin</div>
