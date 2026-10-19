@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'vendedores', 'vendcli']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'vendedores', 'vendcli']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -107,7 +107,9 @@ function catRowOk(row, empresa) {
 // Clientes semilla por empresa (TUMAR, del Excel de facturación · sin país).
 const SEED_CLIENTES = { 'TUMAR': ['LA LOMITA OUTDOORS SRL', 'HERNANDEZ ISMAEL MARIA', 'RIVAROLA MARIA ESTELA', 'MARTHA HEADWEAR SA S. A.', 'WILBERGER NOELIA MARILINA', 'GIGENA JUAN MANUEL', 'UNIAVENTURA S.A.', 'FOURCANS MARTIN OSCAR', 'MORIS CESAR OSVALDO', 'SCALZO OSVALDO NESTOR', 'ANGLER S AVENTURAS SOCIEDAD DE RESPONSABILIDAD LIMITADA', 'CRISTOBAL COLON S. R. L.', 'GROUP MOBILE S.A.', 'EL VIAJERO CAMPING S.R.L.', 'RANCHOCAVALIER S.R.L.', 'BASSI JUAN PABLO', 'PARALELO 42 S. CAP I SECC IV', 'PLACE IT S.A'] }
 /* Empresas del grupo (el nombre debe coincidir con la columna EMPRESA del Histórico). */
-const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO']
+const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO', 'SINERGY']
+// Orden fijo de columnas en el Total Holding (las demás empresas se agregan al final).
+const HOLDING_ORDER = ['ENERGY BRANDS', 'SINERGY', 'TAHO', 'TUMAR']
 
 /* Colores por SBU y por marca (identidad visual dinámica) */
 const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'SBU 4': '#be185d', 'RETAIL': '#4338ca', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
@@ -249,7 +251,10 @@ const RETAIL_GASTOS = [
   ['Mantenimiento y aseo', 22690], ['Gastos bancarios', 118173], ['Gastos apertura o cierre de tiendas', 135885], ['Otros gastos', 23635],
 ]
 // Retail: tiendas físicas por defecto (del P&L). Se pueden agregar nuevas en la pestaña Ventas por tienda.
-const RETAIL_TIENDAS = ['Birkenstock Andino', 'Hoka Andino', 'MUH Atlantis', 'MUH Arkadia', 'Sale Factory', 'E-Commerce', 'Mayoristas']
+const RETAIL_TIENDAS = ['Birkenstock Andino', 'Hoka Andino', 'MUH Atlantis', 'MUH Arkadia', 'Sale Factory', 'E-Commerce', 'Mayoristas', 'SINERGY']
+// Tiendas que pertenecen al bucket SINERGY (su P&L va a la columna SINERGY del Holding, NO a Energy Brands). El resto es P&L Retail EB.
+const SINERGY_TIENDAS = new Set(['SINERGY'])
+const esTiendaSinergy = (t) => SINERGY_TIENDAS.has(String(t || '').trim())
 const sTag = (s, buy) => buy ? '(compra 2028)' : (s === 'ANT' ? '(saldo viejo agrupado)' : '(saldo anterior)')
 
 /* ===== helpers ===== */
@@ -287,8 +292,8 @@ const PasoH = ({ n, children }) => (
 function effSBUS(empresa, combos) {
   const c = combos[empresa]
   const names = sbuNamesFor(empresa)
-  const baseDef = empresa === 'TAHO' ? TAHO_SBUS : DEFAULT_SBUS
-  const universe = empresa === 'TAHO' ? [...new Set([...ALL_MARCAS, ...TAHO_SBU4])] : ALL_MARCAS
+  const baseDef = empresa === 'TAHO' ? TAHO_SBUS : empresa === 'SINERGY' ? {} : DEFAULT_SBUS
+  const universe = (empresa === 'TAHO' || empresa === 'SINERGY') ? [...new Set([...ALL_MARCAS, ...TAHO_SBU4])] : ALL_MARCAS
   const excl = new Set((c && c['NO VENDE']) || [])
   if (empresa === 'ENERGY BRANDS') EB_RETIRADAS.forEach((m) => excl.add(m)) // marcas retiradas: nunca aparecen
   if (!c || !names.some((s) => (c[s] || []).length)) {
@@ -774,7 +779,7 @@ export default function App() {
 }
 
 /* ===== RoleForm: pestañas de rubro (simple o detalle) ===== */
-function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, onSaved, headerChip }) {
+function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, onSaved, headerChip, capTitle }) {
   const esTot = String(fixedMarca || '').startsWith('TOTAL::')
   // Los VIAJES ya no se llenan dentro de cada rol: se capturan en la pestaña "🧳 Viajes equipo". Por eso se quitan del selector VER del rol (salvo cuando se pide explícito con rubrosOverride, como en Gerencia/Finanzas/Viajes equipo).
   const rubros = (rubrosOverride || role.rubros.filter((rb) => rb.k !== 'VIAJES')).filter((rb) => !rb.gadmin || esTot).filter((rb) => !(empresa === 'TUMAR' && rb.muestras)) // Gastos admin solo en TOTAL SBU · Muestras no aplica en TUMAR
@@ -788,7 +793,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, on
   if (!rubros.length) return null
   const idx = Math.min(tab, rubros.length - 1)
   const rb = rubros[idx]
-  const common = { role, rubro: rb, usuario, empresa, sbus, data, setData, saving, setSaving, msg, setMsg, fixedMarca, onSaved, headerChip }
+  const common = { role, rubro: rb, usuario, empresa, sbus, data, setData, saving, setSaving, msg, setMsg, fixedMarca, onSaved, headerChip, capTitle }
 
   return (
     <>
@@ -987,7 +992,7 @@ function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, sa
 }
 
 /* ===== DetalleForm: sub-rubros por marca (Marketing y Viajes) ===== */
-function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, data, setData, saving, setSaving, setMsg, fixedMarca, onSaved, headerChip }) {
+function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, data, setData, saving, setSaving, setMsg, fixedMarca, onSaved, headerChip, capTitle }) {
   const marcas = marcasDe(sbus)
   const [marca, setMarca] = useState(fixedMarca || marcas[0].marca)
   useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
@@ -1132,7 +1137,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
       </div>}
       <div className="panel">
         <div className="toolbar" style={{ alignItems: 'center', marginBottom: 2 }}>
-          <h3 style={{ margin: 0 }}>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>solo lectura</span> : <Responsable empresa={empresa} seccion="Finanzas" />}</h3>
+          <h3 style={{ margin: 0 }}>{capTitle ? capTitle : <>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$}</>} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>solo lectura</span> : <Responsable empresa={empresa} seccion="Finanzas" />}</h3>
           <div className="spacer"></div>
           {!isTotal && !String(fixedMarca || '').startsWith('(') && <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>}
         </div>
@@ -3466,6 +3471,14 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const fk = (line, mi) => `${line}|${mi}`
   const setCF = (line, mi, v) => setCf((d) => ({ ...d, [fk(line, mi)]: v }))
   const guardarCF = () => guardarKeys([['retail_cf', cf]], 'Cash Flow guardado en el Sheet ✓')
+  // ---- Capturas SINERGY (manuales): viajes Director/Marketing + marketing total. Alimentan SOLO el P&L SINERGY. ----
+  const [sin, setSin] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_sin_${empresa}`) || '{}') } catch { return {} } })
+  useEffect(() => { try { setSin(JSON.parse(localStorage.getItem(`retail_sin_${empresa}`) || '{}')) } catch { } }, [empresa])
+  const sg = (line, mi) => num(sin[`${line}|${mi}`])
+  const setSIN = (line, mi, v) => setSin((d) => ({ ...d, [`${line}|${mi}`]: v }))
+  const guardarSin = () => guardarKeys([['retail_sin', sin]], 'Captura SINERGY guardada en el Sheet ✓')
+  const sinVjAnual = MESES.reduce((a, _, mi) => a + sg('VJDIR', mi) + sg('VJMK', mi), 0)
+  const sinMkAnual = MESES.reduce((a, _, mi) => a + sg('MK', mi), 0)
   // ---- Cash Flow Retail: mismas líneas que las marcas, Cash Final encadenado ----
   const mpct = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
   // Importaciones DERIVADAS del mapa: por (marca,categoría)/mes = Σ(tiendas, subcats) unidades × %marca × AUC(marca, categoría de la celda) × factor.
@@ -3516,7 +3529,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         {/* Marketing sobre la venta (Retail): venta neta = venta por tienda */}
         {(() => { const vnMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0); const vnAn = MESES.reduce((a, _, mi) => a + vnMes(mi), 0); const mkAn = MESES.reduce((a, _, mi) => a + mkMes(mi), 0); const pctC = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
           return <div className="panel" style={{ marginBottom: 8 }}>
-            <h3 style={{ color: col }}>MARKETING sobre la venta — Retail <span className="unit">(venta = ventas por tienda)</span></h3>
+            <h3 style={{ color: col }}>MARKETING EB sobre la venta — Retail <span className="unit">(venta = ventas por tienda)</span></h3>
             <div className="sub">Cuánto pesa <b>Marketing</b> sobre la <b>venta neta</b>, por mes y en total.</div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
               <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -3527,14 +3540,31 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               </tbody>
             </table></div>
           </div> })()}
-        <RoleForm key="retail-mk" role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} />
+        <RoleForm key="retail-mk" role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} capTitle="MARKETING EB — (Retail)" />
+        {/* ---- Marketing SINERGY: una sola línea de total manual (no por rubro) ---- */}
+        <div className="panel" style={{ marginTop: 14, borderLeftColor: '#be185d' }}>
+          <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
+            <span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🤝 Marketing SINERGY</span>
+            <div className="spacer"></div>
+            <SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarSin}>{saving ? 'Guardando…' : '💾 Guardar SINERGY'}</button>
+          </div>
+          <div className="sub" style={{ marginBottom: 6 }}>Total de marketing de <b>SINERGY</b> por mes (se llena a mano, sin desglose por rubro). Alimenta <b>solo</b> el P&L SINERGY. Total: <b>${fmt(sinMkAnual)}</b></div>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '85px' }} /></colgroup>
+              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+              <tbody>
+                <tr><td className="l sub2" style={{ color: '#be185d', fontWeight: 700 }}>MARKETING SINERGY ($)</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={sin[`MK|${mi}`] ?? ''} onChange={(e) => setSIN('MK', mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot">{fmt(sinMkAnual)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </>}
 
       {tab === 'viajes' && <>
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {/* Resumen por área/rol (espejo) */}
         {(() => {
-          const areas = [['Ventas', 'ventas', '📈'], ['Producto', 'producto', '📦'], ['Marketing', 'marketing', '📣'], ['Director', 'director', '🧑‍💼']]
+          const areas = [['Producto EB', 'producto', '📦'], ['Director EB', 'director', '🧑‍💼'], ['Marketing EB', 'marketing', '📣'], ['Controler EB', 'ventas', '🧮']]
           const vjAreaMes = (k, mi) => (capVj[k] || []).reduce((a, r) => a + num(r[4 + mi]), 0)
           const totVjMes = (mi) => areas.reduce((a, [, k]) => a + vjAreaMes(k, mi), 0)
           const vnMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
@@ -3556,12 +3586,32 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
             </div>
           </div>
         })()}
-        <div className="sub" style={{ marginBottom: 8 }}>En Retail viajan <b>4 áreas</b>: Director, Producto, Marketing y Ventas. Cada bloque tiene su captura y su total.</div>
+        <div className="sub" style={{ marginBottom: 8 }}>Viajes <b>EB</b>: Producto, Director, Marketing y Controler (cada bloque con su captura). Abajo, los viajes <b>SINERGY</b> (Director y Marketing), que alimentan solo el P&L SINERGY.</div>
         {vjRoles.map((r) => (
           <div key={r.id} style={{ marginTop: 14 }}>
             <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} headerChip={<span style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 13, padding: '6px 12px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 15 }}>{r.icon}</span> Viajes de {r.label} — Retail</span>} />
           </div>
         ))}
+        {/* ---- Viajes SINERGY (manual): Director SINERGY + Marketing SINERGY ---- */}
+        <div className="panel" style={{ marginTop: 18, borderLeftColor: '#be185d' }}>
+          <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
+            <span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🤝 Viajes SINERGY</span>
+            <div className="spacer"></div>
+            <SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarSin}>{saving ? 'Guardando…' : '💾 Guardar SINERGY'}</button>
+          </div>
+          <div className="sub" style={{ marginBottom: 6 }}>Captura manual de los viajes de <b>SINERGY</b> (por mes). Alimentan <b>solo</b> el P&L SINERGY, no a Energy Brands.</div>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '85px' }} /></colgroup>
+              <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+              <tbody>
+                {[['🧑‍💼 Director SINERGY', 'VJDIR'], ['📣 Marketing SINERGY', 'VJMK']].map(([lbl, k]) => (
+                  <tr key={k}><td className="l sub2">{lbl}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={sin[`${k}|${mi}`] ?? ''} onChange={(e) => setSIN(k, mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + sg(k, mi), 0))}</td></tr>
+                ))}
+                <tr className="grandrow"><td className="l">Total viajes SINERGY</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(sg('VJDIR', mi) + sg('VJMK', mi))}</td>)}<td className="tot">{fmt(sinVjAnual)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </>}
 
       {tab === 'gastos' && <>
@@ -3572,7 +3622,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           <h3 style={{ color: col }}>Gastos 2028 — Retail</h3>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table className="vfix"><colgroup><col style={{ width: '200px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '95px' }} /></colgroup>
-              <thead><tr><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">Ref 2027</th></tr></thead>
+              <thead><tr><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">2027</th></tr></thead>
               <tbody>
                 {gRubros.map((r) => { const esX = gRubrosX.includes(r.n); return <tr key={r.n}><td className="l sub2">{r.n}{esX && <span className="newbadge">NUEVO</span>}{esX && <button title="Quitar rubro" onClick={() => delRubroG(r.n)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={gastos[gk(r.n, mi)] ?? ''} onChange={(e) => setG(r.n, mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot">{fmt(gRow(r.n))}</td><td className="tot ya">{fmt(r.ref)}</td></tr> })}
                 <tr className="grandrow"><td className="l">Total gastos</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(gCol(mi))}</td>)}<td className="tot">{fmt(gGran)}</td><td className="tot ya">{fmt(RETAIL_GASTOS.reduce((a, [, ref]) => a + ref, 0))}</td></tr>
@@ -3644,7 +3694,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           <div className="sub">Lo que Retail le compra a las SBU, por marca y mes = unidades a comprar × AUC wholesale (de Producto) × factor ({fmt(factor())}).</div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '95px' }} /></colgroup>
-              <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">Ref 2027 $</th></tr></thead>
+              <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">2027 $</th></tr></thead>
               <tbody>
                 {wholesaleMarcas.map((m) => { const ref = RETAIL_IMP_2027[m] || {}; const an = impMarcaAnual(m); return <tr key={m}><td className="l" title={ref.c ? `Referencia 2027: ${fmt(ref.u)} ud · $${fmt(ref.c)}` : undefined}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(impMarcaMes(m, mi))}</td>)}<td className="tot">{fmt(an)}</td><td className="tot ya">{fmt(ref.c)}</td></tr> })}
                 <tr className="grandrow"><td className="l">TOTAL Retail</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(impMes(mi))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + impMes(mi), 0))}</td><td className="tot ya">{fmt(RETAIL_MARCAS.reduce((a, m) => a + (RETAIL_IMP_2027[m]?.c || 0), 0))}</td></tr>
@@ -3784,33 +3834,43 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
 
       {tab === 'pl' && <>
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
-        <div className="panel">
-          <h3 style={{ color: col }}>P&L — Retail <span className="unit">(2028 · estilo Contribución de las SBU)</span></h3>
-          <div className="sub">Resultado operativo de Retail: <b>Venta Neta</b> (por tienda) − <b>Costo</b> = <b>Margen Bruto</b>; luego se restan <b>Gastos</b>, <b>Marketing</b> y <b>Viajes</b>. La columna <b>2027</b> es la referencia del ABP (hoja P&L USD del Excel). En 2027, Marketing y Viajes están dentro de Gastos, por eso van como "—" en esas filas.</div>
-          <div className="tablewrap" style={{ overflowX: 'auto', maxWidth: 640 }}>
-            <table><thead><tr><th className="l">Concepto</th><th>2028</th><th className="ya">2027 (ref)</th><th className="ya">Δ vs 2027</th></tr></thead>
-              <tbody>
-                {(() => {
-                  const R27 = { venta: 2363461, costo: 1360521, margen: 1002941, gastos: 2193944, resultado: -1191004 }
-                  const mb = totVenta - totCosto, res = mb - gGran - mkAnual - vjAnual
-                  const pc = (a) => totVenta > 0 ? ' · ' + (a / totVenta * 100).toFixed(1) + '%' : ''
-                  const r27 = (v) => v == null ? '—' : fmt(v)
-                  const dCell = (v28, v27) => v27 == null ? <td className="tot ya">—</td> : <td className="tot ya" style={{ color: (v28 - v27) >= 0 ? '#15803d' : '#b91c1c' }}>{(v28 - v27) >= 0 ? '+' : ''}{fmt(v28 - v27)}</td>
-                  const row = (lbl, v28, v27, opts = {}) => <tr className={opts.grand ? 'grandrow' : undefined}><td className={'l' + (opts.sub ? ' sub2' : '')} style={opts.color ? { color: opts.color } : undefined}>{lbl}</td><td className="tot" style={{ color: opts.color, fontWeight: opts.grand ? 800 : undefined }}>{fmt(v28)}{opts.pctOf ? <span className="unit">{pc(v28)}</span> : null}</td><td className="tot ya">{r27(v27)}</td>{dCell(v28, v27)}</tr>
-                  return <>
-                    {row('Venta Neta', totVenta, R27.venta)}
-                    {row('(−) Costo', totCosto, R27.costo, { sub: true, color: '#b91c1c' })}
-                    {row('= Margen Bruto', mb, R27.margen, { grand: true, pctOf: true })}
-                    {row('(−) Gastos', gGran, R27.gastos, { sub: true, color: '#b91c1c' })}
-                    {row('(−) Marketing', mkAnual, null, { sub: true, color: '#b91c1c' })}
-                    {row('(−) Viajes', vjAnual, null, { sub: true, color: '#b91c1c' })}
-                    {row('= Resultado Operativo', res, R27.resultado, { grand: true, pctOf: true, color: res >= 0 ? '#0f766e' : '#b91c1c' })}
-                  </>
-                })()}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {(() => {
+          const vEB = tiendas.filter((t) => !esTiendaSinergy(t)), vSIN = tiendas.filter((t) => esTiendaSinergy(t))
+          const sum = (arr, f) => arr.reduce((a, t) => a + f(t), 0)
+          const ventaEB = sum(vEB, tVenta), costoEB = sum(vEB, tCosto)
+          const ventaSIN = sum(vSIN, tVenta), costoSIN = sum(vSIN, tCosto)
+          const mkSinAnual = sinMkAnual, vjSinAnual = sinVjAnual
+          const R27 = { venta: 2363461, costo: 1360521, margen: 1002941, gastos: 2193944, resultado: -1191004 }
+          const r27 = (v) => v == null ? '—' : fmt(v)
+          const dCell = (v28, v27) => v27 == null ? <td className="tot ya">—</td> : <td className="tot ya" style={{ color: (v28 - v27) >= 0 ? '#15803d' : '#b91c1c' }}>{(v28 - v27) >= 0 ? '+' : ''}{fmt(v28 - v27)}</td>
+          const bloque = ({ title, sub, venta, costo, gastos, marketing, viajes, showRef, accent }) => {
+            const mb = venta - costo, res = mb - (gastos || 0) - marketing - viajes
+            const pc = (a) => venta > 0 ? <span className="unit"> · {(a / venta * 100).toFixed(1)}%</span> : null
+            const row = (lbl, v28, v27, opts = {}) => <tr className={opts.grand ? 'grandrow' : undefined}><td className={'l' + (opts.sub ? ' sub2' : '')} style={opts.color ? { color: opts.color } : undefined}>{lbl}</td><td className="tot" style={{ color: opts.color, fontWeight: opts.grand ? 800 : undefined }}>{fmt(v28)}{opts.pctOf ? pc(v28) : null}</td><td className="tot ya">{r27(v27)}</td>{dCell(v28, v27)}</tr>
+            return <div className="panel">
+              <h3 style={{ color: accent || col }}>{title} <span className="unit">{sub}</span></h3>
+              <div className="tablewrap" style={{ overflowX: 'auto', maxWidth: 640 }}>
+                <table><thead><tr><th className="l">Concepto</th><th>2028</th><th className="ya">2027</th><th className="ya">Δ vs 2027</th></tr></thead>
+                  <tbody>
+                    {row('Venta Neta', venta, showRef ? R27.venta : null)}
+                    {row('(−) Costo', costo, showRef ? R27.costo : null, { sub: true, color: '#b91c1c' })}
+                    {row('= Margen Bruto', mb, showRef ? R27.margen : null, { grand: true, pctOf: true })}
+                    {gastos != null && row('(−) Gastos', gastos, showRef ? R27.gastos : null, { sub: true, color: '#b91c1c' })}
+                    {row('(−) Marketing', marketing, null, { sub: true, color: '#b91c1c' })}
+                    {row('(−) Viajes', viajes, null, { sub: true, color: '#b91c1c' })}
+                    {row('= Resultado Operativo', res, showRef ? R27.resultado : null, { grand: true, pctOf: true, color: res >= 0 ? '#0f766e' : '#b91c1c' })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+          return <>
+            <div className="sub" style={{ marginBottom: 6 }}>El P&L de Retail se compone de dos: <b>P&L Retail EB</b> (suma al P&L y Cash Flow de Energy Brands) y <b>P&L SINERGY</b> (solo suma a la columna SINERGY del Holding). El <b>TOTAL</b> es la suma de los dos. La columna <b>2027</b> es la referencia del ABP (solo aplica a EB; SINERGY es nueva).</div>
+            {bloque({ title: '🧾 P&L Retail — TOTAL', sub: '(EB + SINERGY · 2028)', venta: ventaEB + ventaSIN, costo: costoEB + costoSIN, gastos: gGran, marketing: mkAnual + mkSinAnual, viajes: vjAnual + vjSinAnual, showRef: true, accent: '#7c3aed' })}
+            {bloque({ title: '🏬 P&L RETAIL EB', sub: '(alimenta P&L y Cash Flow de Energy Brands)', venta: ventaEB, costo: costoEB, gastos: gGran, marketing: mkAnual, viajes: vjAnual, showRef: true, accent: col })}
+            {bloque({ title: '🤝 P&L SINERGY', sub: '(solo suma a la columna SINERGY del Holding)', venta: ventaSIN, costo: costoSIN, gastos: null, marketing: mkSinAnual, viajes: vjSinAnual, showRef: false, accent: '#be185d' })}
+          </>
+        })()}
       </>}
     </div>
   )
@@ -4237,7 +4297,11 @@ function HoldingScreen({ empresas, sbusFor }) {
     gadmin = gadminAnualOf(emp)
     return { ...tot, gadmin, resultado: (tot.brand || 0) - gadmin }
   }
-  const byEmp = empresas.map((e) => ({ e, v: calcEmp(e) }))
+  const empsOrden = [...empresas].sort((a, b) => {
+    const ia = HOLDING_ORDER.indexOf(upper(a)), ib = HOLDING_ORDER.indexOf(upper(b))
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)
+  })
+  const byEmp = empsOrden.map((e) => ({ e, v: calcEmp(e) }))
   const filas = [
     { k: 'Unidades', g: (v) => v.unidades },
     { k: 'Venta Neta', g: (v) => v.ventaNeta, strong: true },
@@ -4270,11 +4334,11 @@ function HoldingScreen({ empresas, sbusFor }) {
       <div className="panel">
         <div className="toolbar" style={{ marginBottom: 8 }}>
           <span style={{ fontWeight: 800, fontSize: 15 }}>🔎 Detalle por empresa</span>
-          {empresas.map((e) => <button key={e} className={'seg' + (detEmp === e ? ' active' : '')} onClick={() => setDetEmp(e)} style={detEmp === e ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : {}}>{e}</button>)}
+          {empsOrden.map((e) => <button key={e} className={'seg' + (detEmp === e ? ' active' : '')} onClick={() => setDetEmp(e)} style={detEmp === e ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : {}}>{e}</button>)}
           <button className={'seg' + (detEmp === '__ALL__' ? ' active' : '')} onClick={() => setDetEmp('__ALL__')} style={detEmp === '__ALL__' ? { background: '#1f2d3d', borderColor: '#1f2d3d', color: '#fff' } : {}}>▣ TODOS</button>
         </div>
         {detEmp === '__ALL__'
-          ? empresas.map((e) => <div key={e} style={{ marginBottom: 18 }}><div style={{ fontWeight: 800, fontSize: 15, color: '#7c3aed', margin: '4px 0 8px' }}>🏢 {e}</div><GerenciaScreen key={e} empresa={e} sbus={sbusFor(e)} /></div>)
+          ? empsOrden.map((e) => <div key={e} style={{ marginBottom: 18 }}><div style={{ fontWeight: 800, fontSize: 15, color: '#7c3aed', margin: '4px 0 8px' }}>🏢 {e}</div><GerenciaScreen key={e} empresa={e} sbus={sbusFor(e)} /></div>)
           : detEmp && <GerenciaScreen key={detEmp} empresa={detEmp} sbus={sbusFor(detEmp)} />}
       </div>
     </>
