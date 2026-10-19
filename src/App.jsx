@@ -273,7 +273,7 @@ function RetailEBCashFlowView({ which = 'EB', title, accent = '#0e7490' } = {}) 
   const rows = []; let prev = 0
   MESES.forEach((_, mi) => {
     const ini = mi === 0 ? (Number(e.ini) || 0) : prev
-    const cobros = g(e.venta, mi), pagos = g(e.costo, mi)
+    const cobros = g(e.venta, mi), pagos = (e.pagos ? g(e.pagos, mi) : g(e.costo, mi))
     const gasto = g(e.gastos, mi), logi = g(e.logistica, mi), mk = g(e.mk, mi), vj = g(e.vj, mi)
     const oper = gasto + logi + mk + vj
     const fin = g(e.fin, mi), oIng = g(e.oIng, mi), oGas = g(e.oGas, mi)
@@ -309,7 +309,8 @@ function retailEBNetMensual() {
     const d = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null'); const e = d && d.EB; if (!e) return null
     const g = (a, i) => Number((a || [])[i]) || 0
     // Flujo neto de caja = operativo (venta−costo−logística−gastos−mkt−viajes) + otros ingresos − costos financieros − otros gastos; el Cash Inicial de Retail entra en enero.
-    return Array.from({ length: 12 }, (_, i) => g(e.venta, i) - g(e.costo, i) - g(e.logistica, i) - g(e.gastos, i) - g(e.mk, i) - g(e.vj, i) + g(e.oIng, i) - g(e.fin, i) - g(e.oGas, i) + (i === 0 ? (Number(e.ini) || 0) : 0))
+    const pag = (i) => (e.pagos ? g(e.pagos, i) : g(e.costo, i))
+    return Array.from({ length: 12 }, (_, i) => g(e.venta, i) - pag(i) - g(e.logistica, i) - g(e.gastos, i) - g(e.mk, i) - g(e.vj, i) + g(e.oIng, i) - g(e.fin, i) - g(e.oGas, i) + (i === 0 ? (Number(e.ini) || 0) : 0))
   } catch { return null }
 }
 const sTag = (s, buy) => buy ? '(compra 2028)' : (s === 'ANT' ? '(saldo viejo agrupado)' : '(saldo anterior)')
@@ -3414,7 +3415,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
     ['comercial', '🛍️ Comercial'], ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'],
     ['logistica', '🚚 Logística'], ['gastos', '💵 Gastos'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
   ]
-  const COM_TABS = [['mapa', '1. 🧭 Mapa de abastecimiento'], ['ventas', '2. 🚢 Importaciones por tienda'], ['ucv', '3. 🏬 Ventas por tienda']]
+  const COM_TABS = [['mapa', '1. 🧭 Mapa de abastecimiento'], ['ventas', '2. 📦 Compras por tienda'], ['ucv', '3. 🏬 Ventas por tienda']]
   // ---- Importaciones (captura mensual del COSTO de importación por marca, con referencia 2027) ----
   const [imp, setImp] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
@@ -3551,6 +3552,12 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const sinVjAnual = MESES.reduce((a, _, mi) => a + sg('VJDIR', mi) + sg('VJMK', mi), 0)
   const sinMkAnual = MESES.reduce((a, _, mi) => a + sg('MK', mi), 0)
   const sinLogAnual = MESES.reduce((a, _, mi) => a + sg('LOG', mi), 0)
+  // ---- Calendario de importaciones (Paso 1): meses marcados con X en que EB despacha (llega la mercancía a todas las tiendas). Guardado en retail_cf. ----
+  const impCalOn = (mi) => !!String(cf[fk('IMPCAL', mi)] || '').trim()
+  const impCalToggle = (mi) => setCF('IMPCAL', mi, impCalOn(mi) ? '' : '1')
+  const impCalCount = MESES.reduce((a, _, mi) => a + (impCalOn(mi) ? 1 : 0), 0)
+  // Compras (costo de la mercancía a importar) por bucket, re-cronometradas al calendario: si hay meses marcados, el total anual se reparte en esos meses; si no, cae mes a mes como el costo.
+  const comprasCalMes = (ts, mi) => { if (impCalCount > 0) { if (!impCalOn(mi)) return 0; const annual = ts.reduce((a, t) => a + tCosto(t), 0); return annual / impCalCount } return ts.reduce((s, t) => s + storeCostoM(t, mi), 0) }
   // ---- Cash Flow Retail: mismas líneas que las marcas, Cash Final encadenado ----
   const mpct = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
   // Importaciones DERIVADAS del mapa: por (marca,categoría)/mes = Σ(tiendas, subcats) unidades × %marca × AUC(marca, categoría de la celda) × factor.
@@ -3589,7 +3596,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
     MESES.forEach((_, mi) => {
       const ini = mi === 0 ? cfFin(bucket, 'INI', 0) : prev
       const cobros = ts.reduce((a, t) => a + storeVentaM(t, mi), 0)
-      const pagos = ts.reduce((a, t) => a + storeCostoM(t, mi), 0)
+      const pagos = comprasCalMes(ts, mi)
       const gasto = bucket === 'SIN' ? 0 : gastoMes(mi)
       const logi = bucket === 'EB' ? 0 : sg('LOG', mi)
       const mk = bucket === 'EB' ? mkMes(mi) : bucket === 'SIN' ? sg('MK', mi) : mkMes(mi) + sg('MK', mi)
@@ -3607,10 +3614,12 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   // ---- Resumen del P&L Retail (EB vs SINERGY), arreglos mensuales, para el Holding y el P&L/Cash Flow de Energy Brands ----
   const plSummary = () => {
     const z = () => Array(12).fill(0)
-    const EB = { venta: z(), costo: z(), gastos: z(), mk: z(), vj: z(), logistica: z(), fin: z(), oIng: z(), oGas: z(), ini: num(cf[fk('INI', 0)]) }
-    const SIN = { venta: z(), costo: z(), gastos: z(), mk: z(), vj: z(), logistica: z(), fin: z(), oIng: z(), oGas: z(), ini: num(sin['CFINI|0']) }
+    const EB = { venta: z(), costo: z(), pagos: z(), gastos: z(), mk: z(), vj: z(), logistica: z(), fin: z(), oIng: z(), oGas: z(), ini: num(cf[fk('INI', 0)]) }
+    const SIN = { venta: z(), costo: z(), pagos: z(), gastos: z(), mk: z(), vj: z(), logistica: z(), fin: z(), oIng: z(), oGas: z(), ini: num(sin['CFINI|0']) }
+    const tEB = tiendas.filter((t) => !esTiendaSinergy(t)), tSIN = tiendas.filter((t) => esTiendaSinergy(t))
     MESES.forEach((_, mi) => {
       tiendas.forEach((t) => { const v = storeVentaM(t, mi), c = storeCostoM(t, mi); const B = esTiendaSinergy(t) ? SIN : EB; B.venta[mi] += v; B.costo[mi] += c })
+      EB.pagos[mi] = comprasCalMes(tEB, mi); SIN.pagos[mi] = comprasCalMes(tSIN, mi)
       EB.gastos[mi] = gastoMes(mi); EB.mk[mi] = mkMes(mi); EB.vj[mi] = vjMes(mi)
       EB.fin[mi] = num(cf[fk('FIN', mi)]); EB.oIng[mi] = num(cf[fk('OING', mi)]); EB.oGas[mi] = num(cf[fk('OGAS', mi)])
       SIN.mk[mi] = sg('MK', mi); SIN.vj[mi] = sg('VJDIR', mi) + sg('VJMK', mi); SIN.logistica[mi] = sg('LOG', mi)
@@ -3769,8 +3778,22 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Importaciones por tienda</span><div className="spacer"></div><button className="btn" onClick={() => setComTab('mapa')}>🧭 Mapa de abastecimiento</button><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
-          <h3 style={{ color: col }}>Importaciones y costo proyectados por tienda — 2028 <span className="unit">(unidades a comprar · Retail → Wholesale)</span></h3>
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Compras por tienda</span><div className="spacer"></div><button className="btn" onClick={() => setComTab('mapa')}>🧭 Mapa de abastecimiento</button><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+          <h3 style={{ color: col }}>Compras por tienda — 2028 <span className="unit">(unidades a comprar · Retail → Wholesale)</span></h3>
+          {/* ---- Paso 1: calendario de importaciones (cuándo EB despacha; aplica a todas las tiendas) ---- */}
+          <div className="panel tight" style={{ marginBottom: 10 }}>
+            <PasoH n={1}>Calendario de importaciones <span className="unit" style={{ fontWeight: 400 }}>(marca con X los meses en que EB despacha; la mercancía llega a todas las tiendas en esos meses)</span></PasoH>
+            <div className="tablewrap" style={{ overflowX: 'auto' }}>
+              <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}</colgroup>
+                <thead><tr><th className="l">Importación</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}</tr></thead>
+                <tbody>
+                  <tr><td className="l sub2">¿Llega mercancía?</td>{MESES.map((_, mi) => <td key={mi} className="cell" style={{ textAlign: 'center', cursor: 'pointer', background: impCalOn(mi) ? '#eefaf6' : undefined }} onClick={() => impCalToggle(mi)} title="Clic para marcar/desmarcar el mes de importación">{impCalOn(mi) ? <span style={{ color: '#0f766e', fontWeight: 800 }}>✕</span> : <span style={{ color: 'var(--muted)' }}>·</span>}</td>)}</tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="sub" style={{ marginTop: 4 }}>{impCalCount > 0 ? <>Las compras del año se reflejan en los <b>{impCalCount}</b> mes(es) marcado(s) en el <b>Cash Flow</b> (pagos). </> : <>Sin meses marcados, los pagos caen mes a mes según el costo. </>}El <b>P&L</b> no cambia (el costo se reconoce cuando se vende).</div>
+          </div>
+          <PasoH n={2}>Unidades a comprar por tienda</PasoH>
           <div className="sub">Escoge una <b>tienda</b> y captura por <b>subcategoría Retail</b>: las <b>unidades por mes</b>. El <b>costo</b> sale del <b>mapa de abastecimiento</b> (de qué marca/categoría wholesale se compra cada subcategoría) × el <b>factor</b> global.</div>
           <div className="toolbar" style={{ margin: '8px 0 2px', gap: 8, alignItems: 'center' }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Factor wholesale→Retail (×):</label>
@@ -3853,7 +3876,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Mapa de abastecimiento</span><div className="spacer"></div><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Mapa de abastecimiento <span className="unit">(a qué marca · categoría wholesale le compra Retail cada subcategoría)</span></h3>
           <div className="sub">En cada <b>subcategoría</b> (fila) y <b>marca</b> (columna), pon el <b>%</b> que se le compra y elige la <b>categoría</b> de esa marca. Cada fila debe sumar <b>100%</b> — si no, se marca en rojo. El costo usa el <b>AUC exacto</b> de esa marca·categoría × factor.</div>
-          {allSubcats.length === 0 ? <div className="sub">No hay subcategorías. Agrégalas en "Importaciones por tienda".</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
+          {allSubcats.length === 0 ? <div className="sub">No hay subcategorías. Agrégalas en "Compras por tienda".</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table style={{ minWidth: (250 + wholesaleMarcas.length * 118 + 70) + 'px', borderCollapse: 'collapse' }}><colgroup><col style={{ width: '180px' }} />{wholesaleMarcas.map((_, i) => <col key={i} style={{ width: '118px' }} />)}<col style={{ width: '70px' }} /></colgroup>
               <thead><tr><th className="l">Subcategoría</th>{wholesaleMarcas.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th></tr></thead>
               <tbody>
@@ -4413,7 +4436,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
 // Cash Flow consolidado del Total Holding = suma de los resúmenes de cada empresa (cfsum_*) + el bloque SINERGY del Retail.
 function HoldingCashFlow({ empresas }) {
   const read = (e) => { try { return JSON.parse(localStorage.getItem(`cfsum_${e}`) || 'null') } catch { return null } }
-  const sinFromRetail = () => { try { const d = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null'); const s = d && d.SIN; if (!s) return null; const g = (a, i) => Number((a || [])[i]) || 0; const o = { cobros: [], pagos: [], oper: [], fin: [], oIng: [], oGas: [], flujo: [], ini0: Number(s.ini) || 0 }; for (let i = 0; i < 12; i++) { const cob = g(s.venta, i), pag = g(s.costo, i), op = g(s.logistica, i) + g(s.mk, i) + g(s.vj, i), fn = g(s.fin, i), oi = g(s.oIng, i), og = g(s.oGas, i); o.cobros.push(cob); o.pagos.push(pag); o.oper.push(op); o.fin.push(fn); o.oIng.push(oi); o.oGas.push(og); o.flujo.push(cob - pag - op - fn - og + oi) } return o } catch { return null } }
+  const sinFromRetail = () => { try { const d = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null'); const s = d && d.SIN; if (!s) return null; const g = (a, i) => Number((a || [])[i]) || 0; const o = { cobros: [], pagos: [], oper: [], fin: [], oIng: [], oGas: [], flujo: [], ini0: Number(s.ini) || 0 }; for (let i = 0; i < 12; i++) { const cob = g(s.venta, i), pag = (s.pagos ? g(s.pagos, i) : g(s.costo, i)), op = g(s.logistica, i) + g(s.mk, i) + g(s.vj, i), fn = g(s.fin, i), oi = g(s.oIng, i), og = g(s.oGas, i); o.cobros.push(cob); o.pagos.push(pag); o.oper.push(op); o.fin.push(fn); o.oIng.push(oi); o.oGas.push(og); o.flujo.push(cob - pag - op - fn - og + oi) } return o } catch { return null } }
   const parts = (empresas || []).map((e) => e === 'SINERGY' ? sinFromRetail() : read(e)).filter(Boolean)
   if (!parts.length) return <div className="panel" style={{ borderLeftColor: '#7c3aed' }}><h3 style={{ color: '#7c3aed' }}>💵 Cash Flow consolidado — Total Holding</h3><div className="sub">Aún no hay cash flow guardado. Entra a cada empresa → <b>Gerencia → Cash Flow (▣ TODAS)</b> y guarda; aquí se sumarán todas.</div></div>
   const sumArr = (k) => Array.from({ length: 12 }, (_, i) => parts.reduce((a, p) => a + (Number((p[k] || [])[i]) || 0), 0))
