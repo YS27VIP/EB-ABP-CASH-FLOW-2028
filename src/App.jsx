@@ -162,7 +162,7 @@ const CF_TERMINOS = ['Cash', '30 días', '60 días', '90 días', '120 días', '1
 const CF_PLAZO_MESES = { 'Cash': 0, '30 días': 1, '60 días': 2, '90 días': 3, '120 días': 4, '150 días': 5, '180 días': 6, 'Intercompañía': 0 }
 /* Costos Operativos = suma de estos 4 sub-rubros (el usuario los llena; el total es calculado) */
 const CF_COSTOS_PARENT = 'Costos Operativos'
-const CF_COSTOS = ['Gastos Admin Directos', 'Logística', 'Gastos Admin Indirectos', 'Viajes', 'Marketing', 'Comisiones']
+const CF_COSTOS = ['Gastos Admin Directos', 'Logística', 'Viajes', 'Gastos Admin Indirectos', 'Marketing', 'Comisiones']
 /* Nuevas líneas que llena Finanzas (nivel empresa, solo en la vista TOTAL), antes del Flujo neto */
 const CF_FIN_PARENT = 'Costos Financieros'
 const CF_FIN = [['perd', 'Intereses perdidos'], ['gan', 'Intereses ganados']]
@@ -1354,8 +1354,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const gadminIndSubtot = MESES.map((_, m) => gadminCfg.reduce((a, it) => a + num(gadminIndData[`${it.cod}|${m}`]), 0))
   const cellRaw = (concepto, mi) => {
     if (concepto === 'Comisiones') return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[mi], 0) : comisTotalMes(marca)[mi]
-    if (concepto === 'Gastos Admin Directos') return isTotal ? gadminSubtot[mi] : 0 // gastos admin directos solo existen a TOTAL SBU
-    if (concepto === 'Gastos Admin Indirectos') return isTotal ? gadminIndSubtot[mi] : 0 // indirectos (corporativos) — se llenan en Finanzas y suman al Cash Flow
+    if (concepto === 'Gastos Admin Directos') return gadminSubtot[mi] * gadminPeso() // prorrateado por peso de venta de la vista (SBU o marca)
+    if (concepto === 'Gastos Admin Indirectos') return gadminIndSubtot[mi] * gadminPeso() // indirectos (corporativos) — prorrateados por peso de venta de cada SBU
     if (concepto === 'Viajes') { return isTotal ? sbuMarcas.reduce((s, m) => s + viajesMes(m)[mi], 0) : viajesMes(marca)[mi] } // solo viajes de las SBU; los viajes back office (Finanzas/Admin/Procesos) van en Otros gastos
     if (concepto === 'Marketing') return isTotal ? sbuMarcas.reduce((s, m) => s + marketingMes(m)[mi], 0) : marketingMes(marca)[mi]
     if (concepto === 'Logística') { if (LOG_SIMPLE(empresa)) return isTotal ? tumarLogAllArr(logcost, sbuMarcas)[mi] : tumarLogMarcaArr(logcost, marca)[mi]; return isTotal ? sbuMarcas.reduce((s, m) => s + logisticaMes(m)[mi], 0) : logisticaMes(marca)[mi] } // TUMAR/TAHO: logística por marca (3 líneas manuales); el total suma las marcas
@@ -1405,6 +1405,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
 
   // Venta Neta 2028 = Σ unidades (Ventas) × AUP (Producto), por mes. Ambos salen de Comercial.
   const ventaNetaMes = (mca) => realAupAuc(empresa, mca, ventas, producto, (cats[mca] || []).map((c) => c.cat)).ventaMes
+  // Prorrateo de Gastos Admin (Directos + Indirectos) por peso de venta de la vista actual sobre la venta de TODA la empresa.
+  const _vnAnualM = (mca) => MESES.reduce((s, _, k) => s + ventaNetaMes(mca)[k], 0)
+  const _allMarcasEmp = [...new Set(ventas.filter((r) => upper(r[0]) === upper(empresa)).map((r) => String(r[3] || '').trim()).filter(Boolean))]
+  const _empVNAnual = _allMarcasEmp.reduce((a, m) => a + _vnAnualM(m), 0)
+  const gadminPeso = () => { const vista = (isTotal ? sbuMarcas : [marca]).reduce((a, m) => a + _vnAnualM(m), 0); return _empVNAnual > 0 ? vista / _empVNAnual : ((isTotal && sbu === '__ALL__') ? 1 : 0) }
   // Inventario (de Producto): saldo en unidades × AUC. Inicial del mes = saldo del mes anterior.
   const invFinUsd = (mca) => { const { saldoUnits } = inventarioCalc(temp, mca, ventaMarcaMes(ventas, empresa, mca)); const auc = aucMes(mca); return MESES.map((_, m) => saldoUnits[m] * (auc[m] || 0)) }
   const invIniUsd = (mca) => { const { saldoUnits } = inventarioCalc(temp, mca, ventaMarcaMes(ventas, empresa, mca)); const auc = aucMes(mca); const kk = invKeys(mca); const opening = SEASONS.reduce((a, s) => a + num(temp[kk.II(s)]), 0); return MESES.map((_, m) => (m === 0 ? opening : saldoUnits[m - 1]) * (auc[m] || 0)) }
