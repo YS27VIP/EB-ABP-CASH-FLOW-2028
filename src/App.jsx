@@ -2586,7 +2586,7 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
   useEffect(() => {
     try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { }
-    ;(async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const cl = []; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl) } } catch { } })()
+    ;(async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const cl = []; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl.length ? cl : [{ cat: 'General', peso: 0 }]) } } catch { } })()
   }, [empresa, marca])
   const k = (tipo, mi) => `${marca}|${tipo}|${mi}`
   const set = (tipo, mi, v) => setData((d) => ({ ...d, [k(tipo, mi)]: v }))
@@ -2695,7 +2695,7 @@ function ResumenInventario({ marca, tempState, precios, empresa }) {
   const data = tempState || {}
   const [vista, setVista] = useState('ud') // ud | $ | ambas
   const [catList, setCatList] = useState([]); const [ventas, setVentas] = useState([])
-  useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const cl = []; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl) } } catch { } try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVentas(jv.values.slice(1)) } catch { } })() }, [empresa, marca])
+  useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const cl = []; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl.length ? cl : [{ cat: 'General', peso: 0 }]) } } catch { } try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVentas(jv.values.slice(1)) } catch { } })() }, [empresa, marca])
   const { flujos } = inventarioCalc(data, marca, ventaMarcaMes(ventas, empresa, marca))
   const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
   const seasonAUC = (s) => { let n = 0, d = 0; catList.forEach(({ cat, peso }) => { const a = num((precios || {})[`PAUC|${marca}|${s}|${cat}`]); const w = (num(peso) || 0) + 0.0001; if (a > 0) { n += a * w; d += w } }); return d ? n / d : 0 }
@@ -2779,7 +2779,7 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp, precios }) {
     (async () => {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
-      try { const j3 = await gReadTab('Cap_Categorias'); if (j3 && j3.ok && j3.values) { const cl = []; j3.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl) } } catch { }
+      try { const j3 = await gReadTab('Cap_Categorias'); if (j3 && j3.ok && j3.values) { const cl = []; j3.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl.length ? cl : [{ cat: 'General', peso: 0 }]) } } catch { }
     })()
   }, [empresa, marca])
   const tr = Math.max(0, Math.round(num(temp[`TR|${marca}`])))
