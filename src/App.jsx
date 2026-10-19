@@ -997,7 +997,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   // TUMAR no usa el detalle de viajes de Energy Brands: una sola línea "VIAJES".
-  const groupsEff = (empresa === 'TUMAR' && rubro.k === 'VIAJES') ? [{ g: 'VIAJES', items: [{ c: '201', n: 'VIAJES' }] }]
+  const groupsEff = ((empresa === 'TUMAR' || empresa === 'TAHO') && rubro.k === 'VIAJES') ? [{ g: 'VIAJES', items: [{ c: '201', n: 'VIAJES' }] }]
     : (empresa === 'TAHO' && rubro.k === 'MARKETING') ? [{ g: 'MARKETING', items: [{ c: '301', n: 'MARKETING' }] }] : groups
   const multi = groupsEff.length > 1
 
@@ -4730,7 +4730,7 @@ function ComparadorMarcas({ empresa, sbuName, marcasSBU }) {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
       const [ven, prod, cap] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias')])
       let hist = []; try { const jh = await gHistorico(); if (jh && jh.ok && jh.values) hist = jh.values.slice(1) } catch { }
-      const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3]; if (!mar || !c) return; (cats[mar] = cats[mar] || []).push(c) })
+      const cats = {}; cap.forEach((row) => { if (!catRowOk(row, empresa)) return; const c = row[1], mar = row[3]; if (!mar || !c) return; (cats[mar] = cats[mar] || []).push(c) })
       setP({ ven, prod, cats, hist })
     })()
   }, [empresa])
@@ -4918,7 +4918,7 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
       const [ven, prod, cap, mk] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing')])
       let hist = []; try { const jh = await gHistorico(); if (jh && jh.ok && jh.values) hist = jh.values.slice(1) } catch { }
-      const cats = {}; cap.forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const c = row[1], mar = row[3]; if (!mar || !c) return; (cats[mar] = cats[mar] || []).push(c) })
+      const cats = {}; cap.forEach((row) => { if (!catRowOk(row, empresa)) return; const c = row[1], mar = row[3]; if (!mar || !c) return; (cats[mar] = cats[mar] || []).push(c) })
       setP({ ven, prod, cats, mk, hist })
     })()
   }, [empresa])
