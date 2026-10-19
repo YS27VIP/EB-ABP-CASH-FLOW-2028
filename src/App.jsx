@@ -3941,42 +3941,52 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Ventas por tienda</span><div className="spacer"></div><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
-          <h3 style={{ color: col }}>Ventas por tienda — 2028 <span className="unit">(unidades · costo · venta · se alimenta de las importaciones y el margen)</span></h3>
-          <div className="sub">Unidades, ingresos (venta neta) y costo por tienda y mes, con la utilidad bruta. Las tiendas nuevas (agregadas por ti) salen marcadas con <b style={{ color: '#0e7490' }}>NUEVA</b>.</div>
-          {/* Supuestos de venta: %Margen / %Descuento por tienda y mes (generan la venta neta) */}
-          <div className="sub" style={{ fontWeight: 700, margin: '10px 0 4px', color: col }}>Supuestos de venta por tienda <span className="unit" style={{ fontWeight: 400 }}>(venta neta = costo × (1 + %margen) × (1 − %descuento))</span></div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
-            {tiendas.map((t) => <button key={t} className={'seg' + (selStore === t ? ' active' : '')} onClick={() => setSelT(t)} style={selStore === t ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{t}</button>)}
+          <h3 style={{ color: col }}>Ventas por tienda — 2028 <span className="unit">(unidades manuales · venta neta = costo/ud × (1 + %margen) × (1 − %descuento))</span></h3>
+          <div className="sub">Escribe las <b>unidades 2028 a mano</b> por tienda y mes. La <b>venta neta 2028</b> se calcula con el costo/ud (del mapa) y el %margen/%descuento. Las referencias <b>2026</b> son para comparar (aún sin datos; puedes llenarlas). Las tiendas nuevas salen con <b style={{ color: '#0e7490' }}>NUEVA</b>.</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '8px 0 6px' }}>
+            {tiendas.map((t) => <button key={t} className={'seg' + (selStore === t ? ' active' : '')} onClick={() => setSelT(t)} style={selStore === t ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{t}{esTiendaNueva(t) && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 800 }}>NUEVA</span>}</button>)}
           </div>
-          {selStore && <div className="tablewrap" style={{ overflowX: 'auto', marginBottom: 14 }}>
-            <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}</colgroup>
-              <thead><tr><th className="l">{selStore} — supuesto (por mes)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}</tr></thead>
-              <tbody>
-                <tr><td className="l sub2" style={{ color: '#15803d' }}>% Margen</td>{MESES.map((_, mi) => <td key={mi} className="cell ya"><input value={vt[`${selStore}||MARGEN||${mi}`] ?? ''} onChange={(e) => setVt((d) => ({ ...d, [`${selStore}||MARGEN||${mi}`]: e.target.value }))} inputMode="decimal" /></td>)}</tr>
-                <tr><td className="l sub2" style={{ color: '#b45309' }}>% Descuento</td>{MESES.map((_, mi) => <td key={mi} className="cell ya"><input value={vt[`${selStore}||DESC||${mi}`] ?? ''} onChange={(e) => setVt((d) => ({ ...d, [`${selStore}||DESC||${mi}`]: e.target.value }))} inputMode="decimal" /></td>)}</tr>
-              </tbody>
-            </table>
-          </div>}
+          {selStore && (() => {
+            const t = selStore
+            const venta28 = (mi) => storeVentaM(t, mi), costo28 = (mi) => storeCostoM(t, mi)
+            const sum = (fn) => MESES.reduce((a, _, mi) => a + fn(mi), 0)
+            const cell = (val, set, color) => MESES.map((_, mi) => <td key={mi} className="cell ya"><input value={val(mi)} onChange={(e) => set(mi, e.target.value)} inputMode="decimal" placeholder="0" style={color ? { color } : undefined} /></td>)
+            const calcRow = (lbl, fn, color, bold) => <tr className={bold ? 'grandrow' : undefined}><td className="l sub2" style={{ color, fontWeight: bold ? 800 : undefined }}>{lbl}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color, fontWeight: bold ? 800 : undefined }}>{fmt(fn(mi))}</td>)}<td className="tot" style={{ color, fontWeight: 800 }}>{fmt(sum(fn))}</td></tr>
+            return <div className="tablewrap" style={{ overflowX: 'auto' }}>
+              <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '92px' }} /></colgroup>
+                <thead><tr><th className="l">🏬 {t}</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+                <tbody>
+                  <tr className="secrow"><td colSpan={14}>SUPUESTOS (editables)</td></tr>
+                  <tr><td className="l sub2" style={{ color: '#15803d' }}>% Margen</td>{cell((mi) => vt[`${t}||MARGEN||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||MARGEN||${mi}`]: v })), '#15803d')}<td className="tot">—</td></tr>
+                  <tr><td className="l sub2" style={{ color: '#b45309' }}>% Descuento</td>{cell((mi) => vt[`${t}||DESC||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||DESC||${mi}`]: v })), '#b45309')}<td className="tot">—</td></tr>
+                  <tr><td className="l sub2" style={{ color: '#1d4ed8', fontWeight: 700 }}>Unidades 2028 (manual)</td>{cell((mi) => vt[`${t}||SU||${mi}`] ?? '', (mi, v) => setSell(t, mi, v), '#1d4ed8')}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(sum((mi) => sellU(t, mi)))}</td></tr>
+                  <tr className="secrow"><td colSpan={14}>REFERENCIA 2026 (🪞 · aún sin datos)</td></tr>
+                  <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Unidades 2026</td>{cell((mi) => vt[`${t}||U26||${mi}`] ?? '', (mi, v) => setU26(t, mi, v))}<td className="tot">{fmt(sum((mi) => u26m(t, mi)))}</td></tr>
+                  <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Venta neta 2026 ($)</td>{cell((mi) => vt[`${t}||VN26||${mi}`] ?? '', (mi, v) => setVN26(t, mi, v))}<td className="tot">{fmt(sum((mi) => vn26m(t, mi)))}</td></tr>
+                  <tr className="secrow"><td colSpan={14}>RESULTADO 2028 (calculado)</td></tr>
+                  {calcRow('= Venta neta 2028 ($)', venta28, '#15803d', true)}
+                  {calcRow('(−) Costo 2028 ($)', costo28, '#b91c1c')}
+                  {calcRow('= Utilidad bruta ($)', (mi) => venta28(mi) - costo28(mi), '#0f766e', true)}
+                </tbody>
+              </table>
+            </div>
+          })()}
+          {/* Consolidado de todas las tiendas (sell-through) */}
+          <div className="sub" style={{ fontWeight: 700, color: col, margin: '18px 0 6px', borderTop: '1px solid var(--line)', paddingTop: 12 }}>Consolidado — todas las tiendas <span className="unit" style={{ fontWeight: 400 }}>(venta neta y costo 2028)</span></div>
           {(() => {
             const nf = (v) => Math.round(v).toLocaleString('en-US')
-            const uMes = (mi) => tiendas.reduce((a, t) => a + storeUnitsM(t, mi), 0)
             const vMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
             const cMes = (mi) => tiendas.reduce((a, t) => a + storeCostoM(t, mi), 0)
-            const nombre = (t) => <>{t}{esTiendaNueva(t) && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, color: '#0e7490', border: '1px solid #0e7490', borderRadius: 4, padding: '0 4px', verticalAlign: 'middle' }} title="Tienda nueva (agregada por el usuario)">NUEVA</span>}</>
+            const uMes = (mi) => tiendas.reduce((a, t) => a + storeUnitsM(t, mi), 0)
             const annual = (fn) => MESES.reduce((a, _, mi) => a + fn(mi), 0)
-            const Section = ({ title, color, perStore, totalFn, bold }) => <>
-              <tr className="secrow"><td colSpan={14} style={{ color: color || undefined }}>{title}</td></tr>
-              {tiendas.map((t) => <tr key={t}><td className="l sub2">{nombre(t)}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{nf(perStore(t, mi))}</td>)}<td className="tot">{nf(MESES.reduce((a, _, mi) => a + perStore(t, mi), 0))}</td></tr>)}
-              <tr className="grandrow"><td className="l">{bold}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{nf(totalFn(mi))}</td>)}<td className="tot">{nf(annual(totalFn))}</td></tr>
-            </>
             return <div className="tablewrap" style={{ overflowX: 'auto' }}>
-              <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '72px' }} />)}<col style={{ width: '92px' }} /></colgroup>
+              <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '92px' }} /></colgroup>
                 <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
                 <tbody>
-                  <Section title="UNIDADES PROYECTADAS" perStore={storeUnitsM} totalFn={uMes} bold="Total unidades" />
-                  <Section title="INGRESOS PROYECTADOS (venta neta)" color="#15803d" perStore={storeVentaM} totalFn={vMes} bold="Total ingresos" />
-                  <Section title="COSTOS PROYECTADOS" color="#b91c1c" perStore={storeCostoM} totalFn={cMes} bold="Total costos" />
-                  <tr className="grandrow" style={{ background: '#eafaf1' }}><td className="l" style={{ color: '#0f766e', fontWeight: 800 }}>UTILIDAD BRUTA PROYECTADA</td>{MESES.map((_, mi) => { const u = vMes(mi) - cMes(mi); return <td key={mi} className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{nf(u)}</td> })}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{nf(annual((mi) => vMes(mi) - cMes(mi)))}</td></tr>
+                  <tr><td className="l sub2">Unidades</td>{MESES.map((_, mi) => <td key={mi} className="tot">{nf(uMes(mi))}</td>)}<td className="tot">{nf(annual(uMes))}</td></tr>
+                  <tr><td className="l sub2" style={{ color: '#15803d' }}>Venta neta ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#15803d' }}>{nf(vMes(mi))}</td>)}<td className="tot" style={{ color: '#15803d', fontWeight: 800 }}>{nf(annual(vMes))}</td></tr>
+                  <tr><td className="l sub2" style={{ color: '#b91c1c' }}>Costo ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#b91c1c' }}>{nf(cMes(mi))}</td>)}<td className="tot" style={{ color: '#b91c1c', fontWeight: 800 }}>{nf(annual(cMes))}</td></tr>
+                  <tr className="grandrow" style={{ background: '#eafaf1' }}><td className="l" style={{ color: '#0f766e', fontWeight: 800 }}>Utilidad bruta ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{nf(vMes(mi) - cMes(mi))}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{nf(annual((mi) => vMes(mi) - cMes(mi)))}</td></tr>
                 </tbody>
               </table>
             </div>
@@ -6422,7 +6432,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
       <div className="panel" style={{ marginTop: 28 }}>
         <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
           <h3 style={{ margin: 0 }}>Ventas · Unidades 2028 — {marca}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Ventas" /></h3>
-          {useVend && <div style={{ display: 'flex', gap: 6, marginLeft: 10, flexWrap: 'wrap' }}>{[[0, vName(0)], [1, vName(1)], ['T', '▣ Total']].map(([k, lbl]) => <button key={k} className={'seg' + (vendView === k ? ' active' : '')} onClick={() => setVendView(k)}>{lbl}</button>)}</div>}
+          {useVend && <div style={{ display: 'flex', gap: 6, marginLeft: 10, flexWrap: 'wrap' }}>{[[0, vName(0)], [1, vName(1)], ['inter', '🔄 Intercompañía'], ['T', '▣ Total']].map(([k, lbl]) => <button key={k} className={'seg' + (vendView === k ? ' active' : '')} onClick={() => setVendView(k)} style={vendView === k ? (k === 'inter' ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : undefined) : undefined}>{lbl}</button>)}</div>}
           <div className="spacer"></div>
           <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
         </div>
@@ -6431,7 +6441,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           <div>Stock disponible de temporadas anteriores de <b>{marca}</b>: <b style={{ fontSize: 15 }}>{fmt(stockViejo(marca))} ud</b>. <span className="unit">Tenlo en cuenta al proyectar: tu venta 2028 debería incluir mover este stock viejo.</span></div>
         </div>
         <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: junto al % verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)) y la <b>suma</b> de lo que llevas repartido. Luego, en las <b>celdas amarillas de 2028</b>, tú decides <b>en qué meses</b> vender esas unidades. Cuando la suma cuadra con el objetivo aparece <b style={{ color: '#15803d' }}>✓</b>; si no, sale en <b style={{ color: '#b45309' }}>ámbar ⚠</b> para que ajustes. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente.</div>
-        <div className="sub" style={{ marginTop: 4, fontWeight: 700, color: '#5b9bd5' }}>{useVend && vendView !== 'T' ? <>{vName(vendView)} — {fmt(vendUnits(vendView))} ud en 2028</> : <>Total 2028 de {marca}: {fmt(totMarcaSel + interTot)} ud{hayInter && <span className="unit" style={{ fontWeight: 400 }}> (incl. {fmt(interTot)} intercompañía)</span>}</>}</div>
+        <div className="sub" style={{ marginTop: 4, fontWeight: 700, color: vendView === 'inter' ? '#7c3aed' : '#5b9bd5' }}>{useVend && vendView === 'inter' ? <>🔄 Intercompañía (Retail) — {fmt(interTot)} ud en 2028 <span className="unit" style={{ fontWeight: 400 }}>(solo lectura · incobrable)</span></> : useVend && vendView !== 'T' ? <>{vName(vendView)} — {fmt(vendUnits(vendView))} ud en 2028</> : <>Total 2028 de {marca}: {fmt(totMarcaSel + interTot)} ud{hayInter && <span className="unit" style={{ fontWeight: 400 }}> (incl. {fmt(interTot)} intercompañía)</span>}</>}</div>
         <div style={{ display: 'flex', gap: 28, margin: '4px 0 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ order: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
             <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />
@@ -6488,7 +6498,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                   </tr>
                 </Fragment2>
               ) })}
-              {hayInter && (!useVend || vendView === 'T') && <tr style={{ background: '#f6eef9' }}><td className="l" colSpan={2} style={{ color: '#7c3aed', fontWeight: 700 }}>🔄 {INTER_CLI} <span className="unit" style={{ fontWeight: 400 }}>(solo lectura · desde Retail · ⛔ incobrable)</span></td><td className="yl proyl">2028</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#7c3aed' }}>{fmt(interU(mi))}</td>)}<td className="tot" style={{ color: '#7c3aed', fontWeight: 800 }}>{fmt(interTot)}</td><td className="tot">{(totMarcaSel + interTot) ? (interTot / (totMarcaSel + interTot) * 100).toFixed(1) + '%' : '—'}</td></tr>}
+              {(vendView === 'inter' || (hayInter && (!useVend || vendView === 'T'))) && <tr style={{ background: '#f6eef9' }}><td className="l" colSpan={2} style={{ color: '#7c3aed', fontWeight: 700 }}>🔄 {INTER_CLI} <span className="unit" style={{ fontWeight: 400 }}>(solo lectura · desde Retail · ⛔ incobrable)</span></td><td className="yl proyl">2028</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#7c3aed' }}>{fmt(interU(mi))}</td>)}<td className="tot" style={{ color: '#7c3aed', fontWeight: 800 }}>{fmt(interTot)}</td><td className="tot">{(totMarcaSel + interTot) ? (interTot / (totMarcaSel + interTot) * 100).toFixed(1) + '%' : '—'}</td></tr>}
+              {vendView === 'inter' && !hayInter && <tr><td className="l" colSpan={17} style={{ color: 'var(--muted)', fontStyle: 'italic', padding: '10px 9px' }}>Aún no hay compras de <b>{marca}</b> en Retail. Entra a <b>Retail → Compras por tienda</b>, carga unidades y el mapa de abastecimiento (que incluya {marca}) y guarda; aquí aparecerán las unidades intercompañía automáticamente.</td></tr>}
               {clientes.length > 0 && <tr className="grandrow" style={{ background: '#eef4fb' }}><td className="l" style={{ color: '#1d4ed8', whiteSpace: 'normal', overflow: 'visible', lineHeight: 1.2 }}>💰 Venta neta{useVend && vendView !== 'T' && <div style={{ fontWeight: 600, fontSize: 11 }}>{vName(vendView)}</div>}</td><td></td><td></td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#1d4ed8' }}>{fmt(ventaNetaMes(mi))}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(MESES.reduce((a, _, mi) => a + ventaNetaMes(mi), 0))}</td><td></td></tr>}
               {clientes.length > 0 && (!useVend || vendView === 'T') && <>
                 <tr className="grandrow"><td className="l" rowSpan={rsp} style={{ verticalAlign: 'top' }}>TOTAL {marca}</td><td rowSpan={rsp} style={{ verticalAlign: 'top', fontSize: 10, lineHeight: 1.3, whiteSpace: 'normal', overflow: 'hidden' }} title="Crecimiento del total 2028 frente a cada año histórico">{(tot26Marca || tot25Marca) ? <div style={{ color: 'var(--muted)', fontWeight: 600, marginBottom: 3 }}>Crec. 2028:</div> : null}{tot26Marca ? <div>vs 2026 <b style={{ color: crecMarca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1)}%</b></div> : null}{tot25Marca && showY25 ? <div>vs 2025 <b style={{ color: crec25Marca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crec25Marca >= 0 ? '+' : '') + crec25Marca.toFixed(1)}%</b></div> : null}{!(tot26Marca || tot25Marca) ? '—' : null}</td>{showY25 ? <><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></> : <><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></>}</tr>
