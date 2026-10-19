@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'cfsum', 'vendedores', 'vendcli']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_ind', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'cfsum', 'vendedores', 'vendcli']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -162,7 +162,7 @@ const CF_TERMINOS = ['Cash', '30 días', '60 días', '90 días', '120 días', '1
 const CF_PLAZO_MESES = { 'Cash': 0, '30 días': 1, '60 días': 2, '90 días': 3, '120 días': 4, '150 días': 5, '180 días': 6, 'Intercompañía': 0 }
 /* Costos Operativos = suma de estos 4 sub-rubros (el usuario los llena; el total es calculado) */
 const CF_COSTOS_PARENT = 'Costos Operativos'
-const CF_COSTOS = ['Gastos administrativos directos', 'Logística', 'Gastos administrativos generales', 'Viajes', 'Marketing', 'Comisiones']
+const CF_COSTOS = ['Gastos Admin Directos', 'Logística', 'Gastos Admin Indirectos', 'Viajes', 'Marketing', 'Comisiones']
 /* Nuevas líneas que llena Finanzas (nivel empresa, solo en la vista TOTAL), antes del Flujo neto */
 const CF_FIN_PARENT = 'Costos Financieros'
 const CF_FIN = [['perd', 'Intereses perdidos'], ['gan', 'Intereses ganados']]
@@ -204,11 +204,12 @@ const TUMAR_GADMIN_SKIP = new Set(['MARKETING', 'LOGISTICA', 'GASTOS REPRESENTAC
 // Gasto admin anual (línea del P&L). En TUMAR excluye las categorías que ya vienen de sus pantallas (Marketing/Logística/Viajes).
 function gadminAnualOf(empresa) {
   try {
-    const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')
+    const d = JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')       // directos
+    const di = JSON.parse(localStorage.getItem(`gadmin_ind_${empresa}`) || '{}')  // indirectos (solo EB)
     let cfg = empresa === 'TUMAR' ? TUMAR_GADMIN : DEFAULT_GADMIN
     try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { }
     const skip = empresa === 'TUMAR'
-    return cfg.reduce((a, it) => (skip && TUMAR_GADMIN_SKIP.has(upper(it.cat || '')) ? a : a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]), 0)), 0)
+    return cfg.reduce((a, it) => (skip && TUMAR_GADMIN_SKIP.has(upper(it.cat || '')) ? a : a + MESES.reduce((s, _, m) => s + num(d[`${it.cod}|${m}`]) + num(di[`${it.cod}|${m}`]), 0)), 0)
   } catch { return 0 }
 }
 
@@ -871,7 +872,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, on
         : rb.invflow ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="flow" />
         : rb.comis ? <ComisionesForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.muestras ? <MuestrasForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
-        : rb.gadmin ? <GastosAdminForm key={rb.k} empresa={empresa} />
+        : rb.gadmin ? (empresa === 'ENERGY BRANDS' ? <Fragment2 key={rb.k}><GastosAdminForm empresa={empresa} tipo="dir" /><div style={{ height: 18 }} /><GastosAdminForm empresa={empresa} tipo="ind" /></Fragment2> : <GastosAdminForm key={rb.k} empresa={empresa} />)
         : rb.aprob ? <AprobacionesForm key={rb.k} empresa={empresa} sbus={sbus} />
 
         : rb.porCat ? <CatCaptureForm key={rb.k} {...common} />
@@ -1265,7 +1266,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const [temp, setTemp] = useState({})
   const [comisData, setComisData] = useState({})
   const [logcost, setLogcost] = useState({}); const [precios, setPrecios] = useState({}) // % logísticos por marca (los llena Logística) + costos por temporada
-  const [gadminData, setGadminData] = useState({}); const [gadminCfg, setGadminCfg] = useState(DEFAULT_GADMIN)
+  const [gadminData, setGadminData] = useState({}); const [gadminCfg, setGadminCfg] = useState(DEFAULT_GADMIN); const [gadminIndData, setGadminIndData] = useState({})
   // Cliente NUEVO (sin histórico 2025/2026): lo agregó Ventas. Se marca discretamente para que Finanzas lo sepa.
   const newSet = (() => {
     try {
@@ -1277,7 +1278,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   })()
   const esNew = (cli) => newSet.has(upper(cli))
   const [mkRows, setMkRows] = useState([]); const [logRows, setLogRows] = useState([]); const [dirRows, setDirRows] = useState([]); const [finRows, setFinRows] = useState([]) // Marketing / Logística / Director / Finanzas (para espejo de Costos Operativos)
-  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } try { setLogcost(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { } try { setGadminData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) setGadminCfg(s) } catch { } }, [empresa])
+  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } try { setLogcost(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { } try { setGadminData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { setGadminIndData(JSON.parse(localStorage.getItem(`gadmin_ind_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) setGadminCfg(s) } catch { } }, [empresa])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   const sbuLbl = sbu === '__ALL__' ? 'TODAS' : sbu
@@ -1350,10 +1351,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const arr27Total = (mca, mi) => (mi < ARR_N ? clientesDe(mca).reduce((s, cli) => s + arr27(mca, cli, mi), 0) : 0) // arrastre que entra en el mes mi
   const arr27Cli = (mca, cli) => { let t = 0; for (let mi = 0; mi < ARR_N; mi++) t += arr27(mca, cli, mi); return t }
   const gadminSubtot = MESES.map((_, m) => gadminCfg.reduce((a, it) => a + num(gadminData[`${it.cod}|${m}`]), 0))
+  const gadminIndSubtot = MESES.map((_, m) => gadminCfg.reduce((a, it) => a + num(gadminIndData[`${it.cod}|${m}`]), 0))
   const cellRaw = (concepto, mi) => {
     if (concepto === 'Comisiones') return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[mi], 0) : comisTotalMes(marca)[mi]
-    if (concepto === 'Gastos administrativos directos') return isTotal ? gadminSubtot[mi] : 0 // gastos admin directos solo existen a TOTAL SBU
-    if (concepto === 'Gastos administrativos generales') return 0 // PENDIENTE: definir la captura de gastos administrativos generales (corporativos, prorrateados por venta)
+    if (concepto === 'Gastos Admin Directos') return isTotal ? gadminSubtot[mi] : 0 // gastos admin directos solo existen a TOTAL SBU
+    if (concepto === 'Gastos Admin Indirectos') return isTotal ? gadminIndSubtot[mi] : 0 // indirectos (corporativos) — se llenan en Finanzas y suman al Cash Flow
     if (concepto === 'Viajes') { const base = isTotal ? sbuMarcas.reduce((s, m) => s + viajesMes(m)[mi], 0) : viajesMes(marca)[mi]; return base + ((isTotal && sbu === '__ALL__') ? gViajesMes(mi) : 0) } // en el consolidado de EMPRESA (TODAS) se suman los viajes de Gerencia (Finanzas/Admin/Procesos)
     if (concepto === 'Marketing') return isTotal ? sbuMarcas.reduce((s, m) => s + marketingMes(m)[mi], 0) : marketingMes(marca)[mi]
     if (concepto === 'Logística') { if (LOG_SIMPLE(empresa)) return isTotal ? tumarLogAllArr(logcost, sbuMarcas)[mi] : tumarLogMarcaArr(logcost, marca)[mi]; return isTotal ? sbuMarcas.reduce((s, m) => s + logisticaMes(m)[mi], 0) : logisticaMes(marca)[mi] } // TUMAR/TAHO: logística por marca (3 líneas manuales); el total suma las marcas
@@ -3212,8 +3214,10 @@ function AprobacionesForm({ empresa, sbus }) {
 }
 
 /* ===== GASTOS ADMINISTRATIVOS: detalle por centro de costo, compartido por TODAS las SBU ===== */
-function GastosAdminForm({ empresa }) {
-  const cfgKey = `gadmin_cfg_${empresa}`, stKey = `gadmin_${empresa}`
+function GastosAdminForm({ empresa, tipo = 'dir' }) {
+  const esInd = tipo === 'ind'
+  const titulo = esInd ? 'Gastos Admin Indirectos' : (empresa === 'ENERGY BRANDS' ? 'Gastos Admin Directos' : 'Gastos administrativos')
+  const cfgKey = `gadmin_cfg_${empresa}`, stKey = esInd ? `gadmin_ind_${empresa}` : `gadmin_${empresa}`
   const defCfg = empresa === 'TUMAR' ? TUMAR_GADMIN : DEFAULT_GADMIN
   const [lista, setLista] = useState(() => { try { const s = JSON.parse(localStorage.getItem(cfgKey) || 'null'); return Array.isArray(s) && s.length ? s : defCfg } catch { return defCfg } })
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(stKey) || '{}') } catch { return {} } })
@@ -3229,7 +3233,7 @@ function GastosAdminForm({ empresa }) {
   const key = (cod, m) => `${cod}|${m}`
   const subtot = MESES.map((_, m) => lista.reduce((a, it) => a + g(key(it.cod, m)), 0))
   const filaTot = (cod) => MESES.reduce((a, _, m) => a + g(key(cod, m)), 0)
-  function guardar() { setSaving(true); try { saveEstado(empresa, 'gadmin_cfg', lista); saveEstado(empresa, 'gadmin', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet. Los centros de costo aplican a todas las SBU.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function guardar() { setSaving(true); try { if (!esInd) saveEstado(empresa, 'gadmin_cfg', lista); saveEstado(empresa, esInd ? 'gadmin_ind' : 'gadmin', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet. Los centros de costo aplican a todas las SBU.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   function agregar() { setLista([...lista, { cod: '', sub: '' }]) }
   function quitar(i) { setLista(lista.filter((_, j) => j !== i)) }
   function editar(i, campo, v) { setLista(lista.map((x, j) => j === i ? { ...x, [campo]: v } : x)) }
@@ -3263,16 +3267,16 @@ function GastosAdminForm({ empresa }) {
     <>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <div className="toolbar" style={{ marginBottom: 8 }}>
-        <span className="empchip" style={{ marginLeft: 0, background: 'var(--accent, #0e7490)' }}>Gastos administrativos</span>
-        <button className={'seg' + (edit ? ' active' : '')} onClick={() => setEdit((e) => !e)}>{edit ? '✓ Editando centros de costo' : '✏️ Editar centros de costo'}</button>
-        {edit && <button className="btn" onClick={agregar}>➕ Agregar rubro</button>}
+        <span className="empchip" style={{ marginLeft: 0, background: esInd ? '#7c3aed' : 'var(--accent, #0e7490)' }}>{titulo}</span>
+        {!esInd && <button className={'seg' + (edit ? ' active' : '')} onClick={() => setEdit((e) => !e)}>{edit ? '✓ Editando centros de costo' : '✏️ Editar centros de costo'}</button>}
+        {edit && !esInd && <button className="btn" onClick={agregar}>➕ Agregar rubro</button>}
         <button className="btn" onClick={plantilla}>📄 Descargar plantilla</button>
         <label className="btn" style={{ cursor: 'pointer' }}>📥 Importar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={importar} style={{ display: 'none' }} /></label>
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       <div className="panel">
-        <h3>Gastos administrativos <span className="unit">(detalle · compartido por todas las SBU)</span>{M$}<Responsable empresa={empresa} seccion="Finanzas" /></h3>
+        <h3>{titulo} <span className="unit">{esInd ? '(corporativos · se prorratean por peso de venta de las SBU)' : '(detalle · compartido por todas las SBU)'}</span>{M$}<Responsable empresa={empresa} seccion="Finanzas" /></h3>
         {esT && <div className="sub"><b>Referencia 2026:</b> gasto real 2026 de TUMAR Performance (USD) por concepto. Marketing, Logística y Representación salen aquí como referencia, pero en el P&L vienen de sus pantallas propias para no duplicar.</div>}
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '270px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th>{esT && <th style={{ background: '#fffdf2', color: '#8a6d1a' }} title="Gasto real 2026 de TUMAR Performance (USD) — referencia">2026 (ref)</th>}</tr></thead>
@@ -3679,8 +3683,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {/* Marketing sobre la venta (Retail): venta neta = venta por tienda */}
         {(() => { const vnMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0); const vnAn = MESES.reduce((a, _, mi) => a + vnMes(mi), 0); const mkAn = MESES.reduce((a, _, mi) => a + mkMes(mi), 0); const pctC = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
-          return <div className="panel" style={{ marginBottom: 8 }}>
-            <h3 style={{ color: col }}>MARKETING EB sobre la venta — Retail <span className="unit">(venta = ventas por tienda)</span></h3>
+          return <div className="panel" style={{ marginBottom: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, paddingBottom: 8 }}>
+            <h3>MARKETING EB sobre la venta — Retail <span className="unit">(venta = ventas por tienda)</span></h3>
             <div className="sub">Cuánto pesa <b>Marketing</b> sobre la <b>venta neta</b>, por mes y en total.</div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
               <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -4451,7 +4455,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
     { k: '(−) Viajes', g: (a) => a.viajes, fy26: T ? sum12(T.lines.viajes) : null },
     { k: '= Contribución de la SBU', g: (a) => a.brand, strong: true },
     { k: '(−) Gastos administrativos', g: (a) => gastosDe(a), fy26: T ? sum12(T.lines.admin) : null },
-    { k: '(−) Otros gastos', g: (a) => otrosDe(a), tip: otrosTip, help: 'Viajes de Finanzas + Admin + Procesos (nivel empresa, no SBU ni Retail). Prorrateados por peso de venta de cada SBU.' },
+    { k: '(−) Otros gastos · viajes back office', g: (a) => otrosDe(a), tip: otrosTip, help: 'Viajes back office = Viajes de Finanzas + Admin + Procesos (nivel empresa, no SBU ni Retail). Prorrateados por peso de venta de cada SBU.' },
     { k: '🎯 = Resultado Operativo', g: (a) => (a.brand || 0) - gastosDe(a) - otrosDe(a), strong: true },
   ]
   const dpctG = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
@@ -4479,6 +4483,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
             </tr> })}
           </tbody>
         </table></div>
+        {multiSBU && ventaTot > 0 && <div className="sub" style={{ marginTop: 8 }}>⚖️ <b>Peso de venta por SBU</b> (prorrateo de Gastos administrativos y Otros gastos): {sbuList.filter(({ s }) => s !== 'Retail').map(({ s, a }) => `${s} ${(100 * (a.ventaNeta || 0) / ventaTot).toFixed(1)}%`).join(' · ')}</div>}
       </div>}
       {!soloSBU && !cargando && (espejo || gtab === 'cf') && <div style={{ marginTop: 4 }}>
         {!espejo && <div className="toolbar" style={{ marginBottom: 6 }}>
