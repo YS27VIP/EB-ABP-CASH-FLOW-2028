@@ -3462,24 +3462,33 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   useEffect(() => { try { const t = JSON.parse(localStorage.getItem(`retail_tiendas_${empresa}`) || 'null'); if (Array.isArray(t) && t.length) setTiendas(t) } catch { } try { setCats(JSON.parse(localStorage.getItem(`retail_cats_${empresa}`) || '{}')) } catch { } try { setVt(JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}')) } catch { } setSelT(null) }, [empresa])
   const catsOf = (t) => (Array.isArray(cats[t]) && cats[t].length) ? cats[t] : RETAIL_CATS_DEF
   const selStore = selT && tiendas.includes(selT) ? selT : (tiendas[0] || null)
-  const cvk = (t, c, mi) => `${t}||${c}||U||${mi}`           // unidades del mes
+  const cvk = (t, c, mi) => `${t}||${c}||U||${mi}`           // (modelo viejo) unidades del mes
+  const uaKey = (t, c) => `${t}||${c}||UA`                    // (modelo nuevo) unidades ANUALES por subcategoría/tienda
   const cmk = (t, c, f) => `${t}||${c}||${f}`                 // AUC / AUP / DESC (constante por fila)
-  const setU = (t, c, mi, v) => setVt((d) => ({ ...d, [cvk(t, c, mi)]: v }))
+  // Calendario de importaciones (Paso 1): % por mes (debe sumar 100). El split mensual de las compras lo determina este calendario.
+  const calPctRaw = (mi) => num(vt[`IMPCAL||${mi}`])
+  const calPctTot = MESES.reduce((a, _, mi) => a + calPctRaw(mi), 0)
+  const calFrac = (mi) => calPctTot > 0 ? calPctRaw(mi) / calPctTot : 0
+  const setCal = (mi, v) => setVt((d) => ({ ...d, [`IMPCAL||${mi}`]: v }))
+  // Unidades anuales por subcategoría (con migración: si aún no hay valor anual, suma lo que haya del modelo viejo por mes).
+  const uAnual = (t, c) => { const a = vt[uaKey(t, c)]; if (a != null && String(a).trim() !== '') return num(a); return MESES.reduce((s, _, mi) => s + num(vt[cvk(t, c, mi)]), 0) }
+  const setUA = (t, c, v) => setVt((d) => ({ ...d, [uaKey(t, c)]: v }))
+  const uMes = (t, c, mi) => uAnual(t, c) * calFrac(mi)       // unidades del mes = anuales × % del calendario
   const setMeta = (t, c, f, v) => setVt((d) => ({ ...d, [cmk(t, c, f)]: v }))
-  const rowUnits = (t, c) => MESES.reduce((a, _, mi) => a + num(vt[cvk(t, c, mi)]), 0)
+  const rowUnits = (t, c) => uAnual(t, c)
   // Nuevo modelo: costo = AUC wholesale ponderado (del mapa) × factor global; venta = costo × (1+margen%) × (1−desc%)
   const margenPct = (t, mi) => num(vt[`${t}||MARGEN||${mi}`])
   const descPct = (t, mi) => num(vt[`${t}||DESC||${mi}`])
   const whUnit = (c, mi) => wholesaleMarcas.reduce((a, m) => { const p = pctOf(c, m); if (!p) return a; return a + (p / 100) * aucMC(m, catOf(c, m), mi) }, 0)   // costo wholesale ponderado/ud (% + categoría por marca)
   const cogsUnit = (c, mi) => whUnit(c, mi) * factor()                                                         // costo de la venta por unidad (× factor)
   const ventaUnit = (t, c, mi) => cogsUnit(c, mi) * (1 + margenPct(t, mi) / 100) * (1 - descPct(t, mi) / 100)  // venta neta por unidad (margen/desc por tienda+mes)
-  const ventaM = (t, c, mi) => num(vt[cvk(t, c, mi)]) * ventaUnit(t, c, mi)
-  const costoM = (t, c, mi) => num(vt[cvk(t, c, mi)]) * cogsUnit(c, mi)
+  const ventaM = (t, c, mi) => uMes(t, c, mi) * ventaUnit(t, c, mi)
+  const costoM = (t, c, mi) => uMes(t, c, mi) * cogsUnit(c, mi)
   const rowVenta = (t, c) => MESES.reduce((a, _, mi) => a + ventaM(t, c, mi), 0)
   const rowCosto = (t, c) => MESES.reduce((a, _, mi) => a + costoM(t, c, mi), 0)
   const storeVentaM = (t, mi) => catsOf(t).reduce((a, c) => a + ventaM(t, c, mi), 0)
   const storeCostoM = (t, mi) => catsOf(t).reduce((a, c) => a + costoM(t, c, mi), 0)
-  const storeUnitsM = (t, mi) => catsOf(t).reduce((a, c) => a + num(vt[cvk(t, c, mi)]), 0)
+  const storeUnitsM = (t, mi) => catsOf(t).reduce((a, c) => a + uMes(t, c, mi), 0)
   const esTiendaNueva = (t) => !RETAIL_TIENDAS.includes(t)
   const tVenta = (t) => MESES.reduce((a, _, mi) => a + storeVentaM(t, mi), 0)
   const tCosto = (t) => MESES.reduce((a, _, mi) => a + storeCostoM(t, mi), 0)
@@ -3552,18 +3561,14 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const sinVjAnual = MESES.reduce((a, _, mi) => a + sg('VJDIR', mi) + sg('VJMK', mi), 0)
   const sinMkAnual = MESES.reduce((a, _, mi) => a + sg('MK', mi), 0)
   const sinLogAnual = MESES.reduce((a, _, mi) => a + sg('LOG', mi), 0)
-  // ---- Calendario de importaciones (Paso 1): meses marcados con X en que EB despacha (llega la mercancía a todas las tiendas). Guardado en retail_cf. ----
-  const impCalOn = (mi) => !!String(cf[fk('IMPCAL', mi)] || '').trim()
-  const impCalToggle = (mi) => setCF('IMPCAL', mi, impCalOn(mi) ? '' : '1')
-  const impCalCount = MESES.reduce((a, _, mi) => a + (impCalOn(mi) ? 1 : 0), 0)
-  // Compras (costo de la mercancía a importar) por bucket, re-cronometradas al calendario: si hay meses marcados, el total anual se reparte en esos meses; si no, cae mes a mes como el costo.
-  const comprasCalMes = (ts, mi) => { if (impCalCount > 0) { if (!impCalOn(mi)) return 0; const annual = ts.reduce((a, t) => a + tCosto(t), 0); return annual / impCalCount } return ts.reduce((s, t) => s + storeCostoM(t, mi), 0) }
+  // Compras (pagos de importación) por bucket y mes = costo de la mercancía, que ya sigue el calendario (Paso 1) vía las unidades mensuales.
+  const comprasCalMes = (ts, mi) => ts.reduce((s, t) => s + storeCostoM(t, mi), 0)
   // ---- Cash Flow Retail: mismas líneas que las marcas, Cash Final encadenado ----
   const mpct = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
   // Importaciones DERIVADAS del mapa: por (marca,categoría)/mes = Σ(tiendas, subcats) unidades × %marca × AUC(marca, categoría de la celda) × factor.
-  const impPairMes = (m, ct, mi) => tiendas.reduce((aT, t) => aT + catsOf(t).reduce((aC, c) => { if (catOf(c, m) !== ct) return aC; const p = pctOf(c, m); if (!p) return aC; const u = num(vt[cvk(t, c, mi)]); if (!u) return aC; return aC + u * (p / 100) * aucMC(m, ct, mi) * factor() }, 0), 0)
+  const impPairMes = (m, ct, mi) => tiendas.reduce((aT, t) => aT + catsOf(t).reduce((aC, c) => { if (catOf(c, m) !== ct) return aC; const p = pctOf(c, m); if (!p) return aC; const u = uMes(t, c, mi); if (!u) return aC; return aC + u * (p / 100) * aucMC(m, ct, mi) * factor() }, 0), 0)
   const impPairAnual = (m, ct) => MESES.reduce((a, _, mi) => a + impPairMes(m, ct, mi), 0)
-  const impMarcaMes = (m, mi) => tiendas.reduce((aT, t) => aT + catsOf(t).reduce((aC, c) => { const p = pctOf(c, m); if (!p) return aC; const u = num(vt[cvk(t, c, mi)]); if (!u) return aC; return aC + u * (p / 100) * aucMC(m, catOf(c, m), mi) * factor() }, 0), 0)
+  const impMarcaMes = (m, mi) => tiendas.reduce((aT, t) => aT + catsOf(t).reduce((aC, c) => { const p = pctOf(c, m); if (!p) return aC; const u = uMes(t, c, mi); if (!u) return aC; return aC + u * (p / 100) * aucMC(m, catOf(c, m), mi) * factor() }, 0), 0)
   const impMarcaAnual = (m) => MESES.reduce((a, _, mi) => a + impMarcaMes(m, mi), 0)
   const impMes = (mi) => wholesaleMarcas.reduce((a, m) => a + impMarcaMes(m, mi), 0)
   const aucPairAvg = (m, ct) => MESES.reduce((a, _, mi) => a + aucMC(m, ct, mi), 0) / 12
@@ -3782,19 +3787,19 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           <h3 style={{ color: col }}>Compras por tienda — 2028 <span className="unit">(unidades a comprar · Retail → Wholesale)</span></h3>
           {/* ---- Paso 1: calendario de importaciones (cuándo EB despacha; aplica a todas las tiendas) ---- */}
           <div className="panel tight" style={{ marginBottom: 10 }}>
-            <PasoH n={1}>Calendario de importaciones <span className="unit" style={{ fontWeight: 400 }}>(marca con X los meses en que EB despacha; la mercancía llega a todas las tiendas en esos meses)</span></PasoH>
+            <PasoH n={1}>Calendario de importaciones <span className="unit" style={{ fontWeight: 400 }}>(% de la compra del año que llega cada mes · debe sumar 100%)</span></PasoH>
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
-              <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}</colgroup>
-                <thead><tr><th className="l">Importación</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}</tr></thead>
+              <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+                <thead><tr><th className="l">% importación</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Suma</th></tr></thead>
                 <tbody>
-                  <tr><td className="l sub2">¿Llega mercancía?</td>{MESES.map((_, mi) => <td key={mi} className="cell" style={{ textAlign: 'center', cursor: 'pointer', background: impCalOn(mi) ? '#eefaf6' : undefined }} onClick={() => impCalToggle(mi)} title="Clic para marcar/desmarcar el mes de importación">{impCalOn(mi) ? <span style={{ color: '#0f766e', fontWeight: 800 }}>✕</span> : <span style={{ color: 'var(--muted)' }}>·</span>}</td>)}</tr>
+                  <tr><td className="l sub2">% llega cada mes</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={vt[`IMPCAL||${mi}`] ?? ''} onChange={(e) => setCal(mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>)}<td className="tot" style={{ fontWeight: 800, color: Math.abs(calPctTot - 100) < 0.5 ? '#0f766e' : '#b45309' }}>{fmt(calPctTot)}%{Math.abs(calPctTot - 100) < 0.5 ? ' ✓' : ' ⚠'}</td></tr>
                 </tbody>
               </table>
             </div>
-            <div className="sub" style={{ marginTop: 4 }}>{impCalCount > 0 ? <>Las compras del año se reflejan en los <b>{impCalCount}</b> mes(es) marcado(s) en el <b>Cash Flow</b> (pagos). </> : <>Sin meses marcados, los pagos caen mes a mes según el costo. </>}El <b>P&L</b> no cambia (el costo se reconoce cuando se vende).</div>
+            <div className="sub" style={{ marginTop: 4 }}>El % define en qué meses llega la mercancía a <b>todas las tiendas</b>. Las <b>unidades anuales</b> del Paso 2 se reparten por mes con este %. {Math.abs(calPctTot - 100) >= 0.5 && <b style={{ color: '#b45309' }}>Ojo: la suma debe ser 100%.</b>}</div>
           </div>
-          <PasoH n={2}>Unidades a comprar por tienda</PasoH>
-          <div className="sub">Escoge una <b>tienda</b> y captura por <b>subcategoría Retail</b>: las <b>unidades por mes</b>. El <b>costo</b> sale del <b>mapa de abastecimiento</b> (de qué marca/categoría wholesale se compra cada subcategoría) × el <b>factor</b> global.</div>
+          <PasoH n={2}>Unidades a comprar por tienda <span className="unit" style={{ fontWeight: 400 }}>(cantidad ANUAL por subcategoría · el split mensual lo da el Paso 1)</span></PasoH>
+          <div className="sub">Escoge una <b>tienda</b> y captura por <b>subcategoría Retail</b> las <b>unidades del año</b>. El <b>costo</b> sale del <b>mapa de abastecimiento</b> × el <b>factor</b> global, y se reparte por mes según el calendario.</div>
           <div className="toolbar" style={{ margin: '8px 0 2px', gap: 8, alignItems: 'center' }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Factor wholesale→Retail (×):</label>
             <input className="fillin" value={cf[fk('FACTOR', 0)] ?? ''} onChange={(e) => setCF('FACTOR', 0, e.target.value)} inputMode="decimal" placeholder="1.25" style={{ width: 70, textAlign: 'center' }} />
@@ -3811,12 +3816,12 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
               <div className="spacer"></div>
               <button className="btn" onClick={() => addCat(t)}>➕ Agregar subcategoría</button>
             </div>
-            {/* Captura de UNIDADES A COMPRAR por subcategoría (el costo sale del mapa) */}
-            <div className="sub" style={{ fontWeight: 700, margin: '4px 0 4px' }}>Unidades a comprar <span className="unit" style={{ fontWeight: 400 }}>(cuántas unidades se comprarán por mes · el costo se calcula con el mapa)</span></div>
+            {/* Captura de UNIDADES ANUALES A COMPRAR por subcategoría (el costo sale del mapa; el split mensual lo da el Paso 1) */}
+            <div className="sub" style={{ fontWeight: 700, margin: '4px 0 4px' }}>Unidades a comprar <span className="unit" style={{ fontWeight: 400 }}>(cantidad ANUAL · el split por mes lo da el calendario del Paso 1)</span></div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
-              <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}<col style={{ width: '82px' }} /><col style={{ width: '90px' }} /></colgroup>
+              <table className="vfix"><colgroup><col style={{ width: '300px' }} /><col style={{ width: '120px' }} /><col style={{ width: '90px' }} /><col style={{ width: '110px' }} /></colgroup>
                 <thead>
-                  <tr><th className="l">Subcategoría Retail</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th className="ya">Costo/ud</th><th>Costo</th></tr>
+                  <tr><th className="l">Subcategoría Retail</th><th>Unidades (año)</th><th className="ya">Costo/ud</th><th>Costo</th></tr>
                 </thead>
                 <tbody>
                   {cs.map((c) => { const sum = rowSum(c); const nF = marcasDeSub(c).length; return <tr key={c}>
@@ -3825,11 +3830,11 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                       <button title="Ir a configurar el mapa de abastecimiento" onClick={() => setComTab('mapa')} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: nF ? '#0f766e' : '#b45309', cursor: 'pointer', fontSize: 11 }}>🧭 {nF ? `${nF} fuente${nF > 1 ? 's' : ''}` : 'sin mapa'}</button>
                       {nF > 0 && Math.round(sum) !== 100 && <span className="unit" style={{ color: '#b45309', marginLeft: 4 }} title="El mapa no suma 100%">⚠ {fmt(sum)}%</span>}
                     </td>
-                    {MESES.map((_, mi) => <td key={mi} className="cell"><input value={vt[cvk(t, c, mi)] ?? ''} onChange={(e) => setU(t, c, mi, e.target.value)} inputMode="decimal" title={`${c} · unidades a comprar`} /></td>)}
+                    <td className="cell"><input value={vt[uaKey(t, c)] ?? ''} onChange={(e) => setUA(t, c, e.target.value)} inputMode="decimal" title={`${c} · unidades a comprar (año)`} style={{ width: '100%', textAlign: 'center' }} /></td>
                     <td className="tot ya" title="Costo por unidad = costo wholesale ponderado (del mapa) × factor">{whAvg(c) > 0 ? fmt(whAvg(c) * factor()) : '—'}</td>
                     <td className="tot" style={{ color: '#b91c1c' }}>{fmt(rowCosto(t, c))}</td>
                   </tr> })}
-                  <tr className="grandrow"><td className="l">Total {t} <span className="unit">(unid: {fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))})</span></td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(cs.reduce((a, c) => a + num(vt[cvk(t, c, mi)]), 0))}</td>)}<td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCosto(t))}</td></tr>
+                  <tr className="grandrow"><td className="l">Total {t}</td><td className="tot">{fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))}</td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCosto(t))}</td></tr>
                 </tbody>
               </table>
             </div>
@@ -4398,7 +4403,25 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
 
       {!soloSBU && !cargando && !espejo && gtab === 'viajes' && empresa !== 'TUMAR' && <div className="panel" style={{ marginTop: 10 }}>
         <h3>🧳 Viajes de Gerencia — {empresa} <span className="unit">(nivel empresa · impactan el Cash Flow ▣ TODAS)</span></h3>
-        <div className="sub">Captura los <b>viajes admin</b> y <b>viajes de procesos</b> (misma vista que cada equipo). Los <b>viajes de Finanzas</b> se llenan en Finanzas y salen como <b>espejo</b> aquí. Todos — más los de cada SBU y Retail (cuando se cree) — impactan el <b>Cash Flow ▣ TODAS</b> de arriba.</div>
+        <div className="sub">Captura los <b>viajes admin</b> y <b>viajes de procesos</b> (misma vista que cada equipo). Los <b>viajes de Finanzas</b> se llenan en Finanzas y salen como <b>espejo</b> aquí. Todos restan en el P&L en <b>Otros gastos</b> e impactan el <b>Cash Flow ▣ TODAS</b>.</div>
+        {(() => {
+          const areas = [['🧮 Admin', '(ADMIN)'], ['⚙️ Procesos', '(PROCESOS)'], ['💰 Finanzas', '(FINANZAS)']]
+          const areaMes = (tag, mi) => finR.reduce((a, r) => (upper(r[0]) === upper(empresa) && upper(r[3]) === tag && esVi(String(r[1] || ''))) ? a + num(r[4 + mi]) : a, 0)
+          const totMes = (mi) => areas.reduce((a, [, tag]) => a + areaMes(tag, mi), 0)
+          const totAnual = MESES.reduce((a, _, mi) => a + totMes(mi), 0)
+          return <div className="panel tight" style={{ marginBottom: 10 }}>
+            <div className="toolbar" style={{ marginBottom: 2 }}><h3 style={{ margin: 0 }}>Resumen de viajes de Gerencia <span className="unit">(🪞 espejo · 2028)</span></h3></div>
+            <div className="tablewrap" style={{ overflowX: 'auto' }}>
+              <table className="vfix"><colgroup><col style={{ width: '170px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+                <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+                <tbody>
+                  {areas.map(([lbl, tag]) => <tr key={tag}><td className="l sub2">{lbl}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(areaMes(tag, mi))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + areaMes(tag, mi), 0))}</td></tr>)}
+                  <tr className="grandrow"><td className="l">Total Gerencia (→ Otros gastos)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totAnual)}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        })()}
         <div style={{ fontWeight: 800, margin: '12px 0 2px', color: '#6b21a8', fontSize: 14 }}>① Viajes admin</div>
         <RoleForm key="gvadmin" role={{ label: 'Viajes', tab: 'Cap_Finanzas' }} rubrosOverride={[VJ]} usuario="" empresa={empresa} sbus={sbus} fixedMarca="(Admin)" />
         <div style={{ fontWeight: 800, margin: '22px 0 2px', color: '#6b21a8', fontSize: 14 }}>② Viajes de procesos</div>
