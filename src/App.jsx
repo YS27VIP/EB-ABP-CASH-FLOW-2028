@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'cfsum', 'vendedores', 'vendcli']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'cfsum', 'vendedores', 'vendcli']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -3502,7 +3502,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const esTiendaNueva = (t) => !RETAIL_TIENDAS.includes(t)
   const tVenta = (t) => MESES.reduce((a, _, mi) => a + storeVentaM(t, mi), 0)
   const tCosto = (t) => MESES.reduce((a, _, mi) => a + storeCostoM(t, mi), 0)
-  const guardarVentas = () => guardarKeys([['retail_ventas', vt], ['retail_cats', cats], ['retail_tiendas', tiendas], ['retail_map', smap], ['retail_cf', cf], ['retail_pl', plSummary()]], 'Guardado en el Google Sheet ✓')
+  const guardarVentas = () => guardarKeys([['retail_ventas', vt], ['retail_cats', cats], ['retail_tiendas', tiendas], ['retail_map', smap], ['retail_cf', cf], ['retail_pl', plSummary()], ['retail_inter', interSummary()]], 'Guardado en el Google Sheet ✓')
   function addTienda() { const n = window.prompt('Nombre de la nueva tienda:'); if (!n) return; const nm = n.trim(); if (!nm || tiendas.some((t) => t.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa tienda ya existe.' }); return } const next = [...tiendas, nm]; setTiendas(next); setSelT(nm); saveEstado(empresa, 'retail_tiendas', next) }
   function delTienda(t) { if (!window.confirm(`¿Quitar la tienda "${t}"?`)) return; const next = tiendas.filter((x) => x !== t); setTiendas(next); if (selT === t) setSelT(next[0] || null); saveEstado(empresa, 'retail_tiendas', next) }
   function addCat(t) { const n = window.prompt('Subcategoría Retail (ej: "CORRER", "SENDERISMO"):'); if (!n) return; const nm = n.trim(); const cur = catsOf(t); if (!nm || cur.some((c) => c.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa subcategoría ya existe en la tienda.' }); return } setCats((d) => ({ ...d, [t]: [...cur, nm] })) }
@@ -3643,8 +3643,11 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
     })
     return { EB, SIN }
   }
-  // Mantener retail_pl en localStorage al día (lectura inmediata por Holding/EB en esta sesión).
-  useEffect(() => { try { localStorage.setItem(`retail_pl_${empresa}`, JSON.stringify(plSummary())) } catch { } })
+  // Intercompañía: unidades (y $) que Retail le compra a cada marca de EB (vía el mapa), por mes. Alimenta el "vendedor Intercompañía" en Ventas de EB.
+  const interUnidMes = (m, mi) => tiendas.reduce((aT, t) => aT + catsOf(t).reduce((aC, c) => { const p = pctOf(c, m); if (!p) return aC; return aC + uMes(t, c, mi) * (p / 100) }, 0), 0)
+  const interSummary = () => { const out = {}; wholesaleMarcas.forEach((m) => { out[upper(m)] = { unid: MESES.map((_, mi) => interUnidMes(m, mi)), usd: MESES.map((_, mi) => impMarcaMes(m, mi)) } }); return out }
+  // Mantener retail_pl / retail_inter en localStorage al día (lectura inmediata por Holding/EB en esta sesión).
+  useEffect(() => { try { localStorage.setItem(`retail_pl_${empresa}`, JSON.stringify(plSummary())) } catch { } try { localStorage.setItem(`retail_inter_${empresa}`, JSON.stringify(interSummary())) } catch { } })
 
   return (
     <div>
@@ -6126,6 +6129,12 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const t26 = (cli) => MESES.reduce((a, _, mi) => a + u26(cli, mi), 0)
   const t28 = (cli) => MESES.reduce((a, _, mi) => a + u28(cli, mi), 0)
   const totMarcaSel = clientes.reduce((s, cli) => s + t28(cli), 0)
+  // Intercompañía (solo lectura): unidades que Retail le compra a esta marca (vía el mapa de abastecimiento). Se guardan como un "cliente" interno incobrable.
+  const INTER_CLI = 'INTERCOMPAÑÍA (Retail)'
+  const interMarca = (() => { try { const d = JSON.parse(localStorage.getItem('retail_inter_ENERGY BRANDS') || '{}'); return d[upper(marca)] || null } catch { return null } })()
+  const interU = (mi) => (empresa === 'ENERGY BRANDS' && interMarca && interMarca.unid) ? Math.round(num(interMarca.unid[mi])) : 0
+  const interTot = MESES.reduce((a, _, mi) => a + interU(mi), 0)
+  const hayInter = interTot > 0.5
   const totMarca = {}
   const mesMarca = {}
   Object.keys(u2026).forEach((k) => { const p = k.split('|'), cli = p[0], mar = p[1]; const arr = mesMarca[mar] || (mesMarca[mar] = Array(12).fill(0)); let t = 0; for (let mi = 0; mi < 12; mi++) { const cur = manual[mar + '|' + cli + '|' + mi]; const v = (cur === undefined || cur === '') ? 0 : Math.round(num(cur)); arr[mi] += v; t += v } totMarca[mar] = (totMarca[mar] || 0) + t })
@@ -6144,9 +6153,15 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
     // Cap_Ventas refleje exactamente el plan del vendedor. Si filtráramos los ceros, un cliente que bajaste
     // a 0 conservaría su valor viejo en la hoja e inflaría el total que ve Producto/Finanzas.
     const rows = clientes.map((cli) => ({ rubro: cli, sbu, marca, meses: MESES.map((_, mi) => u28(cli, mi)) }))
+    // Intercompañía: guarda (o pone en 0) el "cliente" interno con las unidades que Retail compra de esta marca.
+    let intEstado = interno
+    if (empresa === 'ENERGY BRANDS' && interMarca) {
+      rows.push({ rubro: INTER_CLI, sbu, marca, meses: MESES.map((_, mi) => interU(mi)) })
+      intEstado = { ...interno, [marca + '|' + INTER_CLI]: true }; setInterno(intEstado)
+    }
     await postToTab('Cap_Ventas', empresa, usuario, role.label, rows, setMsg)
     saveEstado(empresa, 'ventas_growth', growth); saveEstado(empresa, 'catpart', catPart); saveEstado(empresa, 'catpct', catPct)
-    saveEstado(empresa, 'ventas_manual', manual); saveEstado(empresa, 'addcli', addCli); saveEstado(empresa, 'interno', interno)
+    saveEstado(empresa, 'ventas_manual', manual); saveEstado(empresa, 'addcli', addCli); saveEstado(empresa, 'interno', intEstado)
     setSaving(false)
   }
   const catList = cats[marca] || []
@@ -6439,7 +6454,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                 <Fragment2 key={cli}>
                   {useVend && vendView === 'T' && (_idx === 0 || vendOf(_arr[_idx - 1]) !== vendOf(cli)) && (() => { const vi = vendOf(cli); const grp = _arr.filter((c) => vendOf(c) === vi); const uSub = grp.reduce((a, c) => a + t28(c), 0); return <tr className="secrow"><td className="l" colSpan={17}>🧑‍💼 {vName(vi)} <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>· {grp.length} cliente(s) · {fmt(uSub)} ud en 2028</span></td></tr> })()}
                   <tr>
-                    <td className="l" rowSpan={rsp}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}{paisByCli[cli] && <div style={{ marginTop: 2, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }} title="País del cliente (Base Clientes SF)">📍 {paisByCli[cli]}</div>}<label style={{ display: 'block', marginTop: 5, fontSize: 11, color: esInt(cli) ? '#b45309' : 'var(--muted)', cursor: 'pointer', fontWeight: 600 }}><input type="checkbox" checked={esInt(cli)} onChange={() => toggleInt(cli)} style={{ marginRight: 5, verticalAlign: 'middle' }} />Interno (intercompañía)</label>{useVend && <div style={{ marginTop: 5 }}><span className="unit" style={{ marginRight: 4 }}>Vendedor:</span><select value={vendOf(cli)} onChange={(e) => setVendOf(cli, Number(e.target.value))} style={{ fontSize: 11, padding: '2px 4px', borderRadius: 5, border: '1px solid var(--line)' }}><option value={0}>{vName(0)}</option><option value={1}>{vName(1)}</option></select></div>}</td>
+                    <td className="l" rowSpan={rsp}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}{paisByCli[cli] && <div style={{ marginTop: 2, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }} title="País del cliente (Base Clientes SF)">📍 {paisByCli[cli]}</div>}{useVend && <div style={{ marginTop: 5 }}><span className="unit" style={{ marginRight: 4 }}>Vendedor:</span><select value={vendOf(cli)} onChange={(e) => setVendOf(cli, Number(e.target.value))} style={{ fontSize: 11, padding: '2px 4px', borderRadius: 5, border: '1px solid var(--line)' }}><option value={0}>{vName(0)}</option><option value={1}>{vName(1)}</option></select></div>}</td>
                     <td className="cell" rowSpan={rsp} style={{ verticalAlign: 'top' }}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}
                       <div style={{ marginTop: 7, fontSize: 11, lineHeight: 1.45 }}>
                         {!nuevo && <div style={{ color: 'var(--muted)' }} title="Total objetivo = total 2026 × (1 + % crecimiento). Reparte este total en los meses de 2028.">🎯 obj <b>{fmt(obj)}</b></div>}
