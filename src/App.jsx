@@ -2767,6 +2767,14 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp, precios }) {
   const seasonOf = (m) => m < 6 ? 'SS28' : m < 10 ? 'FW28' : 'SS29' // ene–jun = SS28 · jul–oct = FW28 · nov–dic = SS29
   const cpKey = (m) => `CP|${marca}|${seasonOf(m)}|${m}`
   const setCP = (m, v) => setTemp((t) => ({ ...t, [cpKey(m)]: v }))
+  // TAHO compra a 2 proveedores internos: Energy Brands y TUMAR. Cada uno es un bloque; el total alimenta el inventario.
+  const esTaho = empresa === 'TAHO'
+  const TAHO_PROVS = [['EB', 'Energy Brands'], ['TU', 'TUMAR']]
+  const cpProvKey = (prov, m) => `CPP|${marca}|${prov}|${seasonOf(m)}|${m}`
+  const cp27ProvKey = (prov, k) => `CP2027P|${marca}|${prov}|${k}`
+  // Al editar la compra de un proveedor: guarda su valor y recalcula el TOTAL (suma de los 2) en la clave de siempre.
+  const setCPProv = (prov, m, v) => setTemp((t) => { const nx = { ...t, [cpProvKey(prov, m)]: v }; const other = prov === 'EB' ? 'TU' : 'EB'; nx[cpKey(m)] = String(num(v) + num(t[cpProvKey(other, m)])); return nx })
+  const setCP27Prov = (prov, k, v) => setTemp((t) => { const nx = { ...t, [cp27ProvKey(prov, k)]: v }; const other = prov === 'EB' ? 'TU' : 'EB'; nx[`CP2027|${marca}|${k}`] = String(num(v) + num(t[cp27ProvKey(other, k)])); return nx })
   const xfd = MESES.map((_, m) => num(temp[cpKey(m)]))
   const disp = MESES.map((_, m) => (m - tr >= 0 ? xfd[m - tr] : 0))
   // Compras de fin de 2027 (Nov/Dic) que llegan y quedan disponibles para el arranque de 2028 (SS28).
@@ -2809,10 +2817,18 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp, precios }) {
           <tr><th className="l">Concepto</th><th style={{ color: '#9a6a1a' }}>NOV-27</th><th style={{ color: '#9a6a1a' }}>DIC-27</th>{MESES.map((m, i) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Total</th></tr>
         </thead>
         <tbody>
-          <tr><td className="l">Compras a comprar · <b>XFD</b> <span className="unit">({vista === 'ud' ? 'unidades' : vista === '$' ? 'valor $' : 'ud · $'})</span> {vista === 'ud' && <span className="fill-badge" style={{ marginLeft: 4 }}>✏️</span>}</td>
+          {esTaho ? <>
+            {TAHO_PROVS.map(([pk, pn]) => { const xp = MESES.map((_, m) => num(temp[cpProvKey(pk, m)])); const n27 = num(temp[cp27ProvKey(pk, 'N')]), d27 = num(temp[cp27ProvKey(pk, 'D')]); return (
+              <tr key={pk}><td className="l">Compras a <b style={{ color: '#0e7490' }}>{pn}</b> · <b>XFD</b> {vista === 'ud' && <span className="fill-badge" style={{ marginLeft: 4 }}>✏️</span>}</td>
+                {['N', 'D'].map((k) => vista === 'ud' ? <td key={k} className="cell" style={{ background: '#fffdf2' }}><input value={temp[cp27ProvKey(pk, k)] ?? ''} onChange={(e) => setCP27Prov(pk, k, e.target.value)} inputMode="decimal" style={{ width: '100%' }} title="Compra de fin de 2027 que llega para arrancar 2028" /></td> : <td key={k} className="tot" style={{ background: '#fffdf2', color: '#9a6a1a' }}>{cell27(num(temp[cp27ProvKey(pk, k)]))}</td>)}
+                {MESES.map((_, m) => vista === 'ud' ? <td key={m} className="cell"><input value={temp[cpProvKey(pk, m)] ?? ''} onChange={(e) => setCPProv(pk, m, e.target.value)} inputMode="decimal" style={{ width: '100%' }} /></td> : <td key={m} className="tot">{cCell(xp, m)}</td>)}
+                <td className="tot">{vista === 'ud' ? fmt(RT(xp) + n27 + d27) : fmt(RT(money(xp)) + (n27 + d27) * auc27)}</td></tr>
+            ) })}
+            <tr className="grandrow"><td className="l">= Total compras · XFD <span className="unit" style={{ fontWeight: 400 }}>(ambos proveedores)</span></td><td className="tot" style={{ background: '#fffdf2' }}>{cell27(v27N)}</td><td className="tot" style={{ background: '#fffdf2' }}>{cell27(v27D)}</td>{MESES.map((_, m) => <td key={m} className="tot">{cCell(xfd, m)}</td>)}<td className="tot">{vista === 'ud' ? fmt(RT(xfd) + v27N + v27D) : fmt(RT(money(xfd)) + (v27N + v27D) * auc27)}</td></tr>
+          </> : <tr><td className="l">Compras a comprar · <b>XFD</b> <span className="unit">({vista === 'ud' ? 'unidades' : vista === '$' ? 'valor $' : 'ud · $'})</span> {vista === 'ud' && <span className="fill-badge" style={{ marginLeft: 4 }}>✏️</span>}</td>
             {['N', 'D'].map((k) => vista === 'ud' ? <td key={k} className="cell" style={{ background: '#fffdf2' }}><input value={temp[cp27(k)] ?? ''} onChange={(e) => setTemp((t) => ({ ...t, [cp27(k)]: e.target.value }))} inputMode="decimal" style={{ width: '100%' }} title="Compra de fin de 2027 (SS28) que llega para arrancar 2028" /></td> : <td key={k} className="tot" style={{ background: '#fffdf2', color: '#9a6a1a' }}>{cell27(num(temp[cp27(k)]))}</td>)}
             {MESES.map((_, m) => vista === 'ud' ? <td key={m} className="cell"><input value={temp[cpKey(m)] ?? ''} onChange={(e) => setCP(m, e.target.value)} inputMode="decimal" style={{ width: '100%' }} /></td> : <td key={m} className="tot">{cCell(xfd, m)}</td>)}
-            <td className="tot">{vista === 'ud' ? fmt(RT(xfd) + v27N + v27D) : vista === '$' ? fmt(RT(money(xfd)) + (v27N + v27D) * auc27) : <>{fmt(RT(xfd) + v27N + v27D)}<div className="unit" style={{ fontSize: 10 }}>${fmt(RT(money(xfd)) + (v27N + v27D) * auc27)}</div></>}</td></tr>
+            <td className="tot">{vista === 'ud' ? fmt(RT(xfd) + v27N + v27D) : vista === '$' ? fmt(RT(money(xfd)) + (v27N + v27D) * auc27) : <>{fmt(RT(xfd) + v27N + v27D)}<div className="unit" style={{ fontSize: 10 }}>${fmt(RT(money(xfd)) + (v27N + v27D) * auc27)}</div></>}</td></tr>}
           <tr className="catrow"><td className="l">Compras · disponible <span className="unit">(XFD + tránsito)</span></td><td className="tot" style={{ background: '#fffdf2', color: '#c0a060' }}>—</td><td className="tot" style={{ background: '#fffdf2', color: '#c0a060' }}>—</td>{MESES.map((_, m) => <td key={m} className="tot">{cCell(disp, m)}</td>)}<td className="tot">{cTot(disp)}</td></tr>
           <tr className="secrow"><td colSpan={16}>Flujo de inventario 2028 (todas las temporadas)</td></tr>
           <tr><td className="l sub2">Inventario inicial del mes</td><td className="tot" style={{ color: '#c0a060' }}>—</td><td className="tot" style={{ color: '#c0a060' }}>—</td>{MESES.map((_, m) => <td key={m} className="tot help-bulb" title={m === 0 ? `Inventario inicial de enero = temporadas anteriores (${iniCompStr})${(v27N + v27D) ? ` + compras Nov/Dic 2027 ${fmt(v27N + v27D)}` : ''} = ${fmt(ini2028)} ud` : `Saldo fin de ${MESES[m - 1].slice(0, 3).toUpperCase()}: inicial ${fmt(saldoIni[m - 1])} + compras ${fmt(disp[m - 1])} − ventas ${fmt(ventasU[m - 1])} = ${fmt(saldoIni[m])} ud`}>{cCell(saldoIni, m)}</td>)}<td className="tot"></td></tr>
