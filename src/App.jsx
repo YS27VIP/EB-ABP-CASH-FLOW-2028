@@ -3531,6 +3531,30 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   })
   const cfSum = (k) => cfRows.reduce((a, r) => a + r[k], 0)
 
+  // ---- Cash Flow por bucket (EB / SINERGY / TOTAL), misma separación que el P&L ----
+  // Inputs financieros: EB usa las claves de retail_cf; SINERGY usa claves 'CF…' dentro de retail_sin; TOTAL = EB + SINERGY (solo lectura).
+  const cfFin = (bucket, line, mi) => bucket === 'EB' ? num(cf[fk(line, mi)]) : bucket === 'SIN' ? num(sin[`CF${line}|${mi}`]) : num(cf[fk(line, mi)]) + num(sin[`CF${line}|${mi}`])
+  const cfRowsBucket = (bucket) => {
+    const ts = bucket === 'TOTAL' ? tiendas : tiendas.filter((t) => bucket === 'SIN' ? esTiendaSinergy(t) : !esTiendaSinergy(t))
+    const rows = []; let prev = 0
+    MESES.forEach((_, mi) => {
+      const ini = mi === 0 ? cfFin(bucket, 'INI', 0) : prev
+      const cobros = ts.reduce((a, t) => a + storeVentaM(t, mi), 0)
+      const pagos = ts.reduce((a, t) => a + storeCostoM(t, mi), 0)
+      const gasto = bucket === 'SIN' ? 0 : gastoMes(mi)
+      const logi = bucket === 'EB' ? 0 : sg('LOG', mi)
+      const mk = bucket === 'EB' ? mkMes(mi) : bucket === 'SIN' ? sg('MK', mi) : mkMes(mi) + sg('MK', mi)
+      const vj = bucket === 'EB' ? vjMes(mi) : bucket === 'SIN' ? (sg('VJDIR', mi) + sg('VJMK', mi)) : vjMes(mi) + sg('VJDIR', mi) + sg('VJMK', mi)
+      const oper = gasto + logi + mk + vj
+      const fin = cfFin(bucket, 'FIN', mi), oIng = cfFin(bucket, 'OING', mi), oGas = cfFin(bucket, 'OGAS', mi)
+      const flujo = cobros + oIng - pagos - oper - fin - oGas
+      const final = ini + flujo
+      rows.push({ ini, cobros, pagos, gasto, logi, mk, vj, oper, fin, oIng, oGas, flujo, final }); prev = final
+    })
+    return rows
+  }
+  const guardarCFAll = () => guardarKeys([['retail_cf', cf], ['retail_sin', sin], ['retail_pl', plSummary()]], 'Cash Flow guardado en el Sheet ✓')
+
   // ---- Resumen del P&L Retail (EB vs SINERGY), arreglos mensuales, para el Holding y el P&L/Cash Flow de Energy Brands ----
   const plSummary = () => {
     const z = () => Array(12).fill(0)
@@ -3854,40 +3878,44 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
       {tab === 'cf' && <>
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-        <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Cash Flow</span><div className="spacer"></div><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarCF}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
-          <h3 style={{ color: col }}>Cash Flow — Retail</h3>
-          <div className="sub"><b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> + <span style={{ color: '#15803d' }}>Otros ingresos</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span> − <span style={{ color: '#b91c1c' }}>Costos financieros</span> − <span style={{ color: '#b91c1c' }}>Otros gastos</span></b>.</div>
-          <div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre los números calculados para ver el origen. Despliega los costos con ▶.</div>
-          <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '95px' }} /></colgroup>
-              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m} className="yb">{m}</th>)}<th>Total 2028</th></tr></thead>
-              <tbody>
-                <tr className="secrow"><td colSpan={14}>CASH FLOW</td></tr>
-                {/* Cash Inicial */}
-                <tr><td className="l" style={{ fontWeight: 700 }}>Cash Inicial</td>{cfRows.map((r, mi) => mi === 0
-                  ? <td key={mi} className="cell yb"><input value={cf[fk('INI', 0)] ?? ''} onChange={(e) => setCF('INI', 0, e.target.value)} inputMode="decimal" title="Saldo en banco al cierre de 2027 (arranque de enero-28)" /></td>
-                  : <td key={mi} className="tot yb" style={{ cursor: BULB_CURSOR }} title="Cash Inicial = Cash Final del mes anterior">{fmt(r.ini)}</td>)}<td className="tot">—</td></tr>
-                {/* Cash In */}
-                <tr><td className="l" style={{ color: '#15803d' }}>Cash In (Cobros)</td>{cfRows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#15803d', cursor: BULB_CURSOR }} title={`Cobros = ventas por tienda del mes = ${fmt(r.cobros)}`}>{r.cobros > 0.5 ? '+ ' : ''}{fmt(r.cobros)}</td>)}<td className="tot" style={{ color: '#15803d' }}>+ {fmt(cfSum('cobros'))}</td></tr>
-                {/* Cash Out */}
-                <tr><td className="l" style={{ color: '#b91c1c' }}>Cash Out (Pagos)</td>{cfRows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#b91c1c', cursor: BULB_CURSOR }} title={`Pagos = importaciones (compras a la SBU) del mes = ${fmt(r.pagos)}`}>{r.pagos > 0.5 ? '− ' : ''}{fmt(r.pagos)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(cfSum('pagos'))}</td></tr>
-                {/* Costos Operativos (desplegable: gastos / marketing / viajes) */}
-                <tr className={'rowline ' + (openOper ? 'open' : '')} onClick={() => setOpenOper((o) => !o)} style={{ cursor: 'pointer' }}><td className="l" style={{ color: '#b91c1c' }}><span className="caret">▶</span> Costos Operativos <span className="unit" style={{ marginLeft: 6, color: 'var(--muted)' }}>({openOper ? 'ocultar' : 'ver'} detalle)</span></td>{cfRows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#b91c1c' }}>{r.oper > 0.5 ? '− ' : ''}{fmt(r.oper)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(cfSum('oper'))}</td></tr>
-                {openOper && [['Gastos', 'gasto'], ['Marketing', 'mk'], ['Viajes', 'vj']].map(([lbl, kk]) => <tr key={kk}><td className="l sub2" style={{ color: 'var(--muted)' }}>{lbl}</td>{cfRows.map((r, i) => <td key={i} className="tot yb" style={{ color: 'var(--muted)' }}>{fmt(r[kk])}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(cfSum(kk))}</td></tr>)}
-                {/* Costos Financieros (desplegable: editable) */}
-                <tr className={'rowline ' + (openFin ? 'open' : '')} onClick={() => setOpenFin((o) => !o)} style={{ cursor: 'pointer' }}><td className="l" style={{ color: '#b91c1c' }}><span className="caret">▶</span> Costos Financieros <span className="unit" style={{ marginLeft: 6, color: 'var(--muted)' }}>({openFin ? 'ocultar' : 'ver'} detalle · se escribe a mano)</span></td>{cfRows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#b91c1c' }}>{r.fin > 0.5 ? '− ' : ''}{fmt(r.fin)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(cfSum('fin'))}</td></tr>
-                {openFin && <tr onClick={(e) => e.stopPropagation()}><td className="l sub2" style={{ color: 'var(--muted)' }}>Costos financieros (editable)</td>{cfRows.map((r, mi) => <td key={mi} className="cell yb"><input value={cf[fk('FIN', mi)] ?? ''} onChange={(e) => setCF('FIN', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(cfSum('fin'))}</td></tr>}
-                {/* Otros ingresos / gastos (editables) */}
-                <tr><td className="l" style={{ color: '#15803d' }}>Otros ingresos</td>{cfRows.map((r, mi) => <td key={mi} className="cell yb"><input value={cf[fk('OING', mi)] ?? ''} onChange={(e) => setCF('OING', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot" style={{ color: '#15803d' }}>+ {fmt(cfSum('oIng'))}</td></tr>
-                <tr><td className="l" style={{ color: '#b91c1c' }}>Otros gastos</td>{cfRows.map((r, mi) => <td key={mi} className="cell yb"><input value={cf[fk('OGAS', mi)] ?? ''} onChange={(e) => setCF('OGAS', mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(cfSum('oGas'))}</td></tr>
-                {/* Flujo neto + Cash Final */}
-                <tr className="grandrow"><td className="l">= Flujo neto del mes <span className="unit">(cobros + otros ingresos − pagos − costos oper. − financieros − otros gastos)</span></td>{cfRows.map((r, i) => { const s = r.flujo > 0.5 ? '+ ' : r.flujo < -0.5 ? '− ' : ''; return <td key={i} className="tot yb" style={{ color: r.flujo < -0.5 ? '#b91c1c' : r.flujo > 0.5 ? '#15803d' : undefined }}>{s}{fmt(Math.abs(r.flujo))}</td> })}<td className="tot">{fmt(cfSum('flujo'))}</td></tr>
-                <tr><td className="l" style={{ fontWeight: 700 }}>Cash Final</td>{cfRows.map((r, i) => <td key={i} className="tot yb" style={{ cursor: BULB_CURSOR, fontWeight: 700 }} title="Cash Final = Cash Inicial + Cash In + Otros ingresos − Cash Out − Costos Operativos − Costos Financieros − Otros gastos">{fmt(r.final)}</td>)}<td className="tot">—</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {(() => {
+          const sumK = (rows, k) => rows.reduce((a, r) => a + r[k], 0)
+          const cfBlock = (bucket, title, accent, editable) => {
+            const rows = cfRowsBucket(bucket); const S = (k) => sumK(rows, k)
+            const operDetail = bucket === 'EB' ? [['Gastos', 'gasto'], ['Marketing', 'mk'], ['Viajes', 'vj']] : bucket === 'SIN' ? [['Logística', 'logi'], ['Marketing', 'mk'], ['Viajes', 'vj']] : [['Gastos', 'gasto'], ['Logística', 'logi'], ['Marketing', 'mk'], ['Viajes', 'vj']]
+            const finVal = (line, mi) => bucket === 'EB' ? (cf[fk(line, mi)] ?? '') : (sin[`CF${line}|${mi}`] ?? '')
+            const setFin = (line, mi, v) => bucket === 'EB' ? setCF(line, mi, v) : setSIN(`CF${line}`, mi, v)
+            const editRow = (lbl, line, color, sumk, signo) => <tr><td className="l" style={{ color }}>{lbl}</td>{rows.map((r, mi) => editable ? <td key={mi} className="cell yb"><input value={finVal(line, mi)} onChange={(e) => setFin(line, mi, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot yb" style={{ color }}>{r[sumk] > 0.5 ? signo + ' ' : ''}{fmt(r[sumk])}</td>)}<td className="tot" style={{ color }}>{signo} {fmt(S(sumk))}</td></tr>
+            return <div className="panel" style={{ borderLeftColor: accent }}>
+              <div className="toolbar"><span className="empchip" style={{ background: accent, marginLeft: 0 }}>{title}</span><div className="spacer"></div>{editable && <><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarCFAll}>{saving ? 'Guardando…' : '💾 Guardar'}</button></>}</div>
+              <div className="tablewrap" style={{ overflowX: 'auto' }}>
+                <table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '95px' }} /></colgroup>
+                  <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m} className="yb">{m}</th>)}<th>Total 2028</th></tr></thead>
+                  <tbody>
+                    <tr><td className="l" style={{ fontWeight: 700 }}>Cash Inicial</td>{rows.map((r, mi) => (editable && mi === 0)
+                      ? <td key={mi} className="cell yb"><input value={finVal('INI', 0)} onChange={(e) => setFin('INI', 0, e.target.value)} inputMode="decimal" title="Saldo al cierre 2027 (arranque enero-28)" /></td>
+                      : <td key={mi} className="tot yb" style={{ cursor: BULB_CURSOR }} title="Cash Inicial = Cash Final del mes anterior">{fmt(r.ini)}</td>)}<td className="tot">—</td></tr>
+                    <tr><td className="l" style={{ color: '#15803d' }}>Cash In (Cobros)</td>{rows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#15803d' }} title={`Cobros = ventas por tienda del mes = ${fmt(r.cobros)}`}>{r.cobros > 0.5 ? '+ ' : ''}{fmt(r.cobros)}</td>)}<td className="tot" style={{ color: '#15803d' }}>+ {fmt(S('cobros'))}</td></tr>
+                    <tr><td className="l" style={{ color: '#b91c1c' }}>Cash Out (Pagos)</td>{rows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#b91c1c' }} title={`Pagos = costo de la mercancía del mes = ${fmt(r.pagos)}`}>{r.pagos > 0.5 ? '− ' : ''}{fmt(r.pagos)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(S('pagos'))}</td></tr>
+                    <tr className={'rowline ' + (openOper ? 'open' : '')} onClick={() => setOpenOper((o) => !o)} style={{ cursor: 'pointer' }}><td className="l" style={{ color: '#b91c1c' }}><span className="caret">▶</span> Costos Operativos <span className="unit" style={{ marginLeft: 6, color: 'var(--muted)' }}>({openOper ? 'ocultar' : 'ver'} detalle)</span></td>{rows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#b91c1c' }}>{r.oper > 0.5 ? '− ' : ''}{fmt(r.oper)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(S('oper'))}</td></tr>
+                    {openOper && operDetail.map(([lbl, kk]) => <tr key={kk}><td className="l sub2" style={{ color: 'var(--muted)' }}>{lbl}</td>{rows.map((r, i) => <td key={i} className="tot yb" style={{ color: 'var(--muted)' }}>{fmt(r[kk])}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(S(kk))}</td></tr>)}
+                    {editRow('Costos Financieros', 'FIN', '#b91c1c', 'fin', '−')}
+                    {editRow('Otros ingresos', 'OING', '#15803d', 'oIng', '+')}
+                    {editRow('Otros gastos', 'OGAS', '#b91c1c', 'oGas', '−')}
+                    <tr className="grandrow"><td className="l">= Flujo neto del mes</td>{rows.map((r, i) => { const s = r.flujo > 0.5 ? '+ ' : r.flujo < -0.5 ? '− ' : ''; return <td key={i} className="tot yb" style={{ color: r.flujo < -0.5 ? '#b91c1c' : r.flujo > 0.5 ? '#15803d' : undefined }}>{s}{fmt(Math.abs(r.flujo))}</td> })}<td className="tot">{fmt(S('flujo'))}</td></tr>
+                    <tr><td className="l" style={{ fontWeight: 700 }}>Cash Final</td>{rows.map((r, i) => <td key={i} className="tot yb" style={{ cursor: BULB_CURSOR, fontWeight: 700 }} title="Cash Final = Cash Inicial + Cobros + Otros ingresos − Pagos − Costos Operativos − Costos Financieros − Otros gastos">{fmt(r.final)}</td>)}<td className="tot">—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+          return <>
+            <div className="sub" style={{ marginBottom: 6 }}><b>Cash Final = Cash Inicial + Cobros + Otros ingresos − Pagos − Costos operativos − Costos financieros − Otros gastos</b>. Hay <b>3 cash flow</b>: <b>TOTAL</b> (EB + SINERGY, solo lectura), <b>Retail EB</b> y <b>SINERGY</b> (editables). Cobros/Pagos/operativos salen con la misma lógica del P&L.</div>
+            {cfBlock('TOTAL', '💰 Cash Flow — TOTAL', '#7c3aed', false)}
+            {cfBlock('EB', '🏬 Cash Flow — Retail EB', col, true)}
+            {cfBlock('SIN', '🤝 Cash Flow — SINERGY', '#be185d', true)}
+          </>
+        })()}
       </>}
 
       {tab === 'pl' && <>
