@@ -3028,7 +3028,6 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
 
       {showEvol && <div className="panel">
         <h3>Evolución mensual del AUP / AUC — {marca}{M$} <span className="unit">(consecuencia de la combinación)</span></h3>
-        <div className="sub" style={{ marginBottom: 6 }}>Según la <b>combinación de temporadas</b>, cada mes se vende una combinación distinta de temporadas → el AUP y AUC <b>cambian mes a mes</b>. Ej.: si en junio se vende FW26 a AUC $46 y en julio entra SS28 a AUC $60, el AUC del mes sube de $46 a $60; y si un mes se vende mitad de cada una, el AUC efectivo es ~$53.</div>
         {HOVERTIP}
         {!MESES.some((_, m) => unitsMes(m) > 0.5) && <div className="note warn" style={{ marginBottom: 10 }}>Sale <b>vacía</b> porque aún no hay <b>salidas de inventario</b>. Ya pusiste las unidades arriba; ahora falta escribir las <b>unidades a rotar</b> por temporada en el bloque de Combinación de temporadas (Paso 2). Eso define qué se vende cada mes.</div>}
         {cats.length > 1 && <div className="toolbar" style={{ marginBottom: 8 }}><input value={catBuscar} onChange={(e) => setCatBuscar(e.target.value)} placeholder="🔍 Buscar categoría…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />{catBuscar && <button className="btn" onClick={() => setCatBuscar('')}>✕ limpiar</button>}</div>}
