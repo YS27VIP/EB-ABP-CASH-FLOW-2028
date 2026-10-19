@@ -3500,7 +3500,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const sellU = (t, mi) => num(vt[`${t}||SU||${mi}`])
   const setSell = (t, mi, v) => setVt((d) => ({ ...d, [`${t}||SU||${mi}`]: v }))
   // Costo/ud promedio de la tienda (ponderado por la mezcla de compras del mapa).
-  const storeAvgCogs = (t, mi) => { let u = 0, c = 0; catsOf(t).forEach((ct) => { const uu = uAnual(t, ct); u += uu; c += uu * cogsUnit(ct, mi) }); return u > 0 ? c / u : 0 }
+  // Costo/ud promedio de la tienda = promedio anual del costo/ud del mapa (whAvg × factor), ponderado por unidades de compra; fallback a promedio simple. Igual en todos los meses (no depende de la temporada del mes).
+  const storeAvgCogs = (t) => { let u = 0, c = 0; catsOf(t).forEach((ct) => { const uu = uAnual(t, ct); const cg = whAvg(ct) * factor(); u += uu; c += uu * cg }); if (u > 0) return c / u; let n = 0, s = 0; catsOf(t).forEach((ct) => { const cg = whAvg(ct) * factor(); if (cg > 0) { s += cg; n++ } }); return n > 0 ? s / n : 0 }
   const storeUnitsM = (t, mi) => sellU(t, mi)
   const storeCostoM = (t, mi) => sellU(t, mi) * storeAvgCogs(t, mi)
   const storeVentaM = (t, mi) => sellU(t, mi) * storeAvgCogs(t, mi) * (1 + margenPct(t, mi) / 100) * (1 - descPct(t, mi) / 100)
@@ -3827,7 +3828,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
         <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Compras por tienda</span><div className="spacer"></div><button className="btn" onClick={() => setComTab('mapa')}>🧭 Mapa de abastecimiento</button><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Compras por tienda</span><div className="spacer"></div><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Compras por tienda — 2028 <span className="unit">(unidades a comprar · Retail → Wholesale)</span></h3>
           {/* ---- Paso 1: calendario de importaciones (cuándo EB despacha; aplica a todas las tiendas) ---- */}
           <div className="panel tight" style={{ marginBottom: 10 }}>
@@ -4006,8 +4007,8 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                   <tr className="secrow"><td colSpan={14}>2028 · venta neta = costo × (1 + %margen) × (1 − %descuento)</td></tr>
                   <tr><td className="l sub2" style={{ color: '#1d4ed8', fontWeight: 700 }}>① Unidades 2028 (manual)</td>{cell((mi) => vt[`${t}||SU||${mi}`] ?? '', (mi, v) => setSell(t, mi, v), '#1d4ed8')}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(sum((mi) => sellU(t, mi)))}</td></tr>
                   {calcRow('② Costo ($)', costo28, '#b91c1c')}
-                  <tr><td className="l sub2" style={{ color: '#b45309' }}>③ % Descuento (se llena)</td>{cell((mi) => vt[`${t}||DESC||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||DESC||${mi}`]: v })), '#b45309')}<td className="tot">—</td></tr>
-                  <tr><td className="l sub2" style={{ color: '#15803d' }}>④ % Margen (se llena)</td>{cell((mi) => vt[`${t}||MARGEN||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||MARGEN||${mi}`]: v })), '#15803d')}<td className="tot">—</td></tr>
+                  <tr><td className="l sub2" style={{ color: '#b45309' }}>③ % Descuento</td>{cell((mi) => vt[`${t}||DESC||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||DESC||${mi}`]: v })), '#b45309')}<td className="tot">—</td></tr>
+                  <tr><td className="l sub2" style={{ color: '#15803d' }}>④ % Margen</td>{cell((mi) => vt[`${t}||MARGEN||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||MARGEN||${mi}`]: v })), '#15803d')}<td className="tot">—</td></tr>
                   {calcRow('= Venta neta 2028 ($)', venta28, '#15803d', true)}
                   {calcRow('= Utilidad bruta ($)', (mi) => venta28(mi) - costo28(mi), '#0f766e', true)}
                   <tr className="secrow"><td colSpan={14}>REFERENCIA 2026 (🪞)</td></tr>
@@ -6492,9 +6493,10 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           <span style={{ fontSize: 20 }}>📦</span>
           <div>Stock disponible de temporadas anteriores de <b>{marca}</b>: <b style={{ fontSize: 15 }}>{fmt(stockViejo(marca))} ud</b>. <span className="unit">Tenlo en cuenta al proyectar: tu venta 2028 debería incluir mover este stock viejo.</span></div>
         </div>
-        <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: junto al % verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)) y la <b>suma</b> de lo que llevas repartido. Luego, en las <b>celdas amarillas de 2028</b>, tú decides <b>en qué meses</b> vender esas unidades. Cuando la suma cuadra con el objetivo aparece <b style={{ color: '#15803d' }}>✓</b>; si no, sale en <b style={{ color: '#b45309' }}>ámbar ⚠</b> para que ajustes. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente.</div>
+        {vendView !== 'inter' && <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: junto al % verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)) y la <b>suma</b> de lo que llevas repartido. Luego, en las <b>celdas amarillas de 2028</b>, tú decides <b>en qué meses</b> vender esas unidades. Cuando la suma cuadra con el objetivo aparece <b style={{ color: '#15803d' }}>✓</b>; si no, sale en <b style={{ color: '#b45309' }}>ámbar ⚠</b> para que ajustes. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente.</div>}
+        {vendView === 'inter' && <div className="sub">🔄 <b>Intercompañía (Retail)</b>: estas unidades salen automáticamente de lo que <b>Retail</b> le compra a {marca} (vía el mapa de abastecimiento). Son de <b>solo lectura</b> e <b>incobrables</b>; se editan en <b>Retail → Compras por tienda</b>.</div>}
         <div className="sub" style={{ marginTop: 4, fontWeight: 700, color: vendView === 'inter' ? '#7c3aed' : '#5b9bd5' }}>{useVend && vendView === 'inter' ? <>🔄 Intercompañía (Retail) — {fmt(interTot)} ud en 2028 <span className="unit" style={{ fontWeight: 400 }}>(solo lectura · incobrable)</span></> : useVend && vendView !== 'T' ? <>{vName(vendView)} — {fmt(vendUnits(vendView))} ud en 2028</> : <>Total 2028 de {marca}: {fmt(totMarcaSel + interTot)} ud{hayInter && <span className="unit" style={{ fontWeight: 400 }}> (incl. {fmt(interTot)} intercompañía)</span>}</>}</div>
-        <div style={{ display: 'flex', gap: 28, margin: '4px 0 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        {vendView !== 'inter' && <div style={{ display: 'flex', gap: 28, margin: '4px 0 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ order: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
             <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />
             {buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}
@@ -6513,7 +6515,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
               <button className="btn primary" onClick={() => agregarCliente(nuevoCli)}>➕ Agregar</button>
             </div>
           </div>
-        </div>
+        </div>}
         <div ref={topScRef} onScroll={() => { if (botScRef.current) botScRef.current.scrollLeft = topScRef.current.scrollLeft }} className="tablewrap" style={{ maxHeight: 'none', overflowY: 'hidden', border: 'none', borderRadius: 0, marginBottom: 2 }}><div style={{ width: 1228, height: 1 }} /></div>
         <div className="tablewrap" ref={botScRef} onScroll={() => { if (topScRef.current) topScRef.current.scrollLeft = botScRef.current.scrollLeft }}>
           <table className="vfix" style={{ width: 1228 }}>
