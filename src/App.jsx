@@ -3962,7 +3962,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           }
           return <>
             <div className="sub" style={{ marginBottom: 6 }}><b>Cash Final = Cash Inicial + Cobros + Otros ingresos − Pagos − Costos operativos − Costos financieros − Otros gastos</b>. Hay <b>3 cash flow</b>: <b>TOTAL</b> (EB + SINERGY, solo lectura), <b>Retail EB</b> y <b>SINERGY</b> (editables). Cobros/Pagos/operativos salen con la misma lógica del P&L.</div>
-            {cfBlock('TOTAL', '💰 Cash Flow — TOTAL', '#7c3aed', false)}
+            {cfBlock('TOTAL', '💰 Cash Flow — TOTAL (EB + SINERGY)', '#7c3aed', false)}
             {cfBlock('EB', '🏬 Cash Flow — Retail EB', col, true)}
             {cfBlock('SIN', '🤝 Cash Flow — SINERGY', '#be185d', true)}
           </>
