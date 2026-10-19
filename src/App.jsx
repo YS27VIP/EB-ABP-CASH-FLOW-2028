@@ -264,6 +264,14 @@ function retailPLTotales() {
     return { EB: blk(d.EB), SIN: blk(d.SIN) }
   } catch { return null }
 }
+// Flujo neto mensual (12) del P&L Retail EB = venta − costo − gastos − marketing − viajes. Para la línea "Retail EB" del Cash Flow de Energy Brands.
+function retailEBNetMensual() {
+  try {
+    const d = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null'); const e = d && d.EB; if (!e) return null
+    const g = (a, i) => Number((a || [])[i]) || 0
+    return Array.from({ length: 12 }, (_, i) => g(e.venta, i) - g(e.costo, i) - g(e.gastos, i) - g(e.mk, i) - g(e.vj, i))
+  } catch { return null }
+}
 const sTag = (s, buy) => buy ? '(compra 2028)' : (s === 'ANT' ? '(saldo viejo agrupado)' : '(saldo anterior)')
 
 /* ===== helpers ===== */
@@ -585,7 +593,7 @@ export default function App() {
               <label className="who">Empresa:
                 <span className="inline">
                   {veTodasEff
-                    ? <select value={empresa} onChange={(e) => setEmpresa(e.target.value)}>{empresas.map((e) => <option key={e}>{e}</option>)}</select>
+                    ? <select value={empresa} onChange={(e) => setEmpresa(e.target.value)}>{empresas.filter((e) => e !== 'SINERGY').map((e) => <option key={e}>{e}</option>)}</select>
                     : <span className="empchip" style={{ marginLeft: 0, background: 'var(--odoo)' }}>{empresa}</span>}
                 </span>
               </label>
@@ -1003,7 +1011,7 @@ function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, sa
 /* ===== DetalleForm: sub-rubros por marca (Marketing y Viajes) ===== */
 function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, data, setData, saving, setSaving, setMsg, fixedMarca, onSaved, headerChip, capTitle }) {
   const marcas = marcasDe(sbus)
-  const [marca, setMarca] = useState(fixedMarca || marcas[0].marca)
+  const [marca, setMarca] = useState(fixedMarca || (marcas[0] && marcas[0].marca) || '')
   useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
   // Rubros extra: por EMPRESA y persistidos en el Sheet (Cap_Estado) para que TODOS los roles que viajan los vean.
   const [extras, setExtras] = useState(() => { try { return JSON.parse(localStorage.getItem(`${extrasKey}_${empresa}`) || localStorage.getItem(extrasKey) || '[]') } catch { return [] } })
@@ -1191,7 +1199,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
 /* ===== CASH FLOW: PSI + Cash Flow, 3 meses 2026 + proyección 2027 ===== */
 function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const marcas = marcasDe(sbus)
-  const [marca, setMarca] = useState(fixedMarca || marcas[0].marca)
+  const [marca, setMarca] = useState(fixedMarca || (marcas[0] && marcas[0].marca) || '')
   useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -1392,10 +1400,14 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     for (let mi = 0; mi < CF_MESES.length; mi++) { ini[mi] = mi === 0 ? seed : fin[mi - 1]; fin[mi] = ini[mi] + inFn(mi) - outFn(mi) }
     return { ini, fin }
   }
+  // Retail EB: línea neta mensual (cobros − pagos − gastos − mkt − viajes de las tiendas EB). Solo en la vista consolidada de Energy Brands.
+  const _retailEb = (empresa === 'ENERGY BRANDS' && isTotal && sbu === '__ALL__') ? retailEBNetMensual() : null
+  const retailEbMes = (mi) => _retailEb ? (_retailEb[mi] || 0) : 0
+  const hayRetailEb = !!_retailEb
   // Salida neta extra (nivel empresa): costos financieros + otros gastos − otros ingresos. Solo cuenta en la vista TOTAL.
   const extraOut = (mi) => cell(CF_FIN_PARENT, mi) + cell(CF_OTRO_GAS, mi) - cell(CF_OTRO_ING, mi)
-  const flujoNeto = (mi) => cell(CASHIN, mi) - cell(CASH_OUT, mi) - cell(CF_COSTOS_PARENT, mi) - extraOut(mi)
-  const cashCalc = buildCash((mi) => cell(CASHIN, mi), (mi) => cell(CASH_OUT, mi) + cell(CF_COSTOS_PARENT, mi) + extraOut(mi), isTotal ? sbuMarcas.reduce((s, m) => s + bancoIni(m), 0) : bancoIni(marca))
+  const flujoNeto = (mi) => cell(CASHIN, mi) - cell(CASH_OUT, mi) - cell(CF_COSTOS_PARENT, mi) - extraOut(mi) + retailEbMes(mi)
+  const cashCalc = buildCash((mi) => cell(CASHIN, mi) + retailEbMes(mi), (mi) => cell(CASH_OUT, mi) + cell(CF_COSTOS_PARENT, mi) + extraOut(mi), isTotal ? sbuMarcas.reduce((s, m) => s + bancoIni(m), 0) : bancoIni(marca))
   const cashCalcMarca = (mca) => buildCash((mi) => cellMarca(mca, CASHIN, mi), (mi) => cellMarca(mca, CASH_OUT, mi) + cellMarca(mca, CF_COSTOS_PARENT, mi), bancoIni(mca))
   // Texto "ALTRA: 1,234 · HOKA: 567" para el tooltip del total (solo si el desglose está activo).
   const brk = (concepto, mi) => isTotal ? (sbuMarcas.map((m) => ({ m, v: cellMarca(m, concepto, mi) })).filter((x) => Math.abs(x.v) > 0.5).map((x) => `${x.m}: ${fmt(x.v)}`).join(' · ') || 'Sin datos por marca') : undefined
@@ -1501,8 +1513,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                     if (it === CASH_FIN) {
                       const flujoCeldas = CF_MESES.map((_, mi) => { const cls = 'yb'; const v = flujoNeto(mi); const s = v > 0.5 ? '+ ' : v < -0.5 ? '− ' : ''; return <td key={mi} className={'tot ' + cls} style={{ color: v < -0.5 ? '#b91c1c' : v > 0.5 ? '#15803d' : undefined }}>{s}{fmt(Math.abs(v))}</td> })
                       const flujoTot = CF_MESES.reduce((a, _, mi) => a + flujoNeto(mi), 0)
-                      const flujoRow = <tr key="flujoneto" className="grandrow"><td className="l">= Flujo neto del mes <span className="unit">(cobros + otros ingresos − pagos − costos oper. − financieros − otros gastos)</span></td>{flujoCeldas}<td className="tot">{fmt(flujoTot)}</td></tr>
-                      return <Fragment2 key={it}>{flujoRow}{fila}</Fragment2>
+                      const flujoRow = <tr key="flujoneto" className="grandrow"><td className="l">= Flujo neto del mes <span className="unit">(cobros + otros ingresos − pagos − costos oper. − financieros − otros gastos{hayRetailEb ? ' + Retail EB' : ''})</span></td>{flujoCeldas}<td className="tot">{fmt(flujoTot)}</td></tr>
+                      const retailEbRow = hayRetailEb ? <tr key="retaileb"><td className="l sub2" style={{ color: '#0e7490' }}>🏬 Retail EB <span className="unit">(flujo neto de tiendas EB · espejo del P&L Retail)</span></td>{CF_MESES.map((_, mi) => { const v = retailEbMes(mi); return <td key={mi} className="tot" style={{ color: v < -0.5 ? '#b91c1c' : v > 0.5 ? '#15803d' : undefined }}>{v > 0.5 ? '+ ' : v < -0.5 ? '− ' : ''}{fmt(Math.abs(v))}</td> })}<td className="tot" style={{ color: '#0e7490' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + retailEbMes(mi), 0))}</td></tr> : null
+                      return <Fragment2 key={it}>{retailEbRow}{flujoRow}{fila}</Fragment2>
                     }
                     if (esVentas) {
                       return <Fragment2 key={it}>{fila}{openVentas && [['Venta externa (base de cobros)', '#0b5566', 'ext'], ['Venta interna (incobrable · intercompañía)', '#b45309', 'int']].map(([lbl, color, pick]) => <tr key={pick}><td className="l sub2" style={{ color }}>{lbl}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color }}>{fmt(ventaSplitMemo(pick, mi))}</td>)}<td className="tot" style={{ color }}>{fmt(CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo(pick, mi), 0))}</td></tr>)}</Fragment2>
@@ -4350,6 +4363,8 @@ function HoldingScreen({ empresas, sbusFor }) {
     { k: '🎯 = Resultado Operativo', g: (v) => v.resultado, strong: true },
   ]
   const totHold = (g) => byEmp.reduce((a, { v }) => a + (g(v) || 0), 0)
+  // SINERGY no tiene pantallas propias: su detalle es un P&L de solo lectura (sale del bloque SINERGY del Retail).
+  const sinPanel = (e) => { const v = calcEmp(e); return <div className="panel"><h3 style={{ color: '#be185d' }}>🤝 {e} — P&L <span className="unit">(viene del bloque SINERGY del Retail · solo lectura)</span></h3><div className="sub">SINERGY no se edita aquí: su <b>venta y costo</b> salen de la tienda <b>SINERGY</b> en Retail, y su <b>marketing/viajes</b> de las capturas SINERGY. Para cambiarlo, ve a <b>Retail</b>.</div><div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 360 }}><tbody>{filas.map((f) => <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}</td><td className="tot" style={f.strong ? { fontWeight: 800 } : undefined}>{fmt(f.g(v))}</td></tr>)}</tbody></table></div></div> }
   return (
     <>
       <div className="panel">
@@ -4373,8 +4388,8 @@ function HoldingScreen({ empresas, sbusFor }) {
           <button className={'seg' + (detEmp === '__ALL__' ? ' active' : '')} onClick={() => setDetEmp('__ALL__')} style={detEmp === '__ALL__' ? { background: '#1f2d3d', borderColor: '#1f2d3d', color: '#fff' } : {}}>▣ TODOS</button>
         </div>
         {detEmp === '__ALL__'
-          ? empsOrden.map((e) => <div key={e} style={{ marginBottom: 18 }}><div style={{ fontWeight: 800, fontSize: 15, color: '#7c3aed', margin: '4px 0 8px' }}>🏢 {e}</div><GerenciaScreen key={e} empresa={e} sbus={sbusFor(e)} /></div>)
-          : detEmp && <GerenciaScreen key={detEmp} empresa={detEmp} sbus={sbusFor(detEmp)} />}
+          ? empsOrden.map((e) => <div key={e} style={{ marginBottom: 18 }}><div style={{ fontWeight: 800, fontSize: 15, color: '#7c3aed', margin: '4px 0 8px' }}>🏢 {e}</div>{e === 'SINERGY' ? sinPanel(e) : <GerenciaScreen key={e} empresa={e} sbus={sbusFor(e)} />}</div>)
+          : detEmp && (detEmp === 'SINERGY' ? sinPanel(detEmp) : <GerenciaScreen key={detEmp} empresa={detEmp} sbus={sbusFor(detEmp)} />)}
       </div>
     </>
   )
@@ -5671,7 +5686,7 @@ function HistoricoScreen() {
 /* ===== DIRECTOR · Categorías por marca (peso %) ===== */
 function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const marcas = marcasDe(sbus)
-  const [marca, setMarca] = useState(fixedMarca || marcas[0].marca)
+  const [marca, setMarca] = useState(fixedMarca || (marcas[0] && marcas[0].marca) || '')
   useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
   const [cats, setCats] = useState({})
   const [saving, setSaving] = useState(false)
@@ -5768,7 +5783,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
 /* ===== VENTAS · Proyección de unidades 2028 (histórico 2026 + % crecimiento) ===== */
 function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const marcas = marcasDe(sbus)
-  const [marca, setMarca] = useState(fixedMarca || marcas[0].marca)
+  const [marca, setMarca] = useState(fixedMarca || (marcas[0] && marcas[0].marca) || '')
   useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
   const [hist, setHist] = useState([])
   const [cats, setCats] = useState({})
