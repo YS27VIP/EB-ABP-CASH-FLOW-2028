@@ -513,6 +513,24 @@ export async function gLoadEstado(empresa) {
   for (let r = 1; r < v.length; r++) { const row = v[r]; if (up(row[0]) !== up(empresa)) continue; const clave = String(row[1] || ''); if (clave) map[clave] = String(row[2] == null ? '' : row[2]) }
   return { ok: true, map }
 }
+/* Espejo para Energy Brands / TUMAR: lo que TAHO planea comprarles (de las compras por proveedor que captura TAHO en Producto). */
+export async function gTahoCompras() {
+  const est = await gLoadEstado('TAHO')
+  let temp = {}; try { temp = JSON.parse((est.map || {})['temp'] || '{}') } catch { }
+  let prod = []; try { prod = await readValues('Cap_Producto') } catch { }
+  const pnum = (v) => { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n }
+  const auc = {} // MARCA -> [12] AUC de TAHO
+  for (let r = 1; r < prod.length; r++) { const row = prod[r]; if (!row) continue; if (up(row[0]) !== 'TAHO' || up(row[1]) !== 'AUC') continue; const mar = up(row[3]); auc[mar] = Array.from({ length: 12 }, (_, m) => pnum(row[4 + m])) }
+  const out = { EB: { unid: _tmZ(), usd: _tmZ(), marcas: {} }, TU: { unid: _tmZ(), usd: _tmZ(), marcas: {} } }
+  const add = (prov, marca, m, u) => { const o = out[prov]; if (!o) return; const a = (auc[up(marca)] || [])[m] || 0; o.unid[m] += u; o.usd[m] += u * a; const mm = o.marcas[marca] || (o.marcas[marca] = { unid: _tmZ(), usd: _tmZ() }); mm.unid[m] += u; mm.usd[m] += u * a }
+  Object.keys(temp).forEach((k) => {
+    let mt = k.match(/^CPP\|([^|]+)\|(EB|TU)\|(SS28|FW28|SS29)\|(\d+)$/)
+    if (mt) { add(mt[2], mt[1], +mt[4], pnum(temp[k])); return }
+    mt = k.match(/^CP2027P\|([^|]+)\|(EB|TU)\|([ND])$/) // compras de fin de 2027 → llegan en enero
+    if (mt) add(mt[2], mt[1], 0, pnum(temp[k]))
+  })
+  return { ok: true, ...out }
+}
 export async function gSaveEstado(empresa, clave, valor) {
   await ensureTab('Cap_Estado', ['EMPRESA', 'CLAVE', 'VALOR'])
   const valStr = typeof valor === 'string' ? valor : JSON.stringify(valor)

@@ -47,7 +47,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal, gTumarClientes, gTumarGastos } from './google'
+import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal, gTumarClientes, gTumarGastos, gTahoCompras } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -2088,6 +2088,33 @@ function ReporteScreen({ empresa, sbus }) {
   )
 }
 
+/* ===== ESPEJO: lo que TAHO planea comprarle a Energy Brands / TUMAR (solo lectura) ===== */
+function TahoEspejo({ empresa }) {
+  const prov = empresa === 'ENERGY BRANDS' ? 'EB' : empresa === 'TUMAR' ? 'TU' : null
+  const [d, setD] = useState(null)
+  useEffect(() => { if (!prov) return; (async () => { try { const r = await gTahoCompras(); setD((r && r[prov]) || null) } catch { } })() }, [empresa])
+  if (!prov) return null
+  const totU = d ? d.unid.reduce((a, b) => a + b, 0) : 0, totUsd = d ? d.usd.reduce((a, b) => a + b, 0) : 0
+  const marcas = d ? Object.keys(d.marcas).filter((m) => d.marcas[m].unid.some((x) => x > 0)) : []
+  return (
+    <div className="panel">
+      <h3>🪞 Compras TAHO — espejo{M$} <span className="unit">(lo que TAHO planea comprarle a {empresa} · solo lectura)</span></h3>
+      {(!d || totU === 0)
+        ? <div className="sub">TAHO aún no ha cargado compras para {empresa}. Cuando las cargue en su Producto, aquí aparecerán como espejo (no afecta tus totales).</div>
+        : <>
+          <div className="sub">Unidades y valor (× AUC de TAHO) que <b>TAHO planea comprarle a {empresa}</b> en 2028. Es un <b>espejo informativo</b>: no cambia tus totales.</div>
+          <div className="tablewrap"><table className="vfix logcost-tbl"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '96px' }} /></colgroup>
+            <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+            <tbody>
+              <tr className="grandrow"><td className="l">TOTAL (unidades)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(d.unid[mi])}</td>)}<td className="tot">{fmt(totU)} ud<div className="unit">${fmt(totUsd)}</div></td></tr>
+              {marcas.map((m) => { const mm = d.marcas[m]; return <tr key={m}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mm.unid[mi])}</td>)}<td className="tot">{fmt(mm.unid.reduce((a, b) => a + b, 0))} ud<div className="unit">${fmt(mm.usd.reduce((a, b) => a + b, 0))}</div></td></tr> })}
+            </tbody>
+          </table></div>
+        </>}
+    </div>
+  )
+}
+
 /* ===== LOGÍSTICA (menú): detalle consolidado por SBU y marca + referencia ABP y real 2026 del EBP ===== */
 /* ===== TUMAR · Logística: por MARCA, 3 líneas editables (en amarillo) + total; el gran total impacta Cash Flow y P&L ===== */
 const TUMAR_LOG_LINES = [
@@ -2185,6 +2212,7 @@ function TumarLogistica({ empresa, sbus }) {
           <tr style={{ background: '#fffdf2' }}><td className="l" style={{ fontWeight: 700, color: '#8a6d1a' }}>Real {lbl26}</td><td className="tot">{log26 ? fmt(log26) : '—'}</td><td className="tot">{vn26 ? fmt(vn26) : '—'}</td><td className="tot" style={{ color: '#8a6d1a', fontWeight: 700 }}>{peso(log26, vn26)}</td></tr>
         </tbody>
       </table></div>
+      <div style={{ marginTop: 18 }}><TahoEspejo empresa={empresa} /></div>
     </div>
   )
 }
@@ -2398,6 +2426,7 @@ function LogisticaHome({ empresa, sbus }) {
           </table>
         </div>
       </div>
+      <TahoEspejo empresa={empresa} />
     </>
   )
 }
@@ -4126,6 +4155,8 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
         </div>
         {cfSbu && <CashFlowForm key={'gcf' + cfSbu} role={{ label: 'Cash Flow', tab: 'Cap_Finanzas' }} rubro={{ k: 'CASH FLOW', cash: true }} usuario="" empresa={empresa} sbus={cfSbu === '__ALL__' ? sbus : { [cfSbu]: sbus[cfSbu] || [] }} fixedMarca={`TOTAL::${cfSbu}`} />}
       </div>}
+
+      {!soloSBU && !cargando && <TahoEspejo empresa={empresa} />}
 
       {!soloSBU && !cargando && empresa !== 'TUMAR' && <div className="panel" style={{ marginTop: 10 }}>
         <h3>🧳 Viajes de Gerencia — {empresa} <span className="unit">(nivel empresa · impactan el Cash Flow ▣ TODAS)</span></h3>
