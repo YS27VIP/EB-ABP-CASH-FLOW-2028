@@ -1283,6 +1283,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const sbuLbl = sbu === '__ALL__' ? 'TODAS' : sbu
   const sbuMarcas = sbu === '__ALL__' ? Object.values(sbus).flat() : (sbus[sbu] || [])
   const soloVer = !!(role && role.id === 'director') // el Director solo ve (lo llena Finanzas)
+  const finEdit = !!(role && role.id === 'finanzas') // los campos de Finanzas (Otros ing/gastos, Cash Inicial, Costos Financieros) solo se editan en Finanzas; en SBU/Gerencia son espejo
   const esDirector = !!(role && role.id === 'director') // excepción: el plazo de los clientes NUEVOS lo define el Director (amarillo); Finanzas lo ve como espejo
   const cfVer = useDataVersion() // al guardar en cualquier área, el Cash Flow se recarga
 
@@ -1509,7 +1510,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         {(!soloVer || esDirector) && <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : (esDirector ? '💾 Guardar plazos' : '💾 Guardar')}</button>}
       </div>
       <div className="panel">
-        <h3>{role.label} — CASH FLOW{M$} <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer && ESP('Espejo (solo lectura): estos valores los llena Finanzas en su Cash Flow. Aquí solo se ven.')}</h3>
+        <h3>{role.label} — CASH FLOW{M$} <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer ? ESP('Espejo (solo lectura): estos valores los llena Finanzas en su Cash Flow. Aquí solo se ven.') : !finEdit && ESP('Otros ingresos/gastos, Cash Inicial y Costos Financieros son espejo (los llena Finanzas en su Cash Flow).')}</h3>
         <div className="sub">Proyección 2028 (enero a diciembre). <b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span> − <span style={{ color: '#b91c1c' }}>Costos financieros</span> + <span style={{ color: '#15803d' }}>Otros ingresos</span> − <span style={{ color: '#b91c1c' }}>Otros gastos</span></b>.</div>
         {HOVERTIP}
         <div className="tablewrap">
@@ -1537,12 +1538,12 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       // Otros ingresos / Otros gastos: los llena Finanzas, nivel empresa, editable solo en la vista TOTAL.
                       if (esOtroIng || esOtroGas) {
                         const dk = esOtroIng ? `OTROS|ing|${mi}` : `OTROS|gas|${mi}`
-                        if (!soloVer) return <td key={mi} className={'cell ' + cls}><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td>
+                        if (finEdit) return <td key={mi} className={'cell ' + cls}><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td>
                         const v = cell(it, mi); return <td key={mi} className={'tot ' + cls} style={{ color: colFila }}>{Math.abs(v) > 0.5 ? signo : ''}{fmt(v)}</td>
                       }
                       // Cash Inicial: enero-28 es la SEMILLA = saldo en banco al cierre de dic-27 (editable); el resto = Cash Final del mes anterior (calc)
                       if (it === CASH_INI) {
-                        if (mi === 0 && !isTotal && !soloVer) { const k = key(marca, CASH_INI, 0); return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" title="Saldo en banco al cierre de 2027 (arranque de enero-28)" /></td> }
+                        if (mi === 0 && !isTotal && finEdit) { const k = key(marca, CASH_INI, 0); return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" title="Saldo en banco al cierre de 2027 (arranque de enero-28)" /></td> }
                         return <td key={mi} className={'tot ' + cls} style={{ cursor: BULB_CURSOR }} title={mi === 0 ? 'Saldo en banco al cierre de 2027 (semilla que pone Finanzas)' : 'Cash Inicial = Cash Final del mes anterior'}>{fmt(cell(it, mi))}</td>
                       }
                       // Cash Final: siempre calculado = Cash Inicial + Cash In − Cash Out − Costos Operativos
@@ -1582,7 +1583,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                             const color = kk === 'perd' ? '#b91c1c' : '#15803d'
                             const sceldas = CF_MESES.map((_, mi) => {
                               const dk = `FINCOST|${kk}|${mi}`
-                              if (!soloVer) return <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td>
+                              if (finEdit) return <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td>
                               return <td key={mi} className="tot yb" style={{ color }}>{fmt(num(data[dk]))}</td>
                             })
                             return <tr key={kk}><td className="l sub2" style={{ color }}>{lbl} <span className="unit">{kk === 'perd' ? '(pago)' : '(ingreso)'}</span></td>{sceldas}<td className="tot" style={{ color }}>{fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`FINCOST|${kk}|${mi}`]), 0))}</td></tr>
@@ -3959,19 +3960,35 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
             <button className={'seg' + (ucvAll ? ' active' : '')} onClick={() => setUcvAll(true)} style={ucvAll ? { background: '#1f2d3d', borderColor: '#1f2d3d', color: '#fff' } : {}}>▣ TODAS</button>
           </div>
           {ucvAll && (() => {
-            const nf = (v) => Math.round(v).toLocaleString('en-US')
-            const vMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
+            const uMes = (mi) => tiendas.reduce((a, t) => a + sellU(t, mi), 0)
             const cMes = (mi) => tiendas.reduce((a, t) => a + storeCostoM(t, mi), 0)
-            const uMes = (mi) => tiendas.reduce((a, t) => a + storeUnitsM(t, mi), 0)
-            const annual = (fn) => MESES.reduce((a, _, mi) => a + fn(mi), 0)
+            const vMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
+            const u26A = (mi) => tiendas.reduce((a, t) => a + u26m(t, mi), 0)
+            const vn26A = (mi) => tiendas.reduce((a, t) => a + vn26m(t, mi), 0)
+            const effMargen = (mi) => { const u = uMes(mi); return u > 0 ? tiendas.reduce((a, t) => a + sellU(t, mi) * margenPct(t, mi), 0) / u : 0 }
+            const effDesc = (mi) => { const u = uMes(mi); return u > 0 ? tiendas.reduce((a, t) => a + sellU(t, mi) * descPct(t, mi), 0) / u : 0 }
+            const sum = (fn) => MESES.reduce((a, _, mi) => a + fn(mi), 0)
+            const calcRow = (lbl, fn, color, bold) => <tr className={bold ? 'grandrow' : undefined}><td className="l sub2" style={{ color, fontWeight: bold ? 800 : undefined }}>{lbl}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color, fontWeight: bold ? 800 : undefined }}>{fmt(fn(mi))}</td>)}<td className="tot" style={{ color, fontWeight: 800 }}>{fmt(sum(fn))}</td></tr>
+            const pctRow = (lbl, fn, color) => <tr><td className="l sub2" style={{ color }}>{lbl}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color }}>{fn(mi) ? fn(mi).toFixed(1) + '%' : '—'}</td>)}<td className="tot">—</td></tr>
+            const pc = (a, b) => b > 0 ? ((a - b) / b * 100) : null
+            const crecRow = (lbl, fn28, fn26, color) => <tr><td className="l sub2" style={{ color }}>{lbl}</td>{MESES.map((_, mi) => { const p = pc(fn28(mi), fn26(mi)); return <td key={mi} className="tot" style={{ color: p == null ? 'var(--muted)' : p >= 0 ? '#15803d' : '#b91c1c' }}>{p == null ? '—' : (p >= 0 ? '+' : '') + p.toFixed(1) + '%'}</td> })}{(() => { const p = pc(sum(fn28), sum(fn26)); return <td className="tot" style={{ color: p == null ? 'var(--muted)' : p >= 0 ? '#15803d' : '#b91c1c' }}>{p == null ? '—' : (p >= 0 ? '+' : '') + p.toFixed(1) + '%'}</td> })()}</tr>
             return <div className="tablewrap" style={{ overflowX: 'auto' }}>
               <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '92px' }} /></colgroup>
                 <thead><tr><th className="l">▣ TODAS las tiendas</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
                 <tbody>
-                  <tr><td className="l sub2" style={{ color: '#1d4ed8', fontWeight: 700 }}>Unidades</td>{MESES.map((_, mi) => <td key={mi} className="tot">{nf(uMes(mi))}</td>)}<td className="tot" style={{ fontWeight: 800 }}>{nf(annual(uMes))}</td></tr>
-                  <tr><td className="l sub2" style={{ color: '#b91c1c' }}>Costo ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#b91c1c' }}>{nf(cMes(mi))}</td>)}<td className="tot" style={{ color: '#b91c1c', fontWeight: 800 }}>{nf(annual(cMes))}</td></tr>
-                  <tr className="grandrow"><td className="l" style={{ color: '#15803d' }}>Venta neta ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#15803d', fontWeight: 800 }}>{nf(vMes(mi))}</td>)}<td className="tot" style={{ color: '#15803d', fontWeight: 800 }}>{nf(annual(vMes))}</td></tr>
-                  <tr className="grandrow" style={{ background: '#eafaf1' }}><td className="l" style={{ color: '#0f766e', fontWeight: 800 }}>Utilidad bruta ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{nf(vMes(mi) - cMes(mi))}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{nf(annual((mi) => vMes(mi) - cMes(mi)))}</td></tr>
+                  <tr className="secrow"><td colSpan={14}>2028 · suma de todas las tiendas (solo lectura)</td></tr>
+                  {calcRow('① Unidades 2028', (mi) => uMes(mi), '#1d4ed8', true)}
+                  {calcRow('② Costo ($)', cMes, '#b91c1c')}
+                  {pctRow('③ % Descuento (efectivo)', effDesc, '#b45309')}
+                  {pctRow('④ % Margen (efectivo)', effMargen, '#15803d')}
+                  {calcRow('= Venta neta 2028 ($)', vMes, '#15803d', true)}
+                  {calcRow('= Utilidad bruta ($)', (mi) => vMes(mi) - cMes(mi), '#0f766e', true)}
+                  <tr className="secrow"><td colSpan={14}>REFERENCIA 2026 (🪞)</td></tr>
+                  {calcRow('Unidades 2026', u26A, 'var(--muted)')}
+                  {calcRow('Venta neta 2026 ($)', vn26A, 'var(--muted)')}
+                  <tr className="secrow"><td colSpan={14}>CRECIMIENTO 2028 vs 2026</td></tr>
+                  {crecRow('Crec. Unidades %', (mi) => uMes(mi), u26A)}
+                  {crecRow('Crec. Venta neta %', vMes, vn26A)}
                 </tbody>
               </table>
             </div>
@@ -3996,9 +4013,35 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                   <tr className="secrow"><td colSpan={14}>REFERENCIA 2026 (🪞)</td></tr>
                   <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Unidades 2026</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(u26m(t, mi))}</td>)}<td className="tot">{fmt(sum((mi) => u26m(t, mi)))}</td></tr>
                   <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Venta neta 2026 ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(vn26m(t, mi))}</td>)}<td className="tot">{fmt(sum((mi) => vn26m(t, mi)))}</td></tr>
+                  <tr className="secrow"><td colSpan={14}>CRECIMIENTO 2028 vs 2026</td></tr>
+                  {(() => { const pc = (a, b) => b > 0 ? ((a - b) / b * 100) : null; const cell2 = (a, b) => { const p = pc(a, b); return <td className="tot" style={{ color: p == null ? 'var(--muted)' : p >= 0 ? '#15803d' : '#b91c1c' }}>{p == null ? '—' : (p >= 0 ? '+' : '') + p.toFixed(1) + '%'}</td> }; return <>
+                    <tr><td className="l sub2" style={{ color: '#1d4ed8' }}>Crec. Unidades %</td>{MESES.map((_, mi) => <Fragment2 key={mi}>{cell2(sellU(t, mi), u26m(t, mi))}</Fragment2>)}{cell2(sum((mi) => sellU(t, mi)), sum((mi) => u26m(t, mi)))}</tr>
+                    <tr><td className="l sub2" style={{ color: '#15803d' }}>Crec. Venta neta %</td>{MESES.map((_, mi) => <Fragment2 key={mi}>{cell2(venta28(mi), vn26m(t, mi))}</Fragment2>)}{cell2(sum(venta28), sum((mi) => vn26m(t, mi)))}</tr>
+                  </> })()}
                 </tbody>
               </table>
             </div>
+          })()}
+          {/* Resumen por tienda: venta neta, peso y crecimiento vs 2026 */}
+          {(() => {
+            const vnT = (t) => MESES.reduce((a, _, mi) => a + storeVentaM(t, mi), 0)
+            const vn26T = (t) => MESES.reduce((a, _, mi) => a + vn26m(t, mi), 0)
+            const totVN = tiendas.reduce((a, t) => a + vnT(t), 0)
+            const totVN26 = tiendas.reduce((a, t) => a + vn26T(t), 0)
+            const crec = (a, b) => b > 0 ? ((a - b) / b * 100) : null
+            const crecCell = (a, b) => { const p = crec(a, b); return <td className="tot" style={{ color: p == null ? 'var(--muted)' : p >= 0 ? '#15803d' : '#b91c1c' }}>{p == null ? '—' : (p >= 0 ? '+' : '') + p.toFixed(1) + '%'}</td> }
+            return <>
+              <div className="sub" style={{ fontWeight: 700, color: col, margin: '18px 0 6px', borderTop: '1px solid var(--line)', paddingTop: 12 }}>Resumen de venta neta por tienda <span className="unit" style={{ fontWeight: 400 }}>(peso y crecimiento vs 2026)</span></div>
+              <div className="tablewrap" style={{ overflowX: 'auto' }}>
+                <table style={{ width: 'auto', minWidth: 520 }}>
+                  <thead><tr><th className="l">Tienda</th><th>Venta neta 2028 ($)</th><th>Peso %</th><th>Venta neta 2026 ($)</th><th>Crec. vs 2026</th></tr></thead>
+                  <tbody>
+                    {tiendas.map((t) => { const v = vnT(t); return <tr key={t} onClick={() => { setUcvAll(false); setSelT(t) }} style={{ cursor: 'pointer' }}><td className="l">{t}{esTiendaNueva(t) && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 800, color: '#0e7490' }}>NUEVA</span>}</td><td className="tot" style={{ color: '#15803d' }}>{fmt(v)}</td><td className="tot">{totVN > 0 ? (v / totVN * 100).toFixed(1) + '%' : '—'}</td><td className="tot" style={{ color: 'var(--muted)' }}>{fmt(vn26T(t))}</td>{crecCell(v, vn26T(t))}</tr> })}
+                    <tr className="grandrow"><td className="l">TOTAL</td><td className="tot" style={{ color: '#15803d' }}>{fmt(totVN)}</td><td className="tot">100%</td><td className="tot">{fmt(totVN26)}</td>{crecCell(totVN, totVN26)}</tr>
+                  </tbody>
+                </table>
+              </div>
+            </>
           })()}
         </div>
       </>}
