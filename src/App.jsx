@@ -1278,6 +1278,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   })()
   const esNew = (cli) => newSet.has(upper(cli))
   const [mkRows, setMkRows] = useState([]); const [logRows, setLogRows] = useState([]); const [dirRows, setDirRows] = useState([]); const [finRows, setFinRows] = useState([]) // Marketing / Logística / Director / Finanzas (para espejo de Costos Operativos)
+  const cfVer = useDataVersion() // al guardar en cualquier área, el Cash Flow se recarga
   useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } try { setLogcost(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { } try { setGadminData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { setGadminIndData(JSON.parse(localStorage.getItem(`gadmin_ind_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) setGadminCfg(s) } catch { } }, [empresa, cfVer])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
@@ -1286,7 +1287,6 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const soloVer = !!(role && role.id === 'director') // el Director solo ve (lo llena Finanzas)
   const finEdit = !!(role && role.id === 'finanzas') // los campos de Finanzas (Otros ing/gastos, Cash Inicial, Costos Financieros) solo se editan en Finanzas; en SBU/Gerencia son espejo
   const esDirector = !!(role && role.id === 'director') // excepción: el plazo de los clientes NUEVOS lo define el Director (amarillo); Finanzas lo ve como espejo
-  const cfVer = useDataVersion() // al guardar en cualquier área, el Cash Flow se recarga
 
   useEffect(() => {
     (async () => {
