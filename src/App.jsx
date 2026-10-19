@@ -1196,7 +1196,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         <div className="toolbar" style={{ alignItems: 'center', marginBottom: 2 }}>
           <h3 style={{ margin: 0 }}>{capTitle ? capTitle : <>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$}</>} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>solo lectura</span> : <Responsable empresa={empresa} seccion="Finanzas" />}</h3>
           <div className="spacer"></div>
-          {!isTotal && !String(fixedMarca || '').startsWith('(') && <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>}
+          {!isTotal && (!String(fixedMarca || '').startsWith('(') || fixedMarca === '(Retail)') && <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>}
         </div>
         <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : <>Captura por rubro y mes. Los rubros son iguales para todas las marcas. Un rubro que agregues aquí se suma para <b>toda la empresa</b> y lo verán <b>todos los roles</b> que capturan {rubro.k.toLowerCase()}.</>} Total: <b>${fmt(totalGeneral)}</b></div>
         <div className="tablewrap">
@@ -1454,9 +1454,18 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const subTot = (sub) => CF_MESES.reduce((a, _, mi) => a + cellRaw(sub, mi), 0)
   const rowTot = (concepto) => CF_MESES.reduce((a, _, mi) => a + cell(concepto, mi), 0)
 
+  // Resumen mensual del Cash Flow consolidado de la empresa (solo la vista TOTAL ▣ TODAS), para que el Total Holding sume todas las empresas.
+  const esConsolidado = isTotal && sbu === '__ALL__'
+  const cfSummary = () => {
+    const s = { cobros: [], pagos: [], oper: [], fin: [], oIng: [], oGas: [], flujo: [], final: [], ini0: cashCalc.ini[0] || 0 }
+    CF_MESES.forEach((_, mi) => { s.cobros.push(cell(CASHIN, mi) + retailEbMes(mi)); s.pagos.push(cell(CASH_OUT, mi)); s.oper.push(cell(CF_COSTOS_PARENT, mi)); s.fin.push(cell(CF_FIN_PARENT, mi)); s.oIng.push(cell(CF_OTRO_ING, mi)); s.oGas.push(cell(CF_OTRO_GAS, mi)); s.flujo.push(flujoNeto(mi)); s.final.push(cashCalc.fin[mi]) })
+    return s
+  }
+  useEffect(() => { if (!esConsolidado) return; try { localStorage.setItem(`cfsum_${empresa}`, JSON.stringify(cfSummary())) } catch { } })
+
   function guardar() {
     setSaving(true)
-    try { saveEstado(empresa, 'cf', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet (Cash Flow).' }) }
+    try { saveEstado(empresa, 'cf', data); if (esConsolidado) { try { const s = JSON.stringify(cfSummary()); localStorage.setItem(`cfsum_${empresa}`, s); gSaveEstado(empresa, 'cfsum', s) } catch { } } setMsg({ t: 'ok', x: 'Guardado en Google Sheet (Cash Flow).' }) }
     catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) }
     setSaving(false)
   }
@@ -3693,7 +3702,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
         <div className="sub" style={{ marginBottom: 8 }}>Viajes <b>EB</b>: Producto, Director, Marketing y Controler (cada bloque con su captura). Abajo, los viajes <b>SINERGY</b> (Director y Marketing), que alimentan solo el P&L SINERGY.</div>
         {vjRoles.map((r) => (
           <div key={r.id} style={{ marginTop: 14 }}>
-            <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} headerChip={<span style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 13, padding: '6px 12px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 15 }}>{r.icon}</span> Viajes de {r.label} — Retail</span>} />
+            <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} headerChip={<span style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 13, padding: '6px 12px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 15 }}>{r.icon}</span> Viajes de {r.label} EB — Retail</span>} />
           </div>
         ))}
         {/* ---- Viajes SINERGY (manual): Director SINERGY + Marketing SINERGY ---- */}
@@ -4226,6 +4235,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   }, [empresa])
   const sum12 = (a) => (a || []).reduce((x, y) => x + y, 0)
   const T = empresa === 'TUMAR' && tumar ? tumar : null
+  const esT = empresa === 'TUMAR' // TUMAR no usa nada del EBP: sus referencias salen solo de TUMAR Performance
   // FY (histórico) y ABP2027 (PLAN) para un conjunto de marcas
   const fySet = (ms, year, tipo) => { let s = 0; hist.forEach((r) => { if (String(r[1]) !== String(year)) return; if (!ms.some((m) => upper(m) === upper(r[5]))) return; if (String(r[3] || '').toUpperCase().indexOf(tipo) < 0) return; s += num(r[7]) }); return s }
   const abpSet = (ms, campo) => ms.reduce((a, m) => { const o = plan[upper(m)]; return a + (o ? o[campo] || 0 : 0) }, 0)
@@ -4309,11 +4319,11 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   const log26 = T ? sum12(T.lines.logistica) : null
   const filasG = [
     { k: 'Unidades', g: (a) => a.unidades, fy26: T ? sum12(T.totalUnid) : null },
-    { k: 'Venta Neta', g: (a) => a.ventaNeta, strong: true, fy26: v26, fy25: fySet(allM, 2025, 'VENTA'), abp27: abpSet(allM, 'venta') },
-    { k: '(−) Costo', g: (a) => a.costo, fy26: c26, fy25: fySet(allM, 2025, 'COSTO'), abp27: abpSet(allM, 'costo') },
+    { k: 'Venta Neta', g: (a) => a.ventaNeta, strong: true, fy26: v26, fy25: esT ? null : fySet(allM, 2025, 'VENTA'), abp27: esT ? null : abpSet(allM, 'venta') },
+    { k: '(−) Costo', g: (a) => a.costo, fy26: c26, fy25: esT ? null : fySet(allM, 2025, 'COSTO'), abp27: esT ? null : abpSet(allM, 'costo') },
     { k: '(−) Comisiones', g: (a) => a.comisiones, fy26: com26 },
     { k: '(−) Logística', g: (a) => a.logistica, fy26: log26 },
-    { k: '= Margen Bruto', g: (a) => a.margenBruto, strong: true, fy26: T ? (v26 - c26 - (com26 || 0) - (log26 || 0)) : (fySet(allM, 2026, 'VENTA') - fySet(allM, 2026, 'COSTO')), fy25: fySet(allM, 2025, 'VENTA') - fySet(allM, 2025, 'COSTO'), abp27: abpSet(allM, 'venta') - abpSet(allM, 'costo') },
+    { k: '= Margen Bruto', g: (a) => a.margenBruto, strong: true, fy26: T ? (v26 - c26 - (com26 || 0) - (log26 || 0)) : (fySet(allM, 2026, 'VENTA') - fySet(allM, 2026, 'COSTO')), fy25: esT ? null : (fySet(allM, 2025, 'VENTA') - fySet(allM, 2025, 'COSTO')), abp27: esT ? null : (abpSet(allM, 'venta') - abpSet(allM, 'costo')) },
     { k: '(−) Marketing', g: (a) => a.marketing, fy26: T ? sum12(T.lines.marketing) : null },
     { k: '(−) Viajes', g: (a) => a.viajes, fy26: T ? sum12(T.lines.viajes) : null },
     { k: '= Contribución de la SBU', g: (a) => a.brand, strong: true },
@@ -4333,7 +4343,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       </div>}
       {!soloSBU && !cargando && (espejo || gtab === 'pl') && <div className="panel">
         <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
-        <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno.</div>
+        {!espejo && <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno.</div>}
         {HOVERTIP}
         <div className="toolbar" style={{ marginBottom: 8 }}><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar</>)}</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
@@ -4398,6 +4408,39 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       </div>}
     </>
   )
+}
+
+// Cash Flow consolidado del Total Holding = suma de los resúmenes de cada empresa (cfsum_*) + el bloque SINERGY del Retail.
+function HoldingCashFlow({ empresas }) {
+  const read = (e) => { try { return JSON.parse(localStorage.getItem(`cfsum_${e}`) || 'null') } catch { return null } }
+  const sinFromRetail = () => { try { const d = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null'); const s = d && d.SIN; if (!s) return null; const g = (a, i) => Number((a || [])[i]) || 0; const o = { cobros: [], pagos: [], oper: [], fin: [], oIng: [], oGas: [], flujo: [], ini0: Number(s.ini) || 0 }; for (let i = 0; i < 12; i++) { const cob = g(s.venta, i), pag = g(s.costo, i), op = g(s.logistica, i) + g(s.mk, i) + g(s.vj, i), fn = g(s.fin, i), oi = g(s.oIng, i), og = g(s.oGas, i); o.cobros.push(cob); o.pagos.push(pag); o.oper.push(op); o.fin.push(fn); o.oIng.push(oi); o.oGas.push(og); o.flujo.push(cob - pag - op - fn - og + oi) } return o } catch { return null } }
+  const parts = (empresas || []).map((e) => e === 'SINERGY' ? sinFromRetail() : read(e)).filter(Boolean)
+  if (!parts.length) return <div className="panel" style={{ borderLeftColor: '#7c3aed' }}><h3 style={{ color: '#7c3aed' }}>💵 Cash Flow consolidado — Total Holding</h3><div className="sub">Aún no hay cash flow guardado. Entra a cada empresa → <b>Gerencia → Cash Flow (▣ TODAS)</b> y guarda; aquí se sumarán todas.</div></div>
+  const sumArr = (k) => Array.from({ length: 12 }, (_, i) => parts.reduce((a, p) => a + (Number((p[k] || [])[i]) || 0), 0))
+  const cobros = sumArr('cobros'), pagos = sumArr('pagos'), oper = sumArr('oper'), fin = sumArr('fin'), oIng = sumArr('oIng'), oGas = sumArr('oGas'), flujo = sumArr('flujo')
+  const ini0 = parts.reduce((a, p) => a + (Number(p.ini0) || 0), 0)
+  const ini = [], final = []; let prev = 0; for (let i = 0; i < 12; i++) { ini[i] = i === 0 ? ini0 : prev; final[i] = ini[i] + flujo[i]; prev = final[i] }
+  const S = (a) => a.reduce((x, y) => x + y, 0)
+  const rowCalc = (lbl, arr, color, sign) => <tr><td className="l" style={{ color }}>{lbl}</td>{arr.map((v, i) => <td key={i} className="tot yb" style={{ color }}>{sign && v > 0.5 ? sign + ' ' : ''}{fmt(v)}</td>)}<td className="tot" style={{ color }}>{sign ? sign + ' ' : ''}{fmt(S(arr))}</td></tr>
+  return <div className="panel" style={{ borderLeftColor: '#7c3aed' }}>
+    <h3 style={{ color: '#7c3aed' }}>💵 Cash Flow consolidado — Total Holding <span className="unit">(suma de todas las empresas · solo lectura)</span></h3>
+    <div className="tablewrap" style={{ overflowX: 'auto' }}>
+      <table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '95px' }} /></colgroup>
+        <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m} className="yb">{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+        <tbody>
+          <tr><td className="l" style={{ fontWeight: 700 }}>Cash Inicial</td>{ini.map((v, i) => <td key={i} className="tot yb">{fmt(v)}</td>)}<td className="tot">—</td></tr>
+          {rowCalc('Cash In (Cobros)', cobros, '#15803d', '+')}
+          {rowCalc('Cash Out (Pagos)', pagos, '#b91c1c', '−')}
+          {rowCalc('Costos Operativos', oper, '#b91c1c', '−')}
+          {rowCalc('Costos Financieros', fin, '#b91c1c', '−')}
+          {rowCalc('Otros ingresos', oIng, '#15803d', '+')}
+          {rowCalc('Otros gastos', oGas, '#b91c1c', '−')}
+          <tr className="grandrow"><td className="l">= Flujo neto del mes</td>{flujo.map((v, i) => { const s = v > 0.5 ? '+ ' : v < -0.5 ? '− ' : ''; return <td key={i} className="tot yb" style={{ color: v < -0.5 ? '#b91c1c' : v > 0.5 ? '#15803d' : undefined }}>{s}{fmt(Math.abs(v))}</td> })}<td className="tot">{fmt(S(flujo))}</td></tr>
+          <tr><td className="l" style={{ fontWeight: 700 }}>Cash Final</td>{final.map((v, i) => <td key={i} className="tot yb" style={{ fontWeight: 700 }}>{fmt(v)}</td>)}<td className="tot">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 }
 
 /* ===== TOTAL HOLDING: consolida las 3 empresas con la misma lógica de Gerencia ===== */
@@ -4480,15 +4523,13 @@ function HoldingScreen({ empresas, sbusFor }) {
           </tbody>
         </table></div>
       </div>
+      <HoldingCashFlow empresas={empsOrden} />
       <div className="panel">
         <div className="toolbar" style={{ marginBottom: 8 }}>
           <span style={{ fontWeight: 800, fontSize: 15 }}>🔎 Detalle por empresa</span>
           {empsOrden.map((e) => <button key={e} className={'seg' + (detEmp === e ? ' active' : '')} onClick={() => setDetEmp(e)} style={detEmp === e ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : {}}>{e}</button>)}
-          <button className={'seg' + (detEmp === '__ALL__' ? ' active' : '')} onClick={() => setDetEmp('__ALL__')} style={detEmp === '__ALL__' ? { background: '#1f2d3d', borderColor: '#1f2d3d', color: '#fff' } : {}}>▣ TODOS</button>
         </div>
-        {detEmp === '__ALL__'
-          ? empsOrden.map((e) => <div key={e} style={{ marginBottom: 18 }}><div style={{ fontWeight: 800, fontSize: 15, color: '#7c3aed', margin: '4px 0 8px' }}>🏢 {e}</div>{e === 'SINERGY' ? sinPanel(e) : <GerenciaScreen key={e} empresa={e} sbus={sbusFor(e)} espejo />}</div>)
-          : detEmp && (detEmp === 'SINERGY' ? sinPanel(detEmp) : <GerenciaScreen key={detEmp} empresa={detEmp} sbus={sbusFor(detEmp)} espejo />)}
+        {detEmp && (detEmp === 'SINERGY' ? sinPanel(detEmp) : <GerenciaScreen key={detEmp} empresa={detEmp} sbus={sbusFor(detEmp)} espejo />)}
       </div>
     </>
   )
