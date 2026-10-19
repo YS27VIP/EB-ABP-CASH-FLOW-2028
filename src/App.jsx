@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'vendedores', 'vendcli']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'vendedores', 'vendcli']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -255,6 +255,15 @@ const RETAIL_TIENDAS = ['Birkenstock Andino', 'Hoka Andino', 'MUH Atlantis', 'MU
 // Tiendas que pertenecen al bucket SINERGY (su P&L va a la columna SINERGY del Holding, NO a Energy Brands). El resto es P&L Retail EB.
 const SINERGY_TIENDAS = new Set(['SINERGY'])
 const esTiendaSinergy = (t) => SINERGY_TIENDAS.has(String(t || '').trim())
+// Lee el resumen del P&L Retail (guardado bajo Energy Brands) y devuelve totales anuales por bloque EB y SINERGY.
+function retailPLTotales() {
+  try {
+    const d = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null'); if (!d) return null
+    const sum = (a) => (a || []).reduce((x, y) => x + (Number(y) || 0), 0)
+    const blk = (b) => { if (!b) return null; const venta = sum(b.venta), costo = sum(b.costo), gastos = sum(b.gastos), mk = sum(b.mk), vj = sum(b.vj); const margenBruto = venta - costo; return { ventaNeta: venta, costo, gastos, marketing: mk, viajes: vj, margenBruto, brand: margenBruto - mk - vj } }
+    return { EB: blk(d.EB), SIN: blk(d.SIN) }
+  } catch { return null }
+}
 const sTag = (s, buy) => buy ? '(compra 2028)' : (s === 'ANT' ? '(saldo viejo agrupado)' : '(saldo anterior)')
 
 /* ===== helpers ===== */
@@ -3366,7 +3375,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const rowTotM = (m) => MESES.reduce((a, _, mi) => a + num(imp[ik(m, mi)]), 0)
   const colTotM = (mi) => RETAIL_MARCAS.reduce((a, m) => a + num(imp[ik(m, mi)]), 0)
   const granTot = RETAIL_MARCAS.reduce((a, m) => a + rowTotM(m), 0)
-  const guardarImp = () => guardarKeys([['retail_imp', imp]], 'Importaciones guardadas en el Sheet ✓')
+  const guardarImp = () => guardarKeys([['retail_imp', imp], ['retail_pl', plSummary()]], 'Importaciones guardadas en el Sheet ✓')
   const vjRoles = ['director', 'producto', 'marketing', 'ventas'].map((id) => ROLES.find((r) => r.id === id))
   const mkRubro = (ROLES.find((r) => r.id === 'marketing').rubros || [])[0]
   // ---- Gastos (por rubro y mes, con ref 2027 y agregar rubro) ----
@@ -3379,7 +3388,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const gRow = (n) => MESES.reduce((a, _, mi) => a + num(gastos[gk(n, mi)]), 0)
   const gCol = (mi) => gRubros.reduce((a, r) => a + num(gastos[gk(r.n, mi)]), 0)
   const gGran = gRubros.reduce((a, r) => a + gRow(r.n), 0)
-  const guardarGastos = () => guardarKeys([['retail_gastos', gastos], ['retail_gastos_x', gRubrosX]], 'Gastos guardados en el Sheet ✓')
+  const guardarGastos = () => guardarKeys([['retail_gastos', gastos], ['retail_gastos_x', gRubrosX], ['retail_pl', plSummary()]], 'Gastos guardados en el Sheet ✓')
   function addRubroG() { const n = window.prompt('Nombre del nuevo rubro de gasto:'); if (!n) return; const nm = n.trim(); if (!nm || gRubros.some((r) => r.n.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Ese rubro ya existe.' }); return } const next = [...gRubrosX, nm]; setGRubrosX(next); saveEstado(empresa, 'retail_gastos_x', next) }
   function delRubroG(nm) { const next = gRubrosX.filter((x) => x !== nm); setGRubrosX(next); saveEstado(empresa, 'retail_gastos_x', next) }
   // ---- Ventas por tienda: se ESCOGE una tienda y se llena por categoría/subcategoría ----
@@ -3411,7 +3420,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const esTiendaNueva = (t) => !RETAIL_TIENDAS.includes(t)
   const tVenta = (t) => MESES.reduce((a, _, mi) => a + storeVentaM(t, mi), 0)
   const tCosto = (t) => MESES.reduce((a, _, mi) => a + storeCostoM(t, mi), 0)
-  const guardarVentas = () => guardarKeys([['retail_ventas', vt], ['retail_cats', cats], ['retail_tiendas', tiendas], ['retail_map', smap], ['retail_cf', cf]], 'Guardado en el Google Sheet ✓')
+  const guardarVentas = () => guardarKeys([['retail_ventas', vt], ['retail_cats', cats], ['retail_tiendas', tiendas], ['retail_map', smap], ['retail_cf', cf], ['retail_pl', plSummary()]], 'Guardado en el Google Sheet ✓')
   function addTienda() { const n = window.prompt('Nombre de la nueva tienda:'); if (!n) return; const nm = n.trim(); if (!nm || tiendas.some((t) => t.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa tienda ya existe.' }); return } const next = [...tiendas, nm]; setTiendas(next); setSelT(nm); saveEstado(empresa, 'retail_tiendas', next) }
   function delTienda(t) { if (!window.confirm(`¿Quitar la tienda "${t}"?`)) return; const next = tiendas.filter((x) => x !== t); setTiendas(next); if (selT === t) setSelT(next[0] || null); saveEstado(empresa, 'retail_tiendas', next) }
   function addCat(t) { const n = window.prompt('Subcategoría Retail (ej: "CORRER", "SENDERISMO"):'); if (!n) return; const nm = n.trim(); const cur = catsOf(t); if (!nm || cur.some((c) => c.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Esa subcategoría ya existe en la tienda.' }); return } setCats((d) => ({ ...d, [t]: [...cur, nm] })) }
@@ -3476,7 +3485,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   useEffect(() => { try { setSin(JSON.parse(localStorage.getItem(`retail_sin_${empresa}`) || '{}')) } catch { } }, [empresa])
   const sg = (line, mi) => num(sin[`${line}|${mi}`])
   const setSIN = (line, mi, v) => setSin((d) => ({ ...d, [`${line}|${mi}`]: v }))
-  const guardarSin = () => guardarKeys([['retail_sin', sin]], 'Captura SINERGY guardada en el Sheet ✓')
+  const guardarSin = () => guardarKeys([['retail_sin', sin], ['retail_pl', plSummary()]], 'Captura SINERGY guardada en el Sheet ✓')
   const sinVjAnual = MESES.reduce((a, _, mi) => a + sg('VJDIR', mi) + sg('VJMK', mi), 0)
   const sinMkAnual = MESES.reduce((a, _, mi) => a + sg('MK', mi), 0)
   // ---- Cash Flow Retail: mismas líneas que las marcas, Cash Final encadenado ----
@@ -3507,6 +3516,21 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
     prevFin = final
   })
   const cfSum = (k) => cfRows.reduce((a, r) => a + r[k], 0)
+
+  // ---- Resumen del P&L Retail (EB vs SINERGY), arreglos mensuales, para el Holding y el P&L/Cash Flow de Energy Brands ----
+  const plSummary = () => {
+    const z = () => Array(12).fill(0)
+    const EB = { venta: z(), costo: z(), gastos: z(), mk: z(), vj: z() }
+    const SIN = { venta: z(), costo: z(), gastos: z(), mk: z(), vj: z() }
+    MESES.forEach((_, mi) => {
+      tiendas.forEach((t) => { const v = storeVentaM(t, mi), c = storeCostoM(t, mi); const B = esTiendaSinergy(t) ? SIN : EB; B.venta[mi] += v; B.costo[mi] += c })
+      EB.gastos[mi] = gastoMes(mi); EB.mk[mi] = mkMes(mi); EB.vj[mi] = vjMes(mi)
+      SIN.mk[mi] = sg('MK', mi); SIN.vj[mi] = sg('VJDIR', mi) + sg('VJMK', mi)
+    })
+    return { EB, SIN }
+  }
+  // Mantener retail_pl en localStorage al día (lectura inmediata por Holding/EB en esta sesión).
+  useEffect(() => { try { localStorage.setItem(`retail_pl_${empresa}`, JSON.stringify(plSummary())) } catch { } })
 
   return (
     <div>
@@ -4162,7 +4186,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   // Consolidado P&L con las SBU lado a lado (Contribución de la SBU → Gastos Admin → Resultado Operativo)
   const sbuList = Object.entries(sbus).filter(([s]) => !soloSBU || s === soloSBU).map(([s, ms]) => ({ s, a: sbuAgg(ms) }))
   // Energy Brands: Retail es una 4ª unidad (tiendas propias · venta intercompañía). Aún sin datos (pendiente), va en cero.
-  if (!soloSBU && empresa === 'ENERGY BRANDS') sbuList.push({ s: 'Retail', a: { unidades: 0, ventaNeta: 0, costo: 0, comisiones: 0, logistica: 0, marketing: 0, viajes: 0, margenBruto: 0, brand: 0 }, pend: true })
+  if (!soloSBU && empresa === 'ENERGY BRANDS') { const _rp = retailPLTotales(); const _e = _rp && _rp.EB; sbuList.push({ s: 'Retail', a: _e ? { unidades: 0, ventaNeta: _e.ventaNeta, costo: _e.costo, comisiones: 0, logistica: 0, marketing: _e.marketing, viajes: _e.viajes, margenBruto: _e.margenBruto, brand: _e.brand - _e.gastos } : { unidades: 0, ventaNeta: 0, costo: 0, comisiones: 0, logistica: 0, marketing: 0, viajes: 0, margenBruto: 0, brand: 0 }, pend: !_e }) }
   const totAgg = sbuList.reduce((acc, { a }) => { Object.keys(a).forEach((k) => acc[k] = (acc[k] || 0) + a[k]); return acc }, {})
   const multiSBU = sbuList.length > 1 // con una sola SBU, la columna TOTAL duplicaría a la SBU → se omite
   const ventaTot = totAgg.ventaNeta || 0
@@ -4277,6 +4301,12 @@ function HoldingScreen({ empresas, sbusFor }) {
   }, [])
   if (!data) return <div className="panel"><div className="banner">⏳ Consolidando las {empresas.length} empresas del holding…</div></div>
   const calcEmp = (emp) => {
+    // SINERGY: su P&L sale del bloque SINERGY del Retail (tienda SINERGY + capturas), no de marcas propias.
+    if (upper(emp) === 'SINERGY') {
+      const pl = retailPLTotales(); const s = pl && pl.SIN
+      if (s) return { unidades: 0, ventaNeta: s.ventaNeta, costo: s.costo, comisiones: 0, logistica: 0, marketing: s.marketing, viajes: s.viajes, margenBruto: s.margenBruto, brand: s.brand, gadmin: 0, resultado: s.brand }
+      return { unidades: 0, ventaNeta: 0, costo: 0, comisiones: 0, logistica: 0, marketing: 0, viajes: 0, margenBruto: 0, brand: 0, gadmin: 0, resultado: 0 }
+    }
     const { ventas, producto, capCat, mk, log, dir } = data
     const cats = {}; capCat.forEach((row) => { if (!catRowOk(row, emp)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
     const esVi = (rub) => rub.toUpperCase().startsWith('VIAJES')
@@ -4295,6 +4325,11 @@ function HoldingScreen({ empresas, sbusFor }) {
     const tot = allM.reduce((a, m) => { const c = fullCalc(m); Object.keys(c).forEach((k) => a[k] = (a[k] || 0) + c[k]); return a }, {})
     let gadmin = 0
     gadmin = gadminAnualOf(emp)
+    // Energy Brands: suma el P&L Retail EB (venta/costo/mkt/viajes a sus líneas; los gastos de tienda van a gastos administrativos).
+    if (upper(emp) === 'ENERGY BRANDS') {
+      const pl = retailPLTotales(); const e = pl && pl.EB
+      if (e) { tot.ventaNeta = (tot.ventaNeta || 0) + e.ventaNeta; tot.costo = (tot.costo || 0) + e.costo; tot.marketing = (tot.marketing || 0) + e.marketing; tot.viajes = (tot.viajes || 0) + e.viajes; tot.margenBruto = (tot.margenBruto || 0) + e.margenBruto; tot.brand = (tot.brand || 0) + e.brand; gadmin += e.gastos }
+    }
     return { ...tot, gadmin, resultado: (tot.brand || 0) - gadmin }
   }
   const empsOrden = [...empresas].sort((a, b) => {
