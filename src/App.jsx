@@ -96,6 +96,14 @@ const _EB_BRANDS = new Set(Object.values(DEFAULT_SBUS).flat().map((m) => m.toUpp
 const TAHO_SBU4 = TUMAR_MARCAS.filter((m) => !_EB_BRANDS.has(m.toUpperCase())) // OSPREY, FJALLRAVEN, HYDRO FLASK, VEJA
 const TAHO_SBUS = { ...DEFAULT_SBUS, 'SBU 4': TAHO_SBU4 }
 const sbuNamesFor = (empresa) => empresa === 'TAHO' ? ['SBU 1', 'SBU 2', 'SBU 3', 'SBU 4'] : SBU_NAMES
+// TAHO hereda las CATEGORÍAS de Energy Brands (sus marcas) y de TUMAR (las marcas de SBU 4). Para las demás empresas, usa las propias.
+function catRowOk(row, empresa) {
+  const e = String(empresa || '').toUpperCase()
+  if (e !== 'TAHO') return String(row[0] || '').toUpperCase() === e
+  const mar = String(row[3] || '').toUpperCase()
+  const isSbu4 = TAHO_SBU4.some((m) => m.toUpperCase() === mar)
+  return String(row[0] || '').toUpperCase() === (isSbu4 ? 'TUMAR' : 'ENERGY BRANDS')
+}
 // Clientes semilla por empresa (TUMAR, del Excel de facturación · sin país).
 const SEED_CLIENTES = { 'TUMAR': ['LA LOMITA OUTDOORS SRL', 'HERNANDEZ ISMAEL MARIA', 'RIVAROLA MARIA ESTELA', 'MARTHA HEADWEAR SA S. A.', 'WILBERGER NOELIA MARILINA', 'GIGENA JUAN MANUEL', 'UNIAVENTURA S.A.', 'FOURCANS MARTIN OSCAR', 'MORIS CESAR OSVALDO', 'SCALZO OSVALDO NESTOR', 'ANGLER S AVENTURAS SOCIEDAD DE RESPONSABILIDAD LIMITADA', 'CRISTOBAL COLON S. R. L.', 'GROUP MOBILE S.A.', 'EL VIAJERO CAMPING S.R.L.', 'RANCHOCAVALIER S.R.L.', 'BASSI JUAN PABLO', 'PARALELO 42 S. CAP I SECC IV', 'PLACE IT S.A'] }
 /* Empresas del grupo (el nombre debe coincidir con la columna EMPRESA del Histórico). */
@@ -920,7 +928,7 @@ function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, sa
 
   useEffect(() => {
     (async () => {
-      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
+      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (!catRowOk(row, empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
       try { const j2 = await gReadTab(role.tab); if (j2 && j2.ok && j2.values) { const next = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const rub = String(row[1] || ''); if (rub.indexOf(PFX) !== 0) return; const cat = rub.slice(PFX.length), mar = row[3]; for (let mi = 0; mi < 12; mi++) { const v = num(row[4 + mi]); if (v) next[key(mar, cat, mi)] = v } }); if (Object.keys(next).length) setData((d) => { const m = { ...d }; Object.keys(next).forEach((k) => { if (m[k] === undefined || m[k] === '') m[k] = next[k] }); return m }) } } catch { }
     })()
   }, [empresa])
@@ -989,7 +997,8 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   // TUMAR no usa el detalle de viajes de Energy Brands: una sola línea "VIAJES".
-  const groupsEff = (empresa === 'TUMAR' && rubro.k === 'VIAJES') ? [{ g: 'VIAJES', items: [{ c: '201', n: 'VIAJES' }] }] : groups
+  const groupsEff = (empresa === 'TUMAR' && rubro.k === 'VIAJES') ? [{ g: 'VIAJES', items: [{ c: '201', n: 'VIAJES' }] }]
+    : (empresa === 'TAHO' && rubro.k === 'MARKETING') ? [{ g: 'MARKETING', items: [{ c: '301', n: 'MARKETING' }] }] : groups
   const multi = groupsEff.length > 1
 
   const extraItems = extras.map((e) => ({ c: '', n: e }))
@@ -1215,7 +1224,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Ventas'); if (j2 && j2.ok && j2.values) setVentas(j2.values.slice(1)) } catch { }
       try { const j3 = await gReadTab('Cap_Producto'); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
-      try { const j4 = await gReadTab('Cap_Categorias'); if (j4 && j4.ok && j4.values) { const out = {}; j4.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
+      try { const j4 = await gReadTab('Cap_Categorias'); if (j4 && j4.ok && j4.values) { const out = {}; j4.values.slice(1).forEach((row) => { if (!catRowOk(row, empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
       try { const j5 = await gReadTab('Cap_Marketing'); if (j5 && j5.ok && j5.values) setMkRows(j5.values.slice(1)) } catch { }
       try { const j6 = await gReadTab('Cap_Logistica'); if (j6 && j6.ok && j6.values) setLogRows(j6.values.slice(1)) } catch { }
       try { const j7 = await gReadTab('Cap_Director'); if (j7 && j7.ok && j7.values) setDirRows(j7.values.slice(1)) } catch { }
@@ -2155,7 +2164,7 @@ function TumarLogistica({ empresa, sbus }) {
     (async () => {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j = await gReadTab('Cap_Producto'); if (j && j.ok && j.values) setProducto(j.values.slice(1)) } catch { }
-      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const o = {}; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const c = r[1], mar = r[3]; if (!mar || !c) return; (o[mar] = o[mar] || []).push(c) }); setCats(o) } } catch { }
+      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const o = {}; j.values.slice(1).forEach((r) => { if (!catRowOk(r, empresa)) return; const c = r[1], mar = r[3]; if (!mar || !c) return; (o[mar] = o[mar] || []).push(c) }); setCats(o) } } catch { }
       if (empresa === 'TUMAR') { try { setTumar(await gTumarReal()) } catch { } }
     })()
   }, [empresa])
@@ -2241,7 +2250,7 @@ function TumarLogMarca({ empresa, marca }) {
     (async () => {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j = await gReadTab('Cap_Producto'); if (j && j.ok && j.values) setProducto(j.values.slice(1)) } catch { }
-      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const o = {}; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const c = r[1], mar = r[3]; if (!mar || !c) return; (o[mar] = o[mar] || []).push(c) }); setCats(o) } } catch { }
+      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const o = {}; j.values.slice(1).forEach((r) => { if (!catRowOk(r, empresa)) return; const c = r[1], mar = r[3]; if (!mar || !c) return; (o[mar] = o[mar] || []).push(c) }); setCats(o) } } catch { }
       if (empresa === 'TUMAR') { try { setTumar(await gTumarReal()) } catch { } }
     })()
   }, [empresa, marca])
@@ -2301,7 +2310,7 @@ function LogisticaHome({ empresa, sbus }) {
     (async () => {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j = await gReadTab('Cap_Producto'); if (j && j.ok && j.values) setProducto(j.values.slice(1)) } catch { }
-      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const o = {}; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; const c = r[1], mar = r[3]; if (!mar || !c) return; (o[mar] = o[mar] || []).push(c) }); setCats(o) } } catch { }
+      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const o = {}; j.values.slice(1).forEach((r) => { if (!catRowOk(r, empresa)) return; const c = r[1], mar = r[3]; if (!mar || !c) return; (o[mar] = o[mar] || []).push(c) }); setCats(o) } } catch { }
       try { const jr = await gLoadLogRef(); if (jr && jr.ok) setLogRef(jr.val) } catch { }
       try { const j26 = await gLogRef2026(); if (j26 && j26.ok) setReal26(j26.val) } catch { }
       try { const j25 = await gLogExpRef(); if (j25) setLog25(j25) } catch { }
@@ -2471,7 +2480,7 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
     ;(async () => {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
-      try { const j3 = await gReadTab('Cap_Categorias'); if (j3 && j3.ok && j3.values) { const o = []; j3.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) o.push(r[1]) }); setCatList(o) } } catch { }
+      try { const j3 = await gReadTab('Cap_Categorias'); if (j3 && j3.ok && j3.values) { const o = []; j3.values.slice(1).forEach((r) => { if (!catRowOk(r, empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) o.push(r[1]) }); setCatList(o) } } catch { }
       try { const jr = await gLoadLogRef(); if (jr && jr.ok) setLogRef(jr.val) } catch { }
       try { const j26 = await gLogRef2026(); if (j26 && j26.ok) setReal26(j26.val) } catch { }
     })()
@@ -2596,7 +2605,7 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
   useEffect(() => {
     try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { }
-    ;(async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const cl = []; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl.length ? cl : [{ cat: 'General', peso: 0 }]) } } catch { } })()
+    ;(async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const cl = []; j.values.slice(1).forEach((r) => { if (!catRowOk(r, empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl.length ? cl : [{ cat: 'General', peso: 0 }]) } } catch { } })()
   }, [empresa, marca])
   const k = (tipo, mi) => `${marca}|${tipo}|${mi}`
   const set = (tipo, mi, v) => setData((d) => ({ ...d, [k(tipo, mi)]: v }))
@@ -2661,7 +2670,7 @@ function ComisionesForm({ empresa, fixedMarca, sbus }) {
     ;(async () => {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
-      try { const j3 = await gReadTab('Cap_Categorias'); if (j3 && j3.ok && j3.values) { const o = []; j3.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) o.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(o) } } catch { }
+      try { const j3 = await gReadTab('Cap_Categorias'); if (j3 && j3.ok && j3.values) { const o = []; j3.values.slice(1).forEach((r) => { if (!catRowOk(r, empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) o.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(o) } } catch { }
     })()
   }, [empresa, marca])
   const g = (k) => num(data[k]); const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
@@ -2705,7 +2714,7 @@ function ResumenInventario({ marca, tempState, precios, empresa }) {
   const data = tempState || {}
   const [vista, setVista] = useState('ud') // ud | $ | ambas
   const [catList, setCatList] = useState([]); const [ventas, setVentas] = useState([])
-  useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const cl = []; j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl.length ? cl : [{ cat: 'General', peso: 0 }]) } } catch { } try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVentas(jv.values.slice(1)) } catch { } })() }, [empresa, marca])
+  useEffect(() => { (async () => { try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) { const cl = []; j.values.slice(1).forEach((r) => { if (!catRowOk(r, empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl.length ? cl : [{ cat: 'General', peso: 0 }]) } } catch { } try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVentas(jv.values.slice(1)) } catch { } })() }, [empresa, marca])
   const { flujos } = inventarioCalc(data, marca, ventaMarcaMes(ventas, empresa, marca))
   const rowTot = (arr, key) => arr.reduce((a, x) => a + x[key], 0)
   const seasonAUC = (s) => { let n = 0, d = 0; catList.forEach(({ cat, peso }) => { const a = num((precios || {})[`PAUC|${marca}|${s}|${cat}`]); const w = (num(peso) || 0) + 0.0001; if (a > 0) { n += a * w; d += w } }); return d ? n / d : 0 }
@@ -2789,7 +2798,7 @@ function ComprasXFDStep({ empresa, marca, temp, setTemp, precios }) {
     (async () => {
       try { const j = await gReadTab('Cap_Ventas'); if (j && j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j2 = await gReadTab('Cap_Producto'); if (j2 && j2.ok && j2.values) setProducto(j2.values.slice(1)) } catch { }
-      try { const j3 = await gReadTab('Cap_Categorias'); if (j3 && j3.ok && j3.values) { const cl = []; j3.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl.length ? cl : [{ cat: 'General', peso: 0 }]) } } catch { }
+      try { const j3 = await gReadTab('Cap_Categorias'); if (j3 && j3.ok && j3.values) { const cl = []; j3.values.slice(1).forEach((r) => { if (!catRowOk(r, empresa) || upper(r[3]) !== upper(marca)) return; if (r[1]) cl.push({ cat: r[1], peso: num(r[4]) }) }); setCatList(cl.length ? cl : [{ cat: 'General', peso: 0 }]) } } catch { }
     })()
   }, [empresa, marca])
   const tr = Math.max(0, Math.round(num(temp[`TR|${marca}`])))
@@ -2891,7 +2900,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
     try { setLogcost(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { }
     ;(async () => {
       let cl = []
-      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) j.values.slice(1).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; if (r[1] && !cl.some((x) => x.cat === r[1])) cl.push({ cat: r[1], peso: num(r[4]) }) }) } catch { }
+      try { const j = await gReadTab('Cap_Categorias'); if (j && j.ok && j.values) j.values.slice(1).forEach((r) => { if (!catRowOk(r, empresa) || upper(r[3]) !== upper(marca)) return; if (r[1] && !cl.some((x) => x.cat === r[1])) cl.push({ cat: r[1], peso: num(r[4]) }) }) } catch { }
       setCatList(cl.length ? cl : [{ cat: 'General', peso: 0 }])
       try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVentasRows(jv.values.slice(1)) } catch { }
     })()
@@ -4018,7 +4027,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
       try { const j = await gReadTab('Cap_Ventas'); if (j.ok && j.values) setVentas(j.values.slice(1)) } catch { }
       try { const j = await gReadTab('Cap_Producto'); if (j.ok && j.values) setProducto(j.values.slice(1)) } catch { }
-      try { const j = await gReadTab('Cap_Categorias'); if (j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
+      try { const j = await gReadTab('Cap_Categorias'); if (j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (!catRowOk(row, empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { }
       setMk(await g('Cap_Marketing')); setLog(await g('Cap_Logistica')); setDir(await g('Cap_Director')); setFinR(await g('Cap_Finanzas'))
       try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
       try { const jp = await gPlan2027(); if (jp && jp.map) setPlan(jp.map) } catch { }
@@ -5582,7 +5591,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
     (async () => {
       try {
         const j = await gReadTab('Cap_Categorias')
-        if (j && j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) }
+        if (j && j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (!catRowOk(row, empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) }
       } catch { }
     })()
   }, [empresa])
@@ -5717,7 +5726,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
     setCatsLoaded(false)
     ;(async () => {
       try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { }
-      try { const j2 = await gReadTab('Cap_Categorias'); if (j2 && j2.ok && j2.values) { const out = {}; j2.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { } finally { setCatsLoaded(true) }
+      try { const j2 = await gReadTab('Cap_Categorias'); if (j2 && j2.ok && j2.values) { const out = {}; j2.values.slice(1).forEach((row) => { if (!catRowOk(row, empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) } } catch { } finally { setCatsLoaded(true) }
       try { const j3 = await gReadTab('Cap_Producto'); if (j3 && j3.ok && j3.values) setProducto(j3.values.slice(1)) } catch { }
       // Recupera el plan 2028 guardado en la hoja: rellena SOLO las celdas que estén vacías en el navegador
       // (así lo guardado reaparece tras un refresh y Ventas queda consistente con lo que ve Producto).
