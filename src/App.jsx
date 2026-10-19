@@ -264,6 +264,45 @@ function retailPLTotales() {
     return { EB: blk(d.EB), SIN: blk(d.SIN) }
   } catch { return null }
 }
+// Cash Flow de Retail EB (solo lectura) a partir del resumen retail_pl.EB — para verlo como una "SBU" más en el Cash Flow de Gerencia de Energy Brands.
+function RetailEBCashFlowView({ which = 'EB', title, accent = '#0e7490' } = {}) {
+  let e = null; try { const d = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null'); e = d && d[which] } catch { }
+  const nombre = title || (which === 'SIN' ? 'SINERGY' : 'Retail EB')
+  if (!e) return <div className="panel"><div className="sub">Aún no hay datos de {nombre}. Entra a <b>Retail → Cash Flow</b>, llena y guarda; aquí aparecerá el espejo.</div></div>
+  const g = (a, i) => Number((a || [])[i]) || 0
+  const rows = []; let prev = 0
+  MESES.forEach((_, mi) => {
+    const ini = mi === 0 ? (Number(e.ini) || 0) : prev
+    const cobros = g(e.venta, mi), pagos = g(e.costo, mi)
+    const gasto = g(e.gastos, mi), logi = g(e.logistica, mi), mk = g(e.mk, mi), vj = g(e.vj, mi)
+    const oper = gasto + logi + mk + vj
+    const fin = g(e.fin, mi), oIng = g(e.oIng, mi), oGas = g(e.oGas, mi)
+    const flujo = cobros + oIng - pagos - oper - fin - oGas
+    const final = ini + flujo
+    rows.push({ ini, cobros, pagos, gasto, logi, mk, vj, oper, fin, oIng, oGas, flujo, final }); prev = final
+  })
+  const S = (k) => rows.reduce((a, r) => a + r[k], 0)
+  return <div className="panel" style={{ borderLeftColor: accent }}>
+    <h3 style={{ color: accent }}>Cash Flow — {nombre} <span className="unit">(🪞 espejo del módulo Retail · solo lectura)</span></h3>
+    <div className="sub">Cash Final = Cash Inicial + Cobros + Otros ingresos − Pagos − Costos operativos − Costos financieros − Otros gastos. Se edita en <b>Retail → Cash Flow</b>.</div>
+    <div className="tablewrap" style={{ overflowX: 'auto' }}>
+      <table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '95px' }} /></colgroup>
+        <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m} className="yb">{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+        <tbody>
+          <tr><td className="l" style={{ fontWeight: 700 }}>Cash Inicial</td>{rows.map((r, i) => <td key={i} className="tot yb">{fmt(r.ini)}</td>)}<td className="tot">—</td></tr>
+          <tr><td className="l" style={{ color: '#15803d' }}>Cash In (Cobros)</td>{rows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#15803d' }}>{r.cobros > 0.5 ? '+ ' : ''}{fmt(r.cobros)}</td>)}<td className="tot" style={{ color: '#15803d' }}>+ {fmt(S('cobros'))}</td></tr>
+          <tr><td className="l" style={{ color: '#b91c1c' }}>Cash Out (Pagos)</td>{rows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#b91c1c' }}>{r.pagos > 0.5 ? '− ' : ''}{fmt(r.pagos)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(S('pagos'))}</td></tr>
+          <tr><td className="l" style={{ color: '#b91c1c' }}>Costos Operativos <span className="unit">(gastos + mkt + viajes)</span></td>{rows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#b91c1c' }}>{r.oper > 0.5 ? '− ' : ''}{fmt(r.oper)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(S('oper'))}</td></tr>
+          <tr><td className="l" style={{ color: '#b91c1c' }}>Costos Financieros</td>{rows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#b91c1c' }}>{r.fin > 0.5 ? '− ' : ''}{fmt(r.fin)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(S('fin'))}</td></tr>
+          <tr><td className="l" style={{ color: '#15803d' }}>Otros ingresos</td>{rows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#15803d' }}>{fmt(r.oIng)}</td>)}<td className="tot" style={{ color: '#15803d' }}>+ {fmt(S('oIng'))}</td></tr>
+          <tr><td className="l" style={{ color: '#b91c1c' }}>Otros gastos</td>{rows.map((r, i) => <td key={i} className="tot yb" style={{ color: '#b91c1c' }}>{fmt(r.oGas)}</td>)}<td className="tot" style={{ color: '#b91c1c' }}>− {fmt(S('oGas'))}</td></tr>
+          <tr className="grandrow"><td className="l">= Flujo neto del mes</td>{rows.map((r, i) => { const s = r.flujo > 0.5 ? '+ ' : r.flujo < -0.5 ? '− ' : ''; return <td key={i} className="tot yb" style={{ color: r.flujo < -0.5 ? '#b91c1c' : r.flujo > 0.5 ? '#15803d' : undefined }}>{s}{fmt(Math.abs(r.flujo))}</td> })}<td className="tot">{fmt(S('flujo'))}</td></tr>
+          <tr><td className="l" style={{ fontWeight: 700 }}>Cash Final</td>{rows.map((r, i) => <td key={i} className="tot yb" style={{ fontWeight: 700 }}>{fmt(r.final)}</td>)}<td className="tot">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+}
 // Flujo neto mensual (12) del P&L Retail EB = venta − costo − gastos − marketing − viajes. Para la línea "Retail EB" del Cash Flow de Energy Brands.
 function retailEBNetMensual() {
   try {
@@ -4162,7 +4201,7 @@ function ComercialScreen({ empresa, sbus, usuario }) {
 }
 
 /* ===== GERENCIA: consolidado de solo lectura por SBU y marca ===== */
-function GerenciaScreen({ empresa, sbus, soloSBU }) {
+function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   const [ventas, setVentas] = useState([])
   const [producto, setProducto] = useState([])
   const [cats, setCats] = useState({})
@@ -4289,10 +4328,10 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
   const cellStyle = { cursor: BULB_CURSOR }
   return (
     <>
-      {!soloSBU && !cargando && <div className="subtabs" style={{ marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {!soloSBU && !cargando && !espejo && <div className="subtabs" style={{ marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {[['pl', '📊 Resultado / P&L'], ['cf', '💵 Cash Flow'], ...(empresa !== 'TUMAR' ? [['viajes', '🧳 Viajes']] : [])].map(([id, lbl]) => <button key={id} className={'seg' + (gtab === id ? ' active' : '')} onClick={() => setGtab(id)} style={gtab === id ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : {}}>{lbl}</button>)}
       </div>}
-      {!soloSBU && !cargando && gtab === 'pl' && <div className="panel">
+      {!soloSBU && !cargando && (espejo || gtab === 'pl') && <div className="panel">
         <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
         <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno.</div>
         {HOVERTIP}
@@ -4308,19 +4347,23 @@ function GerenciaScreen({ empresa, sbus, soloSBU }) {
           </tbody>
         </table></div>
       </div>}
-      {!soloSBU && !cargando && gtab === 'cf' && <div style={{ marginTop: 4 }}>
-        <div className="toolbar" style={{ marginBottom: 6 }}>
+      {!soloSBU && !cargando && (espejo || gtab === 'cf') && <div style={{ marginTop: 4 }}>
+        {!espejo && <div className="toolbar" style={{ marginBottom: 6 }}>
           <span style={{ fontWeight: 800, fontSize: 15 }}>💵 Cash Flow total</span>
           <label style={{ marginLeft: 10 }}>Ver</label>
           {Object.keys(sbus).map((s) => <button key={s} className={'seg' + (cfSbu === s ? ' active' : '')} onClick={() => setCfSbu(s)} style={cfSbu === s ? { background: sbuColor(s), borderColor: sbuColor(s), color: '#fff' } : {}}>{s}</button>)}
+          {empresa === 'ENERGY BRANDS' && <button className={'seg' + (cfSbu === '__RETAILEB__' ? ' active' : '')} onClick={() => setCfSbu('__RETAILEB__')} style={cfSbu === '__RETAILEB__' ? { background: '#0e7490', borderColor: '#0e7490', color: '#fff' } : {}}>🏬 RETAIL EB</button>}
           <button className={'seg' + (cfSbu === '__ALL__' ? ' active' : '')} onClick={() => setCfSbu('__ALL__')} style={cfSbu === '__ALL__' ? { background: '#1f2d3d', borderColor: '#1f2d3d', color: '#fff' } : {}}>▣ TODAS</button>
-        </div>
-        {cfSbu && <CashFlowForm key={'gcf' + cfSbu} role={{ label: 'Cash Flow', tab: 'Cap_Finanzas' }} rubro={{ k: 'CASH FLOW', cash: true }} usuario="" empresa={empresa} sbus={cfSbu === '__ALL__' ? sbus : { [cfSbu]: sbus[cfSbu] || [] }} fixedMarca={`TOTAL::${cfSbu}`} />}
+        </div>}
+        {espejo
+          ? <CashFlowForm key="gcfALL" role={{ label: 'Cash Flow', tab: 'Cap_Finanzas' }} rubro={{ k: 'CASH FLOW', cash: true }} usuario="" empresa={empresa} sbus={sbus} fixedMarca="TOTAL::__ALL__" />
+          : cfSbu === '__RETAILEB__' ? <RetailEBCashFlowView />
+          : cfSbu && <CashFlowForm key={'gcf' + cfSbu} role={{ label: 'Cash Flow', tab: 'Cap_Finanzas' }} rubro={{ k: 'CASH FLOW', cash: true }} usuario="" empresa={empresa} sbus={cfSbu === '__ALL__' ? sbus : { [cfSbu]: sbus[cfSbu] || [] }} fixedMarca={`TOTAL::${cfSbu}`} />}
       </div>}
 
-      {!soloSBU && !cargando && gtab === 'pl' && <TahoEspejo empresa={empresa} />}
+      {!soloSBU && !cargando && (espejo || gtab === 'pl') && <TahoEspejo empresa={empresa} />}
 
-      {!soloSBU && !cargando && gtab === 'viajes' && empresa !== 'TUMAR' && <div className="panel" style={{ marginTop: 10 }}>
+      {!soloSBU && !cargando && !espejo && gtab === 'viajes' && empresa !== 'TUMAR' && <div className="panel" style={{ marginTop: 10 }}>
         <h3>🧳 Viajes de Gerencia — {empresa} <span className="unit">(nivel empresa · impactan el Cash Flow ▣ TODAS)</span></h3>
         <div className="sub">Captura los <b>viajes admin</b> y <b>viajes de procesos</b> (misma vista que cada equipo). Los <b>viajes de Finanzas</b> se llenan en Finanzas y salen como <b>espejo</b> aquí. Todos — más los de cada SBU y Retail (cuando se cree) — impactan el <b>Cash Flow ▣ TODAS</b> de arriba.</div>
         <div style={{ fontWeight: 800, margin: '12px 0 2px', color: '#6b21a8', fontSize: 14 }}>① Viajes admin</div>
@@ -4421,12 +4464,11 @@ function HoldingScreen({ empresas, sbusFor }) {
   ]
   const totHold = (g) => byEmp.reduce((a, { v }) => a + (g(v) || 0), 0)
   // SINERGY no tiene pantallas propias: su detalle es un P&L de solo lectura (sale del bloque SINERGY del Retail).
-  const sinPanel = (e) => { const v = calcEmp(e); return <div className="panel"><h3 style={{ color: '#be185d' }}>🤝 {e} — P&L <span className="unit">(viene del bloque SINERGY del Retail · solo lectura)</span></h3><div className="sub">SINERGY no se edita aquí: su <b>venta y costo</b> salen de la tienda <b>SINERGY</b> en Retail, y su <b>marketing/viajes</b> de las capturas SINERGY. Para cambiarlo, ve a <b>Retail</b>.</div><div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 360 }}><tbody>{filas.map((f) => <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}</td><td className="tot" style={f.strong ? { fontWeight: 800 } : undefined}>{fmt(f.g(v))}</td></tr>)}</tbody></table></div></div> }
+  const sinPanel = (e) => { const v = calcEmp(e); return <><div className="panel"><h3 style={{ color: '#be185d' }}>🤝 {e} — P&L <span className="unit">(viene del bloque SINERGY del Retail · solo lectura)</span></h3><div className="sub">SINERGY no se edita aquí: su <b>venta y costo</b> salen de la tienda <b>SINERGY</b> en Retail, y su <b>marketing/viajes</b> de las capturas SINERGY. Para cambiarlo, ve a <b>Retail</b>.</div><div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 360 }}><thead><tr><th className="l">Concepto</th><th style={{ color: '#be185d' }}>{e}</th></tr></thead><tbody>{filas.map((f) => <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}</td><td className="tot" style={f.strong ? { fontWeight: 800 } : undefined}>{fmt(f.g(v))}</td></tr>)}</tbody></table></div></div><RetailEBCashFlowView which="SIN" accent="#be185d" /></> }
   return (
     <>
       <div className="panel">
         <h3>🏛️ Total Holding — Resultado Operativo consolidado <span className="unit">(todas las empresas · 2028 · solo lectura)</span></h3>
-        <div className="sub">Cada columna es una empresa (misma lógica que Gerencia); la columna <b>TOTAL HOLDING</b> suma las {empresas.length} empresas. Para ver el detalle por SBU y el Cash Flow de una empresa, elígela abajo.</div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{byEmp.map(({ e }) => <th key={e}>{e}</th>)}<th style={{ color: '#7c3aed' }}>TOTAL HOLDING</th></tr></thead>
           <tbody>
@@ -4445,8 +4487,8 @@ function HoldingScreen({ empresas, sbusFor }) {
           <button className={'seg' + (detEmp === '__ALL__' ? ' active' : '')} onClick={() => setDetEmp('__ALL__')} style={detEmp === '__ALL__' ? { background: '#1f2d3d', borderColor: '#1f2d3d', color: '#fff' } : {}}>▣ TODOS</button>
         </div>
         {detEmp === '__ALL__'
-          ? empsOrden.map((e) => <div key={e} style={{ marginBottom: 18 }}><div style={{ fontWeight: 800, fontSize: 15, color: '#7c3aed', margin: '4px 0 8px' }}>🏢 {e}</div>{e === 'SINERGY' ? sinPanel(e) : <GerenciaScreen key={e} empresa={e} sbus={sbusFor(e)} />}</div>)
-          : detEmp && (detEmp === 'SINERGY' ? sinPanel(detEmp) : <GerenciaScreen key={detEmp} empresa={detEmp} sbus={sbusFor(detEmp)} />)}
+          ? empsOrden.map((e) => <div key={e} style={{ marginBottom: 18 }}><div style={{ fontWeight: 800, fontSize: 15, color: '#7c3aed', margin: '4px 0 8px' }}>🏢 {e}</div>{e === 'SINERGY' ? sinPanel(e) : <GerenciaScreen key={e} empresa={e} sbus={sbusFor(e)} espejo />}</div>)
+          : detEmp && (detEmp === 'SINERGY' ? sinPanel(detEmp) : <GerenciaScreen key={detEmp} empresa={detEmp} sbus={sbusFor(detEmp)} espejo />)}
       </div>
     </>
   )
