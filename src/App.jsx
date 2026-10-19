@@ -1356,7 +1356,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     if (concepto === 'Comisiones') return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[mi], 0) : comisTotalMes(marca)[mi]
     if (concepto === 'Gastos Admin Directos') return isTotal ? gadminSubtot[mi] : 0 // gastos admin directos solo existen a TOTAL SBU
     if (concepto === 'Gastos Admin Indirectos') return isTotal ? gadminIndSubtot[mi] : 0 // indirectos (corporativos) — se llenan en Finanzas y suman al Cash Flow
-    if (concepto === 'Viajes') { const base = isTotal ? sbuMarcas.reduce((s, m) => s + viajesMes(m)[mi], 0) : viajesMes(marca)[mi]; return base + ((isTotal && sbu === '__ALL__') ? gViajesMes(mi) : 0) } // en el consolidado de EMPRESA (TODAS) se suman los viajes de Gerencia (Finanzas/Admin/Procesos)
+    if (concepto === 'Viajes') { return isTotal ? sbuMarcas.reduce((s, m) => s + viajesMes(m)[mi], 0) : viajesMes(marca)[mi] } // solo viajes de las SBU; los viajes back office (Finanzas/Admin/Procesos) van en Otros gastos
     if (concepto === 'Marketing') return isTotal ? sbuMarcas.reduce((s, m) => s + marketingMes(m)[mi], 0) : marketingMes(marca)[mi]
     if (concepto === 'Logística') { if (LOG_SIMPLE(empresa)) return isTotal ? tumarLogAllArr(logcost, sbuMarcas)[mi] : tumarLogMarcaArr(logcost, marca)[mi]; return isTotal ? sbuMarcas.reduce((s, m) => s + logisticaMes(m)[mi], 0) : logisticaMes(marca)[mi] } // TUMAR/TAHO: logística por marca (3 líneas manuales); el total suma las marcas
     return isTotal ? sbuMarcas.reduce((s, m) => s + val(m, concepto, mi), 0) : val(marca, concepto, mi)
@@ -1425,7 +1425,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     // Costos financieros / otros ingresos / otros gastos: los llena Finanzas (valores a nivel empresa, compartidos)
     if (concepto === CF_FIN_PARENT) return num(data[`FINCOST|perd|${mi}`]) - num(data[`FINCOST|gan|${mi}`])
     if (concepto === CF_OTRO_ING) return num(data[`OTROS|ing|${mi}`])
-    if (concepto === CF_OTRO_GAS) return num(data[`OTROS|gas|${mi}`])
+    if (concepto === CF_OTRO_GAS) return num(data[`OTROS|gas|${mi}`]) + ((isTotal && sbu === '__ALL__') ? gViajesMes(mi) : 0) // Otros gastos = viajes back office (admin+procesos+finanzas) + lo que agregue Finanzas
     return cellRaw(concepto, mi)
   }
   // Valor de UNA marca (para el desglose del total): misma lógica que cell pero sin sumar SBU.
@@ -1538,8 +1538,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                     const celdas = CF_MESES.map((_, mi) => {
                       const cls = 'yb'
                       // Otros ingresos / Otros gastos: los llena Finanzas, nivel empresa, editable solo en la vista TOTAL.
-                      if (esOtroIng || esOtroGas) {
-                        const dk = esOtroIng ? `OTROS|ing|${mi}` : `OTROS|gas|${mi}`
+                      if (esOtroGas) { const v = cell(it, mi); return <td key={mi} className={'tot ' + cls} style={{ color: colFila, fontWeight: 700 }}>{Math.abs(v) > 0.5 ? signo : ''}{fmt(v)}</td> } // total (padre); detalle en sub-líneas
+                      if (esOtroIng) {
+                        const dk = `OTROS|ing|${mi}`
                         if (finEdit) return <td key={mi} className={'cell ' + cls}><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td>
                         const v = cell(it, mi); return <td key={mi} className={'tot ' + cls} style={{ color: colFila }}>{Math.abs(v) > 0.5 ? signo : ''}{fmt(v)}</td>
                       }
@@ -1593,12 +1594,18 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                         </Fragment2>
                       )
                     }
+                    if (esOtroGas) {
+                      const incViajes = isTotal && sbu === '__ALL__'
+                      const viajeRow = incViajes ? <tr key="vbo"><td className="l sub2" style={{ color: '#6b21a8' }}>↳ Viajes admin (back office) <span className="unit">(🪞 Admin+Procesos+Finanzas · fuera de las SBU)</span></td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#6b21a8' }}>{gViajesMes(mi) > 0.5 ? '− ' : ''}{fmt(gViajesMes(mi))}</td>)}<td className="tot" style={{ color: '#6b21a8' }}>− {fmt(CF_MESES.reduce((a, _, mi) => a + gViajesMes(mi), 0))}</td></tr> : null
+                      const otroManualRow = <tr key="ogman"><td className="l sub2" style={{ color: colFila }}>↳ Otros (Finanzas){!finEdit && ESP('Lo llena Finanzas (nivel empresa).')}</td>{CF_MESES.map((_, mi) => { const dk = `OTROS|gas|${mi}`; return finEdit ? <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot yb" style={{ color: colFila }}>{fmt(num(data[dk]))}</td> })}<td className="tot" style={{ color: colFila }}>{fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`OTROS|gas|${mi}`]), 0))}</td></tr>
+                      return <Fragment2 key={it}>{fila}{viajeRow}{otroManualRow}</Fragment2>
+                    }
                     if (!esCostos) return fila
                     return (
                       <Fragment2 key={it}>
                         {fila}
                         {openCostos && CF_COSTOS.map((sub) => {
-                          const fuente = sub === 'Gastos administrativos directos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Gastos administrativos generales' ? 'pendiente: gastos administrativos generales (corporativos, prorrateados por venta)' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de todo el equipo' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)'
+                          const fuente = sub === 'Gastos Admin Directos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Gastos Admin Indirectos' ? 'corporativos · lo llena Finanzas (prorrateados por venta)' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de las SBU (los back office van en Otros gastos)' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)'
                           const sceldas = CF_MESES.map((_, mi) => { const bn = brk(sub, mi); return <td key={mi} className="tot yb" style={{ cursor: BULB_CURSOR }} title={'Origen: ' + fuente + (bn ? '\nDatos de origen: ' + bn : '')}>{fmt(cellRaw(sub, mi))}</td> })
                           return <tr key={sub}><td className="l sub2">{sub} {ESP(fuente)}</td>{sceldas}<td className="tot">{fmt(subTot(sub))}</td></tr>
                         })}
