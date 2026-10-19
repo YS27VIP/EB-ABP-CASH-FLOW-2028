@@ -2713,7 +2713,6 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
       </div>
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       <h3>Muestras a comprar — {marca} <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Director" /></h3>
-      <div className="sub">Escribe por mes <b>cuántas muestras</b> (unidades) planeas comprar de {marca} en 2028, divididas en dos tipos. El <b>Total</b> es la suma. El costo en $ se calcula con el <b>ratio $/unidad</b> que define <b>Logística</b>.</div>
       <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
@@ -2724,7 +2723,6 @@ function MuestrasForm({ empresa, sbus, fixedMarca }) {
       </table></div>
 
       <h3 style={{ marginTop: 22 }}>Valorización en $ — {marca} {ESP('La temporada de compra y el AUC son espejo de Producto; las unidades vienen de arriba.')}<span className="unit">(unidades × AUC de la temporada de compra)</span></h3>
-      <div className="sub">Las muestras <b>no arrastran inventario viejo</b>: se valorizan al <b>AUC de la temporada que se compra ese mes</b> (ene–jun = SS28 · jul–oct = FW28 · nov–dic = SS29). La <b>temporada</b> y el <b>AUC</b> salen como espejo de Producto. Si el AUC sale en cero, Producto aún no capturó el PAUC de esa temporada.</div>
       <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
         <tbody>
@@ -3469,6 +3467,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const [cats, setCats] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_cats_${empresa}`) || '{}') } catch { return {} } })
   const [vt, setVt] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}') } catch { return {} } })
   const [selT, setSelT] = useState(null)
+  const [ucvAll, setUcvAll] = useState(false) // Ventas por tienda: ver TODAS (consolidado) vs una tienda
   useEffect(() => { try { const t = JSON.parse(localStorage.getItem(`retail_tiendas_${empresa}`) || 'null'); if (Array.isArray(t) && t.length) setTiendas(t) } catch { } try { setCats(JSON.parse(localStorage.getItem(`retail_cats_${empresa}`) || '{}')) } catch { } try { setVt(JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}')) } catch { } setSelT(null) }, [empresa])
   const catsOf = (t) => (Array.isArray(cats[t]) && cats[t].length) ? cats[t] : RETAIL_CATS_DEF
   const selStore = selT && tiendas.includes(selT) ? selT : (tiendas[0] || null)
@@ -3956,9 +3955,28 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           <h3 style={{ color: col }}>Ventas por tienda — 2028 <span className="unit">(unidades manuales · venta neta = costo/ud × (1 + %margen) × (1 − %descuento))</span></h3>
           <div className="sub">Escribe las <b>unidades 2028 a mano</b> por tienda y mes. La <b>venta neta 2028</b> se calcula con el costo/ud (del mapa) y el %margen/%descuento. Las referencias <b>2026</b> son para comparar (aún sin datos; puedes llenarlas). Las tiendas nuevas salen con <b style={{ color: '#0e7490' }}>NUEVA</b>.</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '8px 0 6px' }}>
-            {tiendas.map((t) => <button key={t} className={'seg' + (selStore === t ? ' active' : '')} onClick={() => setSelT(t)} style={selStore === t ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{t}{esTiendaNueva(t) && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 800 }}>NUEVA</span>}</button>)}
+            {tiendas.map((t) => <button key={t} className={'seg' + (!ucvAll && selStore === t ? ' active' : '')} onClick={() => { setUcvAll(false); setSelT(t) }} style={!ucvAll && selStore === t ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{t}{esTiendaNueva(t) && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 800 }}>NUEVA</span>}</button>)}
+            <button className={'seg' + (ucvAll ? ' active' : '')} onClick={() => setUcvAll(true)} style={ucvAll ? { background: '#1f2d3d', borderColor: '#1f2d3d', color: '#fff' } : {}}>▣ TODAS</button>
           </div>
-          {selStore && (() => {
+          {ucvAll && (() => {
+            const nf = (v) => Math.round(v).toLocaleString('en-US')
+            const vMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
+            const cMes = (mi) => tiendas.reduce((a, t) => a + storeCostoM(t, mi), 0)
+            const uMes = (mi) => tiendas.reduce((a, t) => a + storeUnitsM(t, mi), 0)
+            const annual = (fn) => MESES.reduce((a, _, mi) => a + fn(mi), 0)
+            return <div className="tablewrap" style={{ overflowX: 'auto' }}>
+              <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '92px' }} /></colgroup>
+                <thead><tr><th className="l">▣ TODAS las tiendas</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+                <tbody>
+                  <tr><td className="l sub2" style={{ color: '#1d4ed8', fontWeight: 700 }}>Unidades</td>{MESES.map((_, mi) => <td key={mi} className="tot">{nf(uMes(mi))}</td>)}<td className="tot" style={{ fontWeight: 800 }}>{nf(annual(uMes))}</td></tr>
+                  <tr><td className="l sub2" style={{ color: '#b91c1c' }}>Costo ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#b91c1c' }}>{nf(cMes(mi))}</td>)}<td className="tot" style={{ color: '#b91c1c', fontWeight: 800 }}>{nf(annual(cMes))}</td></tr>
+                  <tr className="grandrow"><td className="l" style={{ color: '#15803d' }}>Venta neta ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#15803d', fontWeight: 800 }}>{nf(vMes(mi))}</td>)}<td className="tot" style={{ color: '#15803d', fontWeight: 800 }}>{nf(annual(vMes))}</td></tr>
+                  <tr className="grandrow" style={{ background: '#eafaf1' }}><td className="l" style={{ color: '#0f766e', fontWeight: 800 }}>Utilidad bruta ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{nf(vMes(mi) - cMes(mi))}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{nf(annual((mi) => vMes(mi) - cMes(mi)))}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          })()}
+          {!ucvAll && selStore && (() => {
             const t = selStore
             const venta28 = (mi) => storeVentaM(t, mi), costo28 = (mi) => storeCostoM(t, mi)
             const sum = (fn) => MESES.reduce((a, _, mi) => a + fn(mi), 0)
@@ -3970,7 +3988,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                 <tbody>
                   <tr className="secrow"><td colSpan={14}>2028 · venta neta = costo × (1 + %margen) × (1 − %descuento)</td></tr>
                   <tr><td className="l sub2" style={{ color: '#1d4ed8', fontWeight: 700 }}>① Unidades 2028 (manual)</td>{cell((mi) => vt[`${t}||SU||${mi}`] ?? '', (mi, v) => setSell(t, mi, v), '#1d4ed8')}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(sum((mi) => sellU(t, mi)))}</td></tr>
-                  {calcRow('② Costo ($) · de Compras', costo28, '#b91c1c')}
+                  {calcRow('② Costo ($)', costo28, '#b91c1c')}
                   <tr><td className="l sub2" style={{ color: '#b45309' }}>③ % Descuento (se llena)</td>{cell((mi) => vt[`${t}||DESC||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||DESC||${mi}`]: v })), '#b45309')}<td className="tot">—</td></tr>
                   <tr><td className="l sub2" style={{ color: '#15803d' }}>④ % Margen (se llena)</td>{cell((mi) => vt[`${t}||MARGEN||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||MARGEN||${mi}`]: v })), '#15803d')}<td className="tot">—</td></tr>
                   {calcRow('= Venta neta 2028 ($)', venta28, '#15803d', true)}
@@ -3978,26 +3996,6 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                   <tr className="secrow"><td colSpan={14}>REFERENCIA 2026 (🪞)</td></tr>
                   <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Unidades 2026</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(u26m(t, mi))}</td>)}<td className="tot">{fmt(sum((mi) => u26m(t, mi)))}</td></tr>
                   <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Venta neta 2026 ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(vn26m(t, mi))}</td>)}<td className="tot">{fmt(sum((mi) => vn26m(t, mi)))}</td></tr>
-                </tbody>
-              </table>
-            </div>
-          })()}
-          {/* Consolidado de todas las tiendas (sell-through) */}
-          <div className="sub" style={{ fontWeight: 700, color: col, margin: '18px 0 6px', borderTop: '1px solid var(--line)', paddingTop: 12 }}>Consolidado — todas las tiendas <span className="unit" style={{ fontWeight: 400 }}>(venta neta y costo 2028)</span></div>
-          {(() => {
-            const nf = (v) => Math.round(v).toLocaleString('en-US')
-            const vMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
-            const cMes = (mi) => tiendas.reduce((a, t) => a + storeCostoM(t, mi), 0)
-            const uMes = (mi) => tiendas.reduce((a, t) => a + storeUnitsM(t, mi), 0)
-            const annual = (fn) => MESES.reduce((a, _, mi) => a + fn(mi), 0)
-            return <div className="tablewrap" style={{ overflowX: 'auto' }}>
-              <table className="vfix"><colgroup><col style={{ width: '210px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '92px' }} /></colgroup>
-                <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
-                <tbody>
-                  <tr><td className="l sub2">Unidades</td>{MESES.map((_, mi) => <td key={mi} className="tot">{nf(uMes(mi))}</td>)}<td className="tot">{nf(annual(uMes))}</td></tr>
-                  <tr><td className="l sub2" style={{ color: '#15803d' }}>Venta neta ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#15803d' }}>{nf(vMes(mi))}</td>)}<td className="tot" style={{ color: '#15803d', fontWeight: 800 }}>{nf(annual(vMes))}</td></tr>
-                  <tr><td className="l sub2" style={{ color: '#b91c1c' }}>Costo ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#b91c1c' }}>{nf(cMes(mi))}</td>)}<td className="tot" style={{ color: '#b91c1c', fontWeight: 800 }}>{nf(annual(cMes))}</td></tr>
-                  <tr className="grandrow" style={{ background: '#eafaf1' }}><td className="l" style={{ color: '#0f766e', fontWeight: 800 }}>Utilidad bruta ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{nf(vMes(mi) - cMes(mi))}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{nf(annual((mi) => vMes(mi) - cMes(mi)))}</td></tr>
                 </tbody>
               </table>
             </div>
