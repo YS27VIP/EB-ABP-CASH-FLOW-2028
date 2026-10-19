@@ -3491,14 +3491,22 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const descPct = (t, mi) => num(vt[`${t}||DESC||${mi}`])
   const whUnit = (c, mi) => wholesaleMarcas.reduce((a, m) => { const p = pctOf(c, m); if (!p) return a; return a + (p / 100) * aucMC(m, catOf(c, m), mi) }, 0)   // costo wholesale ponderado/ud (% + categoría por marca)
   const cogsUnit = (c, mi) => whUnit(c, mi) * factor()                                                         // costo de la venta por unidad (× factor)
-  const ventaUnit = (t, c, mi) => cogsUnit(c, mi) * (1 + margenPct(t, mi) / 100) * (1 - descPct(t, mi) / 100)  // venta neta por unidad (margen/desc por tienda+mes)
-  const ventaM = (t, c, mi) => uMes(t, c, mi) * ventaUnit(t, c, mi)
-  const costoM = (t, c, mi) => uMes(t, c, mi) * cogsUnit(c, mi)
-  const rowVenta = (t, c) => MESES.reduce((a, _, mi) => a + ventaM(t, c, mi), 0)
-  const rowCosto = (t, c) => MESES.reduce((a, _, mi) => a + costoM(t, c, mi), 0)
-  const storeVentaM = (t, mi) => catsOf(t).reduce((a, c) => a + ventaM(t, c, mi), 0)
-  const storeCostoM = (t, mi) => catsOf(t).reduce((a, c) => a + costoM(t, c, mi), 0)
-  const storeUnitsM = (t, mi) => catsOf(t).reduce((a, c) => a + uMes(t, c, mi), 0)
+  // ---- COMPRAS (Paso 2 · importaciones): unidades anuales por subcategoría × costo wholesale, split por calendario ----
+  const rowCompraCosto = (t, c) => MESES.reduce((a, _, mi) => a + uMes(t, c, mi) * cogsUnit(c, mi), 0)   // $ compra por subcategoría (año)
+  const comprasCostoMes = (t, mi) => catsOf(t).reduce((a, c) => a + uMes(t, c, mi) * cogsUnit(c, mi), 0) // $ compra de la tienda por mes
+  const comprasUnidT = (t) => catsOf(t).reduce((a, c) => a + uAnual(t, c), 0)                            // unidades a comprar (año)
+  const tCompras = (t) => MESES.reduce((a, _, mi) => a + comprasCostoMes(t, mi), 0)                      // $ compra de la tienda (año)
+  // ---- VENTAS (sell-through): unidades MANUALES por tienda y mes; venta neta = unidades × costo/ud × (1+margen) × (1−desc) ----
+  const sellU = (t, mi) => num(vt[`${t}||SU||${mi}`])
+  const setSell = (t, mi, v) => setVt((d) => ({ ...d, [`${t}||SU||${mi}`]: v }))
+  // Costo/ud promedio de la tienda (ponderado por la mezcla de compras del mapa).
+  const storeAvgCogs = (t, mi) => { let u = 0, c = 0; catsOf(t).forEach((ct) => { const uu = uAnual(t, ct); u += uu; c += uu * cogsUnit(ct, mi) }); return u > 0 ? c / u : 0 }
+  const storeUnitsM = (t, mi) => sellU(t, mi)
+  const storeCostoM = (t, mi) => sellU(t, mi) * storeAvgCogs(t, mi)
+  const storeVentaM = (t, mi) => sellU(t, mi) * storeAvgCogs(t, mi) * (1 + margenPct(t, mi) / 100) * (1 - descPct(t, mi) / 100)
+  // Referencias 2026 (unidades y venta neta) — editables, aún sin datos.
+  const u26m = (t, mi) => num(vt[`${t}||U26||${mi}`]); const setU26 = (t, mi, v) => setVt((d) => ({ ...d, [`${t}||U26||${mi}`]: v }))
+  const vn26m = (t, mi) => num(vt[`${t}||VN26||${mi}`]); const setVN26 = (t, mi, v) => setVt((d) => ({ ...d, [`${t}||VN26||${mi}`]: v }))
   const esTiendaNueva = (t) => !RETAIL_TIENDAS.includes(t)
   const tVenta = (t) => MESES.reduce((a, _, mi) => a + storeVentaM(t, mi), 0)
   const tCosto = (t) => MESES.reduce((a, _, mi) => a + storeCostoM(t, mi), 0)
@@ -3572,7 +3580,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const sinMkAnual = MESES.reduce((a, _, mi) => a + sg('MK', mi), 0)
   const sinLogAnual = MESES.reduce((a, _, mi) => a + sg('LOG', mi), 0)
   // Compras (pagos de importación) por bucket y mes = costo de la mercancía, que ya sigue el calendario (Paso 1) vía las unidades mensuales.
-  const comprasCalMes = (ts, mi) => ts.reduce((s, t) => s + storeCostoM(t, mi), 0)
+  const comprasCalMes = (ts, mi) => ts.reduce((s, t) => s + comprasCostoMes(t, mi), 0)
   // ---- Cash Flow Retail: mismas líneas que las marcas, Cash Final encadenado ----
   const mpct = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
   // Importaciones DERIVADAS del mapa: por (marca,categoría)/mes = Σ(tiendas, subcats) unidades × %marca × AUC(marca, categoría de la celda) × factor.
@@ -3586,6 +3594,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const gastoEBMes = (mi) => gRubros.reduce((a, r) => a + num(gastosEB[gk(r.n, mi)]), 0)  // EB directos
   // totales de venta/costo (después de declarar cf/smap/producto, de los que dependen las fórmulas)
   const totVenta = tiendas.reduce((a, t) => a + tVenta(t), 0), totCosto = tiendas.reduce((a, t) => a + tCosto(t), 0)
+  const totCompras = tiendas.reduce((a, t) => a + tCompras(t), 0)
   const cfRows = []; let prevFin = 0
   MESES.forEach((_, mi) => {
     const ini = mi === 0 ? num(cf[fk('INI', 0)]) : prevFin
@@ -3835,7 +3844,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           {!selStore ? <div className="sub">No hay tiendas. Usa <b>➕ Agregar tienda</b>.</div> : (() => { const t = selStore; const cs = catsOf(t); return <>
             <div className="toolbar" style={{ margin: '12px 0 6px' }}>
               <span style={{ fontWeight: 800, color: col, fontSize: 15 }}>🏬 {t}</span>
-              <span className="unit" style={{ marginLeft: 8 }}>Unidades {fmt(MESES.reduce((a, _, mi) => a + storeUnitsM(t, mi), 0))} · Costo {fmt(tCosto(t))}</span>
+              <span className="unit" style={{ marginLeft: 8 }}>Unidades {fmt(comprasUnidT(t))} · Costo {fmt(tCompras(t))}</span>
               <div className="spacer"></div>
               <button className="btn" onClick={() => addCat(t)}>➕ Agregar subcategoría</button>
             </div>
@@ -3855,9 +3864,9 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                     </td>
                     <td className="cell"><input value={vt[uaKey(t, c)] ?? ''} onChange={(e) => setUA(t, c, e.target.value)} inputMode="decimal" title={`${c} · unidades a comprar (año)`} style={{ width: '100%', textAlign: 'center' }} /></td>
                     <td className="tot ya help-bulb" title={whAvg(c) > 0 ? `Costo/ud = $${whAvg(c).toFixed(2)} wholesale (ponderado del mapa) × ${factor().toFixed(2)} factor = $${(whAvg(c) * factor()).toFixed(2)}` : 'Sin mapa: define de qué marca/categoría se compra esta subcategoría.'}>{whAvg(c) > 0 ? (whAvg(c) * factor()).toFixed(2) : '—'}</td>
-                    <td className="tot" style={{ color: '#b91c1c' }}>{fmt(rowCosto(t, c))}</td>
+                    <td className="tot" style={{ color: '#b91c1c' }}>{fmt(rowCompraCosto(t, c))}</td>
                   </tr> })}
-                  <tr className="grandrow"><td className="l">Total {t}</td><td className="tot">{fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))}</td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCosto(t))}</td></tr>
+                  <tr className="grandrow"><td className="l">Total {t}</td><td className="tot">{fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))}</td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCompras(t))}</td></tr>
                 </tbody>
               </table>
             </div>
@@ -3867,15 +3876,15 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table><thead><tr><th className="l">Tienda</th><th>Unidades</th><th>Costo</th></tr></thead>
               <tbody>
-                {tiendas.map((t) => { const u = MESES.reduce((a, _, mi) => a + storeUnitsM(t, mi), 0), c = tCosto(t); return <tr key={t} onClick={() => setSelT(t)} style={{ cursor: 'pointer' }}><td className="l">{t}</td><td className="tot">{fmt(u)}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(c)}</td></tr> })}
-                <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(tiendas.reduce((a, t) => a + MESES.reduce((s, _, mi) => s + storeUnitsM(t, mi), 0), 0))}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCosto)}</td></tr>
+                {tiendas.map((t) => { const u = comprasUnidT(t), c = tCompras(t); return <tr key={t} onClick={() => setSelT(t)} style={{ cursor: 'pointer' }}><td className="l">{t}</td><td className="tot">{fmt(u)}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(c)}</td></tr> })}
+                <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(tiendas.reduce((a, t) => a + comprasUnidT(t), 0))}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCompras)}</td></tr>
               </tbody>
             </table>
           </div>
 
           {/* Importaciones Retail → Wholesale (calculadas del mapa) — unidas en esta misma vista */}
           <div className="sub" style={{ fontWeight: 700, color: col, margin: '18px 0 6px', borderTop: '1px solid var(--line)', paddingTop: 12 }}>Importaciones Retail → Wholesale <span className="unit" style={{ fontWeight: 400 }}>(calculado del mapa · no se escribe a mano · alimenta el Cash Out)</span></div>
-          <div className="sub">Lo que Retail le compra a las SBU, por marca y mes = unidades a comprar × AUC wholesale (de Producto) × factor ({fmt(factor())}).</div>
+          <div className="sub">Lo que Retail le compra a las SBU, por marca y mes = unidades a comprar × AUC wholesale (de Producto) × factor ({factor().toFixed(2)}).</div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '95px' }} /></colgroup>
               <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">2027 $</th></tr></thead>
