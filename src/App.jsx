@@ -91,13 +91,18 @@ const SBU_NAMES = ['SBU 1', 'SBU 2', 'SBU 3']
 // TUMAR: empresa aparte, una sola unidad con sus 7 marcas (no usa SBU 1/2/3).
 const TUMAR_MARCAS = ['OSPREY', 'BLUNDSTONE', 'FJALLRAVEN', 'KEEN', 'ARIAT', 'HYDRO FLASK', 'VEJA']
 const TUMAR_SBUS = { 'SBU 1': TUMAR_MARCAS }
+// TAHO vende las marcas de Energy Brands (SBU 1/2/3) + las marcas de TUMAR que EB no tiene, agrupadas en SBU 4.
+const _EB_BRANDS = new Set(Object.values(DEFAULT_SBUS).flat().map((m) => m.toUpperCase()))
+const TAHO_SBU4 = TUMAR_MARCAS.filter((m) => !_EB_BRANDS.has(m.toUpperCase())) // OSPREY, FJALLRAVEN, HYDRO FLASK, VEJA
+const TAHO_SBUS = { ...DEFAULT_SBUS, 'SBU 4': TAHO_SBU4 }
+const sbuNamesFor = (empresa) => empresa === 'TAHO' ? ['SBU 1', 'SBU 2', 'SBU 3', 'SBU 4'] : SBU_NAMES
 // Clientes semilla por empresa (TUMAR, del Excel de facturación · sin país).
 const SEED_CLIENTES = { 'TUMAR': ['LA LOMITA OUTDOORS SRL', 'HERNANDEZ ISMAEL MARIA', 'RIVAROLA MARIA ESTELA', 'MARTHA HEADWEAR SA S. A.', 'WILBERGER NOELIA MARILINA', 'GIGENA JUAN MANUEL', 'UNIAVENTURA S.A.', 'FOURCANS MARTIN OSCAR', 'MORIS CESAR OSVALDO', 'SCALZO OSVALDO NESTOR', 'ANGLER S AVENTURAS SOCIEDAD DE RESPONSABILIDAD LIMITADA', 'CRISTOBAL COLON S. R. L.', 'GROUP MOBILE S.A.', 'EL VIAJERO CAMPING S.R.L.', 'RANCHOCAVALIER S.R.L.', 'BASSI JUAN PABLO', 'PARALELO 42 S. CAP I SECC IV', 'PLACE IT S.A'] }
 /* Empresas del grupo (el nombre debe coincidir con la columna EMPRESA del Histórico). */
 const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO']
 
 /* Colores por SBU y por marca (identidad visual dinámica) */
-const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'RETAIL': '#4338ca', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
+const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'SBU 4': '#be185d', 'RETAIL': '#4338ca', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
 const sbuColor = (s) => SBU_COLORS[String(s || '').toUpperCase()] || '#0e7490'
 // Paleta sin verde ni amarillo, tonos bien separados (para marcas no fijadas)
 const MARCA_PALETTE = ['#2563eb', '#dc2626', '#9333ea', '#ea580c', '#db2777', '#b45309', '#4f46e5', '#e11d48', '#7c3aed', '#c026d3', '#475569', '#be123c']
@@ -273,17 +278,20 @@ const PasoH = ({ n, children }) => (
 
 function effSBUS(empresa, combos) {
   const c = combos[empresa]
+  const names = sbuNamesFor(empresa)
+  const baseDef = empresa === 'TAHO' ? TAHO_SBUS : DEFAULT_SBUS
+  const universe = empresa === 'TAHO' ? [...new Set([...ALL_MARCAS, ...TAHO_SBU4])] : ALL_MARCAS
   const excl = new Set((c && c['NO VENDE']) || [])
   if (empresa === 'ENERGY BRANDS') EB_RETIRADAS.forEach((m) => excl.add(m)) // marcas retiradas: nunca aparecen
-  if (!c || !SBU_NAMES.some((s) => (c[s] || []).length)) {
-    if (!excl.size) return DEFAULT_SBUS
+  if (!c || !names.some((s) => (c[s] || []).length)) {
+    if (!excl.size) return baseDef
     const out = {}
-    Object.entries(DEFAULT_SBUS).forEach(([s, ms]) => { const f = ms.filter((m) => !excl.has(m)); if (f.length) out[s] = f })
+    Object.entries(baseDef).forEach(([s, ms]) => { const f = ms.filter((m) => !excl.has(m)); if (f.length) out[s] = f })
     return out
   }
   const out = {}, asignadas = new Set()
-  SBU_NAMES.forEach((s) => { const f = (c[s] || []).filter((m) => !excl.has(m)); if (f.length) { out[s] = f; f.forEach((m) => asignadas.add(m)) } })
-  const rest = ALL_MARCAS.filter((m) => !asignadas.has(m) && !excl.has(m))
+  names.forEach((s) => { const f = (c[s] || []).filter((m) => !excl.has(m)); if (f.length) { out[s] = f; f.forEach((m) => asignadas.add(m)) } })
+  const rest = universe.filter((m) => !asignadas.has(m) && !excl.has(m))
   if (rest.length) out['Sin asignar'] = rest
   return out
 }
@@ -1935,7 +1943,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
           </div>
         )
       })()}
-      <div className="panel">
+      {empresa !== 'TAHO' && <div className="panel">
         <h3>Combinación de temporadas — {marca} <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Producto" /></h3>
         <div className="sub">El <b>vendedor asigna el total a vender por mes</b>. Aquí tú decides <b>cuántas unidades de cada temporada</b> cubren ese total: en cada mes escribe las <b>unidades a rotar</b> por temporada (p.ej. 500 de FW25). No puedes poner más de lo que hay en stock. La fila <b>«Por asignar»</b> te dice cuánto falta para llegar a la venta del mes, y <b>«Saldo por asignar»</b> debajo de cada temporada te muestra cuánto stock te queda de esa temporada. {iiAuto ? <>El <b>inventario inicial</b> viene de la matriz de arriba.</> : <>Pon también el <b>inventario inicial</b> y las <b>compras 2028</b>.</>}</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '300px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
@@ -1955,7 +1963,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
             <tr className="grandrow"><td className="l">Saldo total inventario</td><td></td>{saldoUnits.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(saldoUnits[11])}</td></tr>
           </tbody>
         </table></div>
-      </div>
+      </div>}
     </>
   )
 }
@@ -2553,24 +2561,6 @@ function CostosLogisticos({ empresa, fixedMarca, sbus }) {
                 <tr><td className="l" style={{ color: 'var(--muted)' }}>Seeding samples (ud)</td><td className="cell" style={{ textAlign: 'center' }}>{ratioInput(kMueRateSE)}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(mg('SE', mi))}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(mTot('SE'))}</td></tr>
                 <tr className="grandrow" style={{ borderTop: '2px solid #cdd7e0' }}><td className="l">TOTAL muestras (ud)</td><td className="tot" style={{ color: 'var(--muted)' }}>—</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mMes(mi))}</td>)}<td className="tot">{fmt(granTot)}</td></tr>
                 <tr style={{ background: '#eefaf6' }}><td className="l" style={{ color: '#0f766e', fontWeight: 800 }}>= Costo de muestras ($)</td><td className="tot" style={{ color: '#0f766e' }}>—</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(costoMue[mi])}</td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(rowTot(costoMue))}</td></tr>
-              </tbody>
-            </table></div>
-          </div>
-        )
-      })()}
-
-      {(() => {
-        const r = realAupAuc('TAHO', marca, ventas, producto, catList)
-        const vn = r.ventaMes || Array(12).fill(0)
-        const tot = vn.reduce((a, b) => a + b, 0)
-        return (
-          <div style={{ marginTop: 24 }}>
-            <h3>🪞 Ventas netas TAHO — {marca} <span className="unit">($ · espejo, solo lectura)</span></h3>
-            <div className="sub">Espejo de las <b>ventas netas por mes</b> de la empresa <b>TAHO</b> para {marca} (unidades × AUP). Se llena cuando TAHO carga su plan; sirve de referencia para el impacto logístico intercompañía.</div>
-            <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '250px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
-              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
-              <tbody>
-                <tr className="grandrow"><td className="l">Ventas netas TAHO ($)</td>{vn.map((v, m) => <td key={m} className="tot" style={{ color: 'var(--muted)' }}>{fmt(v)}</td>)}<td className="tot" style={{ color: 'var(--muted)' }}>{fmt(tot)}</td></tr>
               </tbody>
             </table></div>
           </div>
@@ -5136,7 +5126,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
   useEffect(() => { try { setVend(JSON.parse(localStorage.getItem(`vendedores_${empresa}`) || '{}')) } catch { setVend({}) } }, [empresa])
   const setVendName = (mca, i, v) => setVend((d) => { const cur = (d[mca] || ['', '']).slice(); cur[i] = v; return { ...d, [mca]: cur } })
   async function guardarVend() { setSavingV(true); setMsgV(null); try { await gSaveEstado(empresa, 'vendedores', vend); try { localStorage.setItem(`vendedores_${empresa}`, JSON.stringify(vend)) } catch { }; setMsgV({ t: 'ok', x: 'Vendedores guardados. Ya salen en Ventas.' }) } catch { setMsgV({ t: 'bad', x: 'No se pudo guardar.' }) } setSavingV(false) }
-  const allMarcas = empresa === 'TUMAR' ? [...new Set([...TUMAR_MARCAS, ...extraMarcas])] : [...new Set([...ALL_MARCAS, ...extraMarcas, ...(ebSbus ? Object.values(ebSbus).flat() : [])])].filter((m) => !(empresa === 'ENERGY BRANDS' && EB_RETIRADAS.has(upper(m))))
+  const allMarcas = empresa === 'TUMAR' ? [...new Set([...TUMAR_MARCAS, ...extraMarcas])] : [...new Set([...ALL_MARCAS, ...(empresa === 'TAHO' ? TAHO_SBU4 : []), ...extraMarcas, ...(ebSbus ? Object.values(ebSbus).flat() : [])])].filter((m) => !(empresa === 'ENERGY BRANDS' && EB_RETIRADAS.has(upper(m))))
   // TUMAR: sus marcas vienen todas en SBU 1 (una sola unidad). Si no hay nada guardado, se auto-asignan a SBU 1.
   useEffect(() => {
     if (empresa !== 'TUMAR') return
@@ -5155,6 +5145,18 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
     const base = real ? c : DEFAULT_SBUS
     const m = {}; [...ALL_MARCAS, ...extraMarcas].forEach((mk) => { m[mk] = '' })
     SBU_NAMES.forEach((s) => (base[s] || []).forEach((mk) => { m[mk] = s }))
+    if (real) (c['NO VENDE'] || []).forEach((mk) => { m[mk] = 'NO' })
+    setAsign(m)
+  }, [empresa, extraMarcas, combos])
+  // TAHO viene PRECONFIGURADO: SBU 1/2/3 = marcas de Energy Brands, SBU 4 = marcas de TUMAR que EB no tiene.
+  useEffect(() => {
+    if (empresa !== 'TAHO') return
+    const c = combos[empresa]
+    const names = sbuNamesFor('TAHO')
+    const real = c && names.filter((s) => (c[s] || []).length).length >= 2
+    const base = real ? c : TAHO_SBUS
+    const m = {}; [...ALL_MARCAS, ...TAHO_SBU4, ...extraMarcas].forEach((mk) => { m[mk] = '' })
+    names.forEach((s) => (base[s] || []).forEach((mk) => { m[mk] = s }))
     if (real) (c['NO VENDE'] || []).forEach((mk) => { m[mk] = 'NO' })
     setAsign(m)
   }, [empresa, extraMarcas, combos])
@@ -5194,7 +5196,8 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
   async function guardar() {
     setSaving(true); setMsg(null)
     const cc = { 'SBU 1': [], 'SBU 2': [], 'SBU 3': [], 'NO VENDE': [] }
-    Object.entries(asign).forEach(([mk, s]) => { if (s === 'NO') cc['NO VENDE'].push(mk); else if (s) cc[s].push(mk) })
+    if (empresa === 'TAHO') cc['SBU 4'] = []
+    Object.entries(asign).forEach(([mk, s]) => { if (s === 'NO') cc['NO VENDE'].push(mk); else if (s && cc[s]) cc[s].push(mk) })
     try {
       const j = await gSaveConfig(empresa, cc)
       if (j.ok) { setCombos({ ...combos, [empresa]: cc }); if (!empresas.includes(empresa)) setEmpresas([...empresas, empresa]); setMsg({ t: 'ok', x: 'Combinaciones guardadas para ' + empresa + '.' }) }
@@ -5233,7 +5236,7 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
                 <tr key={mk}><td className="l">{mk}</td><td>
                   <select value={asign[mk] || ''} onChange={(e) => setAsign({ ...asign, [mk]: e.target.value })}>
                     <option value="">— sin asignar —</option>
-                    {SBU_NAMES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {sbuNamesFor(empresa).map((s) => <option key={s} value={s}>{s}</option>)}
                     <option value="NO">🚫 No la vende</option>
                   </select>
                 </td></tr>
