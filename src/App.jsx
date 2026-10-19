@@ -1278,7 +1278,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   })()
   const esNew = (cli) => newSet.has(upper(cli))
   const [mkRows, setMkRows] = useState([]); const [logRows, setLogRows] = useState([]); const [dirRows, setDirRows] = useState([]); const [finRows, setFinRows] = useState([]) // Marketing / Logística / Director / Finanzas (para espejo de Costos Operativos)
-  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } try { setLogcost(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { } try { setGadminData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { setGadminIndData(JSON.parse(localStorage.getItem(`gadmin_ind_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) setGadminCfg(s) } catch { } }, [empresa])
+  useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } try { setLogcost(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { } try { setGadminData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { setGadminIndData(JSON.parse(localStorage.getItem(`gadmin_ind_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) setGadminCfg(s) } catch { } }, [empresa, cfVer])
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   const sbuLbl = sbu === '__ALL__' ? 'TODAS' : sbu
@@ -1430,7 +1430,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     // Costos financieros / otros ingresos / otros gastos: los llena Finanzas (valores a nivel empresa, compartidos)
     if (concepto === CF_FIN_PARENT) return num(data[`FINCOST|perd|${mi}`]) - num(data[`FINCOST|gan|${mi}`])
     if (concepto === CF_OTRO_ING) return num(data[`OTROS|ing|${mi}`])
-    if (concepto === CF_OTRO_GAS) return num(data[`OTROS|gas|${mi}`]) + ((isTotal && sbu === '__ALL__') ? gViajesMes(mi) : 0) // Otros gastos = viajes back office (admin+procesos+finanzas) + lo que agregue Finanzas
+    if (concepto === CF_OTRO_GAS) { const w = finEdit ? 1 : gadminPeso(); return (num(data[`OTROS|gas|${mi}`]) + gViajesMes(mi)) * w } // Otros gastos = (viajes back office + lo que agregue Finanzas), prorrateado por peso de venta de la vista
     return cellRaw(concepto, mi)
   }
   // Valor de UNA marca (para el desglose del total): misma lógica que cell pero sin sumar SBU.
@@ -1600,9 +1600,10 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       )
                     }
                     if (esOtroGas) {
-                      const incViajes = isTotal && sbu === '__ALL__'
-                      const viajeRow = incViajes ? <tr key="vbo"><td className="l sub2" style={{ color: '#6b21a8' }}>↳ Viajes admin (back office) <span className="unit">(🪞 Admin+Procesos+Finanzas · fuera de las SBU)</span></td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#6b21a8' }}>{gViajesMes(mi) > 0.5 ? '− ' : ''}{fmt(gViajesMes(mi))}</td>)}<td className="tot" style={{ color: '#6b21a8' }}>− {fmt(CF_MESES.reduce((a, _, mi) => a + gViajesMes(mi), 0))}</td></tr> : null
-                      const otroManualRow = <tr key="ogman"><td className="l sub2" style={{ color: colFila }}>↳ Otros (Finanzas){!finEdit && ESP('Lo llena Finanzas (nivel empresa).')}</td>{CF_MESES.map((_, mi) => { const dk = `OTROS|gas|${mi}`; return finEdit ? <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot yb" style={{ color: colFila }}>{fmt(num(data[dk]))}</td> })}<td className="tot" style={{ color: colFila }}>{fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`OTROS|gas|${mi}`]), 0))}</td></tr>
+                      const w = finEdit ? 1 : gadminPeso()
+                      const vb = (mi) => gViajesMes(mi) * w
+                      const viajeRow = <tr key="vbo"><td className="l sub2" style={{ color: '#6b21a8' }}>↳ Viajes admin (back office){!isTotal ? null : <span className="unit"> (🪞 Admin+Procesos+Finanzas{w < 0.999 ? ' · prorrateado' : ''})</span>}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#6b21a8' }}>{vb(mi) > 0.5 ? '− ' : ''}{fmt(vb(mi))}</td>)}<td className="tot" style={{ color: '#6b21a8' }}>− {fmt(CF_MESES.reduce((a, _, mi) => a + vb(mi), 0))}</td></tr>
+                      const otroManualRow = <tr key="ogman"><td className="l sub2" style={{ color: colFila }}>↳ Otros (Finanzas){!finEdit && ESP('Lo llena Finanzas (nivel empresa).')}</td>{CF_MESES.map((_, mi) => { const dk = `OTROS|gas|${mi}`; return finEdit ? <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot yb" style={{ color: colFila }}>{fmt(num(data[dk]) * w)}</td> })}<td className="tot" style={{ color: colFila }}>{fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`OTROS|gas|${mi}`]) * w, 0))}</td></tr>
                       return <Fragment2 key={it}>{fila}{viajeRow}{otroManualRow}</Fragment2>
                     }
                     if (!esCostos) return fila
