@@ -3356,7 +3356,7 @@ function GastosRetailEBEspejo({ empresa }) {
   return <div className="panel" style={{ borderLeftColor: '#0e7490' }}>
     <h3 style={{ color: '#0e7490' }}>🏬 Gastos Admin — Retail EB <span className="unit">(🪞 espejo · solo lectura · se llena en Retail → Gastos)</span></h3>
     <div className="sub">Estos gastos ya alimentan el <b>P&L y Cash Flow de Retail EB</b>. Se muestran aquí solo para visibilidad del total de gastos admin de Energy Brands.</div>
-    <div className="tablewrap" style={{ overflowX: 'auto' }}><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+    <div className="tablewrap" style={{ overflowX: 'auto' }}><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
       <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
       <tbody>
         {DEFAULT_GADMIN.map((it) => <tr key={it.cod}><td>{it.cod}</td><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>{it.sub}</td>{MESES.map((_, m) => <td key={m} className="tot" style={{ background: '#f8fafc' }}>{fmt(num(ret[`G|${it.cod}|${m}`]))}</td>)}<td className="tot">{fmt(row(it.cod))}</td></tr>)}
@@ -3382,7 +3382,7 @@ function GastosAdminTotalBlock({ empresa, sbus }) {
   return <div className="panel" style={{ borderLeftColor: '#7c3aed' }}>
     <h3 style={{ color: '#7c3aed' }}>Σ Gastos Admin — TOTAL <span className="unit">(directos + indirectos + aprobado a las áreas · USD · 2028)</span></h3>
     <div className="sub">Suma de los <b>gastos admin directos</b> + <b>indirectos</b> (ambos los llena Finanzas aquí) + lo <b>aprobado</b> a Director y Logística (105/106/107 por SBU) + el <b>espejo de Retail EB</b> (🪞 solo lectura, se llena en Retail).</div>
-    <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+    <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '370px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
       <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m} className="yb">{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
       <tbody>
         {row('Gastos Admin Directos', mDir, 'var(--muted)')}
@@ -4036,7 +4036,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
             <div className="panel" style={{ borderLeftColor: accent, marginBottom: 12 }}>
               <div className="toolbar"><span className="empchip" style={{ background: accent, marginLeft: 0 }}>{title}</span><div className="spacer"></div>{editable ? <><button className="btn" onClick={addRubroG}>➕ Agregar rubro</button><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar'}</button></> : <span className="empchip" style={{ background: '#64748b' }}>solo lectura</span>}</div>
               <div className="tablewrap" style={{ overflowX: 'auto' }}>
-                <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+                <table className="vfix"><colgroup><col style={{ width: '320px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
                   <thead><tr><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
                   <tbody>
                     {gRubros.map((r) => { const esX = gRubrosX.includes(r.n); return <tr key={r.n}><td className="l sub2">{r.n}{esX && <span className="newbadge">NUEVO</span>}{esX && editable && <button title="Quitar rubro" onClick={() => delRubroG(r.n)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>}</td>{MESES.map((_, mi) => editable ? <td key={mi} className="cell"><input value={data[gk(r.n, mi)] ?? ''} onChange={(e) => setFn(r.n, mi, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot">{fmt(num(gastosEB[gk(r.n, mi)]) + num(gastos[gk(r.n, mi)]))}</td>)}<td className="tot">{fmt(rowFn(r.n))}</td></tr> })}
@@ -4050,7 +4050,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
             <div className="panel" style={{ borderLeftColor: col, marginBottom: 12 }}>
               <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>🏬 Gastos EB Directos</span><span className="unit" style={{ alignSelf: 'center' }}>Mismo formato de centros de costo de Finanzas</span><div className="spacer"></div><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
               <div className="tablewrap" style={{ overflowX: 'auto' }}>
-                <table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+                <table className="vfix"><colgroup><col style={{ width: '60px' }} /><col style={{ width: '260px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
                   <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
                   <tbody>
                     {EB_CENTROS.map((it) => <tr key={it.cod}><td>{it.cod}</td><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>{it.sub}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={gastosEB[gk(it.cod, mi)] ?? ''} onChange={(e) => setGEB(it.cod, mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot">{fmt(gRowEB(it.cod))}</td></tr>)}
@@ -4063,7 +4063,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
             <div className="panel" style={{ borderLeftColor: '#7c3aed', marginBottom: 12 }}>
               <div className="toolbar"><span className="empchip" style={{ background: '#7c3aed', marginLeft: 0 }}>🧾 Gastos TOTAL (EB + Sinergy)</span><div className="spacer"></div><span className="empchip" style={{ background: '#64748b' }}>solo lectura · sin desglose</span></div>
               <div className="tablewrap" style={{ overflowX: 'auto' }}>
-                <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+                <table className="vfix"><colgroup><col style={{ width: '320px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
                   <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
                   <tbody>
                     <tr><td className="l sub2" style={{ color: col }}>🏬 Gastos EB Directos</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(gColEB(mi))}</td>)}<td className="tot" style={{ color: col, fontWeight: 800 }}>{fmt(gGranEB)}</td></tr>
