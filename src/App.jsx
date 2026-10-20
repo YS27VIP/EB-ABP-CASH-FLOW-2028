@@ -867,11 +867,11 @@ export default function App() {
 }
 
 /* ===== RoleForm: pestañas de rubro (simple o detalle) ===== */
-function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, onSaved, headerChip, capTitle, readOnly }) {
+function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, onSaved, headerChip, capTitle, readOnly, initRubro }) {
   const esTot = String(fixedMarca || '').startsWith('TOTAL::')
   // Los VIAJES ya no se llenan dentro de cada rol: se capturan en la pestaña "🧳 Viajes equipo". Por eso se quitan del selector VER del rol (salvo cuando se pide explícito con rubrosOverride, como en Gerencia/Finanzas/Viajes equipo).
   const rubros = (rubrosOverride || role.rubros.filter((rb) => rb.k !== 'VIAJES')).filter((rb) => !rb.gadmin || esTot).filter((rb) => !(empresa === 'TUMAR' && rb.muestras)) // Gastos admin solo en TOTAL SBU · Muestras no aplica en TUMAR
-  const [tab, setTab] = useState(0)
+  const [tab, setTab] = useState(() => { if (initRubro) { const i = rubros.findIndex((r) => r.k === initRubro); if (i >= 0) return i } return 0 }) // VER inicial (deep-link desde la Guía)
   // Borrador local: lo tecleado se recuerda en el navegador aunque no se haya guardado, para no perderlo al cambiar de pestaña.
   const draftKey = `cap_draft_${role.tab || role.label}_${empresa}_${fixedMarca || ''}`
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(draftKey) || '{}') } catch { return {} } })
@@ -4627,7 +4627,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede, deep }) {
                       ? (LOG_SIMPLE(empresa)
                         ? <TumarLogMarca key={sbuName + 'tlog' + marca} empresa={empresa} marca={marca} />
                         : <LogisticaBlock key={sbuName + 'log' + marca} r={r} empresa={empresa} usuario={usuario} oneSbu={oneSbu} marca={marca} noHeader />)
-                      : <RoleForm key={sbuName + r.id + marca} role={r} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
+                      : <RoleForm key={sbuName + r.id + marca} role={r} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} initRubro={deep && deep.comSub === r.id ? deep.ver : undefined} />}
                   </div>))}
               </>)
               : <RoleForm key={sbuName + secId + marca} role={role} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
@@ -4705,7 +4705,14 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
       rol: 'Director', nav: { sbu: true, step: { sec: 'comercial', comSub: 'director', marca: 'first' } },
       a: '#4f46e5', icon: '🧭', role: 'Director Comercial', scope: 'Por cada SBU (1 · 2 · 3) y por cada marca',
       where: <>Entra a la <b>SBU</b> (menú) → elige la <b>marca</b> (panel izquierdo) → paso <b style={{ color: '#4f46e5' }}>Director</b></>,
-      items: ['Categorías que aplican a la marca', 'Categorías por cliente (qué compra cada cliente — reparto de la venta)', 'Muestras (unidades) por categoría', 'Comisiones (%) sobre la venta', 'Plazo de cobro de los clientes NUEVOS (celdas amarillas dentro del Cash Flow)', { t: 'Viajes del Director', step: { sec: 'viajes', marca: 'first' } }],
+      items: [
+        { t: 'Categorías que aplican a la marca', step: { sec: 'comercial', comSub: 'director', marca: 'first', ver: 'CATEGORIAS' } },
+        { t: 'Categorías por cliente (qué compra cada cliente — reparto de la venta)', step: { sec: 'comercial', comSub: 'director', marca: 'first', ver: 'CATEGORIAS' } },
+        { t: 'Muestras (unidades) por categoría', step: { sec: 'comercial', comSub: 'director', marca: 'first', ver: 'MUESTRAS' } },
+        { t: 'Comisiones (%) sobre la venta', step: { sec: 'comercial', comSub: 'director', marca: 'first', ver: 'COMISIONES' } },
+        { t: 'Plazo de cobro de los clientes NUEVOS (celdas amarillas dentro del Cash Flow)', step: { sec: 'comercial', comSub: 'director', marca: 'first', ver: 'CASH FLOW' } },
+        { t: 'Viajes del Director', step: { sec: 'viajes', marca: 'first' } },
+      ],
       note: <>Si falta info de este paso, el selector de Comercial muestra <b>⚠ pendiente</b>. Hasta no completarlo, los pasos siguientes quedan incompletos.</>,
     },
     {
