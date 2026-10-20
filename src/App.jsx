@@ -4702,48 +4702,59 @@ function ComercialScreen({ empresa, sbus, usuario }) {
 function FlujoTelarana() {
   const [hover, setHover] = useState(null)
   const N = {
-    director: { x: 150, y: 90, label: '🧭 Director', c: '#4f46e5' },
-    producto: { x: 150, y: 250, label: '📦 Producto', c: '#047857' },
-    logistica: { x: 150, y: 410, label: '🚚 Logística', c: '#b45309' },
-    marketing: { x: 150, y: 560, label: '📣 Marketing', c: '#db2777' },
-    ventas: { x: 410, y: 110, label: '💵 Ventas', c: '#0891b2' },
-    retail: { x: 480, y: 480, label: '🏬 Retail', c: '#0e7490' },
-    viajes: { x: 330, y: 650, label: '🧳 Viajes', c: '#6b21a8' },
-    finanzas: { x: 715, y: 340, label: '🧮 Finanzas', c: '#7c3aed' },
-    gerencia: { x: 715, y: 110, label: '📈 Gerencia / Holding', c: '#1f2d3d' },
+    // DESTINOS (arriba) — así se construyen de abajo hacia arriba
+    pl: { x: 240, y: 70, label: '📊 P&L Energy Brands', c: '#0f766e', out: true },
+    cf: { x: 630, y: 70, label: '💵 Cash Flow Energy Brands', c: '#15803d', out: true },
+    // ROLES (abajo, quién llena)
+    director: { x: 110, y: 260, label: '🧭 Director', c: '#4f46e5' },
+    ventas: { x: 330, y: 250, label: '💵 Ventas', c: '#0891b2' },
+    producto: { x: 110, y: 400, label: '📦 Producto', c: '#047857' },
+    finanzas: { x: 560, y: 400, label: '🧮 Finanzas', c: '#7c3aed' },
+    retail: { x: 770, y: 430, label: '🏬 Retail', c: '#0e7490' },
+    logistica: { x: 110, y: 540, label: '🚚 Logística', c: '#b45309' },
+    marketing: { x: 330, y: 560, label: '📣 Marketing', c: '#db2777' },
+    viajes: { x: 540, y: 600, label: '🧳 Viajes', c: '#6b21a8' },
   }
   const E = [
+    // dependencias entre roles (la cadena de la venta)
     ['director', 'ventas', 'categorías + % por cliente'],
     ['director', 'producto', 'categorías'],
-    ['director', 'finanzas', 'plazo clientes nuevos + comisiones'],
-    ['director', 'gerencia', 'comisiones + muestras'],
     ['producto', 'ventas', 'AUP → venta $'],
-    ['ventas', 'finanzas', 'unidades → cobros'],
-    ['producto', 'finanzas', 'AUC + compras → pagos'],
+    ['retail', 'ventas', 'Intercompañía (lo que Retail compra)'],
+    // aprobación de gastos admin de las áreas
     ['director', 'finanzas', '105/106/107 (lo aprueba)'],
     ['logistica', 'finanzas', '105/106/107 (lo aprueba)'],
-    ['ventas', 'gerencia', 'venta / contribución'],
-    ['producto', 'gerencia', 'costo / margen'],
-    ['logistica', 'gerencia', '% logístico'],
-    ['marketing', 'gerencia', 'marketing'],
-    ['finanzas', 'gerencia', 'gastos admin + cash flow'],
-    ['retail', 'ventas', 'Intercompañía (lo que Retail compra)'],
-    ['retail', 'finanzas', 'P&L Retail EB → EB'],
-    ['retail', 'gerencia', 'Retail EB (consolidado)'],
+    // viajes: cada rol captura los suyos
     ['director', 'viajes', 'viajes del equipo'],
     ['ventas', 'viajes', 'viajes del equipo'],
     ['producto', 'viajes', 'viajes del equipo'],
     ['logistica', 'viajes', 'viajes del equipo'],
     ['marketing', 'viajes', 'viajes del equipo'],
-    ['finanzas', 'viajes', 'viajes back office (Admin/Procesos)'],
-    ['viajes', 'gerencia', 'línea Viajes (resta al margen)'],
+    ['finanzas', 'viajes', 'back office (Admin/Procesos)'],
+    // → P&L / Contribución por SBU
+    ['ventas', 'pl', 'venta neta'],
+    ['producto', 'pl', 'costo (AUC)'],
+    ['logistica', 'pl', '% logístico (línea Logística)'],
+    ['marketing', 'pl', 'marketing'],
+    ['director', 'pl', 'comisiones + muestras'],
+    ['viajes', 'pl', 'línea Viajes'],
+    ['finanzas', 'pl', 'gastos admin'],
+    ['retail', 'pl', 'P&L Retail EB → EB'],
+    // → Cash Flow por SBU
+    ['ventas', 'cf', 'unidades → cobros'],
+    ['producto', 'cf', 'compras → pagos'],
+    ['director', 'cf', 'plazo cobro nuevos + comisiones'],
+    ['marketing', 'cf', 'marketing (pago)'],
+    ['viajes', 'cf', 'viajes (pago)'],
+    ['finanzas', 'cf', 'gastos admin + financieros'],
+    ['retail', 'cf', 'Cash Flow Retail EB'],
   ]
-  const W = 132, H = 40
+  const W = 150, H = 40
   const conn = (id) => hover && (hover === id || E.some(([a, b]) => (a === hover && b === id) || (b === hover && a === id)))
   const active = (a, b) => !hover || a === hover || b === hover
   const shorten = (ax, ay, bx, by, pad) => { const dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy) || 1; return [bx - dx / d * pad, by - dy / d * pad] }
   return <div style={{ overflowX: 'auto' }}>
-    <svg viewBox="0 0 860 700" style={{ width: '100%', minWidth: 640, maxWidth: 900 }} xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 900 690" style={{ width: '100%', minWidth: 640, maxWidth: 940 }} xmlns="http://www.w3.org/2000/svg">
       <defs><marker id="arrTel" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#94a3b8" /></marker><marker id="arrTelA" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#334155" /></marker></defs>
       {E.map(([a, b, lbl], i) => {
         const na = N[a], nb = N[b]; const [ex, ey] = shorten(na.x, na.y, nb.x, nb.y, 30); const [sx, sy] = shorten(nb.x, nb.y, na.x, na.y, 30)
@@ -4754,9 +4765,9 @@ function FlujoTelarana() {
           {isOn && <><rect x={mx - lbl.length * 3.15} y={my - 9} width={lbl.length * 6.3} height={17} rx={4} fill="#fff" stroke={na.c + '66'} /><text x={mx} y={my + 3} textAnchor="middle" fontSize="10.5" fill="#334155" fontWeight="700">{lbl}</text></>}
         </g>
       })}
-      {Object.entries(N).map(([id, n]) => { const on = !hover || hover === id || conn(id); return <g key={id} style={{ cursor: 'pointer' }} opacity={on ? 1 : 0.25} onMouseEnter={() => setHover(id)} onMouseLeave={() => setHover(null)} onClick={() => setHover((h) => h === id ? null : id)}>
-        <rect x={n.x - W / 2} y={n.y - H / 2} width={W} height={H} rx={10} fill={hover === id ? n.c : '#fff'} stroke={n.c} strokeWidth={hover === id ? 2.5 : 1.8} />
-        <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize="13" fontWeight="800" fill={hover === id ? '#fff' : n.c}>{n.label}</text>
+      {Object.entries(N).map(([id, n]) => { const on = !hover || hover === id || conn(id); const w = n.out ? 230 : W; const h = n.out ? 46 : H; const fillSel = hover === id; return <g key={id} style={{ cursor: 'pointer' }} opacity={on ? 1 : 0.25} onMouseEnter={() => setHover(id)} onMouseLeave={() => setHover(null)} onClick={() => setHover((hh) => hh === id ? null : id)}>
+        <rect x={n.x - w / 2} y={n.y - h / 2} width={w} height={h} rx={10} fill={fillSel ? n.c : n.out ? n.c + '1a' : '#fff'} stroke={n.c} strokeWidth={fillSel ? 2.6 : n.out ? 2.4 : 1.8} />
+        <text x={n.x} y={n.y + (n.out ? 5 : 4)} textAnchor="middle" fontSize={n.out ? 14 : 13} fontWeight="800" fill={fillSel ? '#fff' : n.c}>{n.label}</text>
       </g> })}
     </svg>
   </div>
@@ -4768,6 +4779,7 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
     {
       rol: 'Director', nav: { sbu: true, step: { sec: 'comercial', comSub: 'director', marca: 'first' } },
       a: '#4f46e5', icon: '🧭', role: 'Director Comercial', scope: 'Por cada SBU (1 · 2 · 3) y por cada marca',
+      feeds: <>las unidades de <b>Ventas</b> (categorías + % por cliente) · las categorías de <b>Producto</b> · las líneas <b>Comisiones</b> y <b>Muestras</b> del P&L · el <b>plazo de cobro</b> del Cash Flow.</>,
       where: <>Entra a la <b>SBU</b> (menú) → elige la <b>marca</b> (panel izquierdo) → paso <b style={{ color: '#4f46e5' }}>Director</b></>,
       items: [
         { t: 'Categorías que aplican a la marca', step: { sec: 'comercial', comSub: 'director', marca: 'first', ver: 'CATEGORIAS' } },
@@ -4782,6 +4794,7 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
     {
       rol: 'Ventas', nav: { sbu: true, step: { sec: 'comercial', comSub: 'ventas', marca: 'first' } },
       a: '#0891b2', icon: '💵', role: 'Ventas', scope: 'Por cada SBU y por cada marca',
+      feeds: <>la <b>Venta Neta</b> del P&L (unidades × AUP de Producto) · los <b>Cobros (Cash In)</b> del Cash Flow · la <b>Contribución de la SBU</b>.</>,
       where: <>SBU → marca → paso <b style={{ color: '#0891b2' }}>Ventas</b></>,
       items: ['Unidades 2028 por cliente y por mes (crecimiento sobre 2027)', 'Se capturan los 2 vendedores de la marca', 'Venta neta resultante por cliente', { t: 'Viajes de Ventas', step: { sec: 'viajes', marca: 'first' } }],
       note: <><b>Intercompañía</b> aparece automático y de solo lectura (lo que Retail le compra a la marca). No se llena.</>,
@@ -4789,24 +4802,28 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
     {
       rol: 'Producto', nav: { sbu: true, step: { sec: 'comercial', comSub: 'producto', marca: 'first' } },
       a: '#047857', icon: '📦', role: 'Producto', scope: 'Por cada SBU y por cada marca',
+      feeds: <>el <b>AUP</b> valoriza la <b>Venta Neta</b> ($) · el <b>AUC</b> arma el <b>Costo</b> (y el Margen Bruto) · las <b>compras</b> son los <b>Pagos (Cash Out)</b> del Cash Flow.</>,
       where: <>SBU → marca → paso <b style={{ color: '#047857' }}>Producto</b></>,
       items: ['AUP — precio promedio de venta por categoría / temporada', 'AUC — costo promedio por categoría / temporada', 'Inventario y plan de compras 2028 (por temporada)', 'Margen por categoría', { t: 'Viajes de Producto', step: { sec: 'viajes', marca: 'first' } }],
     },
     {
       rol: 'Logística', nav: { sbu: true, step: { sec: 'comercial', comSub: 'logistica', marca: 'first' } },
       a: '#b45309', icon: '🚚', role: 'Logística', scope: 'Por cada SBU y por cada marca',
+      feeds: <>la línea <b>Logística</b> del P&L (resta al Margen) y del Cash Flow · baja la <b>Contribución de la SBU</b>.</>,
       where: <>SBU → marca → paso <b style={{ color: '#b45309' }}>Logística</b></>,
       items: ['% costo logístico sobre la venta', 'Costo de muestras ($ por unidad)', { t: 'Viajes de Logística', step: { sec: 'viajes', marca: 'first' } }],
     },
     {
       rol: 'Marketing', nav: { sbu: true, step: { sec: 'marketing', marca: 'first' } },
       a: '#db2777', icon: '📣', role: 'Marketing', scope: 'Por cada marca',
+      feeds: <>la línea <b>Marketing</b> del P&L (resta a la Contribución) y los <b>pagos de Marketing</b> del Cash Flow.</>,
       where: <>Entra a <b style={{ color: '#db2777' }}>Marketing</b> → elige la marca</>,
       items: ['Rubros por mes, por grupo: ATL · BTL · TRADE · DIGITAL · PR · PRE VENTAS', 'En DIGITAL: 321 – Implementación / Desarrollo E-commerce (nuevo)', 'Puedes agregar rubros propios además de los predefinidos', { t: 'Viajes de Marketing', step: { sec: 'viajes', marca: 'first' } }],
     },
     {
       rol: 'Finanzas', nav: { go: 'finanzas' },
       a: '#7c3aed', icon: '🧮', role: 'Finanzas', scope: 'A nivel empresa y dentro de cada SBU',
+      feeds: <>los <b>Gastos administrativos</b> del P&L y Cash Flow (por SBU) · los <b>Cobros, Pagos, Costos financieros y Otros</b> del Cash Flow · aprueba los <b>105/106/107</b> de las áreas.</>,
       where: <>Workspace <b style={{ color: '#7c3aed' }}>Finanzas</b> (varios lugares, ver abajo)</>,
       items: [
         { t: 'Cash Flow → Cash Inicial de cada marca', to: 'finanzas' },
@@ -4824,6 +4841,7 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
     {
       nav: { go: 'sbu:Retail' },
       a: '#0e7490', icon: '🏬', role: 'Retail', scope: 'Tiendas propias EB + SINERGY',
+      feeds: <>el <b>P&L y Cash Flow Retail EB</b> (que suman a Energy Brands) · el vendedor <b>Intercompañía</b> en Ventas · la tienda <b>SINERGY</b> → P&L y Cash Flow de SINERGY.</>,
       where: <>Entra a <b style={{ color: '#0e7490' }}>Retail</b> (menú)</>,
       items: [
         { t: 'Mapa de abastecimiento (qué marca/categoría surte cada subcategoría)', to: 'sbu:Retail', d: { retailTab: 'comercial', retailComTab: 'mapa' } },
@@ -4874,6 +4892,7 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
                   </li>
                 })}
               </ul>
+              {c.feeds && <div style={{ marginTop: 11, fontSize: 12.5, background: c.a + '12', border: '1px solid ' + c.a + '44', borderRadius: 9, padding: '8px 11px', color: '#334155' }}><b style={{ color: c.a }}>🔗 Alimenta:</b> {c.feeds}</div>}
               {c.note && <div style={{ marginTop: 11, fontSize: 12, color: 'var(--muted)', borderLeft: '3px solid ' + c.a, padding: '3px 0 3px 10px', background: '#fafafa' }}>{c.note}</div>}
               {go && c.nav && (() => {
                 const btn = { fontSize: 12.5, fontWeight: 700, border: '1px solid ' + c.a, background: '#fff', color: c.a, borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }
