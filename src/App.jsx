@@ -769,7 +769,7 @@ export default function App() {
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
           <span className="rolechip" style={{ background: '#2e7d32' }}>💰 Finanzas</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        {estadoReady ? <main><FinanzasWorkspace key={empresa} empresa={empresa} usuario={usuario} sbus={sbus} /></main> : cargandoMain}
+        {estadoReady ? <main><FinanzasWorkspace key={empresa} empresa={empresa} usuario={usuario} sbus={sbus} deep={navDeep} /></main> : cargandoMain}
       </>
     )
   }
@@ -3605,10 +3605,10 @@ function GastosAdminForm({ empresa, tipo = 'dir', sbus }) {
 }
 
 /* ===== FINANZAS WORKSPACE: panel de marcas (todas las SBU) + Cash Flow por marca ===== */
-function FinanzasWorkspace({ empresa, usuario, sbus }) {
+function FinanzasWorkspace({ empresa, usuario, sbus, deep }) {
   const finRole = ROLES.find((r) => r.id === 'finanzas')
   const firstMarca = (Object.values(sbus)[0] || [])[0]
-  const [marca, setMarca] = useState(firstMarca)
+  const [marca, setMarca] = useState(() => (deep && deep.finMarca) ? deep.finMarca : firstMarca)
   useEffect(() => { if (!marca && firstMarca) setMarca(firstMarca) }, [firstMarca])
   const isTot = String(marca || '').startsWith('TOTAL::')
   const acc = isTot ? sbuColor(String(marca).slice(7)) : marcaColor(marca)
@@ -3731,11 +3731,11 @@ function TeamPanel({ empresa, sbuName }) {
 // el usuario puede borrar las que no apliquen o agregar nuevas.
 const RETAIL_CATS_DEF = ["Everyday Road", "Everyday Trail", "Training", "Road race", "Trail race", "Recovery Slides", "Recovery Shoes", "Logo wear", "Training top", "Training Bottom", "Race Top", "Race Bottom", "Outlayer", "Wearables", "Head", "Socks", "Vest", "Drinkware", "Phone storage", "Eyewear", "Insoles", "Therapy", "Compression", "Underwear", "Sunscreen", "Gaiters & Neck Gaiters", "laces", "Towels", "Others", "Daily packs", "Fanny packs", "Race packs", "Water packs", "Open-Toe Sporty", "Closed-Toe Casual", "Closed-Toe Fashion", "Closed-Toe Sporty", "Slippers", "Low-Cut Boots", "Open-Toe Casual", "Open-Toe Fashion", "Open-Toe Plattform", "Closed-Toe Plattform", "Low-Casual Socks", "High-Casual Socks", "Logowear", "Headwear", "Sport Socks", "Cleaning", "Wallets", "Keychains", "High-Cut Boots", "Tote Bags", "Work Packs", "Shopping Bags", "Pouches & Cases", "Duffel Bags", "Toiletry Bag"]
 
-function RetailWorkspace({ empresa, usuario, sbus }) {
+function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const col = sbuColor('Retail')
   const ver = useDataVersion()
-  const [tab, setTab] = useState('comercial')
-  const [comTab, setComTab] = useState('mapa') // sub-vista de Comercial (paso 1 = mapa)
+  const [tab, setTab] = useState(() => (deep && deep.retailTab) ? deep.retailTab : 'comercial')
+  const [comTab, setComTab] = useState(() => (deep && deep.retailComTab) ? deep.retailComTab : 'mapa') // sub-vista de Comercial (paso 1 = mapa)
   const TABS = [
     ['comercial', '🛍️ Comercial'], ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'],
     ['logistica', '🚚 Logística'], ['gastos', '💵 Gastos'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
@@ -4540,7 +4540,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede, deep }) {
   }
 
   if (isRetail) {
-    return <RetailWorkspace empresa={empresa} usuario={usuario} sbus={sbus} />
+    return <RetailWorkspace empresa={empresa} usuario={usuario} sbus={sbus} deep={deep} />
   }
   return (
     <div className="comercial">
@@ -4738,16 +4738,15 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
       a: '#7c3aed', icon: '🧮', role: 'Finanzas', scope: 'A nivel empresa y dentro de cada SBU',
       where: <>Workspace <b style={{ color: '#7c3aed' }}>Finanzas</b> (varios lugares, ver abajo)</>,
       items: [
-        'Cash Flow → Cash Inicial de cada marca',
-        'Cash Flow → Saldo pendiente por cobrar del 2027: en qué mes de 2028 entra cada cobro (por cliente)',
-        'Cash Flow → Término de cobro de cada cliente (Cash / 30 / 60 / 90 días)',
-        'Cash Flow → Término de pago a proveedores (plazo de pago de las compras)',
-        'Cash Flow → Otros gastos → «Bono 2027 (pago feb-2028)» (el bono del 2027 que se paga en 2028)',
-        'Cash Flow → Costos Financieros, Otros ingresos y Otros gastos',
-        'Gastos Admin Indirectos — barra lateral «💰 Gastos admin indirectos» (nivel empresa). Se prorratean por el peso de venta de cada SBU; ahí se ve el peso y 3 bloques con el resultado por SBU.',
-        'Gastos Admin Directos — entrando a cada SBU → VER: GASTOS ADMIN DIRECTOS',
-        'Viajes de Finanzas y back office (Admin / Procesos) → caen en Otros gastos',
-        'Aprobaciones',
+        { t: 'Cash Flow → Cash Inicial de cada marca', to: 'finanzas' },
+        { t: 'Cash Flow → Saldo pendiente por cobrar del 2027: en qué mes de 2028 entra cada cobro (por cliente)', to: 'finanzas' },
+        { t: 'Cash Flow → Término de cobro de cada cliente (Cash / 30 / 60 / 90 días)', to: 'finanzas' },
+        { t: 'Cash Flow → Término de pago a proveedores (plazo de pago de las compras)', to: 'finanzas' },
+        { t: 'Cash Flow → Otros gastos → «Bono 2027 (pago feb-2028)»', to: 'finanzas' },
+        { t: 'Cash Flow → Costos Financieros, Otros ingresos y Otros gastos', to: 'finanzas' },
+        { t: 'Gastos Admin (directos por SBU + indirectos) — barra lateral «💰 Gastos Admin»', to: 'finanzas', d: { finMarca: '__GADMIN__' } },
+        { t: 'Viajes de Finanzas y back office (Admin / Procesos) → Otros gastos', to: 'finanzas', d: { finMarca: '__VIAJES__' } },
+        { t: 'Aprobaciones', to: 'finanzas' },
       ],
       note: <>Directos + Indirectos impactan el Cash Flow de cada SBU (línea directos, línea indirectos y total). En Gerencia/SBU los campos financieros se ven como <b>espejo</b> (solo lectura).</>,
     },
@@ -4756,14 +4755,14 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
       a: '#0e7490', icon: '🏬', role: 'Retail', scope: 'Tiendas propias EB + SINERGY',
       where: <>Entra a <b style={{ color: '#0e7490' }}>Retail</b> (menú)</>,
       items: [
-        'Mapa de abastecimiento (qué marca/categoría surte cada subcategoría)',
-        'Compras por tienda: calendario (% de llegada por mes, suma 100%) + unidades anuales',
-        'Ventas por tienda: unidades vendidas por mes + % margen + % descuento (2026 es referencia, solo lectura)',
-        'Gastos de tienda (EB) y gastos SINERGY',
-        'Marketing Retail (EB) y Marketing SINERGY',
-        'Logística SINERGY',
-        'Viajes: EB y SINERGY (Director + Marketing)',
-        'Cash Flow: líneas financieras EB y SINERGY',
+        { t: 'Mapa de abastecimiento (qué marca/categoría surte cada subcategoría)', to: 'sbu:Retail', d: { retailTab: 'comercial', retailComTab: 'mapa' } },
+        { t: 'Compras por tienda: calendario (% de llegada por mes, suma 100%) + unidades anuales', to: 'sbu:Retail', d: { retailTab: 'comercial', retailComTab: 'mapa' } },
+        { t: 'Ventas por tienda: unidades vendidas por mes + % margen + % descuento (2026 es referencia, solo lectura)', to: 'sbu:Retail', d: { retailTab: 'comercial', retailComTab: 'ventas' } },
+        { t: 'Gastos de tienda (EB) y gastos SINERGY', to: 'sbu:Retail', d: { retailTab: 'gastos' } },
+        { t: 'Marketing Retail (EB) y Marketing SINERGY', to: 'sbu:Retail', d: { retailTab: 'mk' } },
+        { t: 'Logística SINERGY', to: 'sbu:Retail', d: { retailTab: 'logistica' } },
+        { t: 'Viajes: EB y SINERGY (Director + Marketing)', to: 'sbu:Retail', d: { retailTab: 'viajes' } },
+        { t: 'Cash Flow: líneas financieras EB y SINERGY', to: 'sbu:Retail', d: { retailTab: 'cf' } },
       ],
       note: <>Las ventas de la tienda <b>SINERGY</b> caen al P&L y Cash Flow de <b>SINERGY</b>. El resto de tiendas alimenta el <b>P&L Retail EB</b>, que a su vez suma al P&L y Cash Flow de Energy Brands.</>,
     },
@@ -4796,11 +4795,13 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
             <div style={{ padding: '0 16px 16px' }}>
               <div style={{ fontSize: 12.5, background: '#f3f4f6', borderRadius: 9, padding: '8px 10px', margin: '0 0 11px', color: '#374151' }}>{c.where}</div>
               <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-                {c.items.map((it, i) => (
-                  <li key={i} style={{ position: 'relative', padding: '5px 0 5px 20px', fontSize: 13.5, borderTop: i ? '1px dashed #eceef2' : 'none' }}>
-                    <span style={{ position: 'absolute', left: 4, top: 4, color: c.a, fontWeight: 800 }}>›</span>{it}
+                {c.items.map((it, i) => {
+                  const txt = typeof it === 'string' ? it : it.t
+                  const h = !go ? null : (it && typeof it === 'object' && it.to) ? () => go(it.to, it.d) : c.nav && c.nav.go ? () => go(c.nav.go, c.nav.d) : c.nav && c.nav.sbu ? (() => { const s = miSbuName || sbuNames[0]; return s ? () => go('sbu:' + s, c.nav.step) : null })() : null
+                  return <li key={i} onClick={h || undefined} style={{ position: 'relative', padding: '5px 0 5px 20px', fontSize: 13.5, borderTop: i ? '1px dashed #eceef2' : 'none', cursor: h ? 'pointer' : 'default' }} title={h ? 'Ir a esta parte de la app' : undefined}>
+                    <span style={{ position: 'absolute', left: 4, top: 4, color: c.a, fontWeight: 800 }}>›</span><span style={h ? { color: c.a, textDecoration: 'underline', textDecorationColor: '#cbd5e1' } : undefined}>{txt}</span>{h ? <span style={{ color: c.a, marginLeft: 5 }}>↗</span> : null}
                   </li>
-                ))}
+                })}
               </ul>
               {c.note && <div style={{ marginTop: 11, fontSize: 12, color: 'var(--muted)', borderLeft: '3px solid ' + c.a, padding: '3px 0 3px 10px', background: '#fafafa' }}>{c.note}</div>}
               {go && c.nav && (() => {
