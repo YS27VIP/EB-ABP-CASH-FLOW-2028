@@ -162,7 +162,7 @@ const CF_TERMINOS = ['Cash', '30 días', '60 días', '90 días', '120 días', '1
 const CF_PLAZO_MESES = { 'Cash': 0, '30 días': 1, '60 días': 2, '90 días': 3, '120 días': 4, '150 días': 5, '180 días': 6, 'Intercompañía': 0 }
 /* Costos Operativos = suma de estos 4 sub-rubros (el usuario los llena; el total es calculado) */
 const CF_COSTOS_PARENT = 'Costos Operativos'
-const CF_COSTOS = ['Gastos Admin Directos', 'Logística', 'Viajes', 'Gastos Admin Indirectos', 'Marketing', 'Comisiones']
+const CF_COSTOS = ['Gastos Admin Directos', 'Gastos Admin Indirectos', 'Logística', 'Viajes', 'Marketing', 'Comisiones']
 /* Nuevas líneas que llena Finanzas (nivel empresa, solo en la vista TOTAL), antes del Flujo neto */
 const CF_FIN_PARENT = 'Costos Financieros'
 const CF_FIN = [['perd', 'Intereses perdidos'], ['gan', 'Intereses ganados']]
@@ -872,7 +872,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, on
         : rb.invflow ? <TemporadaForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="flow" />
         : rb.comis ? <ComisionesForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
         : rb.muestras ? <MuestrasForm key={rb.k} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
-        : rb.gadmin ? (empresa === 'ENERGY BRANDS' ? <Fragment2 key={rb.k}><GastosAdminForm empresa={empresa} tipo="dir" /><div style={{ height: 18 }} /><GastosAdminForm empresa={empresa} tipo="ind" /></Fragment2> : <GastosAdminForm key={rb.k} empresa={empresa} />)
+        : rb.gadmin ? <GastosAdminForm key={rb.k} empresa={empresa} tipo="dir" />
         : rb.aprob ? <AprobacionesForm key={rb.k} empresa={empresa} sbus={sbus} />
 
         : rb.porCat ? <CatCaptureForm key={rb.k} {...common} />
@@ -3338,6 +3338,7 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
       <aside className="cmz-side">
         <div className="sub" style={{ fontSize: 11, margin: '0 0 6px', padding: '0 4px' }}>✅ completo · ⚠️ falta algo</div>
         <button className={'cmz-marca' + (marca === '__VIAJES__' ? ' active' : '')} onClick={() => setMarca('__VIAJES__')} style={{ marginBottom: 6, fontWeight: 800, ...(marca === '__VIAJES__' ? { background: '#6b21a8', color: '#fff' } : { color: '#6b21a8' }) }}>🧳 Viajes <span className="unit" style={{ fontWeight: 400 }}>(1 vez)</span><span style={{ float: 'right' }} title={viajesFinOk ? 'Viajes de Finanzas lleno' : 'Falta llenar los Viajes de Finanzas'}>{viajesFinOk ? '✅' : '⚠️'}</span></button>
+        {empresa === 'ENERGY BRANDS' && <button className={'cmz-marca' + (marca === '__GADMIN__' ? ' active' : '')} onClick={() => setMarca('__GADMIN__')} style={{ marginBottom: 6, fontWeight: 800, ...(marca === '__GADMIN__' ? { background: '#be185d', color: '#fff' } : { color: '#be185d' }) }}>💰 Gastos admin indirectos</button>}
         <button className={'cmz-marca' + (marca === '__REPORTE__' ? ' active' : '')} onClick={() => setMarca('__REPORTE__')} style={{ marginBottom: 8, fontWeight: 800, ...(marca === '__REPORTE__' ? { background: '#0e7490', color: '#fff' } : { color: '#0e7490' }) }}>📊 Reporte</button>
         {Object.entries(sbus).map(([s, ms]) => (
           <div className="cmz-sbu" key={s}>
@@ -3353,6 +3354,10 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
           : marca === '__VIAJES__' ? <>
             <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#6b21a8', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>🧳 Viajes de Finanzas</span><span className="unit" style={{ alignSelf: 'center' }}>Se llena una sola vez (toda la empresa), no por marca.</span></div>
             <RoleForm key="finviajes" role={finRole} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Finanzas)" />
+          </>
+          : marca === '__GADMIN__' ? <>
+            <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#be185d', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>💰 Gastos admin indirectos</span><span className="unit" style={{ alignSelf: 'center' }}>Corporativos · a nivel empresa (se llenan una vez). Se prorratean por peso de venta y bajan al Cash Flow de cada SBU.</span></div>
+            <GastosAdminForm empresa={empresa} tipo="ind" />
           </>
           : <>
             {marca && <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: acc, marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>{isTot ? `▣ TOTAL ${String(marca).slice(7)}` : `💰 ${marca}`}</span></div>}
