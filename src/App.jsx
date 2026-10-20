@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_ind', 'gadmin_cfg', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'cfsum', 'vendedores', 'vendcli']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_ind', 'gadmin_cfg', 'gadmin_req', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'cfsum', 'vendedores', 'vendcli']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -145,7 +145,7 @@ const ROLES = [
   { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'INVENTARIO · PRECIOS · MARGEN', u: '$', productoall: true }, VJ] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
-  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, { k: 'GASTOS ADMIN DIRECTOS', gadmin: true }, { k: 'APROBACIONES', aprob: true }] }, // Viajes de Finanzas se llena UNA sola vez (no por marca): botón en la barra lateral
+  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, { k: 'APROBACIONES', aprob: true }] }, // Gastos Admin (directos+indirectos) se llenan a nivel empresa (barra lateral), no dentro de cada SBU. Viajes de Finanzas: botón en la barra lateral.
   { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [{ k: 'CATEGORIAS', cat: true }, VJ, { k: 'COMISIONES', comis: true }, { k: 'MUESTRAS', muestras: true }, { k: 'CASH FLOW', u: '$', cash: true }] },
 ]
 const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
@@ -1307,6 +1307,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   const sbuLbl = sbu === '__ALL__' ? 'TODAS' : sbu
+  const esTotalEB = sbu === '__ALL__' // Cash Flow consolidado de toda la empresa (Total Energy Brands). Los viajes admin back office SOLO aplican aquí, no en las SBU.
   const sbuMarcas = sbu === '__ALL__' ? Object.values(sbus).flat() : (sbus[sbu] || [])
   const soloVer = !!(role && role.id === 'director') // el Director solo ve (lo llena Finanzas)
   const finEdit = !!(role && role.id === 'finanzas') // los campos de Finanzas (Otros ing/gastos, Cash Inicial, Costos Financieros) solo se editan en Finanzas; en SBU/Gerencia son espejo
@@ -1386,7 +1387,13 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const showEne29 = esEB
   const bono2028Anual = () => CF_MESES.reduce((a, _, mi) => a + (num(gadminData[`${BONO_COD}|${mi}`]) + num(gadminIndData[`${BONO_COD}|${mi}`])) * gadminPeso(), 0)
   const e29td = (txt, color, bold) => <td key="e29" className="tot yb" style={{ background: '#fff7ed', color, fontWeight: bold ? 700 : undefined }}>{txt}</td> // celda de la columna informativa ENE-29
+  // Gastos admin propuestos por Director/Logística y APROBADOS por Finanzas (EB). En el Total EB suma todas las SBU aprobadas; en una SBU, solo la suya.
+  const _greqCF = (() => { try { return JSON.parse(localStorage.getItem(`gadmin_req_${empresa}`) || '{}') } catch { return {} } })()
+  const _gaprobCF = (() => { try { return JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}') } catch { return {} } })()
+  const reqAprobMes = (mi) => { if (!esEB) return 0; const list = esTotalEB ? Object.keys(sbus || {}).filter((s) => s !== 'Retail') : [sbu]; return list.reduce((a, s) => _gaprobCF[`GADMINREQ|${s}`] ? a + GADMIN_REQ_AREAS.reduce((b, arr) => b + GADMIN_REQ_COD.reduce((c, cod) => c + num(_greqCF[gadminReqKey(s, arr.k, cod, mi)]), 0), 0) : a, 0) }
+  const cfCostos = esEB ? [...CF_COSTOS, 'Gastos Admin Áreas'] : CF_COSTOS // EB: línea extra con lo aprobado a Director/Logística (105/106/107)
   const cellRaw = (concepto, mi) => {
+    if (concepto === 'Gastos Admin Áreas') return reqAprobMes(mi)
     if (concepto === 'Comisiones') return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[mi], 0) : comisTotalMes(marca)[mi]
     if (concepto === 'Gastos Admin Directos') return gadminSubtotCF[mi] * gadminPeso() // Cash Flow: excluye el bono 2028 (se paga en 2029); prorrateado por peso de venta
     if (concepto === 'Gastos Admin Indirectos') return gadminIndSubtotCF[mi] * gadminPeso() // Cash Flow: excluye el bono 2028; indirectos prorrateados por peso de venta
@@ -1460,11 +1467,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     }
     if (concepto === CASH_OUT) { return isTotal ? sbuMarcas.reduce((s, m) => s + pagosMarca(m).pagos[mi] + corpPagoMes(m)[mi], 0) : pagosMarca(marca).pagos[mi] + corpPagoMes(marca)[mi] } // pagos a proveedores + comisión corporativa (HOKA/UGG)
     if (CALC_PSI[concepto]) { const fn = CALC_PSI[concepto]; return isTotal ? sbuMarcas.reduce((s, m) => s + fn(m)[mi], 0) : fn(marca)[mi] }
-    if (concepto === CF_COSTOS_PARENT) return CF_COSTOS.reduce((a, sub) => a + cellRaw(sub, mi), 0)
+    if (concepto === CF_COSTOS_PARENT) return cfCostos.reduce((a, sub) => a + cellRaw(sub, mi), 0)
     // Costos financieros / otros ingresos / otros gastos: los llena Finanzas (valores a nivel empresa, compartidos)
     if (concepto === CF_FIN_PARENT) return num(data[`FINCOST|perd|${mi}`]) - num(data[`FINCOST|gan|${mi}`])
     if (concepto === CF_OTRO_ING) return num(data[`OTROS|ing|${mi}`])
-    if (concepto === CF_OTRO_GAS) { const w = finEdit ? 1 : gadminPeso(); return (num(data[`OTROS|gas|${mi}`]) + gViajesMes(mi) + bono2027Mes(mi)) * w } // Otros gastos = (viajes back office + bono 2027 pagado en 2028 + lo que agregue Finanzas), prorrateado por peso de venta de la vista
+    if (concepto === CF_OTRO_GAS) { const w = finEdit ? 1 : gadminPeso(); return (num(data[`OTROS|gas|${mi}`]) + bono2027Mes(mi)) * w + (esTotalEB ? gViajesMes(mi) : 0) } // Otros gastos = (bono 2027 + lo que agregue Finanzas) prorrateado · los viajes admin back office SOLO en el Total EB (no en las SBU)
     return cellRaw(concepto, mi)
   }
   // Valor de UNA marca (para el desglose del total): misma lógica que cell pero sin sumar SBU.
@@ -1643,8 +1650,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                     }
                     if (esOtroGas) {
                       const w = finEdit ? 1 : gadminPeso()
-                      const vb = (mi) => gViajesMes(mi) * w
-                      const viajeRow = <tr key="vbo"><td className="l sub2" style={{ color: '#6b21a8' }}>↳ Viajes admin (back office){!isTotal ? null : <span className="unit"> (🪞 Admin+Procesos+Finanzas{w < 0.999 ? ' · prorrateado' : ''})</span>}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#6b21a8' }}>{vb(mi) > 0.5 ? '− ' : ''}{fmt(vb(mi))}</td>)}{showEne29 && e29td('')}<td className="tot" style={{ color: '#6b21a8' }}>− {fmt(CF_MESES.reduce((a, _, mi) => a + vb(mi), 0))}</td></tr>
+                      const vb = (mi) => gViajesMes(mi) // viajes admin: monto completo (solo se muestra en el Total EB)
+                      const viajeRow = esTotalEB ? <tr key="vbo"><td className="l sub2" style={{ color: '#6b21a8' }}>↳ Viajes admin (back office) <span className="unit">(🪞 Admin+Procesos+Finanzas · solo Total EB)</span></td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#6b21a8' }}>{vb(mi) > 0.5 ? '− ' : ''}{fmt(vb(mi))}</td>)}{showEne29 && e29td('')}<td className="tot" style={{ color: '#6b21a8' }}>− {fmt(CF_MESES.reduce((a, _, mi) => a + vb(mi), 0))}</td></tr> : null
                       const otroManualRow = <tr key="ogman"><td className="l sub2" style={{ color: colFila }}>↳ Otros (Finanzas){!finEdit && ESP('Lo llena Finanzas (nivel empresa).')}</td>{CF_MESES.map((_, mi) => { const dk = `OTROS|gas|${mi}`; return finEdit ? <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot yb" style={{ color: colFila }}>{fmt(num(data[dk]) * w)}</td> })}{showEne29 && e29td('')}<td className="tot" style={{ color: colFila }}>{fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`OTROS|gas|${mi}`]) * w, 0))}</td></tr>
                       const bonoRow = esEB ? <tr key="ogbono"><td className="l sub2" style={{ color: '#9a3412' }}>↳ Bono 2027 (pago feb-2028){!finEdit ? ESP('Egreso de caja 2028: el bono del 2027 se paga en feb-2028. Lo llena Finanzas (nivel empresa).') : <span className="unit"> (bono del 2027 pagado en feb-2028)</span>}</td>{CF_MESES.map((_, mi) => { const dk = `BONO2027|${mi}`; return finEdit ? <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot yb" style={{ color: '#9a3412' }}>{num(data[dk]) * w > 0.5 ? '− ' : ''}{fmt(num(data[dk]) * w)}</td> })}{showEne29 && e29td('')}<td className="tot" style={{ color: '#9a3412' }}>− {fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`BONO2027|${mi}`]) * w, 0))}</td></tr> : null
                       const bono28Row = showEne29 ? (() => { const b28 = bono2028Anual(); return <tr key="ogbono28"><td className="l sub2" style={{ color: '#9a3412' }}>↳ Bono 2028 (pago ene-2029) <span className="unit">(en el P&L 2028; la caja sale en 2029)</span></td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: 'var(--muted)' }}></td>)}{e29td((b28 > 0.5 ? '− ' : '') + fmt(b28), '#9a3412', true)}<td className="tot" style={{ color: 'var(--muted)' }}>—</td></tr> })() : null
@@ -1654,9 +1661,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                     return (
                       <Fragment2 key={it}>
                         {fila}
-                        {openCostos && CF_COSTOS.map((sub) => {
+                        {openCostos && cfCostos.map((sub) => {
                           const bonoNota = esEB && (sub === 'Gastos Admin Directos' || sub === 'Gastos Admin Indirectos') ? ' · NO incluye el Performance Bono (103): va en el P&L pero se paga en ene-2029 (ver columna ENE-29)' : ''
-                          const fuente = (sub === 'Gastos Admin Directos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Gastos Admin Indirectos' ? 'corporativos · lo llena Finanzas (prorrateados por venta)' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de las SBU (los back office van en Otros gastos)' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)') + bonoNota
+                          const fuente = (sub === 'Gastos Admin Directos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Gastos Admin Indirectos' ? 'corporativos · lo llena Finanzas (prorrateados por venta)' : sub === 'Gastos Admin Áreas' ? '105/106/107 propuestos por Director/Logística y aprobados por Finanzas' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de las SBU (los back office van en Otros gastos)' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)') + bonoNota
                           const sceldas = CF_MESES.map((_, mi) => { const bn = brk(sub, mi); return <td key={mi} className="tot yb" style={{ cursor: BULB_CURSOR }} title={'Origen: ' + fuente + (bn ? '\nDatos de origen: ' + bn : '')}>{fmt(cellRaw(sub, mi))}</td> })
                           return <tr key={sub}><td className="l sub2">{sub} {ESP(fuente)}</td>{sceldas}{showEne29 && e29td('')}<td className="tot">{fmt(subTot(sub))}</td></tr>
                         })}
@@ -3202,8 +3209,9 @@ function AprobacionesForm({ empresa, sbus }) {
   const [cf, setCf] = useState({})
   const [hist, setHist] = useState([]); const [ven, setVen] = useState([])
   const [aprob, setAprob] = useState(() => { try { return JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}') } catch { return {} } })
+  const [greq, setGreq] = useState(() => { try { return JSON.parse(localStorage.getItem(`gadmin_req_${empresa}`) || '{}') } catch { return {} } })
   const [msg, setMsg] = useState(null)
-  useEffect(() => { try { setLogd(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setCf(JSON.parse(localStorage.getItem(`cf_${empresa}`) || '{}')) } catch { } try { setAprob(JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')) } catch { } (async () => { try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { } try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVen(jv.values.slice(1)) } catch { } })() }, [empresa])
+  useEffect(() => { try { setLogd(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setCf(JSON.parse(localStorage.getItem(`cf_${empresa}`) || '{}')) } catch { } try { setAprob(JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')) } catch { } try { setGreq(JSON.parse(localStorage.getItem(`gadmin_req_${empresa}`) || '{}')) } catch { } (async () => { try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { } try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVen(jv.values.slice(1)) } catch { } })() }, [empresa])
   const histAll = (() => { const s = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) s.add(upper(cli)) }); return s })()
   const esNew = (cli) => !histAll.has(upper(cli))
   const clientesDe = (mca) => { const out = new Set(); ven.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli || cli.toUpperCase().startsWith('VIAJES')) return; let s = 0; for (let i = 0; i < 12; i++) s += Math.max(0, num(r[4 + i])); if (s > 0) out.add(cli) }); return [...out].sort((a, b) => a.localeCompare(b)) }
@@ -3214,6 +3222,13 @@ function AprobacionesForm({ empresa, sbus }) {
   const isAprobC = (mca) => !!aprob[`COMPRA|${mca}`]
   const toggleC = (mca) => { const next = { ...aprob, [`COMPRA|${mca}`]: !isAprobC(mca) }; setAprob(next); saveEstado(empresa, 'aprob', next); setMsg({ t: 'ok', x: (next[`COMPRA|${mca}`] ? 'Término de compra aprobado' : 'Aprobación quitada') + ' · ' + mca + '. Se pone verde en Finanzas y Director.' }) }
   const nApC = marcas.filter(({ marca: m }) => isAprobC(m)).length
+  // Gastos admin propuestos por las áreas (Director/Logística), por SBU. Finanzas aprueba por SBU.
+  const sbuNamesF = Object.keys(sbus || {}).filter((s) => s !== 'Retail')
+  const reqSbuAnual = (s) => GADMIN_REQ_AREAS.reduce((a, ar) => a + GADMIN_REQ_COD.reduce((b, cod) => b + MESES.reduce((c, _, m) => c + num(greq[gadminReqKey(s, ar.k, cod, m)]), 0), 0), 0)
+  const reqAreaAnual = (s, ar) => GADMIN_REQ_COD.reduce((b, cod) => b + MESES.reduce((c, _, m) => c + num(greq[gadminReqKey(s, ar, cod, m)]), 0), 0)
+  const isAprobReq = (s) => !!aprob[`GADMINREQ|${s}`]
+  const toggleReq = (s) => { const next = { ...aprob, [`GADMINREQ|${s}`]: !isAprobReq(s) }; setAprob(next); saveEstado(empresa, 'aprob', next); setMsg({ t: 'ok', x: (next[`GADMINREQ|${s}`] ? 'Aprobado' : 'Aprobación quitada') + ' · gastos admin de ' + s + '. Al aprobar suma al TOTAL de Gastos Admin y al Cash Flow.' }) }
+  const nApReq = sbuNamesF.filter((s) => isAprobReq(s)).length
   return (
     <div className="panel">
       <h3>Aprobaciones — Logística {M$}<span className="unit"> (Finanzas · por marca)</span></h3>
@@ -3251,6 +3266,26 @@ function AprobacionesForm({ empresa, sbus }) {
         </tbody>
       </table></div>
 
+      {empresa === 'ENERGY BRANDS' && <>
+        <h3 style={{ marginTop: 22 }}>Aprobaciones — Gastos admin de las áreas <span className="unit">(Finanzas · por SBU · rubros 105/106/107)</span></h3>
+        <div className="sub">Director y Logística proponen por SBU los rubros <b>105 Capacitaciones</b>, <b>106 Selección de personal</b> y <b>107 Atenciones</b>. Al <b>aprobar</b> una SBU, su monto suma al <b>TOTAL de Gastos Admin</b> y baja al <b>Cash Flow</b>. Aprobadas: <b>{nApReq}</b> de {sbuNamesF.length}.</div>
+        <div className="tablewrap" style={{ overflowX: 'auto' }}><table style={{ width: 'auto' }}>
+          <thead><tr><th className="l">SBU</th><th>Director</th><th>Logística</th><th>Total propuesto</th><th>Estado</th><th>Acción</th></tr></thead>
+          <tbody>
+            {sbuNamesF.map((s) => { const ap = isAprobReq(s); const tot = reqSbuAnual(s); return (
+              <tr key={s}>
+                <td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: sbuColor(s), marginRight: 7 }}></span>{s}</td>
+                <td className="tot">{fmt(reqAreaAnual(s, 'DIR'))}</td>
+                <td className="tot">{fmt(reqAreaAnual(s, 'LOG'))}</td>
+                <td className="tot" style={{ fontWeight: 700 }}>{fmt(tot)}</td>
+                <td className="tot" style={{ color: ap ? 'var(--ok)' : 'var(--warn)', fontWeight: 800 }}>{ap ? '✓ Aprobado' : 'Pendiente'}</td>
+                <td><button className={'btn' + (ap ? '' : ' primary')} disabled={!tot && !ap} onClick={() => toggleReq(s)}>{ap ? '↺ Quitar aprobación' : '✓ Aprobar'}</button></td>
+              </tr>
+            ) })}
+          </tbody>
+        </table></div>
+      </>}
+
       <h3 style={{ marginTop: 22 }}>Clientes y su plazo de cobro <span className="unit">(para revisión · los nuevos marcados)</span></h3>
       <div className="sub">Todos los clientes que participan en la compra 2028 y el <b>plazo de cobro</b> que tienen. Los <b style={{ color: '#f97316' }}>nuevos</b> (sin histórico) los definió el Director; el resto viene de Salesforce.</div>
       <div className="tablewrap" style={{ maxHeight: '55vh', overflowY: 'auto' }}><table style={{ width: 'auto' }}>
@@ -3269,6 +3304,73 @@ function AprobacionesForm({ empresa, sbus }) {
       </table></div>
     </div>
   )
+}
+
+// Rubros que las áreas (Director/Logística) pueden proponer por SBU, y que Finanzas aprueba por SBU.
+const GADMIN_REQ_COD = ['105', '106', '107']
+const GADMIN_REQ_AREAS = [{ k: 'DIR', label: 'Director' }, { k: 'LOG', label: 'Logística' }]
+const gadminReqKey = (sbu, area, cod, m) => `${sbu}||${area}||${cod}||${m}`
+// Suma anual/mensual de lo APROBADO por Finanzas (por SBU) de los rubros propuestos por las áreas.
+function gadminReqAprobMes(empresa, sbus, m) {
+  try {
+    const req = JSON.parse(localStorage.getItem(`gadmin_req_${empresa}`) || '{}')
+    const aprob = JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')
+    const sbuNames = Object.keys(sbus || {}).filter((s) => s !== 'Retail')
+    return sbuNames.reduce((a, s) => aprob[`GADMINREQ|${s}`] ? a + GADMIN_REQ_AREAS.reduce((b, ar) => b + GADMIN_REQ_COD.reduce((c, cod) => c + num(req[gadminReqKey(s, ar.k, cod, m)]), 0), 0) : a, 0)
+  } catch { return 0 }
+}
+
+/* ===== Propuesta de gastos admin 105/106/107 por un área (Director/Logística) a nivel SBU. La aprueba Finanzas. ===== */
+function GadminReqBlock({ empresa, sbu, area, areaLabel, color }) {
+  const ver = useDataVersion()
+  const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(`gadmin_req_${empresa}`) || '{}') } catch { return {} } })
+  useEffect(() => { try { setData(JSON.parse(localStorage.getItem(`gadmin_req_${empresa}`) || '{}')) } catch { } }, [empresa, ver])
+  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  let aprob = {}; try { aprob = JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}') } catch { }
+  const aprobado = !!aprob[`GADMINREQ|${sbu}`]
+  const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
+  const rows = GADMIN_REQ_COD.map((cod) => ({ cod, sub: (DEFAULT_GADMIN.find((x) => x.cod === cod) || {}).sub || cod }))
+  async function guardar() { setSaving(true); setMsg(null); try { const s = JSON.stringify(data); try { localStorage.setItem(`gadmin_req_${empresa}`, s) } catch { } await gSaveEstado(empresa, 'gadmin_req', s); bumpData(); setMsg({ t: 'ok', x: 'Propuesta guardada ✓ — Finanzas la verá en Aprobaciones.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar. Revisa tu conexión.' }) } setSaving(false) }
+  const filaTot = (cod) => MESES.reduce((a, _, m) => a + num(data[gadminReqKey(sbu, area, cod, m)]), 0)
+  const colT = MESES.map((_, m) => rows.reduce((a, r) => a + num(data[gadminReqKey(sbu, area, r.cod, m)]), 0))
+  return <div className="panel" style={{ borderLeftColor: color }}>
+    <div className="toolbar"><h3 style={{ margin: 0, color }}>Gastos admin propuestos — {areaLabel} <span className="unit">(nivel SBU · {sbu} · lo aprueba Finanzas)</span></h3><div className="spacer"></div>{aprobado ? <span className="note ok" style={{ margin: 0, padding: '4px 10px' }}>✓ Aprobado por Finanzas</span> : <span className="note" style={{ margin: 0, padding: '4px 10px', color: '#b45309' }}>⏳ Pendiente de aprobación</span>}<button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+    {msg && <div className={'note ' + (msg.t === 'ok' ? 'ok' : 'warn')} style={{ marginBottom: 8 }}>{msg.x}</div>}
+    <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '260px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+      <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+      <tbody>
+        {rows.map((r) => <tr key={r.cod}><td>{r.cod}</td><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>{r.sub}</td>{MESES.map((_, m) => { const k = gadminReqKey(sbu, area, r.cod, m); return <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}<td className="tot">{fmt(filaTot(r.cod))}</td></tr>)}
+        <tr className="grandrow"><td className="l" colSpan={2}>Total propuesto</td>{colT.map((v, m) => <td key={m} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(colT.reduce((a, b) => a + b, 0))}</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+}
+
+/* ===== GASTOS ADMIN — bloque TOTAL (directos + indirectos + aprobado a las áreas) a nivel empresa ===== */
+function GastosAdminTotalBlock({ empresa, sbus }) {
+  useDataVersion() // se refresca al guardar cualquier bloque
+  const ls = (k) => { try { return JSON.parse(localStorage.getItem(k) || '{}') } catch { return {} } }
+  const dir = ls(`gadmin_${empresa}`), ind = ls(`gadmin_ind_${empresa}`)
+  let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { }
+  const mDir = MESES.map((_, m) => cfg.reduce((a, it) => a + num(dir[`${it.cod}|${m}`]), 0))
+  const mInd = MESES.map((_, m) => cfg.reduce((a, it) => a + num(ind[`${it.cod}|${m}`]), 0))
+  const mReq = MESES.map((_, m) => gadminReqAprobMes(empresa, sbus, m))
+  const mTot = MESES.map((_, m) => mDir[m] + mInd[m] + mReq[m])
+  const sumA = (arr) => arr.reduce((a, b) => a + b, 0)
+  const row = (lbl, arr, color, bold) => <tr className={bold ? 'grandrow' : undefined}><td className="l" style={{ color }}>{lbl}</td>{arr.map((v, m) => <td key={m} className="tot" style={{ color, fontWeight: bold ? 800 : undefined }}>{fmt(v)}</td>)}<td className="tot" style={{ color, fontWeight: bold ? 800 : undefined }}>{fmt(sumA(arr))}</td></tr>
+  return <div className="panel" style={{ borderLeftColor: '#7c3aed' }}>
+    <h3 style={{ color: '#7c3aed' }}>Σ Gastos Admin — TOTAL <span className="unit">(directos + indirectos + aprobado a las áreas · USD · 2028)</span></h3>
+    <div className="sub">Suma de los <b>gastos admin directos</b> + <b>indirectos</b> (ambos los llena Finanzas aquí) + lo que Finanzas <b>aprobó</b> a Director y Logística en los rubros 105/106/107 por SBU.</div>
+    <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+      <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m} className="yb">{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+      <tbody>
+        {row('Gastos Admin Directos', mDir, 'var(--muted)')}
+        {row('Gastos Admin Indirectos', mInd, 'var(--muted)')}
+        {row('Aprobado a las áreas (105/106/107)', mReq, '#0e7490')}
+        {row('TOTAL Gastos Admin', mTot, '#7c3aed', true)}
+      </tbody>
+    </table></div>
+  </div>
 }
 
 /* ===== GASTOS ADMINISTRATIVOS: detalle por centro de costo, compartido por TODAS las SBU ===== */
@@ -3301,7 +3403,18 @@ function GastosAdminForm({ empresa, tipo = 'dir', sbus }) {
   const key = (cod, m) => `${cod}|${m}`
   const subtot = MESES.map((_, m) => lista.reduce((a, it) => a + g(key(it.cod, m)), 0))
   const filaTot = (cod) => MESES.reduce((a, _, m) => a + g(key(cod, m)), 0)
-  function guardar() { setSaving(true); try { if (!esInd) saveEstado(empresa, 'gadmin_cfg', lista); saveEstado(empresa, esInd ? 'gadmin_ind' : 'gadmin', data); setMsg({ t: 'ok', x: 'Guardado en Google Sheet. Los centros de costo aplican a todas las SBU.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  async function guardar() {
+    setSaving(true); setMsg(null)
+    try {
+      if (!esInd) { try { localStorage.setItem(`gadmin_cfg_${empresa}`, JSON.stringify(lista)) } catch { } await gSaveEstado(empresa, 'gadmin_cfg', JSON.stringify(lista)) }
+      const sk = esInd ? 'gadmin_ind' : 'gadmin'
+      try { localStorage.setItem(`${sk}_${empresa}`, JSON.stringify(data)) } catch { }
+      await gSaveEstado(empresa, sk, JSON.stringify(data))
+      bumpData()
+      setMsg({ t: 'ok', x: 'Guardado en Google Sheet ✓' + (esInd ? '' : ' Los centros de costo aplican a todas las SBU.') })
+    } catch { setMsg({ t: 'bad', x: 'No se pudo guardar en el Sheet. Revisa tu conexión e inténtalo de nuevo.' }) }
+    setSaving(false)
+  }
   function agregar() { setLista([...lista, { cod: '', sub: '' }]) }
   function quitar(i) { setLista(lista.filter((_, j) => j !== i)) }
   function editar(i, campo, v) { setLista(lista.map((x, j) => j === i ? { ...x, [campo]: v } : x)) }
@@ -3346,13 +3459,13 @@ function GastosAdminForm({ empresa, tipo = 'dir', sbus }) {
       <div className="panel">
         <h3>{titulo} <span className="unit">{esInd ? '(corporativos · se prorratean por peso de venta de las SBU)' : '(detalle · compartido por todas las SBU)'}</span>{M$}<Responsable empresa={empresa} seccion="Finanzas" /></h3>
         {esT && <div className="sub"><b>Referencia 2026:</b> gasto real 2026 de TUMAR Performance (USD) por concepto. Marketing, Logística y Representación salen aquí como referencia, pero en el P&L vienen de sus pantallas propias para no duplicar.</div>}
-        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '270px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+        <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th>{esT && <th style={{ background: '#fffdf2', color: '#8a6d1a' }} title="Gasto real 2026 de TUMAR Performance (USD) — referencia">2026 (ref)</th>}</tr></thead>
           <tbody>
             {lista.map((it, i) => (
               <tr key={i}>
                 <td>{edit ? <input value={it.cod} onChange={(e) => editar(i, 'cod', e.target.value)} style={{ width: 52, padding: 4, border: '1px solid var(--line)', borderRadius: 5, textAlign: 'center' }} /> : it.cod}</td>
-                <td className="l" style={esT && TUMAR_GADMIN_SKIP.has(upper(it.cat || '')) ? { color: 'var(--muted)' } : undefined}>{edit ? <span style={{ display: 'flex', gap: 4 }}><input value={it.sub} onChange={(e) => editar(i, 'sub', e.target.value)} style={{ width: '90%', padding: 4, border: '1px solid var(--line)', borderRadius: 5 }} /><button className="btn" onClick={() => quitar(i)} style={{ padding: '2px 8px' }}>✕</button></span> : <>{it.sub}{esT && it.cat && <span className="unit" style={{ marginLeft: 6, fontSize: 10 }}>· {it.cat}</span>}</>}</td>
+                <td className="l" style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.2, ...(esT && TUMAR_GADMIN_SKIP.has(upper(it.cat || '')) ? { color: 'var(--muted)' } : {}) }}>{edit ? <span style={{ display: 'flex', gap: 4 }}><input value={it.sub} onChange={(e) => editar(i, 'sub', e.target.value)} style={{ width: '90%', padding: 4, border: '1px solid var(--line)', borderRadius: 5 }} /><button className="btn" onClick={() => quitar(i)} style={{ padding: '2px 8px' }}>✕</button></span> : <>{it.sub}{esT && it.cat && <span className="unit" style={{ marginLeft: 6, fontSize: 10 }}>· {it.cat}</span>}</>}</td>
                 {MESES.map((_, m) => { const k = key(it.cod, m); const espejo = esT && TUMAR_GADMIN_SKIP.has(upper(it.cat || '')); return espejo ? <td key={m} className="tot" style={{ background: '#f1f3f5', color: '#adb5bd' }} title="Se llena en su propia pantalla (Marketing / Logística / Viajes)">—</td> : <td key={m} className="cell"><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td> })}
                 <td className="tot" style={esT && TUMAR_GADMIN_SKIP.has(upper(it.cat || '')) ? { color: '#adb5bd' } : undefined}>{esT && TUMAR_GADMIN_SKIP.has(upper(it.cat || '')) ? '—' : fmt(filaTot(it.cod))}</td>
                 {esT && <td className="tot" style={{ background: '#fffdf2', color: '#8a6d1a' }}>{ref26(it) != null ? fmt(ref26(it)) : '—'}</td>}
@@ -3418,7 +3531,7 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
       <aside className="cmz-side">
         <div className="sub" style={{ fontSize: 11, margin: '0 0 6px', padding: '0 4px' }}>✅ completo · ⚠️ falta algo</div>
         <button className={'cmz-marca' + (marca === '__VIAJES__' ? ' active' : '')} onClick={() => setMarca('__VIAJES__')} style={{ marginBottom: 6, fontWeight: 800, ...(marca === '__VIAJES__' ? { background: '#6b21a8', color: '#fff' } : { color: '#6b21a8' }) }}>🧳 Viajes <span className="unit" style={{ fontWeight: 400 }}>(1 vez)</span><span style={{ float: 'right' }} title={viajesFinOk ? 'Viajes de Finanzas lleno' : 'Falta llenar los Viajes de Finanzas'}>{viajesFinOk ? '✅' : '⚠️'}</span></button>
-        {empresa === 'ENERGY BRANDS' && <button className={'cmz-marca' + (marca === '__GADMIN__' ? ' active' : '')} onClick={() => setMarca('__GADMIN__')} style={{ marginBottom: 6, fontWeight: 800, ...(marca === '__GADMIN__' ? { background: '#be185d', color: '#fff' } : { color: '#be185d' }) }}>💰 Gastos admin indirectos</button>}
+        {empresa === 'ENERGY BRANDS' && <button className={'cmz-marca' + (marca === '__GADMIN__' ? ' active' : '')} onClick={() => setMarca('__GADMIN__')} style={{ marginBottom: 6, fontWeight: 800, ...(marca === '__GADMIN__' ? { background: '#be185d', color: '#fff' } : { color: '#be185d' }) }}>💰 Gastos Admin</button>}
         <button className={'cmz-marca' + (marca === '__REPORTE__' ? ' active' : '')} onClick={() => setMarca('__REPORTE__')} style={{ marginBottom: 8, fontWeight: 800, ...(marca === '__REPORTE__' ? { background: '#0e7490', color: '#fff' } : { color: '#0e7490' }) }}>📊 Reporte</button>
         {Object.entries(sbus).map(([s, ms]) => (
           <div className="cmz-sbu" key={s}>
@@ -3436,8 +3549,10 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
             <RoleForm key="finviajes" role={finRole} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Finanzas)" />
           </>
           : marca === '__GADMIN__' ? <>
-            <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#be185d', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>💰 Gastos admin indirectos</span><span className="unit" style={{ alignSelf: 'center' }}>Corporativos · a nivel empresa (se llenan una vez). Se prorratean por peso de venta y bajan al Cash Flow de cada SBU.</span></div>
+            <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#be185d', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>💰 Gastos Admin</span><span className="unit" style={{ alignSelf: 'center' }}>A nivel empresa (se llenan una vez). <b>Directos</b> e <b>indirectos</b> se prorratean por peso de venta y bajan al Cash Flow de cada SBU; el <b>TOTAL</b> incluye lo aprobado a las áreas (105/106/107).</span></div>
+            <GastosAdminForm empresa={empresa} tipo="dir" sbus={sbus} />
             <GastosAdminForm empresa={empresa} tipo="ind" sbus={sbus} />
+            <GastosAdminTotalBlock empresa={empresa} sbus={sbus} />
           </>
           : <>
             {marca && <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: acc, marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>{isTot ? `▣ TOTAL ${String(marca).slice(7)}` : `💰 ${marca}`}</span></div>}
@@ -3559,9 +3674,11 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const gRow = (n) => MESES.reduce((a, _, mi) => a + num(gastos[gk(n, mi)]), 0)
   const gRowEB = (n) => MESES.reduce((a, _, mi) => a + num(gastosEB[gk(n, mi)]), 0)
   const gCol = (mi) => gRubros.reduce((a, r) => a + num(gastos[gk(r.n, mi)]), 0)
-  const gColEB = (mi) => gRubros.reduce((a, r) => a + num(gastosEB[gk(r.n, mi)]), 0)
+  // Gastos EB Directos: usan el mismo formato de centros de costo que Finanzas (cód + sub rubro), clave por código.
+  const EB_CENTROS = DEFAULT_GADMIN
+  const gColEB = (mi) => EB_CENTROS.reduce((a, it) => a + num(gastosEB[gk(it.cod, mi)]), 0)
   const gGran = gRubros.reduce((a, r) => a + gRow(r.n), 0)          // SINERGY
-  const gGranEB = gRubros.reduce((a, r) => a + gRowEB(r.n), 0)      // EB directos
+  const gGranEB = EB_CENTROS.reduce((a, it) => a + gRowEB(it.cod), 0)      // EB directos (por código)
   const guardarGastos = () => guardarKeys([['retail_gastos', gastos], ['retail_gastos_eb', gastosEB], ['retail_gastos_x', gRubrosX], ['retail_pl', plSummary()]], 'Gastos guardados en el Sheet ✓')
   function addRubroG() { const n = window.prompt('Nombre del nuevo rubro de gasto:'); if (!n) return; const nm = n.trim(); if (!nm || gRubros.some((r) => r.n.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Ese rubro ya existe.' }); return } const next = [...gRubrosX, nm]; setGRubrosX(next); saveEstado(empresa, 'retail_gastos_x', next) }
   function delRubroG(nm) { const next = gRubrosX.filter((x) => x !== nm); setGRubrosX(next); saveEstado(empresa, 'retail_gastos_x', next) }
@@ -3694,7 +3811,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   const impMes = (mi) => wholesaleMarcas.reduce((a, m) => a + impMarcaMes(m, mi), 0)
   const aucPairAvg = (m, ct) => MESES.reduce((a, _, mi) => a + aucMC(m, ct, mi), 0) / 12
   const gastoMes = (mi) => gRubros.reduce((a, r) => a + num(gastos[gk(r.n, mi)]), 0)      // SINERGY
-  const gastoEBMes = (mi) => gRubros.reduce((a, r) => a + num(gastosEB[gk(r.n, mi)]), 0)  // EB directos
+  const gastoEBMes = (mi) => EB_CENTROS.reduce((a, it) => a + num(gastosEB[gk(it.cod, mi)]), 0)  // EB directos (centros de costo, por código)
   // totales de venta/costo (después de declarar cf/smap/producto, de los que dependen las fórmulas)
   const totVenta = tiendas.reduce((a, t) => a + tVenta(t), 0), totCosto = tiendas.reduce((a, t) => a + tCosto(t), 0)
   const totCompras = tiendas.reduce((a, t) => a + tCompras(t), 0)
@@ -3907,7 +4024,18 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
             </div>
           )
           return <>
-            {gBlock('🏬 Gastos EB Directos', col, gastosEB, setGEB, gRowEB, gColEB, gGranEB, true)}
+            <div className="panel" style={{ borderLeftColor: col, marginBottom: 12 }}>
+              <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>🏬 Gastos EB Directos</span><span className="unit" style={{ alignSelf: 'center' }}>Mismo formato de centros de costo de Finanzas</span><div className="spacer"></div><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+              <div className="tablewrap" style={{ overflowX: 'auto' }}>
+                <table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+                  <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+                  <tbody>
+                    {EB_CENTROS.map((it) => <tr key={it.cod}><td>{it.cod}</td><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>{it.sub}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input value={gastosEB[gk(it.cod, mi)] ?? ''} onChange={(e) => setGEB(it.cod, mi, e.target.value)} inputMode="decimal" /></td>)}<td className="tot">{fmt(gRowEB(it.cod))}</td></tr>)}
+                    <tr className="grandrow"><td className="l" colSpan={2}>Total gastos</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(gColEB(mi))}</td>)}<td className="tot">{fmt(gGranEB)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
             {gBlock('🤝 Gastos Sinergy', '#be185d', gastos, setG, gRow, gCol, gGran, true)}
             <div className="panel" style={{ borderLeftColor: '#7c3aed', marginBottom: 12 }}>
               <div className="toolbar"><span className="empchip" style={{ background: '#7c3aed', marginLeft: 0 }}>🧾 Gastos TOTAL (EB + Sinergy)</span><div className="spacer"></div><span className="empchip" style={{ background: '#64748b' }}>solo lectura · sin desglose</span></div>
@@ -4387,6 +4515,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede, deep }) {
                         ? <TumarLogMarca key={sbuName + 'tlog' + marca} empresa={empresa} marca={marca} />
                         : <LogisticaBlock key={sbuName + 'log' + marca} r={r} empresa={empresa} usuario={usuario} oneSbu={oneSbu} marca={marca} noHeader />)
                       : <RoleForm key={sbuName + r.id + marca} role={r} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
+                    {empresa === 'ENERGY BRANDS' && (r.id === 'director' || r.id === 'logistica') && <div style={{ marginTop: 14 }}><GadminReqBlock empresa={empresa} sbu={sbuName} area={r.id === 'director' ? 'DIR' : 'LOG'} areaLabel={r.label} color={r.color} /></div>}
                   </div>))}
               </>)
               : <RoleForm key={sbuName + secId + marca} role={role} usuario={usuario} empresa={empresa} sbus={oneSbu} fixedMarca={marca} />}
@@ -5559,7 +5688,7 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
             {d.baseN === 0
               ? <div className="sub">No hay datos de {year} para estas marcas.</div>
               : <>
-                <div className="sub" style={{ marginBottom: 6 }}><b style={{ color: accent }}>{d.arr.length}</b> de {d.baseN} clientes que vendían en {year} ya no están en el plan 2028. Representaban <b style={{ color: accent }}>${fmt(d.total)}</b> en venta neta {year} (<b>{pct.toFixed(1)}%</b> de la venta neta {year}).</div>
+                <div className="sub" style={{ marginBottom: 6 }}><b style={{ color: accent }}>{d.arr.length}</b> de {d.baseN} clientes que vendían en {year} ya no están en el <b style={{ color: '#2563eb' }}>plan 2028</b>. Representaban <b style={{ color: accent }}>${fmt(d.total)}</b> en venta neta {year} (<b>{pct.toFixed(1)}%</b> de la venta neta {year}).</div>
                 {d.arr.length > 0 && <div className="tablewrap"><table style={{ width: '100%' }}>
                   <thead><tr><th className="l">Cliente perdido</th><th>Venta neta {year}</th><th>Peso {year}</th></tr></thead>
                   <tbody>{d.arr.map(({ cli, v }) => <tr key={cli}><td className="l">{cli}</td><td className="tot" style={{ fontWeight: 700 }}>${fmt(v)}</td><td className="tot" style={{ color: 'var(--muted)' }}>{d.baseTot > 0 ? (v / d.baseTot * 100).toFixed(1) : '0'}%</td></tr>)}</tbody>
