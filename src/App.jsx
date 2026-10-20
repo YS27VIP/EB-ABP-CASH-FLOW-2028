@@ -1657,6 +1657,22 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         </div>
       </div>
 
+      {esEB && (() => {
+        const bono28 = CF_MESES.reduce((a, _, mi) => a + (num(gadminData[`${BONO_COD}|${mi}`]) + num(gadminIndData[`${BONO_COD}|${mi}`])) * gadminPeso(), 0)
+        return <div className="panel" style={{ borderLeftColor: '#9a3412' }}>
+          <h3 style={{ color: '#9a3412' }}>🧮 Memo — Bono 2028 (se paga en ene-2029)</h3>
+          <div className="sub">El <b>Performance Bono del 2028</b> está incluido en el <b>P&L 2028</b>, pero su pago ocurre en <b>enero de 2029</b> (fuera del Cash Flow 2028). Se muestra aquí solo como recordatorio: <b>no afecta la caja del 2028</b>. El bono del 2027, que sí se paga en 2028, está arriba en <i>Otros gastos → ↳ Bono 2027</i>.</div>
+          <div className="tablewrap">
+            <table className="vfix"><colgroup><col style={{ width: '260px' }} /><col style={{ width: '110px' }} /></colgroup>
+              <thead><tr><th className="l">Concepto</th><th className="yb">ENE-29</th></tr></thead>
+              <tbody>
+                <tr><td className="l" style={{ color: '#9a3412' }}>Pago Performance Bono 2028 <span className="unit">(directos + indirectos)</span></td><td className="tot yb" style={{ color: '#9a3412', fontWeight: 700 }}>{bono28 > 0.5 ? '− ' : ''}{fmt(bono28)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      })()}
+
 
       <div className="panel">
         <h3>{role.label} — Término de cobros a los clientes <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): lo captura Finanzas por marca. Aquí solo se ve.')}</h3>
