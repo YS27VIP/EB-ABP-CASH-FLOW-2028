@@ -5574,6 +5574,29 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
           {blk('2025', lost25, '#7c3aed')}
         </div>
       })()}
+      {!esT && (() => {
+        const base25N = Object.values(cliV25).filter((v) => v > 0.5).length
+        const nuevos = Object.entries(cliV26).filter(([cli, v]) => v > 0.5 && !(cliV25[cli] > 0.5)).map(([cli, v]) => ({ cli, v })).sort((a, b) => b.v - a.v)
+        const nTot = nuevos.reduce((a, b) => a + b.v, 0)
+        const base26Tot = Object.values(cliV26).reduce((a, b) => a + (b > 0 ? b : 0), 0)
+        const pct = base26Tot > 0 ? nTot / base26Tot * 100 : 0
+        const sigue28 = (cli) => (cliU28[cli] || 0) > 0 || (cliV28[cli] || 0) > 0.5
+        return <div style={{ marginTop: 18, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+          <h3 style={{ color: col, margin: '0 0 2px' }}>🆕 Clientes nuevos en 2026</h3>
+          <div className="sub">Clientes que <b>empezaron a vender en 2026</b> (no tenían venta en 2025) y cuánto vendieron. La columna <b>¿sigue en 2028?</b> indica si están en el plan.</div>
+          {base25N === 0
+            ? <div className="sub" style={{ marginTop: 8 }}>Se necesita el histórico de <b>2025</b> para identificar los nuevos de 2026.</div>
+            : nuevos.length === 0
+              ? <div className="sub" style={{ marginTop: 8 }}>No hay clientes nuevos en 2026 (todos ya vendían en 2025).</div>
+              : <>
+                <div className="sub" style={{ marginTop: 6, marginBottom: 6 }}><b style={{ color: '#15803d' }}>{nuevos.length}</b> clientes nuevos en 2026. Vendieron <b style={{ color: '#15803d' }}>${fmt(nTot)}</b> en venta neta 2026 (<b>{pct.toFixed(1)}%</b> de la venta neta 2026).</div>
+                <div className="tablewrap"><table style={{ width: '100%' }}>
+                  <thead><tr><th className="l">Cliente nuevo 2026</th><th>Venta neta 2026</th><th>Peso 2026</th><th>¿Sigue en 2028?</th></tr></thead>
+                  <tbody>{nuevos.map(({ cli, v }) => <tr key={cli}><td className="l">{cli}</td><td className="tot" style={{ fontWeight: 700 }}>${fmt(v)}</td><td className="tot" style={{ color: 'var(--muted)' }}>{base26Tot > 0 ? (v / base26Tot * 100).toFixed(1) : '0'}%</td><td className="tot" style={{ color: sigue28(cli) ? 'var(--ok)' : 'var(--bad)', fontWeight: 700 }}>{sigue28(cli) ? 'Sí' : 'No'}</td></tr>)}</tbody>
+                </table></div>
+              </>}
+        </div>
+      })()}
       {!esT && <Section icon="🧩" title="Por categoría" desc={<>Crecimiento por <b>categoría</b> (plan 2028 vs real 2026). El total de cada marca se reparte por el <b>peso</b> que definió el Director.</>} agg={catAgg} label="Categoría" kind="cat" />}
     </div>
   )
