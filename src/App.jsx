@@ -145,7 +145,7 @@ const ROLES = [
   { id: 'producto',  label: 'Producto',  icon: '📦', color: '#017e84', tab: 'Cap_Producto',  rubros: [{ k: 'INVENTARIO · PRECIOS · MARGEN', u: '$', productoall: true }, VJ] },
   { id: 'marketing', label: 'Marketing', icon: '📣', color: '#d9822b', tab: 'Cap_Marketing', rubros: [{ k: 'MARKETING', u: '$', detalle: MK_GROUPS, extrasKey: 'mk_extras' }, VJ] },
   { id: 'logistica', label: 'Logística', icon: '🚚', color: '#3b6ea5', tab: 'Cap_Logistica', rubros: [{ k: 'LOGISTICA', u: '$' }] },
-  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, { k: 'GASTOS ADMIN', gadmin: true }, { k: 'APROBACIONES', aprob: true }] }, // Viajes de Finanzas se llena UNA sola vez (no por marca): botón en la barra lateral
+  { id: 'finanzas',  label: 'Finanzas',  icon: '💰', color: '#2e7d32', tab: 'Cap_Finanzas',  rubros: [{ k: 'CASH FLOW', u: '$', cash: true }, { k: 'GASTOS ADMIN DIRECTOS', gadmin: true }, { k: 'APROBACIONES', aprob: true }] }, // Viajes de Finanzas se llena UNA sola vez (no por marca): botón en la barra lateral
   { id: 'director',  label: 'Director',  icon: '🧑‍💼', color: '#0d9488', tab: 'Cap_Director',  rubros: [{ k: 'CATEGORIAS', cat: true }, VJ, { k: 'COMISIONES', comis: true }, { k: 'MUESTRAS', muestras: true }, { k: 'CASH FLOW', u: '$', cash: true }] },
 ]
 const ACCESO_OPCIONES = ['Ventas', 'Producto', 'Marketing', 'Logística', 'Finanzas', 'Director', 'Histórico', 'Combinaciones', 'Bitácora']
@@ -3227,8 +3227,18 @@ function AprobacionesForm({ empresa, sbus }) {
 }
 
 /* ===== GASTOS ADMINISTRATIVOS: detalle por centro de costo, compartido por TODAS las SBU ===== */
-function GastosAdminForm({ empresa, tipo = 'dir' }) {
+function GastosAdminForm({ empresa, tipo = 'dir', sbus }) {
   const esInd = tipo === 'ind'
+  // Para el prorrateo de indirectos: venta neta anual por SBU (lee Cap_Ventas/Producto/Categorias).
+  const [prorData, setProrData] = useState(null)
+  useEffect(() => { if (!esInd || !sbus) return; let cancel = false; (async () => {
+    const g = async (t) => { try { const j = await gReadTab(t); return j && j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
+    const [ven, prod, cap] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias')])
+    const cats = {}; cap.forEach((r) => { if (!catRowOk(r, empresa)) return; const c = r[1], mar = r[3], peso = num(r[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+    const vnMarca = (mca) => { try { return realAupAuc(empresa, mca, ven, prod, (cats[mca] || []).map((x) => x.cat)).ventaMes.reduce((a, b) => a + b, 0) } catch { return 0 } }
+    const porSbu = Object.entries(sbus).filter(([s]) => s !== 'Retail').map(([s, ms]) => ({ s, vn: (ms || []).reduce((a, m) => a + vnMarca(m), 0) }))
+    if (!cancel) setProrData(porSbu)
+  })(); return () => { cancel = true } }, [esInd, empresa, JSON.stringify(sbus)])
   const titulo = esInd ? 'Gastos Admin Indirectos' : (empresa === 'ENERGY BRANDS' ? 'Gastos Admin Directos' : 'Gastos administrativos')
   const cfgKey = `gadmin_cfg_${empresa}`, stKey = esInd ? `gadmin_ind_${empresa}` : `gadmin_${empresa}`
   const defCfg = empresa === 'TUMAR' ? TUMAR_GADMIN : DEFAULT_GADMIN
@@ -3307,6 +3317,31 @@ function GastosAdminForm({ empresa, tipo = 'dir' }) {
           </tbody>
         </table></div>
       </div>
+      {esInd && prorData && (() => {
+        const totVN = prorData.reduce((a, x) => a + x.vn, 0)
+        const annual = subtot.reduce((a, b) => a + b, 0)
+        return <>
+          <div className="panel" style={{ borderLeftColor: '#7c3aed' }}>
+            <h3 style={{ color: '#7c3aed' }}>⚖️ Peso de venta por SBU <span className="unit">(así se reparten los gastos admin indirectos)</span></h3>
+            <div className="tablewrap"><table style={{ width: 'auto', minWidth: 460 }}>
+              <thead><tr><th className="l">SBU</th><th>Venta neta 2028</th><th>Peso %</th><th>Indirectos asignados</th></tr></thead>
+              <tbody>
+                {prorData.map(({ s, vn }) => { const w = totVN > 0 ? vn / totVN : 0; return <tr key={s}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: sbuColor(s), marginRight: 7 }}></span>{s}</td><td className="tot">{fmt(vn)}</td><td className="tot" style={{ fontWeight: 700 }}>{(w * 100).toFixed(1)}%</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(annual * w)}</td></tr> })}
+                <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(totVN)}</td><td className="tot">100%</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(annual)}</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+          {prorData.map(({ s, vn }) => { const w = totVN > 0 ? vn / totVN : 0; return <div key={s} className="panel" style={{ borderLeftColor: sbuColor(s) }}>
+            <h3 style={{ color: sbuColor(s) }}>{s} · Gastos admin indirectos asignados <span className="unit">(prorrateo {(w * 100).toFixed(1)}% · baja a su Cash Flow)</span></h3>
+            <div className="tablewrap" style={{ overflowX: 'auto' }}><table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /></colgroup>
+              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+              <tbody>
+                <tr className="grandrow"><td className="l" style={{ color: sbuColor(s) }}>Gastos admin indirectos — {s}</td>{subtot.map((v, m) => <td key={m} className="tot">{fmt(v * w)}</td>)}<td className="tot" style={{ color: '#b91c1c', fontWeight: 800 }}>{fmt(annual * w)}</td></tr>
+              </tbody>
+            </table></div>
+          </div> })}
+        </>
+      })()}
     </>
   )
 }
@@ -3357,7 +3392,7 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
           </>
           : marca === '__GADMIN__' ? <>
             <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#be185d', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>💰 Gastos admin indirectos</span><span className="unit" style={{ alignSelf: 'center' }}>Corporativos · a nivel empresa (se llenan una vez). Se prorratean por peso de venta y bajan al Cash Flow de cada SBU.</span></div>
-            <GastosAdminForm empresa={empresa} tipo="ind" />
+            <GastosAdminForm empresa={empresa} tipo="ind" sbus={sbus} />
           </>
           : <>
             {marca && <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: acc, marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>{isTot ? `▣ TOTAL ${String(marca).slice(7)}` : `💰 ${marca}`}</span></div>}
