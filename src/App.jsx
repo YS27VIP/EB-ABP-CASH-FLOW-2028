@@ -4826,6 +4826,29 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
           </div>
         ))}
       </div>
+      {(() => {
+        const FLOWS = [
+          { title: '1 · La venta → margen', parts: [{ t: 'Director: categorías + % por cliente', c: '#4f46e5' }, '→', { t: 'Ventas: unidades 2028', c: '#0891b2' }, '→', { t: '× AUP (Producto) = Venta Neta', c: '#047857' }, '·', { t: '× AUC (Producto) = Costo', c: '#047857' }, '→', { t: '= Margen Bruto', c: '#0f766e' }] },
+          { title: '2 · Margen → resultado', parts: [{ t: 'Margen Bruto', c: '#0f766e' }, '−', { t: 'Marketing', c: '#db2777' }, '−', { t: 'Viajes', c: '#6b21a8' }, '=', { t: 'Contribución', c: '#0f766e' }, '−', { t: 'Gastos admin (Finanzas)', c: '#7c3aed' }, '=', { t: 'Resultado Operativo SBU', c: '#0f766e' }] },
+          { title: '3 · La caja (Cash Flow)', parts: [{ t: 'Ventas + plazos de cobro + saldo 2027', c: '#7c3aed' }, '=', { t: 'Cash In', c: '#15803d' }, '·', { t: 'Compras + término de pago', c: '#7c3aed' }, '=', { t: 'Cash Out', c: '#b91c1c' }, '→', { t: 'Cash Flow de la SBU', c: '#0f766e' }] },
+          { title: '4 · Gastos admin', parts: [{ t: 'Directos por SBU', c: '#be185d' }, '+', { t: 'Indirectos (prorrateo por venta)', c: '#be185d' }, '+', { t: 'Aprobado a las áreas (105/106/107)', c: '#0d9488' }, '=', { t: 'Gastos admin de la SBU', c: '#7c3aed' }, '→', { t: 'baja al Resultado y al Cash Flow', c: '#0f766e' }] },
+          { title: '5 · Retail → Energy Brands', parts: [{ t: 'Ventas por tienda', c: '#0e7490' }, '→', { t: 'tienda SINERGY = P&L / Cash Flow SINERGY', c: '#be185d' }, '·', { t: 'otras tiendas = P&L Retail EB', c: '#0e7490' }, '→', { t: 'suma a Energy Brands', c: '#0f766e' }] },
+          { title: '6 · Consolidación', parts: [{ t: 'SBU 1', c: '#0e7490' }, '+', { t: 'SBU 2', c: '#7c3aed' }, '+', { t: 'SBU 3', c: '#b45309' }, '+', { t: 'Retail EB', c: '#0e7490' }, '=', { t: 'Gerencia: Resultado', c: '#1f2d3d' }, '→', { t: 'Holding: EB + SINERGY + TAHO + TUMAR', c: '#7c3aed' }] },
+        ]
+        const chip = (t, c) => <span style={{ display: 'inline-flex', alignItems: 'center', background: c + '14', color: c, border: '1px solid ' + c + '55', borderRadius: 8, padding: '5px 10px', fontWeight: 700, fontSize: 12.5, lineHeight: 1.2 }}>{t}</span>
+        return <div style={{ marginTop: 22, borderTop: '1px solid var(--line)', paddingTop: 16 }}>
+          <h3 style={{ color: '#4f46e5', margin: '0 0 2px' }}>🔗 Cómo se conecta la información</h3>
+          <div className="sub">Qué alimenta a qué. Al llenar una parte, estas son las que se recalculan automáticamente (× = multiplica, − = resta, + = suma, → = pasa a).</div>
+          <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
+            {FLOWS.map((f, i) => <div key={i} className="panel" style={{ margin: 0, borderLeftColor: '#4f46e5' }}>
+              <div style={{ fontWeight: 800, fontSize: 12.5, color: '#4f46e5', marginBottom: 7 }}>{f.title}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center' }}>
+                {f.parts.map((p, j) => typeof p === 'string' ? <span key={j} style={{ color: '#9ca3af', fontWeight: 800 }}>{p}</span> : <span key={j}>{chip(p.t, p.c)}</span>)}
+              </div>
+            </div>)}
+          </div>
+        </div>
+      })()}
     </div>
   )
 }
