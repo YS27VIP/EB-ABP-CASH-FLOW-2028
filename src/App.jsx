@@ -4487,7 +4487,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede, deep }) {
     ...(pu('Marketing') ? [ROLES.find((r) => r.id === 'marketing')] : []),
     // Director se movió al dropdown de Comercial (1º del flujo), ya no es pestaña aparte.
   ]
-  const [secId, setSecId] = useState(() => (deep && deep.sec && SECS.some((s) => s.id === deep.sec)) ? deep.sec : (SECS[0] ? SECS[0].id : 'comercial'))
+  const [secId, setSecId] = useState(() => { const okIds = [...SECS.map((s) => s.id), ...(canViajes ? ['viajes'] : []), ...(puedeDir ? ['brand'] : [])]; return (deep && deep.sec && okIds.includes(deep.sec)) ? deep.sec : (SECS[0] ? SECS[0].id : 'comercial') })
   const [comSub, setComSub] = useState(() => (deep && deep.comSub) ? deep.comSub : 'all') // sub-selector dentro de Comercial
   const [marca, setMarca] = useState(() => (deep && deep.marca === 'first') ? (_marcasInit[0] || '__TOTAL__') : '__TOTAL__')
   const [totTab, setTotTab] = useState('brand')
@@ -4705,33 +4705,33 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
       rol: 'Director', nav: { sbu: true, step: { sec: 'comercial', comSub: 'director', marca: 'first' } },
       a: '#4f46e5', icon: '🧭', role: 'Director Comercial', scope: 'Por cada SBU (1 · 2 · 3) y por cada marca',
       where: <>Entra a la <b>SBU</b> (menú) → elige la <b>marca</b> (panel izquierdo) → paso <b style={{ color: '#4f46e5' }}>Director</b></>,
-      items: ['Categorías que aplican a la marca', 'Categorías por cliente (qué compra cada cliente — reparto de la venta)', 'Muestras (unidades) por categoría', 'Comisiones (%) sobre la venta', 'Plazo de cobro de los clientes NUEVOS (celdas amarillas dentro del Cash Flow)', 'Viajes del Director'],
+      items: ['Categorías que aplican a la marca', 'Categorías por cliente (qué compra cada cliente — reparto de la venta)', 'Muestras (unidades) por categoría', 'Comisiones (%) sobre la venta', 'Plazo de cobro de los clientes NUEVOS (celdas amarillas dentro del Cash Flow)', { t: 'Viajes del Director', step: { sec: 'viajes', marca: 'first' } }],
       note: <>Si falta info de este paso, el selector de Comercial muestra <b>⚠ pendiente</b>. Hasta no completarlo, los pasos siguientes quedan incompletos.</>,
     },
     {
       rol: 'Ventas', nav: { sbu: true, step: { sec: 'comercial', comSub: 'ventas', marca: 'first' } },
       a: '#0891b2', icon: '💵', role: 'Ventas', scope: 'Por cada SBU y por cada marca',
       where: <>SBU → marca → paso <b style={{ color: '#0891b2' }}>Ventas</b></>,
-      items: ['Unidades 2028 por cliente y por mes (crecimiento sobre 2027)', 'Se capturan los 2 vendedores de la marca', 'Venta neta resultante por cliente', 'Viajes de Ventas'],
+      items: ['Unidades 2028 por cliente y por mes (crecimiento sobre 2027)', 'Se capturan los 2 vendedores de la marca', 'Venta neta resultante por cliente', { t: 'Viajes de Ventas', step: { sec: 'viajes', marca: 'first' } }],
       note: <><b>Intercompañía</b> aparece automático y de solo lectura (lo que Retail le compra a la marca). No se llena.</>,
     },
     {
       rol: 'Producto', nav: { sbu: true, step: { sec: 'comercial', comSub: 'producto', marca: 'first' } },
       a: '#047857', icon: '📦', role: 'Producto', scope: 'Por cada SBU y por cada marca',
       where: <>SBU → marca → paso <b style={{ color: '#047857' }}>Producto</b></>,
-      items: ['AUP — precio promedio de venta por categoría / temporada', 'AUC — costo promedio por categoría / temporada', 'Inventario y plan de compras 2028 (por temporada)', 'Margen por categoría', 'Viajes de Producto'],
+      items: ['AUP — precio promedio de venta por categoría / temporada', 'AUC — costo promedio por categoría / temporada', 'Inventario y plan de compras 2028 (por temporada)', 'Margen por categoría', { t: 'Viajes de Producto', step: { sec: 'viajes', marca: 'first' } }],
     },
     {
       rol: 'Logística', nav: { sbu: true, step: { sec: 'comercial', comSub: 'logistica', marca: 'first' } },
       a: '#b45309', icon: '🚚', role: 'Logística', scope: 'Por cada SBU y por cada marca',
       where: <>SBU → marca → paso <b style={{ color: '#b45309' }}>Logística</b></>,
-      items: ['% costo logístico sobre la venta', 'Costo de muestras ($ por unidad)', 'Viajes de Logística'],
+      items: ['% costo logístico sobre la venta', 'Costo de muestras ($ por unidad)', { t: 'Viajes de Logística', step: { sec: 'viajes', marca: 'first' } }],
     },
     {
       rol: 'Marketing', nav: { sbu: true, step: { sec: 'marketing', marca: 'first' } },
       a: '#db2777', icon: '📣', role: 'Marketing', scope: 'Por cada marca',
       where: <>Entra a <b style={{ color: '#db2777' }}>Marketing</b> → elige la marca</>,
-      items: ['Rubros por mes, por grupo: ATL · BTL · TRADE · DIGITAL · PR · PRE VENTAS', 'En DIGITAL: 321 – Implementación / Desarrollo E-commerce (nuevo)', 'Puedes agregar rubros propios además de los predefinidos', 'Viajes de Marketing'],
+      items: ['Rubros por mes, por grupo: ATL · BTL · TRADE · DIGITAL · PR · PRE VENTAS', 'En DIGITAL: 321 – Implementación / Desarrollo E-commerce (nuevo)', 'Puedes agregar rubros propios además de los predefinidos', { t: 'Viajes de Marketing', step: { sec: 'viajes', marca: 'first' } }],
     },
     {
       rol: 'Finanzas', nav: { go: 'finanzas' },
@@ -4797,7 +4797,7 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
               <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                 {c.items.map((it, i) => {
                   const txt = typeof it === 'string' ? it : it.t
-                  const h = !go ? null : (it && typeof it === 'object' && it.to) ? () => go(it.to, it.d) : c.nav && c.nav.go ? () => go(c.nav.go, c.nav.d) : c.nav && c.nav.sbu ? (() => { const s = miSbuName || sbuNames[0]; return s ? () => go('sbu:' + s, c.nav.step) : null })() : null
+                  const h = !go ? null : (it && typeof it === 'object' && it.to) ? () => go(it.to, it.d) : c.nav && c.nav.go ? () => go(c.nav.go, c.nav.d) : c.nav && c.nav.sbu ? (() => { const s = miSbuName || sbuNames[0]; const st = (it && typeof it === 'object' && it.step) ? it.step : c.nav.step; return s ? () => go('sbu:' + s, st) : null })() : null
                   return <li key={i} onClick={h || undefined} style={{ position: 'relative', padding: '5px 0 5px 20px', fontSize: 13.5, borderTop: i ? '1px dashed #eceef2' : 'none', cursor: h ? 'pointer' : 'default' }} title={h ? 'Ir a esta parte de la app' : undefined}>
                     <span style={{ position: 'absolute', left: 4, top: 4, color: c.a, fontWeight: 800 }}>›</span><span style={h ? { color: c.a, textDecoration: 'underline', textDecorationColor: '#cbd5e1' } : undefined}>{txt}</span>{h ? <span style={{ color: c.a, marginLeft: 5 }}>↗</span> : null}
                   </li>
