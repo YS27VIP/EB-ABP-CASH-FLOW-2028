@@ -255,8 +255,10 @@ const RETAIL_GASTOS = [
 const RETAIL_TIENDAS = ['Birkenstock Andino', 'Hoka Andino', 'MUH Atlantis', 'MUH Arkadia', 'Sale Factory', 'E-Commerce', 'Mayoristas', 'SINERGY']
 // Tiendas que pertenecen al bucket SINERGY (su P&L va a la columna SINERGY del Holding, NO a Energy Brands). El resto es P&L Retail EB.
 const SINERGY_TIENDAS = new Set(['SINERGY'])
-// Match insensible a mayúsculas/espacios: cualquier tienda cuyo nombre sea (o empiece por) "SINERGY" va al bucket SINERGY.
-const esTiendaSinergy = (t) => { const u = String(t || '').trim().toUpperCase(); return SINERGY_TIENDAS.has(u) || u.startsWith('SINERGY') }
+// SINERGY es el nombre del grupo de TODAS las tiendas del Retail: su venta, costo y compras van al
+// P&L y Cash Flow de SINERGY, NO al de Energy Brands. (La venta intercompañía de EB a estas tiendas
+// se mantiene aparte, en las SBU.) Por eso todas las tiendas del Retail pertenecen al bucket SINERGY.
+const esTiendaSinergy = (t) => true
 // Lee el resumen del P&L Retail (guardado bajo Energy Brands) y devuelve totales anuales por bloque EB y SINERGY.
 function retailPLTotales() {
   try {
@@ -431,6 +433,8 @@ export default function App() {
   const [combos, setCombos] = useState({})
   const [roleId, setRoleId] = useState(() => { try { const v = localStorage.getItem('abp_nav_role'); const ts = Number(localStorage.getItem('abp_nav_ts') || 0); return (v && Date.now() - ts < 8 * 60 * 60 * 1000) ? v : null } catch { return null } }) // tras 8 horas de inactividad, vuelve al menú
   const firstNav = useRef(true) // evita borrar la ubicación guardada en el primer render
+  const [navDeep, setNavDeep] = useState(null) // objetivo profundo para la Guía por rol (lleva al paso exacto dentro de una SBU)
+  const goTo = (rid, deep = null) => { setNavDeep(deep); setRoleId(rid) } // navega, opcionalmente con deep-link
   const [connError, setConnError] = useState(false)
   const [authed, setAuthed] = useState(isSignedIn())
   const [estadoReady, setEstadoReady] = useState(false)
@@ -498,6 +502,7 @@ export default function App() {
 
   const [acceso, setAcceso] = useState(null) // null = acceso total (no está en Colaboradores)
   const [veTodas, setVeTodas] = useState(true) // ¿la persona puede cambiar de empresa? (por defecto sí)
+  const [miPerfil, setMiPerfil] = useState(null) // { rol, sbu } del usuario actual (de Colaboradores), para la Guía "ir a mi tarea"
   useEffect(() => {
     if (!authed) return
     let cancel = false
@@ -507,16 +512,19 @@ export default function App() {
         const em = (getEmail() || '').trim().toLowerCase()
         if (cancel) return
         if (!em || !j.values) { setAcceso(null); setVeTodas(true); return }
-        const set = new Set(); let found = false, defEmp = '', todas = false
+        const set = new Set(); let found = false, defEmp = '', todas = false, miRol = '', miSbu = ''
         j.values.slice(1).forEach((row) => {
           if (String(row[3] || '').trim().toLowerCase() !== em) return
           found = true
           if (!defEmp) defEmp = String(row[0] || '').trim()
+          if (!miRol) miRol = String(row[2] || '').trim()
+          if (!miSbu) miSbu = String(row[6] || '').trim()
           if (upper(row[5]) === 'TODAS') todas = true
           String(row[4] || '').split(';').filter(Boolean).forEach((a) => set.add(a))
         })
         setAcceso(found ? [...set] : null)
         setVeTodas(found ? todas : true)
+        setMiPerfil(found ? { rol: miRol, sbu: miSbu } : null)
         if (found && defEmp) setEmpresa(defEmp)
       } catch { if (!cancel) { setAcceso(null); setVeTodas(true) } }
     })()
@@ -645,12 +653,12 @@ export default function App() {
           </div>
           <div className="apps">
             {Object.keys(sbus).map((s) => (
-              <button key={s} className="app" onClick={() => setRoleId('sbu:' + s)}>
+              <button key={s} className="app" onClick={() => goTo('sbu:' + s)}>
                 <span className="appicon" style={{ background: sbuColor(s) }}>🧩</span>
                 <span className="applabel">{s}</span>
               </button>
             ))}
-            {empresa === 'ENERGY BRANDS' && <button className="app" onClick={() => setRoleId('sbu:Retail')}>
+            {empresa === 'ENERGY BRANDS' && <button className="app" onClick={() => goTo('sbu:Retail')}>
               <span className="appicon" style={{ background: sbuColor('Retail') }}>🏬</span>
               <span className="applabel">Retail</span>
             </button>}
@@ -713,7 +721,7 @@ export default function App() {
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
           <span className="rolechip" style={{ background: sbuColor(sbuName) }}>🧩 {sbuName}</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        {estadoReady ? <main><SBUWorkspace key={empresa} sbuName={sbuName} empresa={empresa} usuario={usuario} sbus={sbus} puede={puede} /></main> : cargandoMain}
+        {estadoReady ? <main><SBUWorkspace key={empresa} sbuName={sbuName} empresa={empresa} usuario={usuario} sbus={sbus} puede={puede} deep={navDeep} /></main> : cargandoMain}
       </>
     )
   }
@@ -735,7 +743,7 @@ export default function App() {
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
           <span className="rolechip" style={{ background: '#4f46e5' }}>🗺️ Guía por rol</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        <main><GuiaScreen go={setRoleId} sbuNames={Object.keys(sbus)} canConfig={esSuperAdmin} /></main>
+        <main><GuiaScreen go={goTo} sbuNames={Object.keys(sbus)} miPerfil={miPerfil} /></main>
       </>
     )
   }
@@ -1368,10 +1376,16 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const arr27Cli = (mca, cli) => { let t = 0; for (let mi = 0; mi < ARR_N; mi++) t += arr27(mca, cli, mi); return t }
   const gadminSubtot = MESES.map((_, m) => gadminCfg.reduce((a, it) => a + num(gadminData[`${it.cod}|${m}`]), 0))
   const gadminIndSubtot = MESES.map((_, m) => gadminCfg.reduce((a, it) => a + num(gadminIndData[`${it.cod}|${m}`]), 0))
+  // ENERGY BRANDS: el Performance Bono (código 103) SÍ va en el P&L 2028, pero NO en el Cash Flow 2028 (se paga en feb-2029, fuera del año). Por eso para el Cash Flow se excluye.
+  const esEB = empresa === 'ENERGY BRANDS'
+  const BONO_COD = '103'
+  const gadminSubtotCF = esEB ? MESES.map((_, m) => gadminCfg.reduce((a, it) => a + (it.cod === BONO_COD ? 0 : num(gadminData[`${it.cod}|${m}`])), 0)) : gadminSubtot
+  const gadminIndSubtotCF = esEB ? MESES.map((_, m) => gadminCfg.reduce((a, it) => a + (it.cod === BONO_COD ? 0 : num(gadminIndData[`${it.cod}|${m}`])), 0)) : gadminIndSubtot
+  const bono2027Mes = (mi) => esEB ? num(data[`BONO2027|${mi}`]) : 0 // bono del 2027 pagado en feb-2028: egreso de caja 2028 (lo llena Finanzas)
   const cellRaw = (concepto, mi) => {
     if (concepto === 'Comisiones') return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[mi], 0) : comisTotalMes(marca)[mi]
-    if (concepto === 'Gastos Admin Directos') return gadminSubtot[mi] * gadminPeso() // prorrateado por peso de venta de la vista (SBU o marca)
-    if (concepto === 'Gastos Admin Indirectos') return gadminIndSubtot[mi] * gadminPeso() // indirectos (corporativos) — prorrateados por peso de venta de cada SBU
+    if (concepto === 'Gastos Admin Directos') return gadminSubtotCF[mi] * gadminPeso() // Cash Flow: excluye el bono 2028 (se paga en 2029); prorrateado por peso de venta
+    if (concepto === 'Gastos Admin Indirectos') return gadminIndSubtotCF[mi] * gadminPeso() // Cash Flow: excluye el bono 2028; indirectos prorrateados por peso de venta
     if (concepto === 'Viajes') { return isTotal ? sbuMarcas.reduce((s, m) => s + viajesMes(m)[mi], 0) : viajesMes(marca)[mi] } // solo viajes de las SBU; los viajes back office (Finanzas/Admin/Procesos) van en Otros gastos
     if (concepto === 'Marketing') return isTotal ? sbuMarcas.reduce((s, m) => s + marketingMes(m)[mi], 0) : marketingMes(marca)[mi]
     if (concepto === 'Logística') { if (LOG_SIMPLE(empresa)) return isTotal ? tumarLogAllArr(logcost, sbuMarcas)[mi] : tumarLogMarcaArr(logcost, marca)[mi]; return isTotal ? sbuMarcas.reduce((s, m) => s + logisticaMes(m)[mi], 0) : logisticaMes(marca)[mi] } // TUMAR/TAHO: logística por marca (3 líneas manuales); el total suma las marcas
@@ -1446,7 +1460,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
     // Costos financieros / otros ingresos / otros gastos: los llena Finanzas (valores a nivel empresa, compartidos)
     if (concepto === CF_FIN_PARENT) return num(data[`FINCOST|perd|${mi}`]) - num(data[`FINCOST|gan|${mi}`])
     if (concepto === CF_OTRO_ING) return num(data[`OTROS|ing|${mi}`])
-    if (concepto === CF_OTRO_GAS) { const w = finEdit ? 1 : gadminPeso(); return (num(data[`OTROS|gas|${mi}`]) + gViajesMes(mi)) * w } // Otros gastos = (viajes back office + lo que agregue Finanzas), prorrateado por peso de venta de la vista
+    if (concepto === CF_OTRO_GAS) { const w = finEdit ? 1 : gadminPeso(); return (num(data[`OTROS|gas|${mi}`]) + gViajesMes(mi) + bono2027Mes(mi)) * w } // Otros gastos = (viajes back office + bono 2027 pagado en 2028 + lo que agregue Finanzas), prorrateado por peso de venta de la vista
     return cellRaw(concepto, mi)
   }
   // Valor de UNA marca (para el desglose del total): misma lógica que cell pero sin sumar SBU.
@@ -1620,14 +1634,16 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       const vb = (mi) => gViajesMes(mi) * w
                       const viajeRow = <tr key="vbo"><td className="l sub2" style={{ color: '#6b21a8' }}>↳ Viajes admin (back office){!isTotal ? null : <span className="unit"> (🪞 Admin+Procesos+Finanzas{w < 0.999 ? ' · prorrateado' : ''})</span>}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#6b21a8' }}>{vb(mi) > 0.5 ? '− ' : ''}{fmt(vb(mi))}</td>)}<td className="tot" style={{ color: '#6b21a8' }}>− {fmt(CF_MESES.reduce((a, _, mi) => a + vb(mi), 0))}</td></tr>
                       const otroManualRow = <tr key="ogman"><td className="l sub2" style={{ color: colFila }}>↳ Otros (Finanzas){!finEdit && ESP('Lo llena Finanzas (nivel empresa).')}</td>{CF_MESES.map((_, mi) => { const dk = `OTROS|gas|${mi}`; return finEdit ? <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot yb" style={{ color: colFila }}>{fmt(num(data[dk]) * w)}</td> })}<td className="tot" style={{ color: colFila }}>{fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`OTROS|gas|${mi}`]) * w, 0))}</td></tr>
-                      return <Fragment2 key={it}>{fila}{viajeRow}{otroManualRow}</Fragment2>
+                      const bonoRow = esEB ? <tr key="ogbono"><td className="l sub2" style={{ color: '#9a3412' }}>↳ Bono 2027 (pago feb-2028){!finEdit ? ESP('Egreso de caja 2028: el bono del 2027 se paga en feb-2028. Lo llena Finanzas (nivel empresa).') : <span className="unit"> (bono del 2027 pagado en feb-2028)</span>}</td>{CF_MESES.map((_, mi) => { const dk = `BONO2027|${mi}`; return finEdit ? <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot yb" style={{ color: '#9a3412' }}>{num(data[dk]) * w > 0.5 ? '− ' : ''}{fmt(num(data[dk]) * w)}</td> })}<td className="tot" style={{ color: '#9a3412' }}>− {fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`BONO2027|${mi}`]) * w, 0))}</td></tr> : null
+                      return <Fragment2 key={it}>{fila}{viajeRow}{otroManualRow}{bonoRow}</Fragment2>
                     }
                     if (!esCostos) return fila
                     return (
                       <Fragment2 key={it}>
                         {fila}
                         {openCostos && CF_COSTOS.map((sub) => {
-                          const fuente = sub === 'Gastos Admin Directos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Gastos Admin Indirectos' ? 'corporativos · lo llena Finanzas (prorrateados por venta)' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de las SBU (los back office van en Otros gastos)' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)'
+                          const bonoNota = esEB && (sub === 'Gastos Admin Directos' || sub === 'Gastos Admin Indirectos') ? ' · NO incluye el Performance Bono (103): va en el P&L pero se paga en feb-2029' : ''
+                          const fuente = (sub === 'Gastos Admin Directos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Gastos Admin Indirectos' ? 'corporativos · lo llena Finanzas (prorrateados por venta)' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de las SBU (los back office van en Otros gastos)' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)') + bonoNota
                           const sceldas = CF_MESES.map((_, mi) => { const bn = brk(sub, mi); return <td key={mi} className="tot yb" style={{ cursor: BULB_CURSOR }} title={'Origen: ' + fuente + (bn ? '\nDatos de origen: ' + bn : '')}>{fmt(cellRaw(sub, mi))}</td> })
                           return <tr key={sub}><td className="l sub2">{sub} {ESP(fuente)}</td>{sceldas}<td className="tot">{fmt(subTot(sub))}</td></tr>
                         })}
@@ -4208,8 +4224,9 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
   )
 }
 
-function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
+function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede, deep }) {
   const pu = puede || (() => true)
+  const _marcasInit = String(sbuName).toUpperCase() === 'RETAIL' ? [] : (sbus[sbuName] || [])
   // Acceso por rol: solo se ven las áreas asignadas al colaborador.
   // Orden del flujo comercial: 1) Director (define categorías) → 2) Ventas → 3) Producto → 4) Logística.
   const comercialRoles = ['director', 'ventas', 'producto', 'logistica'].map((id) => ROLES.find((r) => r.id === id)).filter((r) => pu(r.label))
@@ -4223,9 +4240,9 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
     ...(pu('Marketing') ? [ROLES.find((r) => r.id === 'marketing')] : []),
     // Director se movió al dropdown de Comercial (1º del flujo), ya no es pestaña aparte.
   ]
-  const [secId, setSecId] = useState(SECS[0] ? SECS[0].id : 'comercial')
-  const [comSub, setComSub] = useState('all') // sub-selector dentro de Comercial
-  const [marca, setMarca] = useState('__TOTAL__')
+  const [secId, setSecId] = useState(() => (deep && deep.sec && SECS.some((s) => s.id === deep.sec)) ? deep.sec : (SECS[0] ? SECS[0].id : 'comercial'))
+  const [comSub, setComSub] = useState(() => (deep && deep.comSub) ? deep.comSub : 'all') // sub-selector dentro de Comercial
+  const [marca, setMarca] = useState(() => (deep && deep.marca === 'first') ? (_marcasInit[0] || '__TOTAL__') : '__TOTAL__')
   const [totTab, setTotTab] = useState('brand')
   const cashRole = { label: 'Cash Flow', tab: 'Cap_Finanzas' }
   const cashRubro = { k: 'CASH FLOW', cash: true }
@@ -4428,42 +4445,42 @@ function ComercialScreen({ empresa, sbus, usuario }) {
 }
 
 /* ===== GUÍA POR ROL: mapa de dónde llena cada quién (solo Energy Brands) ===== */
-function GuiaScreen({ go, sbuNames = [], canConfig = false }) {
+function GuiaScreen({ go, sbuNames = [], miPerfil }) {
   const CARDS = [
     {
-      nav: { sbu: true },
+      rol: 'Director', nav: { sbu: true, step: { sec: 'comercial', comSub: 'director', marca: 'first' } },
       a: '#4f46e5', icon: '🧭', role: 'Director Comercial', scope: 'Por cada SBU (1 · 2 · 3) y por cada marca',
       where: <>Entra a la <b>SBU</b> (menú) → elige la <b>marca</b> (panel izquierdo) → paso <b style={{ color: '#4f46e5' }}>Director</b></>,
       items: ['Categorías que aplican a la marca', 'Categorías por cliente (qué compra cada cliente — reparto de la venta)', 'Muestras (unidades) por categoría', 'Comisiones (%) sobre la venta', 'Plazo de cobro de los clientes NUEVOS (celdas amarillas dentro del Cash Flow)', 'Viajes del Director'],
       note: <>Si falta info de este paso, el selector de Comercial muestra <b>⚠ pendiente</b>. Hasta no completarlo, los pasos siguientes quedan incompletos.</>,
     },
     {
-      nav: { sbu: true },
+      rol: 'Ventas', nav: { sbu: true, step: { sec: 'comercial', comSub: 'ventas', marca: 'first' } },
       a: '#0891b2', icon: '💵', role: 'Ventas', scope: 'Por cada SBU y por cada marca',
       where: <>SBU → marca → paso <b style={{ color: '#0891b2' }}>Ventas</b></>,
       items: ['Unidades 2028 por cliente y por mes (crecimiento sobre 2027)', 'Se capturan los 2 vendedores de la marca', 'Venta neta resultante por cliente', 'Viajes de Ventas'],
       note: <><b>Intercompañía</b> aparece automático y de solo lectura (lo que Retail le compra a la marca). No se llena.</>,
     },
     {
-      nav: { sbu: true },
+      rol: 'Producto', nav: { sbu: true, step: { sec: 'comercial', comSub: 'producto', marca: 'first' } },
       a: '#047857', icon: '📦', role: 'Producto', scope: 'Por cada SBU y por cada marca',
       where: <>SBU → marca → paso <b style={{ color: '#047857' }}>Producto</b></>,
       items: ['AUP — precio promedio de venta por categoría / temporada', 'AUC — costo promedio por categoría / temporada', 'Inventario y plan de compras 2028 (por temporada)', 'Margen por categoría', 'Viajes de Producto'],
     },
     {
-      nav: { go: 'logistica' },
+      rol: 'Logística', nav: { sbu: true, step: { sec: 'comercial', comSub: 'logistica', marca: 'first' } },
       a: '#b45309', icon: '🚚', role: 'Logística', scope: 'Por cada SBU y por cada marca',
       where: <>SBU → marca → paso <b style={{ color: '#b45309' }}>Logística</b></>,
       items: ['% costo logístico sobre la venta', 'Costo de muestras ($ por unidad)', 'Viajes de Logística'],
     },
     {
-      nav: { sbu: true },
+      rol: 'Marketing', nav: { sbu: true, step: { sec: 'marketing', marca: 'first' } },
       a: '#db2777', icon: '📣', role: 'Marketing', scope: 'Por cada marca',
       where: <>Entra a <b style={{ color: '#db2777' }}>Marketing</b> → elige la marca</>,
       items: ['Rubros por mes, por grupo: ATL · BTL · TRADE · DIGITAL · PR · PRE VENTAS', 'En DIGITAL: 321 – Implementación / Desarrollo E-commerce (nuevo)', 'Puedes agregar rubros propios además de los predefinidos', 'Viajes de Marketing'],
     },
     {
-      nav: { go: 'finanzas' },
+      rol: 'Finanzas', nav: { go: 'finanzas' },
       a: '#7c3aed', icon: '🧮', role: 'Finanzas', scope: 'A nivel empresa y dentro de cada SBU',
       where: <>Workspace <b style={{ color: '#7c3aed' }}>Finanzas</b> (varios lugares, ver abajo)</>,
       items: [
@@ -4471,6 +4488,7 @@ function GuiaScreen({ go, sbuNames = [], canConfig = false }) {
         'Cash Flow → Saldo pendiente por cobrar del 2027: en qué mes de 2028 entra cada cobro (por cliente)',
         'Cash Flow → Término de cobro de cada cliente (Cash / 30 / 60 / 90 días)',
         'Cash Flow → Término de pago a proveedores (plazo de pago de las compras)',
+        'Cash Flow → Otros gastos → «Bono 2027 (pago feb-2028)» (el bono del 2027 que se paga en 2028)',
         'Cash Flow → Costos Financieros, Otros ingresos y Otros gastos',
         'Gastos Admin Indirectos — barra lateral «💰 Gastos admin indirectos» (nivel empresa). Se prorratean por el peso de venta de cada SBU; ahí se ve el peso y 3 bloques con el resultado por SBU.',
         'Gastos Admin Directos — entrando a cada SBU → VER: GASTOS ADMIN DIRECTOS',
@@ -4495,19 +4513,24 @@ function GuiaScreen({ go, sbuNames = [], canConfig = false }) {
       ],
       note: <>Las ventas de la tienda <b>SINERGY</b> caen al P&L y Cash Flow de <b>SINERGY</b>. El resto de tiendas alimenta el <b>P&L Retail EB</b>, que a su vez suma al P&L y Cash Flow de Energy Brands.</>,
     },
-    {
-      nav: { go: 'config', adminOnly: true },
-      a: '#475569', icon: '⚙️', role: 'Administrador / Configuración', scope: 'Gerencia',
-      where: <>Entra a <b style={{ color: '#475569' }}>Configuración</b></>,
-      items: ['SBUs y marcas', 'Vendedores por marca', 'Colaboradores y accesos', 'Viajes de Gerencia (Admin / Procesos)'],
-      note: <>Gerencia y Holding son vistas de consolidación (<b>espejo</b>): muestran P&L y Cash Flow sumados, no se capturan datos ahí.</>,
-    },
   ]
+  const miCard = miPerfil && miPerfil.rol ? CARDS.find((c) => c.rol && upper(c.rol) === upper(miPerfil.rol)) : null
+  const miSbuOk = miPerfil && miPerfil.sbu && upper(miPerfil.sbu) !== 'TODAS' && sbuNames.some((s) => upper(s) === upper(miPerfil.sbu))
+  const miSbuName = miSbuOk ? sbuNames.find((s) => upper(s) === upper(miPerfil.sbu)) : null
+  const irAMiTarea = () => {
+    if (!miCard) return
+    if (miCard.nav.sbu && miSbuName) go('sbu:' + miSbuName, miCard.nav.step)
+    else if (miCard.nav.go) go(miCard.nav.go)
+  }
   return (
     <div style={{ maxWidth: 1180, margin: '0 auto' }}>
       <div className="panel" style={{ borderLeftColor: '#4f46e5' }}>
         <h3 style={{ color: '#4f46e5', margin: '0 0 4px' }}>🗺️ Mapa de captura por rol — Energy Brands</h3>
-        <div className="sub">Qué debe llenar cada rol y en qué parte de la herramienta. El flujo comercial va en orden: <b>Director → Ventas → Producto → Logística</b> (cada paso se apoya en el anterior). Marketing, Finanzas, Retail y Configuración van en paralelo. Lo marcado como <b>automático</b> o <b>espejo</b> no se llena.</div>
+        <div className="sub">Qué debe llenar cada rol y en qué parte de la herramienta. El flujo comercial va en orden: <b>Director → Ventas → Producto → Logística</b> (cada paso se apoya en el anterior). Marketing, Finanzas y Retail van en paralelo. Lo marcado como <b>automático</b> o <b>espejo</b> no se llena.</div>
+        {miCard && (miSbuName || miCard.nav.go) && <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: miCard.a + '12', border: '1px solid ' + miCard.a + '55', borderRadius: 10, padding: '10px 14px' }}>
+          <div style={{ fontSize: 13.5 }}>Según Configuración, eres <b style={{ color: miCard.a }}>{miPerfil.rol}</b>{miSbuName ? <> de <b>{miSbuName}</b></> : null}.</div>
+          <button style={{ fontSize: 13, fontWeight: 800, border: 'none', background: miCard.a, color: '#fff', borderRadius: 8, padding: '8px 16px', cursor: 'pointer' }} onClick={irAMiTarea}>⭐ Ir directo a mi tarea →</button>
+        </div>}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: 16, marginTop: 4 }}>
         {CARDS.map((c) => (
@@ -4532,10 +4555,9 @@ function GuiaScreen({ go, sbuNames = [], canConfig = false }) {
                   const names = sbuNames.length ? sbuNames : ['SBU 1', 'SBU 2', 'SBU 3']
                   return <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center' }}>
                     <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Abrir en:</span>
-                    {names.map((s) => <button key={s} style={btn} onClick={() => go('sbu:' + s)}>{s} →</button>)}
+                    {names.map((s) => <button key={s} style={btn} onClick={() => go('sbu:' + s, c.nav.step)}>{s} →</button>)}
                   </div>
                 }
-                if (c.nav.adminOnly && !canConfig) return null
                 return <div style={{ marginTop: 12 }}><button style={btn} onClick={() => go(c.nav.go)}>Abrir en la app →</button></div>
               })()}
             </div>
