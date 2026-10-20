@@ -1382,6 +1382,10 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
   const gadminSubtotCF = esEB ? MESES.map((_, m) => gadminCfg.reduce((a, it) => a + (it.cod === BONO_COD ? 0 : num(gadminData[`${it.cod}|${m}`])), 0)) : gadminSubtot
   const gadminIndSubtotCF = esEB ? MESES.map((_, m) => gadminCfg.reduce((a, it) => a + (it.cod === BONO_COD ? 0 : num(gadminIndData[`${it.cod}|${m}`])), 0)) : gadminIndSubtot
   const bono2027Mes = (mi) => esEB ? num(data[`BONO2027|${mi}`]) : 0 // bono del 2027 pagado en feb-2028: egreso de caja 2028 (lo llena Finanzas)
+  // Columna informativa ENE-29 (solo EB): el bono 2028 (directos+indirectos) sale de caja en enero-2029. No afecta ningún total del 2028.
+  const showEne29 = esEB
+  const bono2028Anual = () => CF_MESES.reduce((a, _, mi) => a + (num(gadminData[`${BONO_COD}|${mi}`]) + num(gadminIndData[`${BONO_COD}|${mi}`])) * gadminPeso(), 0)
+  const e29td = (txt, color, bold) => <td key="e29" className="tot yb" style={{ background: '#fff7ed', color, fontWeight: bold ? 700 : undefined }}>{txt}</td> // celda de la columna informativa ENE-29
   const cellRaw = (concepto, mi) => {
     if (concepto === 'Comisiones') return isTotal ? sbuMarcas.reduce((s, m) => s + comisTotalMes(m)[mi], 0) : comisTotalMes(marca)[mi]
     if (concepto === 'Gastos Admin Directos') return gadminSubtotCF[mi] * gadminPeso() // Cash Flow: excluye el bono 2028 (se paga en 2029); prorrateado por peso de venta
@@ -1551,15 +1555,15 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         <div className="sub">Proyección 2028 (enero a diciembre). <b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span> − <span style={{ color: '#b91c1c' }}>Costos financieros</span> + <span style={{ color: '#15803d' }}>Otros ingresos</span> − <span style={{ color: '#b91c1c' }}>Otros gastos</span></b>.</div>
         {HOVERTIP}
         <div className="tablewrap">
-          <table className="vfix"><colgroup><col style={{ width: '210px' }} />{CF_MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '80px' }} /></colgroup>
+          <table className="vfix"><colgroup><col style={{ width: '210px' }} />{CF_MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}{showEne29 && <col style={{ width: '72px' }} />}<col style={{ width: '80px' }} /></colgroup>
             <thead>
-              <tr><th className="l">Concepto</th>{CF_M2028.map((m) => <th key={m} className="yb">{m}</th>)}<th>Total</th></tr>
+              <tr><th className="l">Concepto</th>{CF_M2028.map((m) => <th key={m} className="yb">{m}</th>)}{showEne29 && <th className="yb" style={{ background: '#fff7ed', color: '#9a3412' }} title="Informativo: el bono 2028 se paga en enero-2029 (fuera del año). No afecta los totales del 2028.">ENE-29</th>}<th>Total</th></tr>
             </thead>
             <tbody>
               {CF_GROUPS.map((gr, gi) => (
                 <Fragment2 key={gr.g}>
-                  {gi > 0 && <tr className="sep"><td colSpan={14}></td></tr>}
-                  <tr className="secrow"><td colSpan={14}>{gr.g}</td></tr>
+                  {gi > 0 && <tr className="sep"><td colSpan={showEne29 ? 15 : 14}></td></tr>}
+                  <tr className="secrow"><td colSpan={showEne29 ? 15 : 14}>{gr.g}</td></tr>
                   {gr.items.map((it) => {
                     const esCostos = it === CF_COSTOS_PARENT
                     const esCostosFin = it === CF_FIN_PARENT
@@ -1600,18 +1604,26 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                       const k = key(marca, it, mi)
                       return <td key={mi} className={'cell ' + cls}><input value={data[k] ?? ''} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
+                    // Columna informativa ENE-29 (solo EB): el bono 2028 sale en enero-2029. Cash Inicial = Cash Final de dic-28; Otros gastos = bono 2028; el resto va en blanco.
+                    if (showEne29) {
+                      const b28 = bono2028Anual(), decFin = (cashCalc.fin[11] || 0)
+                      if (it === CASH_INI) celdas.push(e29td(fmt(decFin)))
+                      else if (it === CASH_FIN) celdas.push(e29td(fmt(decFin - b28), undefined, true))
+                      else if (esOtroGas) celdas.push(e29td((b28 > 0.5 ? '− ' : '') + fmt(b28), '#9a3412', true))
+                      else celdas.push(e29td(''))
+                    }
                     const ayudaComp = it === CASHIN ? 'Cash In (Cobros): calculado, no se escribe a mano. Suma dos cosas: (1) la COLA de las cuentas por cobrar del cierre 2027 — lo que quedó pendiente de oct/nov/dic-27 entra en su mes según el plazo del cliente (ej: octubre a 90 días → enero-28); y (2) las VENTAS 2028 cobradas por su propia escalera (Cash=mismo mes, 30d=+1, 60=+2…). La venta interna (intercompañía) es incobrable y va aparte, abajo.' : it === CASH_OUT ? 'Cash Out (Pagos): calculado, no se escribe a mano. Es la consecuencia de los pagos a proveedores: la compra 2028 × término de pago de la marca (bloque "Compras y pagos" de abajo).' : it === VENTAS_NETAS ? 'Ventas Netas TOTAL = venta interna + externa (todos los clientes) = Unidades × AUP efectivo del mes. Es la venta CONTABLE (devengada), no el cobro: por eso no coincide con el Cash In, que solo cuenta la venta externa y aplica el plazo de cada cliente.' : it === COMPRAS_FD ? 'Compras = unidades compradas × AUC (Producto). Párate sobre cada mes.' : null
                     const exp = esCostos || esVentas || esCostosFin; const abierto = esCostos ? openCostos : esCostosFin ? openCostosFin : openVentas; const toggle = esCostos ? () => setOpenCostos((o) => !o) : esCostosFin ? () => setOpenCostosFin((o) => !o) : () => setOpenVentas((o) => !o)
                     const fila = <tr key={it} className={exp ? 'rowline ' + (abierto ? 'open' : '') : undefined} onClick={exp ? toggle : undefined} style={exp ? { cursor: 'pointer' } : undefined}><td className="l" style={{ color: colFila }}>{exp ? <span className="caret">▶</span> : null} {esVentas ? 'Ventas Netas Total' : it}{ayudaComp && Q(ayudaComp)}{(esOtroIng || esOtroGas || esCostosFin) && ESP('Lo llena Finanzas (valores a nivel empresa, compartidos entre vistas).')}{exp ? <span className="unit" style={{ marginLeft: 6, color: 'var(--muted)' }}>({abierto ? 'ocultar' : 'ver'} {esVentas ? 'externa / interna' : 'detalle'})</span> : null}</td>{celdas}<td className="tot" style={{ color: colFila }}>{Math.abs(rowTot(it)) > 0.5 ? signo : ''}{fmt(Math.abs(rowTot(it)))}</td></tr>
                     if (it === CASH_FIN) {
                       const flujoCeldas = CF_MESES.map((_, mi) => { const cls = 'yb'; const v = flujoNeto(mi); const s = v > 0.5 ? '+ ' : v < -0.5 ? '− ' : ''; return <td key={mi} className={'tot ' + cls} style={{ color: v < -0.5 ? '#b91c1c' : v > 0.5 ? '#15803d' : undefined }}>{s}{fmt(Math.abs(v))}</td> })
                       const flujoTot = CF_MESES.reduce((a, _, mi) => a + flujoNeto(mi), 0)
-                      const flujoRow = <tr key="flujoneto" className="grandrow"><td className="l">= Flujo neto del mes <span className="unit">(cobros + otros ingresos − pagos − costos oper. − financieros − otros gastos{hayRetailEb ? ' + Retail EB' : ''})</span></td>{flujoCeldas}<td className="tot">{fmt(flujoTot)}</td></tr>
-                      const retailEbRow = hayRetailEb ? <tr key="retaileb"><td className="l sub2" style={{ color: '#0e7490' }}>🏬 Retail EB <span className="unit">(flujo neto de tiendas EB · espejo del P&L Retail)</span></td>{CF_MESES.map((_, mi) => { const v = retailEbMes(mi); return <td key={mi} className="tot" style={{ color: v < -0.5 ? '#b91c1c' : v > 0.5 ? '#15803d' : undefined }}>{v > 0.5 ? '+ ' : v < -0.5 ? '− ' : ''}{fmt(Math.abs(v))}</td> })}<td className="tot" style={{ color: '#0e7490' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + retailEbMes(mi), 0))}</td></tr> : null
+                      const flujoRow = <tr key="flujoneto" className="grandrow"><td className="l">= Flujo neto del mes <span className="unit">(cobros + otros ingresos − pagos − costos oper. − financieros − otros gastos{hayRetailEb ? ' + Retail EB' : ''})</span></td>{flujoCeldas}{showEne29 && (() => { const b28 = bono2028Anual(); return e29td((b28 > 0.5 ? '− ' : '') + fmt(b28), '#b91c1c', true) })()}<td className="tot">{fmt(flujoTot)}</td></tr>
+                      const retailEbRow = hayRetailEb ? <tr key="retaileb"><td className="l sub2" style={{ color: '#0e7490' }}>🏬 Retail EB <span className="unit">(flujo neto de tiendas EB · espejo del P&L Retail)</span></td>{CF_MESES.map((_, mi) => { const v = retailEbMes(mi); return <td key={mi} className="tot" style={{ color: v < -0.5 ? '#b91c1c' : v > 0.5 ? '#15803d' : undefined }}>{v > 0.5 ? '+ ' : v < -0.5 ? '− ' : ''}{fmt(Math.abs(v))}</td> })}{showEne29 && e29td('')}<td className="tot" style={{ color: '#0e7490' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + retailEbMes(mi), 0))}</td></tr> : null
                       return <Fragment2 key={it}>{retailEbRow}{flujoRow}{fila}</Fragment2>
                     }
                     if (esVentas) {
-                      return <Fragment2 key={it}>{fila}{openVentas && [['Venta externa (base de cobros)', '#0b5566', 'ext'], ['Venta interna (incobrable · intercompañía)', '#b45309', 'int']].map(([lbl, color, pick]) => <tr key={pick}><td className="l sub2" style={{ color }}>{lbl}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color }}>{fmt(ventaSplitMemo(pick, mi))}</td>)}<td className="tot" style={{ color }}>{fmt(CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo(pick, mi), 0))}</td></tr>)}</Fragment2>
+                      return <Fragment2 key={it}>{fila}{openVentas && [['Venta externa (base de cobros)', '#0b5566', 'ext'], ['Venta interna (incobrable · intercompañía)', '#b45309', 'int']].map(([lbl, color, pick]) => <tr key={pick}><td className="l sub2" style={{ color }}>{lbl}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color }}>{fmt(ventaSplitMemo(pick, mi))}</td>)}{showEne29 && e29td('')}<td className="tot" style={{ color }}>{fmt(CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo(pick, mi), 0))}</td></tr>)}</Fragment2>
                     }
                     if (esCostosFin) {
                       return (
@@ -1624,7 +1636,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                               if (finEdit) return <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td>
                               return <td key={mi} className="tot yb" style={{ color }}>{fmt(num(data[dk]))}</td>
                             })
-                            return <tr key={kk}><td className="l sub2" style={{ color }}>{lbl} <span className="unit">{kk === 'perd' ? '(pago)' : '(ingreso)'}</span></td>{sceldas}<td className="tot" style={{ color }}>{fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`FINCOST|${kk}|${mi}`]), 0))}</td></tr>
+                            return <tr key={kk}><td className="l sub2" style={{ color }}>{lbl} <span className="unit">{kk === 'perd' ? '(pago)' : '(ingreso)'}</span></td>{sceldas}{showEne29 && e29td('')}<td className="tot" style={{ color }}>{fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`FINCOST|${kk}|${mi}`]), 0))}</td></tr>
                           })}
                         </Fragment2>
                       )
@@ -1632,20 +1644,21 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
                     if (esOtroGas) {
                       const w = finEdit ? 1 : gadminPeso()
                       const vb = (mi) => gViajesMes(mi) * w
-                      const viajeRow = <tr key="vbo"><td className="l sub2" style={{ color: '#6b21a8' }}>↳ Viajes admin (back office){!isTotal ? null : <span className="unit"> (🪞 Admin+Procesos+Finanzas{w < 0.999 ? ' · prorrateado' : ''})</span>}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#6b21a8' }}>{vb(mi) > 0.5 ? '− ' : ''}{fmt(vb(mi))}</td>)}<td className="tot" style={{ color: '#6b21a8' }}>− {fmt(CF_MESES.reduce((a, _, mi) => a + vb(mi), 0))}</td></tr>
-                      const otroManualRow = <tr key="ogman"><td className="l sub2" style={{ color: colFila }}>↳ Otros (Finanzas){!finEdit && ESP('Lo llena Finanzas (nivel empresa).')}</td>{CF_MESES.map((_, mi) => { const dk = `OTROS|gas|${mi}`; return finEdit ? <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot yb" style={{ color: colFila }}>{fmt(num(data[dk]) * w)}</td> })}<td className="tot" style={{ color: colFila }}>{fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`OTROS|gas|${mi}`]) * w, 0))}</td></tr>
-                      const bonoRow = esEB ? <tr key="ogbono"><td className="l sub2" style={{ color: '#9a3412' }}>↳ Bono 2027 (pago feb-2028){!finEdit ? ESP('Egreso de caja 2028: el bono del 2027 se paga en feb-2028. Lo llena Finanzas (nivel empresa).') : <span className="unit"> (bono del 2027 pagado en feb-2028)</span>}</td>{CF_MESES.map((_, mi) => { const dk = `BONO2027|${mi}`; return finEdit ? <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot yb" style={{ color: '#9a3412' }}>{num(data[dk]) * w > 0.5 ? '− ' : ''}{fmt(num(data[dk]) * w)}</td> })}<td className="tot" style={{ color: '#9a3412' }}>− {fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`BONO2027|${mi}`]) * w, 0))}</td></tr> : null
-                      return <Fragment2 key={it}>{fila}{viajeRow}{otroManualRow}{bonoRow}</Fragment2>
+                      const viajeRow = <tr key="vbo"><td className="l sub2" style={{ color: '#6b21a8' }}>↳ Viajes admin (back office){!isTotal ? null : <span className="unit"> (🪞 Admin+Procesos+Finanzas{w < 0.999 ? ' · prorrateado' : ''})</span>}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#6b21a8' }}>{vb(mi) > 0.5 ? '− ' : ''}{fmt(vb(mi))}</td>)}{showEne29 && e29td('')}<td className="tot" style={{ color: '#6b21a8' }}>− {fmt(CF_MESES.reduce((a, _, mi) => a + vb(mi), 0))}</td></tr>
+                      const otroManualRow = <tr key="ogman"><td className="l sub2" style={{ color: colFila }}>↳ Otros (Finanzas){!finEdit && ESP('Lo llena Finanzas (nivel empresa).')}</td>{CF_MESES.map((_, mi) => { const dk = `OTROS|gas|${mi}`; return finEdit ? <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot yb" style={{ color: colFila }}>{fmt(num(data[dk]) * w)}</td> })}{showEne29 && e29td('')}<td className="tot" style={{ color: colFila }}>{fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`OTROS|gas|${mi}`]) * w, 0))}</td></tr>
+                      const bonoRow = esEB ? <tr key="ogbono"><td className="l sub2" style={{ color: '#9a3412' }}>↳ Bono 2027 (pago feb-2028){!finEdit ? ESP('Egreso de caja 2028: el bono del 2027 se paga en feb-2028. Lo llena Finanzas (nivel empresa).') : <span className="unit"> (bono del 2027 pagado en feb-2028)</span>}</td>{CF_MESES.map((_, mi) => { const dk = `BONO2027|${mi}`; return finEdit ? <td key={mi} className="cell yb"><input value={data[dk] ?? ''} onChange={(e) => set(dk, e.target.value)} inputMode="decimal" /></td> : <td key={mi} className="tot yb" style={{ color: '#9a3412' }}>{num(data[dk]) * w > 0.5 ? '− ' : ''}{fmt(num(data[dk]) * w)}</td> })}{showEne29 && e29td('')}<td className="tot" style={{ color: '#9a3412' }}>− {fmt(CF_MESES.reduce((a, _, mi) => a + num(data[`BONO2027|${mi}`]) * w, 0))}</td></tr> : null
+                      const bono28Row = showEne29 ? (() => { const b28 = bono2028Anual(); return <tr key="ogbono28"><td className="l sub2" style={{ color: '#9a3412' }}>↳ Bono 2028 (pago ene-2029) <span className="unit">(en el P&L 2028; la caja sale en 2029)</span></td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: 'var(--muted)' }}></td>)}{e29td((b28 > 0.5 ? '− ' : '') + fmt(b28), '#9a3412', true)}<td className="tot" style={{ color: 'var(--muted)' }}>—</td></tr> })() : null
+                      return <Fragment2 key={it}>{fila}{viajeRow}{otroManualRow}{bonoRow}{bono28Row}</Fragment2>
                     }
                     if (!esCostos) return fila
                     return (
                       <Fragment2 key={it}>
                         {fila}
                         {openCostos && CF_COSTOS.map((sub) => {
-                          const bonoNota = esEB && (sub === 'Gastos Admin Directos' || sub === 'Gastos Admin Indirectos') ? ' · NO incluye el Performance Bono (103): va en el P&L pero se paga en feb-2029' : ''
+                          const bonoNota = esEB && (sub === 'Gastos Admin Directos' || sub === 'Gastos Admin Indirectos') ? ' · NO incluye el Performance Bono (103): va en el P&L pero se paga en ene-2029 (ver columna ENE-29)' : ''
                           const fuente = (sub === 'Gastos Admin Directos' ? 'solo TOTAL · lo llena Finanzas en su pestaña' : sub === 'Gastos Admin Indirectos' ? 'corporativos · lo llena Finanzas (prorrateados por venta)' : sub === 'Logística' ? 'suma de los costos logísticos del equipo de Logística' : sub === 'Viajes' ? 'suma de los viajes de las SBU (los back office van en Otros gastos)' : sub === 'Marketing' ? 'monto del equipo de Marketing' : 'calc del Director (venta externa × %)') + bonoNota
                           const sceldas = CF_MESES.map((_, mi) => { const bn = brk(sub, mi); return <td key={mi} className="tot yb" style={{ cursor: BULB_CURSOR }} title={'Origen: ' + fuente + (bn ? '\nDatos de origen: ' + bn : '')}>{fmt(cellRaw(sub, mi))}</td> })
-                          return <tr key={sub}><td className="l sub2">{sub} {ESP(fuente)}</td>{sceldas}<td className="tot">{fmt(subTot(sub))}</td></tr>
+                          return <tr key={sub}><td className="l sub2">{sub} {ESP(fuente)}</td>{sceldas}{showEne29 && e29td('')}<td className="tot">{fmt(subTot(sub))}</td></tr>
                         })}
                       </Fragment2>
                     )
@@ -1656,22 +1669,6 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
           </table>
         </div>
       </div>
-
-      {esEB && (() => {
-        const bono28 = CF_MESES.reduce((a, _, mi) => a + (num(gadminData[`${BONO_COD}|${mi}`]) + num(gadminIndData[`${BONO_COD}|${mi}`])) * gadminPeso(), 0)
-        return <div className="panel" style={{ borderLeftColor: '#9a3412' }}>
-          <h3 style={{ color: '#9a3412' }}>🧮 Memo — Bono 2028 (se paga en ene-2029)</h3>
-          <div className="sub">El <b>Performance Bono del 2028</b> está incluido en el <b>P&L 2028</b>, pero su pago ocurre en <b>enero de 2029</b> (fuera del Cash Flow 2028). Se muestra aquí solo como recordatorio: <b>no afecta la caja del 2028</b>. El bono del 2027, que sí se paga en 2028, está arriba en <i>Otros gastos → ↳ Bono 2027</i>.</div>
-          <div className="tablewrap">
-            <table className="vfix"><colgroup><col style={{ width: '260px' }} /><col style={{ width: '110px' }} /></colgroup>
-              <thead><tr><th className="l">Concepto</th><th className="yb">ENE-29</th></tr></thead>
-              <tbody>
-                <tr><td className="l" style={{ color: '#9a3412' }}>Pago Performance Bono 2028 <span className="unit">(directos + indirectos)</span></td><td className="tot yb" style={{ color: '#9a3412', fontWeight: 700 }}>{bono28 > 0.5 ? '− ' : ''}{fmt(bono28)}</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      })()}
 
 
       <div className="panel">
@@ -5468,6 +5465,12 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
   P.hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || String(r[1]) !== '2026') return; const mca = upper(r[5]); if (!marcasU.has(mca)) return; const pais = String(r[9] || '').trim(), rub = upper(r[3]), val = num(r[7]); if (rub.indexOf('UNIDAD') >= 0) addP(pais, 'u26', val); else if (rub.indexOf('VENTA') >= 0) addP(pais, 'v26', val) })
   // Agregado por cliente
   const cliAgg = {}; const allCli = new Set([...Object.keys(cliU28), ...Object.keys(cliU26), ...Object.keys(cliV26)]); allCli.forEach((cli) => { cliAgg[cli] = { u28: cliU28[cli] || 0, v28: cliV28[cli] || 0, u26: cliU26[cli] || 0, v26: cliV26[cli] || 0 } })
+  // 2025 por cliente (del histórico), para medir clientes perdidos vs 2025
+  const cliU25 = {}, cliV25 = {}
+  P.hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || String(r[1]) !== '2025') return; const mca = upper(r[5]); if (!marcasU.has(mca)) return; const cli = String(r[8] || '').trim(); if (!cli) return; const rub = upper(r[3]), val = num(r[7]); if (rub.indexOf('UNIDAD') >= 0) cliU25[cli] = (cliU25[cli] || 0) + val; else if (rub.indexOf('VENTA') >= 0) cliV25[cli] = (cliV25[cli] || 0) + val })
+  // Clientes "perdidos": tenían venta en el año base pero YA NO están en el plan 2028 (sin unidades ni venta 2028)
+  const activo28 = (cli) => (cliU28[cli] || 0) > 0 || (cliV28[cli] || 0) > 0.5
+  const perdidosDe = (vMap) => { const arr = Object.entries(vMap).filter(([cli, v]) => v > 0.5 && !activo28(cli)).map(([cli, v]) => ({ cli, v })).sort((a, b) => b.v - a.v); const total = arr.reduce((a, b) => a + b.v, 0); const baseN = Object.values(vMap).filter((v) => v > 0.5).length; const baseTot = Object.values(vMap).reduce((a, b) => a + (b > 0 ? b : 0), 0); return { arr, total, baseN, baseTot } }
   // Cliente principal 2026 por país (para el comentario)
   const paisTopCli = {}; Object.keys(cliU26).forEach((cli) => { const p = paisByCli[cli] || 'Sin país'; const v = met === 'v' ? (cliV26[cli] || 0) : (cliU26[cli] || 0); if (!paisTopCli[p] || v > paisTopCli[p].v) paisTopCli[p] = { cli, v } })
   // Marcas activas 2026 por país (cuántas marcas se vendieron)
@@ -5547,6 +5550,30 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
       <Section icon="🏷️" title="Por marca" desc={<>Crecimiento por <b>marca</b> (plan 2028 vs real 2026{esT ? ' de TUMAR Performance' : ' del EBP'}). Cada marca con su color; en <b>Tips</b>, el análisis automático.</>} agg={marcaAgg} label="Marca" nameCell={marcaName} kind="marca" />
       {!esT && <Section icon="🌎" title="Por país" desc={<>Crecimiento por <b>país</b> (plan 2028 vs real 2026). La bandera va junto al país; <b>Tips</b> explica el porqué.</>} agg={paisAgg} label="País" nameCell={flagName} kind="pais" />}
       <Section icon="👥" title="Por cliente" desc={<>Crecimiento por <b>cliente</b> (plan 2028 vs real 2026{esT ? ' de TUMAR Performance' : ''}). <b>🆕</b> = cliente nuevo sin 2026.</>} agg={cliAgg} label="Cliente" kind="cli" />
+      {!esT && (() => {
+        const lost26 = perdidosDe(cliV26), lost25 = perdidosDe(cliV25)
+        const blk = (year, d, accent) => {
+          const pct = d.baseTot > 0 ? d.total / d.baseTot * 100 : 0
+          return <div style={{ marginTop: 12 }}>
+            <div style={{ fontWeight: 800, color: accent, marginBottom: 3 }}>vs {year}</div>
+            {d.baseN === 0
+              ? <div className="sub">No hay datos de {year} para estas marcas.</div>
+              : <>
+                <div className="sub" style={{ marginBottom: 6 }}><b style={{ color: accent }}>{d.arr.length}</b> de {d.baseN} clientes que vendían en {year} ya no están en el plan 2028. Representaban <b style={{ color: accent }}>${fmt(d.total)}</b> en venta neta {year} (<b>{pct.toFixed(1)}%</b> de la venta neta {year}).</div>
+                {d.arr.length > 0 && <div className="tablewrap"><table style={{ width: '100%' }}>
+                  <thead><tr><th className="l">Cliente perdido</th><th>Venta neta {year}</th><th>Peso {year}</th></tr></thead>
+                  <tbody>{d.arr.map(({ cli, v }) => <tr key={cli}><td className="l">{cli}</td><td className="tot" style={{ fontWeight: 700 }}>${fmt(v)}</td><td className="tot" style={{ color: 'var(--muted)' }}>{d.baseTot > 0 ? (v / d.baseTot * 100).toFixed(1) : '0'}%</td></tr>)}</tbody>
+                </table></div>}
+              </>}
+          </div>
+        }
+        return <div style={{ marginTop: 18, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+          <h3 style={{ color: col, margin: '0 0 2px' }}>👋 Clientes que ya no están</h3>
+          <div className="sub">Clientes que tenían venta en el año base pero <b>no tienen plan 2028</b> cargado (ni unidades ni venta). Muestra cuántos son y cuánta venta neta representaban, para dimensionar la base que se dejó de atender.</div>
+          {blk('2026', lost26, '#b45309')}
+          {blk('2025', lost25, '#7c3aed')}
+        </div>
+      })()}
       {!esT && <Section icon="🧩" title="Por categoría" desc={<>Crecimiento por <b>categoría</b> (plan 2028 vs real 2026). El total de cada marca se reparte por el <b>peso</b> que definió el Director.</>} agg={catAgg} label="Categoría" kind="cat" />}
     </div>
   )
