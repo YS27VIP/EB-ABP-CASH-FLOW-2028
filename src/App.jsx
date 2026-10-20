@@ -125,7 +125,7 @@ const MK_GROUPS = [
   { g: 'ATL', items: [{ c: '301', n: 'OOH' }, { c: '302', n: 'DOOH' }] },
   { g: 'BTL', items: [{ c: '303', n: 'FEE AGENCIA' }, { c: '304', n: 'EVENTOS / INAUGURACIONES' }, { c: '305', n: 'CARRERAS' }, { c: '306', n: 'OTROS' }] },
   { g: 'TRADE', items: [{ c: '', n: 'TRADE RETAIL' }, { c: '307', n: 'POP' }, { c: '308', n: 'VITRINAS / ESPACIOS BRANDEADOS' }, { c: '309', n: 'ACTIVACIONES EN TIENDA' }, { c: '310', n: 'AGENCIA DE RE-BRANDING' }, { c: '311', n: 'GIFT WITH PURCHASE' }] },
-  { g: 'DIGITAL', items: [{ c: '320', n: 'FEE AGENCIA' }, { c: '312', n: 'PAID SOCIAL MEDIA - AWARENESS' }, { c: '313', n: 'PAID SOCIAL MEDIA - PERFORMANCE' }, { c: '314', n: 'E-COMMERCE MARCAS' }, { c: '315', n: 'E-COMMERCE & AGENCIA MUH' }] },
+  { g: 'DIGITAL', items: [{ c: '320', n: 'FEE AGENCIA' }, { c: '312', n: 'PAID SOCIAL MEDIA - AWARENESS' }, { c: '313', n: 'PAID SOCIAL MEDIA - PERFORMANCE' }, { c: '314', n: 'E-COMMERCE MARCAS' }, { c: '315', n: 'E-COMMERCE & AGENCIA MUH' }, { c: '321', n: 'IMPLEMENTACIÓN / DESARROLLO E-COMMERCE' }] },
   { g: 'PR', items: [{ c: '330', n: 'FEE AGENCIA' }, { c: '316', n: 'PAGO A INFLUENCERS' }, { c: '317', n: 'CANJE INFLUENCERS' }] },
   { g: 'PRE VENTAS / SALES MEETING', items: [{ c: '340', n: 'ASIGNACION DE PRODUCTO' }, { c: '341', n: 'EVENTOS / REUNIONES' }, { c: '342', n: 'OTROS' }] },
 ]
@@ -255,7 +255,8 @@ const RETAIL_GASTOS = [
 const RETAIL_TIENDAS = ['Birkenstock Andino', 'Hoka Andino', 'MUH Atlantis', 'MUH Arkadia', 'Sale Factory', 'E-Commerce', 'Mayoristas', 'SINERGY']
 // Tiendas que pertenecen al bucket SINERGY (su P&L va a la columna SINERGY del Holding, NO a Energy Brands). El resto es P&L Retail EB.
 const SINERGY_TIENDAS = new Set(['SINERGY'])
-const esTiendaSinergy = (t) => SINERGY_TIENDAS.has(String(t || '').trim())
+// Match insensible a mayúsculas/espacios: cualquier tienda cuyo nombre sea (o empiece por) "SINERGY" va al bucket SINERGY.
+const esTiendaSinergy = (t) => { const u = String(t || '').trim().toUpperCase(); return SINERGY_TIENDAS.has(u) || u.startsWith('SINERGY') }
 // Lee el resumen del P&L Retail (guardado bajo Energy Brands) y devuelve totales anuales por bloque EB y SINERGY.
 function retailPLTotales() {
   try {
@@ -618,7 +619,7 @@ export default function App() {
     )
   }
 
-  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'holding' && roleId !== 'calendario' && roleId !== 'aprobaciones') {
+  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'holding' && roleId !== 'calendario' && roleId !== 'aprobaciones' && roleId !== 'guia') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
@@ -673,6 +674,10 @@ export default function App() {
               <span className="appicon" style={{ background: '#0e7490' }}>📅</span>
               <span className="applabel">Calendario</span>
             </button>
+            {empresa === 'ENERGY BRANDS' && <button className="app" onClick={() => setRoleId('guia')}>
+              <span className="appicon" style={{ background: '#4f46e5' }}>🗺️</span>
+              <span className="applabel">Guía por rol</span>
+            </button>}
             {puede('Bitácora') && <button className="app" onClick={() => setRoleId('bitacora')}>
               <span className="appicon" style={{ background: '#455a64' }}>📝</span>
               <span className="applabel">Bitácora</span>
@@ -720,6 +725,17 @@ export default function App() {
           <span className="rolechip" style={{ background: '#1f2d3d' }}>📈 Gerencia</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
         {estadoReady ? <main><GerenciaScreen key={empresa} empresa={empresa} sbus={sbus} /></main> : cargandoMain}
+      </>
+    )
+  }
+
+  if (roleId === 'guia') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#4f46e5' }}>🗺️ Guía por rol</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        <main><GuiaScreen /></main>
       </>
     )
   }
@@ -4216,6 +4232,30 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
   const isRetail = String(sbuName).toUpperCase() === 'RETAIL'
   const oneSbu = isRetail ? {} : { [sbuName]: sbus[sbuName] || [] }
   const marcasSBU = isRetail ? [] : (sbus[sbuName] || [])
+  // Estado del flujo comercial (solo Energy Brands): indica discretamente qué paso tiene info pendiente.
+  const [stD, setStD] = useState(null)
+  useEffect(() => { if (empresa !== 'ENERGY BRANDS') return; let cancel = false; (async () => {
+    const g = async (t) => { try { const j = await gReadTab(t); return j && j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
+    const [ven, prod, cap] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias')])
+    let lc = {}; try { lc = JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}') } catch { }
+    if (!cancel) setStD({ ven, prod, cap, lc })
+  })(); return () => { cancel = true } }, [empresa])
+  const stepMarcas = (marca && !String(marca).startsWith('__')) ? [marca] : marcasSBU
+  const stepPending = (roleId) => {
+    if (empresa !== 'ENERGY BRANDS' || !stD || !stepMarcas.length) return false
+    return stepMarcas.some((m) => {
+      const uV = stD.ven.some((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m) && MESES.some((_, i) => num(r[4 + i]) > 0))
+      const hasAup = stD.prod.some((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m) && String(r[1] || '').toUpperCase().indexOf('AUP') >= 0 && MESES.some((_, i) => num(r[4 + i]) > 0))
+      const hasAuc = stD.prod.some((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(m) && String(r[1] || '').toUpperCase().indexOf('AUC') >= 0 && MESES.some((_, i) => num(r[4 + i]) > 0))
+      const hasCat = stD.cap.some((r) => upper(r[0]) === 'ENERGY BRANDS' && upper(r[3]) === upper(m) && r[1])
+      const hasLog = num(stD.lc[`${m}|PCT_LOGVENTA`]) > 0
+      if (roleId === 'director') return !hasCat
+      if (roleId === 'ventas') return !uV
+      if (roleId === 'producto') return !(hasAup && hasAuc)
+      if (roleId === 'logistica') return !hasLog
+      return false
+    })
+  }
   const role = SECS.find((r) => r.id === secId)
   const col = sbuColor(sbuName)
   const acc = marca === '__TOTAL__' ? col : marcaColor(marca)
@@ -4305,8 +4345,8 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede }) {
                 {comercialRoles.length > 1 && <div className="toolbar" style={{ marginBottom: 12, gap: 8, alignItems: 'center' }}>
                   <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 800 }}>IR A:</span>
                   <select value={comSub} onChange={(e) => setComSub(e.target.value)} style={{ fontWeight: 700, padding: '8px 12px', borderRadius: 8, border: '1.5px solid ' + acc, color: acc, background: '#fff', minWidth: 200 }}>
-                    <option value="all">📋 Todos (en orden)</option>
-                    {comercialRoles.map((r, i) => <option key={r.id} value={r.id}>{i + 1}. {r.icon} {r.label}</option>)}
+                    <option value="all">📋 Todos (en orden){comercialRoles.some((r) => stepPending(r.id)) ? ' ⚠' : ''}</option>
+                    {comercialRoles.map((r, i) => <option key={r.id} value={r.id}>{i + 1}. {r.icon} {r.label}{stepPending(r.id) ? ' ⚠ pendiente' : ''}</option>)}
                   </select>
                 </div>}
                 {comercialRoles.filter((r) => comSub === 'all' || r.id === comSub).map((r) => (
@@ -4384,6 +4424,101 @@ function ComercialScreen({ empresa, sbus, usuario }) {
           </div>
         )}
     </>
+  )
+}
+
+/* ===== GUÍA POR ROL: mapa de dónde llena cada quién (solo Energy Brands) ===== */
+function GuiaScreen() {
+  const CARDS = [
+    {
+      a: '#4f46e5', icon: '🧭', role: 'Director Comercial', scope: 'Por cada SBU (1 · 2 · 3) y por cada marca',
+      where: <>Entra a la <b>SBU</b> (menú) → elige la <b>marca</b> (panel izquierdo) → paso <b style={{ color: '#4f46e5' }}>Director</b></>,
+      items: ['Categorías que aplican a la marca', '% de venta por cliente (cómo se reparte la venta entre clientes)', 'Muestras (unidades) por categoría', 'Comisiones (%) sobre la venta', 'Viajes del Director'],
+      note: <>Si falta info de este paso, el selector de Comercial muestra <b>⚠ pendiente</b>. Hasta no completarlo, los pasos siguientes quedan incompletos.</>,
+    },
+    {
+      a: '#0891b2', icon: '💵', role: 'Ventas', scope: 'Por cada SBU y por cada marca',
+      where: <>SBU → marca → paso <b style={{ color: '#0891b2' }}>Ventas</b></>,
+      items: ['Unidades 2028 por cliente y por mes (crecimiento sobre 2027)', 'Se capturan los 2 vendedores de la marca', 'Venta neta resultante por cliente', 'Viajes de Ventas'],
+      note: <><b>Intercompañía</b> aparece automático y de solo lectura (lo que Retail le compra a la marca). No se llena.</>,
+    },
+    {
+      a: '#047857', icon: '📦', role: 'Producto', scope: 'Por cada SBU y por cada marca',
+      where: <>SBU → marca → paso <b style={{ color: '#047857' }}>Producto</b></>,
+      items: ['AUP — precio promedio por categoría / temporada', 'AUC — costo promedio por categoría / temporada', 'Plan de compras 2028 e inventario', 'Viajes de Producto'],
+    },
+    {
+      a: '#b45309', icon: '🚚', role: 'Logística', scope: 'Por cada SBU y por cada marca',
+      where: <>SBU → marca → paso <b style={{ color: '#b45309' }}>Logística</b></>,
+      items: ['% costo logístico sobre la venta', 'Costo de muestras ($ por unidad)', 'Viajes de Logística'],
+    },
+    {
+      a: '#db2777', icon: '📣', role: 'Marketing', scope: 'Por cada marca',
+      where: <>Entra a <b style={{ color: '#db2777' }}>Marketing</b> → elige la marca</>,
+      items: ['Rubros por mes, por grupo: ATL · BTL · TRADE · DIGITAL · PR · PRE VENTAS', 'En DIGITAL: 321 – Implementación / Desarrollo E-commerce (nuevo)', 'Viajes de Marketing'],
+    },
+    {
+      a: '#7c3aed', icon: '🧮', role: 'Finanzas', scope: 'A nivel empresa y dentro de cada SBU',
+      where: <>Workspace <b style={{ color: '#7c3aed' }}>Finanzas</b> (varios lugares, ver abajo)</>,
+      items: [
+        'Gastos Admin Indirectos — barra lateral «💰 Gastos admin indirectos» (nivel empresa). Se prorratean por el peso de venta de cada SBU; ahí se ve el peso y 3 bloques con el resultado por SBU.',
+        'Gastos Admin Directos — entrando a cada SBU → VER: GASTOS ADMIN DIRECTOS',
+        'Cash Flow — Cash Inicial, plazos de cobro, Costos Financieros, Otros ingresos, Otros gastos',
+        'Viajes de Finanzas y back office (Admin / Procesos) → caen en Otros gastos',
+        'Aprobaciones',
+      ],
+      note: <>Directos + Indirectos impactan el Cash Flow de cada SBU (línea directos, línea indirectos y total). En Gerencia/SBU los campos financieros se ven como <b>espejo</b> (solo lectura).</>,
+    },
+    {
+      a: '#0e7490', icon: '🏬', role: 'Retail', scope: 'Tiendas propias EB + SINERGY',
+      where: <>Entra a <b style={{ color: '#0e7490' }}>Retail</b> (menú)</>,
+      items: [
+        'Mapa de abastecimiento (qué marca/categoría surte cada subcategoría)',
+        'Compras por tienda: calendario (% de llegada por mes, suma 100%) + unidades anuales',
+        'Ventas por tienda: unidades vendidas por mes + % margen + % descuento (2026 es referencia, solo lectura)',
+        'Gastos de tienda (EB) y gastos SINERGY',
+        'Marketing Retail (EB) y Marketing SINERGY',
+        'Logística SINERGY',
+        'Viajes: EB y SINERGY (Director + Marketing)',
+        'Cash Flow: líneas financieras EB y SINERGY',
+      ],
+      note: <>Las ventas de la tienda <b>SINERGY</b> caen al P&L y Cash Flow de <b>SINERGY</b>. El resto de tiendas alimenta el <b>P&L Retail EB</b>, que a su vez suma al P&L y Cash Flow de Energy Brands.</>,
+    },
+    {
+      a: '#475569', icon: '⚙️', role: 'Administrador / Configuración', scope: 'Gerencia',
+      where: <>Entra a <b style={{ color: '#475569' }}>Configuración</b></>,
+      items: ['SBUs y marcas', 'Vendedores por marca', 'Colaboradores y accesos', 'Viajes de Gerencia (Admin / Procesos)'],
+      note: <>Gerencia y Holding son vistas de consolidación (<b>espejo</b>): muestran P&L y Cash Flow sumados, no se capturan datos ahí.</>,
+    },
+  ]
+  return (
+    <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+      <div className="panel" style={{ borderLeftColor: '#4f46e5' }}>
+        <h3 style={{ color: '#4f46e5', margin: '0 0 4px' }}>🗺️ Mapa de captura por rol — Energy Brands</h3>
+        <div className="sub">Qué debe llenar cada rol y en qué parte de la herramienta. El flujo comercial va en orden: <b>Director → Ventas → Producto → Logística</b> (cada paso se apoya en el anterior). Marketing, Finanzas, Retail y Configuración van en paralelo. Lo marcado como <b>automático</b> o <b>espejo</b> no se llena.</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: 16, marginTop: 4 }}>
+        {CARDS.map((c) => (
+          <div key={c.role} className="panel" style={{ borderTop: '4px solid ' + c.a, borderLeft: 'none', padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px 10px' }}>
+              <div style={{ fontSize: 16.5, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 9 }}><span>{c.icon}</span>{c.role}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>{c.scope}</div>
+            </div>
+            <div style={{ padding: '0 16px 16px' }}>
+              <div style={{ fontSize: 12.5, background: '#f3f4f6', borderRadius: 9, padding: '8px 10px', margin: '0 0 11px', color: '#374151' }}>{c.where}</div>
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                {c.items.map((it, i) => (
+                  <li key={i} style={{ position: 'relative', padding: '5px 0 5px 20px', fontSize: 13.5, borderTop: i ? '1px dashed #eceef2' : 'none' }}>
+                    <span style={{ position: 'absolute', left: 4, top: 4, color: c.a, fontWeight: 800 }}>›</span>{it}
+                  </li>
+                ))}
+              </ul>
+              {c.note && <div style={{ marginTop: 11, fontSize: 12, color: 'var(--muted)', borderLeft: '3px solid ' + c.a, padding: '3px 0 3px 10px', background: '#fafafa' }}>{c.note}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
