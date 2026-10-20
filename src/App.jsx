@@ -4756,19 +4756,21 @@ function FlujoTelarana() {
   return <div style={{ overflowX: 'auto' }}>
     <svg viewBox="0 0 900 690" style={{ width: '100%', minWidth: 640, maxWidth: 940 }} xmlns="http://www.w3.org/2000/svg">
       <defs><marker id="arrTel" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#94a3b8" /></marker><marker id="arrTelA" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#334155" /></marker></defs>
-      {E.map(([a, b, lbl], i) => {
+      {E.map(([a, b], i) => {
         const na = N[a], nb = N[b]; const [ex, ey] = shorten(na.x, na.y, nb.x, nb.y, 30); const [sx, sy] = shorten(nb.x, nb.y, na.x, na.y, 30)
-        const isOn = hover && (a === hover || b === hover); const mx = (sx + ex) / 2, my = (sy + ey) / 2
+        const isOn = hover && (a === hover || b === hover)
         const op = !hover ? 0.3 : isOn ? 1 : 0.05
-        return <g key={i} opacity={op}>
-          <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={isOn ? na.c : '#b8c0cc'} strokeWidth={isOn ? 2.4 : 1.1} markerEnd={isOn ? 'url(#arrTelA)' : 'url(#arrTel)'} />
-          {isOn && <><rect x={mx - lbl.length * 3.15} y={my - 9} width={lbl.length * 6.3} height={17} rx={4} fill="#fff" stroke={na.c + '66'} /><text x={mx} y={my + 3} textAnchor="middle" fontSize="10.5" fill="#334155" fontWeight="700">{lbl}</text></>}
-        </g>
+        return <line key={i} opacity={op} x1={sx} y1={sy} x2={ex} y2={ey} stroke={isOn ? na.c : '#b8c0cc'} strokeWidth={isOn ? 2.4 : 1.1} markerEnd={isOn ? 'url(#arrTelA)' : 'url(#arrTel)'} />
       })}
       {Object.entries(N).map(([id, n]) => { const on = !hover || hover === id || conn(id); const w = n.out ? 230 : W; const h = n.out ? 46 : H; const fillSel = hover === id; return <g key={id} style={{ cursor: 'pointer' }} opacity={on ? 1 : 0.25} onMouseEnter={() => setHover(id)} onMouseLeave={() => setHover(null)} onClick={() => setHover((hh) => hh === id ? null : id)}>
         <rect x={n.x - w / 2} y={n.y - h / 2} width={w} height={h} rx={10} fill={fillSel ? n.c : n.out ? n.c + '1a' : '#fff'} stroke={n.c} strokeWidth={fillSel ? 2.6 : n.out ? 2.4 : 1.8} />
         <text x={n.x} y={n.y + (n.out ? 5 : 4)} textAnchor="middle" fontSize={n.out ? 14 : 13} fontWeight="800" fill={fillSel ? '#fff' : n.c}>{n.label}</text>
       </g> })}
+      {hover && E.filter(([a, b]) => a === hover || b === hover).map(([a, b, lbl], i) => {
+        const na = N[a], nb = N[b]; const [ex, ey] = shorten(na.x, na.y, nb.x, nb.y, 30); const [sx, sy] = shorten(nb.x, nb.y, na.x, na.y, 30)
+        const f = 0.5 + ((i % 3) - 1) * 0.1; const mx = sx + (ex - sx) * f, my = sy + (ey - sy) * f // reparte las etiquetas sobre la línea para que no se tapen entre sí
+        return <g key={'L' + i}><rect x={mx - lbl.length * 3.15} y={my - 9} width={lbl.length * 6.3} height={17} rx={4} fill="#fff" stroke={na.c + '88'} /><text x={mx} y={my + 3} textAnchor="middle" fontSize="10.5" fill="#334155" fontWeight="700">{lbl}</text></g>
+      })}
     </svg>
   </div>
 }
