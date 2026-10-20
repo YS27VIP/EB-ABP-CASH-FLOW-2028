@@ -3346,27 +3346,49 @@ function GadminReqBlock({ empresa, sbu, area, areaLabel, color }) {
   </div>
 }
 
+/* ===== Espejo (solo lectura) de los gastos admin de Retail EB (se llenan en Retail → Gastos) ===== */
+function GastosRetailEBEspejo({ empresa }) {
+  useDataVersion()
+  let ret = {}; try { ret = JSON.parse(localStorage.getItem(`retail_gastos_eb_${empresa}`) || '{}') } catch { }
+  const row = (cod) => MESES.reduce((a, _, m) => a + num(ret[`G|${cod}|${m}`]), 0)
+  const col = (m) => DEFAULT_GADMIN.reduce((a, it) => a + num(ret[`G|${it.cod}|${m}`]), 0)
+  const gran = DEFAULT_GADMIN.reduce((a, it) => a + row(it.cod), 0)
+  return <div className="panel" style={{ borderLeftColor: '#0e7490' }}>
+    <h3 style={{ color: '#0e7490' }}>🏬 Gastos Admin — Retail EB <span className="unit">(🪞 espejo · solo lectura · se llena en Retail → Gastos)</span></h3>
+    <div className="sub">Estos gastos ya alimentan el <b>P&L y Cash Flow de Retail EB</b>. Se muestran aquí solo para visibilidad del total de gastos admin de Energy Brands.</div>
+    <div className="tablewrap" style={{ overflowX: 'auto' }}><table className="vfix"><colgroup><col style={{ width: '70px' }} /><col style={{ width: '300px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
+      <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+      <tbody>
+        {DEFAULT_GADMIN.map((it) => <tr key={it.cod}><td>{it.cod}</td><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>{it.sub}</td>{MESES.map((_, m) => <td key={m} className="tot" style={{ background: '#f8fafc' }}>{fmt(num(ret[`G|${it.cod}|${m}`]))}</td>)}<td className="tot">{fmt(row(it.cod))}</td></tr>)}
+        <tr className="grandrow"><td className="l" colSpan={2}>Total Retail EB</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(col(m))}</td>)}<td className="tot">{fmt(gran)}</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+}
+
 /* ===== GASTOS ADMIN — bloque TOTAL (directos + indirectos + aprobado a las áreas) a nivel empresa ===== */
 function GastosAdminTotalBlock({ empresa, sbus }) {
   useDataVersion() // se refresca al guardar cualquier bloque
   const ls = (k) => { try { return JSON.parse(localStorage.getItem(k) || '{}') } catch { return {} } }
-  const dir = ls(`gadmin_${empresa}`), ind = ls(`gadmin_ind_${empresa}`)
+  const dir = ls(`gadmin_${empresa}`), ind = ls(`gadmin_ind_${empresa}`), retEB = ls(`retail_gastos_eb_${empresa}`)
   let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { }
   const mDir = MESES.map((_, m) => cfg.reduce((a, it) => a + num(dir[`${it.cod}|${m}`]), 0))
   const mInd = MESES.map((_, m) => cfg.reduce((a, it) => a + num(ind[`${it.cod}|${m}`]), 0))
   const mReq = MESES.map((_, m) => gadminReqAprobMes(empresa, sbus, m))
-  const mTot = MESES.map((_, m) => mDir[m] + mInd[m] + mReq[m])
+  const mRet = MESES.map((_, m) => DEFAULT_GADMIN.reduce((a, it) => a + num(retEB[`G|${it.cod}|${m}`]), 0)) // espejo: gastos admin de Retail EB
+  const mTot = MESES.map((_, m) => mDir[m] + mInd[m] + mReq[m] + mRet[m])
   const sumA = (arr) => arr.reduce((a, b) => a + b, 0)
   const row = (lbl, arr, color, bold) => <tr className={bold ? 'grandrow' : undefined}><td className="l" style={{ color }}>{lbl}</td>{arr.map((v, m) => <td key={m} className="tot" style={{ color, fontWeight: bold ? 800 : undefined }}>{fmt(v)}</td>)}<td className="tot" style={{ color, fontWeight: bold ? 800 : undefined }}>{fmt(sumA(arr))}</td></tr>
   return <div className="panel" style={{ borderLeftColor: '#7c3aed' }}>
     <h3 style={{ color: '#7c3aed' }}>Σ Gastos Admin — TOTAL <span className="unit">(directos + indirectos + aprobado a las áreas · USD · 2028)</span></h3>
-    <div className="sub">Suma de los <b>gastos admin directos</b> + <b>indirectos</b> (ambos los llena Finanzas aquí) + lo que Finanzas <b>aprobó</b> a Director y Logística en los rubros 105/106/107 por SBU.</div>
+    <div className="sub">Suma de los <b>gastos admin directos</b> + <b>indirectos</b> (ambos los llena Finanzas aquí) + lo <b>aprobado</b> a Director y Logística (105/106/107 por SBU) + el <b>espejo de Retail EB</b> (🪞 solo lectura, se llena en Retail).</div>
     <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
       <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m} className="yb">{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
       <tbody>
         {row('Gastos Admin Directos', mDir, 'var(--muted)')}
         {row('Gastos Admin Indirectos', mInd, 'var(--muted)')}
         {row('Aprobado a las áreas (105/106/107)', mReq, '#0e7490')}
+        {row('Gastos Admin Retail EB (🪞 espejo)', mRet, '#0e7490')}
         {row('TOTAL Gastos Admin', mTot, '#7c3aed', true)}
       </tbody>
     </table></div>
@@ -3552,6 +3574,7 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
             <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#be185d', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>💰 Gastos Admin</span><span className="unit" style={{ alignSelf: 'center' }}>A nivel empresa (se llenan una vez). <b>Directos</b> e <b>indirectos</b> se prorratean por peso de venta y bajan al Cash Flow de cada SBU; el <b>TOTAL</b> incluye lo aprobado a las áreas (105/106/107).</span></div>
             <GastosAdminForm empresa={empresa} tipo="dir" sbus={sbus} />
             <GastosAdminForm empresa={empresa} tipo="ind" sbus={sbus} />
+            <GastosRetailEBEspejo empresa={empresa} />
             <GastosAdminTotalBlock empresa={empresa} sbus={sbus} />
           </>
           : <>
