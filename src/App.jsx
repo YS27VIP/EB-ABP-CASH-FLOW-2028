@@ -4524,6 +4524,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede, deep }) {
   const col = sbuColor(sbuName)
   const acc = marca === '__TOTAL__' ? col : marcaColor(marca)
   const totTabEf = (['brand', 'viajes', 'mk', 'ucvm', 'log', 'mivista', 'avance'].includes(totTab) && !puedeDir) ? 'cash' : (totTab === 'cash' && !pu('Finanzas')) ? 'brand' : totTab
+  const canGadminReq = empresa === 'ENERGY BRANDS' && (puedeDir || pu('Logística')) // pestaña de gastos admin propuestos (105/106/107) por SBU
   // Indicador de avance por marca (✅ completo / ⚠️ falta algo) en la barra lateral.
   const [stVen, setStVen] = useState([]); const [stProd, setStProd] = useState([])
   const sbuVer = useDataVersion()
@@ -4561,10 +4562,6 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede, deep }) {
             <div style={{ marginBottom: 6 }}>
               <span className="empchip" style={{ background: col, marginLeft: 0, fontSize: 13 }}>▣ TOTAL {sbuName}</span>
             </div>
-            {empresa === 'ENERGY BRANDS' && (puedeDir || pu('Logística')) && <div style={{ marginBottom: 14 }}>
-              {puedeDir && <div style={{ marginBottom: 12 }}><GadminReqBlock empresa={empresa} sbu={sbuName} area="DIR" areaLabel="Director" color="#0d9488" /></div>}
-              {pu('Logística') && <GadminReqBlock empresa={empresa} sbu={sbuName} area="LOG" areaLabel="Logística" color="#3b6ea5" />}
-            </div>}
             <div className="subtabs" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 6, display: 'flex', borderTop: '1px solid var(--line)', paddingTop: 10 }}>
               {puedeDir && <button className={'seg' + (totTabEf === 'brand' ? ' active' : '')} onClick={() => setTotTab('brand')} style={totTabEf === 'brand' ? { background: col, borderColor: col, color: '#fff' } : {}}>📊 Contribución de la SBU</button>}
               {pu('Finanzas') && <button className={'seg' + (totTabEf === 'cash' ? ' active' : '')} onClick={() => setTotTab('cash')} style={totTabEf === 'cash' ? { background: col, borderColor: col, color: '#fff' } : {}}>💵 Cash Flow</button>}
@@ -4574,9 +4571,15 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede, deep }) {
               {puedeDir && <button className={'seg' + (totTabEf === 'viajes' ? ' active' : '')} onClick={() => setTotTab('viajes')} style={totTabEf === 'viajes' ? { background: col, borderColor: col, color: '#fff' } : {}}>🧳 Viajes</button>}
               {puedeDir && empresa !== 'TAHO' && <button className={'seg' + (totTabEf === 'mivista' ? ' active' : '')} onClick={() => setTotTab('mivista')} style={totTabEf === 'mivista' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>✨ HIGHLIGHTS</button>}
               {puedeDir && <button className={'seg' + (totTabEf === 'avance' ? ' active' : '')} onClick={() => setTotTab('avance')} style={totTabEf === 'avance' ? { background: col, borderColor: col, color: '#fff' } : { borderColor: col, color: col, fontWeight: 800 }}>✅ Progreso</button>}
+              {canGadminReq && <button className={'seg' + (totTabEf === 'gadminreq' ? ' active' : '')} onClick={() => setTotTab('gadminreq')} style={totTabEf === 'gadminreq' ? { background: col, borderColor: col, color: '#fff' } : {}}>💰 Gastos admin</button>}
               {puedeDir && <><div style={{ flex: 1 }}></div><SbuResultDownload empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} /></>}
             </div>
-            {!puedeDir && !pu('Finanzas')
+            {totTabEf === 'gadminreq' && canGadminReq
+              ? <>
+                {puedeDir && <div style={{ marginBottom: 12 }}><GadminReqBlock empresa={empresa} sbu={sbuName} area="DIR" areaLabel="Director" color="#0d9488" /></div>}
+                {pu('Logística') && <GadminReqBlock empresa={empresa} sbu={sbuName} area="LOG" areaLabel="Logística" color="#3b6ea5" />}
+              </>
+              : !puedeDir && !pu('Finanzas')
               ? <div className="note warn">No tienes acceso al consolidado de esta SBU. Entra a tu área (Ventas/Producto/Logística/Marketing) eligiendo una marca en el panel de la izquierda.</div>
               : totTabEf === 'avance'
               ? <AvanceSBU empresa={empresa} sbuName={sbuName} marcasSBU={marcasSBU} />
