@@ -4775,6 +4775,51 @@ function FlujoTelarana() {
   </div>
 }
 
+/* ===== CÓMO SE ARMA: el P&L y el Cash Flow de Energy Brands, línea por línea, con quién llena cada una ===== */
+function FlujoPiramide() {
+  const R = { dir: { e: '🧭', n: 'Director', c: '#4f46e5' }, ven: { e: '💵', n: 'Ventas', c: '#0891b2' }, prod: { e: '📦', n: 'Producto', c: '#047857' }, log: { e: '🚚', n: 'Logística', c: '#b45309' }, mk: { e: '📣', n: 'Marketing', c: '#db2777' }, fin: { e: '🧮', n: 'Finanzas', c: '#7c3aed' }, ret: { e: '🏬', n: 'Retail', c: '#0e7490' }, vj: { e: '🧳', n: 'Viajes', c: '#6b21a8' } }
+  const chip = (k, x) => { const r = R[k]; return <span key={k + (x || '')} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: r.c + '14', color: r.c, border: '1px solid ' + r.c + '55', borderRadius: 7, padding: '2px 7px', fontWeight: 700, fontSize: 11, margin: '2px 0' }}>{r.e} {r.n}{x ? <span style={{ fontWeight: 500, opacity: .85 }}> · {x}</span> : null}</span> }
+  const pl = [
+    { op: '', c: 'Venta Neta', r: [['ven'], ['prod', 'AUP']] },
+    { op: '−', c: 'Costo', r: [['prod', 'AUC']] },
+    { op: '=', c: 'Margen Bruto', bold: true },
+    { op: '−', c: 'Logística', r: [['log']] },
+    { op: '−', c: 'Marketing', r: [['mk']] },
+    { op: '−', c: 'Viajes', r: [['vj', 'de cada rol']] },
+    { op: '−', c: 'Comisiones', r: [['dir']] },
+    { op: '=', c: 'Contribución por SBU', bold: true },
+    { op: '−', c: 'Gastos administrativos', r: [['fin', 'directos + indirectos + aprobado']] },
+    { op: '=', c: 'Resultado Operativo (cada SBU)', bold: true },
+    { op: '+', c: 'Retail EB', r: [['ret']] },
+    { op: '=', c: '📊 P&L ENERGY BRANDS', result: true },
+  ]
+  const cf = [
+    { op: '+', c: 'Cobros (Cash In)', r: [['ven', 'ventas'], ['dir', 'plazos'], ['fin', 'saldo 2027']] },
+    { op: '−', c: 'Pagos (Cash Out)', r: [['prod', 'compras'], ['fin', 'plazo de pago']] },
+    { op: '−', c: 'Gastos administrativos', r: [['fin']] },
+    { op: '−', c: 'Logística · Marketing · Viajes · Comisiones', r: [['log'], ['mk'], ['vj'], ['dir']] },
+    { op: '−', c: 'Costos financieros · Otros', r: [['fin']] },
+    { op: '+', c: 'Retail EB', r: [['ret']] },
+    { op: '=', c: '💵 CASH FLOW ENERGY BRANDS', result: true },
+  ]
+  const opColor = (op) => op === '−' ? '#b91c1c' : op === '+' ? '#15803d' : '#334155'
+  const tabla = (titulo, rows, accent) => <div className="panel" style={{ margin: 0, borderLeftColor: accent }}>
+    <h3 style={{ color: accent, margin: '0 0 2px' }}>{titulo}</h3>
+    <div className="sub" style={{ marginBottom: 8 }}>Cada línea con <b>quién la llena</b>. Se arma de la base hacia arriba hasta el total.</div>
+    <div>
+      {rows.map((row, i) => <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 8px', borderTop: i ? '1px solid #eef1f4' : 'none', background: row.result ? accent + '12' : row.bold ? '#f8fafc' : undefined, borderRadius: row.result ? 8 : 0 }}>
+        <span style={{ width: 16, textAlign: 'center', fontWeight: 800, color: opColor(row.op) }}>{row.op}</span>
+        <span style={{ fontWeight: row.result ? 800 : row.bold ? 700 : 500, fontSize: row.result ? 13.5 : 13, color: row.result ? accent : '#1e2330', flex: 1, minWidth: 180 }}>{row.c}</span>
+        <span style={{ display: 'flex', flexWrap: 'wrap', gap: 5, justifyContent: 'flex-end' }}>{(row.r || []).map(([k, x]) => chip(k, x))}</span>
+      </div>)}
+    </div>
+  </div>
+  return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: 12 }}>
+    {tabla('📊 Cómo se arma el P&L', pl, '#0f766e')}
+    {tabla('💵 Cómo se arma el Cash Flow', cf, '#15803d')}
+  </div>
+}
+
 /* ===== GUÍA POR ROL: mapa de dónde llena cada quién (solo Energy Brands) ===== */
 function GuiaScreen({ go, sbuNames = [], miPerfil }) {
   const CARDS = [
@@ -4911,30 +4956,11 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
           </div>
         ))}
       </div>
-      {(() => {
-        const FLOWS = [
-          { title: '1 · La venta → margen', parts: [{ t: 'Director: categorías + % por cliente', c: '#4f46e5' }, '→', { t: 'Ventas: unidades 2028', c: '#0891b2' }, '→', { t: '× AUP (Producto) = Venta Neta', c: '#047857' }, '·', { t: '× AUC (Producto) = Costo', c: '#047857' }, '→', { t: '= Margen Bruto', c: '#0f766e' }] },
-          { title: '2 · Margen → resultado', parts: [{ t: 'Margen Bruto', c: '#0f766e' }, '−', { t: 'Marketing', c: '#db2777' }, '−', { t: 'Viajes', c: '#6b21a8' }, '=', { t: 'Contribución', c: '#0f766e' }, '−', { t: 'Gastos admin (Finanzas)', c: '#7c3aed' }, '=', { t: 'Resultado Operativo SBU', c: '#0f766e' }] },
-          { title: '3 · La caja (Cash Flow)', parts: [{ t: 'Ventas + plazos de cobro + saldo 2027', c: '#7c3aed' }, '=', { t: 'Cash In', c: '#15803d' }, '·', { t: 'Compras + término de pago', c: '#7c3aed' }, '=', { t: 'Cash Out', c: '#b91c1c' }, '→', { t: 'Cash Flow de la SBU', c: '#0f766e' }] },
-          { title: '4 · Gastos admin', parts: [{ t: 'Directos por SBU', c: '#be185d' }, '+', { t: 'Indirectos (prorrateo por venta)', c: '#be185d' }, '+', { t: 'Aprobado a las áreas (105/106/107)', c: '#0d9488' }, '=', { t: 'Gastos admin de la SBU', c: '#7c3aed' }, '→', { t: 'baja al Resultado y al Cash Flow', c: '#0f766e' }] },
-          { title: '5 · Retail → Energy Brands', parts: [{ t: 'Ventas por tienda', c: '#0e7490' }, '→', { t: 'tienda SINERGY = P&L / Cash Flow SINERGY', c: '#be185d' }, '·', { t: 'otras tiendas = P&L Retail EB', c: '#0e7490' }, '→', { t: 'suma a Energy Brands', c: '#0f766e' }] },
-          { title: '6 · Consolidación', parts: [{ t: 'SBU 1', c: '#0e7490' }, '+', { t: 'SBU 2', c: '#7c3aed' }, '+', { t: 'SBU 3', c: '#b45309' }, '+', { t: 'Retail EB', c: '#0e7490' }, '=', { t: 'Gerencia: Resultado', c: '#1f2d3d' }, '→', { t: 'Holding: EB + SINERGY + TAHO + TUMAR', c: '#7c3aed' }] },
-        ]
-        const chip = (t, c) => <span style={{ display: 'inline-flex', alignItems: 'center', background: c + '14', color: c, border: '1px solid ' + c + '55', borderRadius: 8, padding: '5px 10px', fontWeight: 700, fontSize: 12.5, lineHeight: 1.2 }}>{t}</span>
-        return <div style={{ marginTop: 22, borderTop: '1px solid var(--line)', paddingTop: 16 }}>
-          <h3 style={{ color: '#4f46e5', margin: '0 0 2px' }}>🔗 Cómo se conecta la información</h3>
-          <div className="sub">Telaraña de roles: cada flecha es un dato que un rol llena y que impacta a otro. <b>Pasa el cursor (o toca) un rol</b> para ver qué datos le llegan y a quién alimenta — las etiquetas aparecen al resaltar. Abajo, el detalle del cálculo paso a paso.</div>
-          <div className="panel" style={{ margin: '10px 0', borderLeftColor: '#4f46e5' }}><FlujoTelarana /></div>
-          <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
-            {FLOWS.map((f, i) => <div key={i} className="panel" style={{ margin: 0, borderLeftColor: '#4f46e5' }}>
-              <div style={{ fontWeight: 800, fontSize: 12.5, color: '#4f46e5', marginBottom: 7 }}>{f.title}</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center' }}>
-                {f.parts.map((p, j) => typeof p === 'string' ? <span key={j} style={{ color: '#9ca3af', fontWeight: 800 }}>{p}</span> : <span key={j}>{chip(p.t, p.c)}</span>)}
-              </div>
-            </div>)}
-          </div>
-        </div>
-      })()}
+      <div style={{ marginTop: 22, borderTop: '1px solid var(--line)', paddingTop: 16 }}>
+        <h3 style={{ color: '#0f766e', margin: '0 0 2px' }}>🧱 Cómo se arma el P&L y el Cash Flow de Energy Brands</h3>
+        <div className="sub" style={{ marginBottom: 10 }}>Cada línea de los dos resultados, <b>de la base hacia arriba</b>, con el chip de <b>quién la llena</b>. Así se ve de dónde sale cada número.</div>
+        <FlujoPiramide />
+      </div>
     </div>
   )
 }
