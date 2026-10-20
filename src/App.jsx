@@ -735,7 +735,7 @@ export default function App() {
         <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
           <span className="rolechip" style={{ background: '#4f46e5' }}>🗺️ Guía por rol</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        <main><GuiaScreen /></main>
+        <main><GuiaScreen go={setRoleId} sbuNames={Object.keys(sbus)} canConfig={esSuperAdmin} /></main>
       </>
     )
   }
@@ -4428,36 +4428,42 @@ function ComercialScreen({ empresa, sbus, usuario }) {
 }
 
 /* ===== GUÍA POR ROL: mapa de dónde llena cada quién (solo Energy Brands) ===== */
-function GuiaScreen() {
+function GuiaScreen({ go, sbuNames = [], canConfig = false }) {
   const CARDS = [
     {
+      nav: { sbu: true },
       a: '#4f46e5', icon: '🧭', role: 'Director Comercial', scope: 'Por cada SBU (1 · 2 · 3) y por cada marca',
       where: <>Entra a la <b>SBU</b> (menú) → elige la <b>marca</b> (panel izquierdo) → paso <b style={{ color: '#4f46e5' }}>Director</b></>,
       items: ['Categorías que aplican a la marca', 'Categorías por cliente (qué compra cada cliente — reparto de la venta)', 'Muestras (unidades) por categoría', 'Comisiones (%) sobre la venta', 'Plazo de cobro de los clientes NUEVOS (celdas amarillas dentro del Cash Flow)', 'Viajes del Director'],
       note: <>Si falta info de este paso, el selector de Comercial muestra <b>⚠ pendiente</b>. Hasta no completarlo, los pasos siguientes quedan incompletos.</>,
     },
     {
+      nav: { sbu: true },
       a: '#0891b2', icon: '💵', role: 'Ventas', scope: 'Por cada SBU y por cada marca',
       where: <>SBU → marca → paso <b style={{ color: '#0891b2' }}>Ventas</b></>,
       items: ['Unidades 2028 por cliente y por mes (crecimiento sobre 2027)', 'Se capturan los 2 vendedores de la marca', 'Venta neta resultante por cliente', 'Viajes de Ventas'],
       note: <><b>Intercompañía</b> aparece automático y de solo lectura (lo que Retail le compra a la marca). No se llena.</>,
     },
     {
+      nav: { sbu: true },
       a: '#047857', icon: '📦', role: 'Producto', scope: 'Por cada SBU y por cada marca',
       where: <>SBU → marca → paso <b style={{ color: '#047857' }}>Producto</b></>,
       items: ['AUP — precio promedio de venta por categoría / temporada', 'AUC — costo promedio por categoría / temporada', 'Inventario y plan de compras 2028 (por temporada)', 'Margen por categoría', 'Viajes de Producto'],
     },
     {
+      nav: { go: 'logistica' },
       a: '#b45309', icon: '🚚', role: 'Logística', scope: 'Por cada SBU y por cada marca',
       where: <>SBU → marca → paso <b style={{ color: '#b45309' }}>Logística</b></>,
       items: ['% costo logístico sobre la venta', 'Costo de muestras ($ por unidad)', 'Viajes de Logística'],
     },
     {
+      nav: { sbu: true },
       a: '#db2777', icon: '📣', role: 'Marketing', scope: 'Por cada marca',
       where: <>Entra a <b style={{ color: '#db2777' }}>Marketing</b> → elige la marca</>,
       items: ['Rubros por mes, por grupo: ATL · BTL · TRADE · DIGITAL · PR · PRE VENTAS', 'En DIGITAL: 321 – Implementación / Desarrollo E-commerce (nuevo)', 'Puedes agregar rubros propios además de los predefinidos', 'Viajes de Marketing'],
     },
     {
+      nav: { go: 'finanzas' },
       a: '#7c3aed', icon: '🧮', role: 'Finanzas', scope: 'A nivel empresa y dentro de cada SBU',
       where: <>Workspace <b style={{ color: '#7c3aed' }}>Finanzas</b> (varios lugares, ver abajo)</>,
       items: [
@@ -4474,6 +4480,7 @@ function GuiaScreen() {
       note: <>Directos + Indirectos impactan el Cash Flow de cada SBU (línea directos, línea indirectos y total). En Gerencia/SBU los campos financieros se ven como <b>espejo</b> (solo lectura).</>,
     },
     {
+      nav: { go: 'sbu:Retail' },
       a: '#0e7490', icon: '🏬', role: 'Retail', scope: 'Tiendas propias EB + SINERGY',
       where: <>Entra a <b style={{ color: '#0e7490' }}>Retail</b> (menú)</>,
       items: [
@@ -4489,6 +4496,7 @@ function GuiaScreen() {
       note: <>Las ventas de la tienda <b>SINERGY</b> caen al P&L y Cash Flow de <b>SINERGY</b>. El resto de tiendas alimenta el <b>P&L Retail EB</b>, que a su vez suma al P&L y Cash Flow de Energy Brands.</>,
     },
     {
+      nav: { go: 'config', adminOnly: true },
       a: '#475569', icon: '⚙️', role: 'Administrador / Configuración', scope: 'Gerencia',
       where: <>Entra a <b style={{ color: '#475569' }}>Configuración</b></>,
       items: ['SBUs y marcas', 'Vendedores por marca', 'Colaboradores y accesos', 'Viajes de Gerencia (Admin / Procesos)'],
@@ -4518,6 +4526,18 @@ function GuiaScreen() {
                 ))}
               </ul>
               {c.note && <div style={{ marginTop: 11, fontSize: 12, color: 'var(--muted)', borderLeft: '3px solid ' + c.a, padding: '3px 0 3px 10px', background: '#fafafa' }}>{c.note}</div>}
+              {go && c.nav && (() => {
+                const btn = { fontSize: 12.5, fontWeight: 700, border: '1px solid ' + c.a, background: '#fff', color: c.a, borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }
+                if (c.nav.sbu) {
+                  const names = sbuNames.length ? sbuNames : ['SBU 1', 'SBU 2', 'SBU 3']
+                  return <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Abrir en:</span>
+                    {names.map((s) => <button key={s} style={btn} onClick={() => go('sbu:' + s)}>{s} →</button>)}
+                  </div>
+                }
+                if (c.nav.adminOnly && !canConfig) return null
+                return <div style={{ marginTop: 12 }}><button style={btn} onClick={() => go(c.nav.go)}>Abrir en la app →</button></div>
+              })()}
             </div>
           </div>
         ))}
