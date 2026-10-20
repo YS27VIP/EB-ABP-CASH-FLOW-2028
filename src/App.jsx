@@ -4433,7 +4433,7 @@ function GuiaScreen() {
     {
       a: '#4f46e5', icon: '🧭', role: 'Director Comercial', scope: 'Por cada SBU (1 · 2 · 3) y por cada marca',
       where: <>Entra a la <b>SBU</b> (menú) → elige la <b>marca</b> (panel izquierdo) → paso <b style={{ color: '#4f46e5' }}>Director</b></>,
-      items: ['Categorías que aplican a la marca', '% de venta por cliente (cómo se reparte la venta entre clientes)', 'Muestras (unidades) por categoría', 'Comisiones (%) sobre la venta', 'Viajes del Director'],
+      items: ['Categorías que aplican a la marca', 'Categorías por cliente (qué compra cada cliente — reparto de la venta)', 'Muestras (unidades) por categoría', 'Comisiones (%) sobre la venta', 'Plazo de cobro de los clientes NUEVOS (celdas amarillas dentro del Cash Flow)', 'Viajes del Director'],
       note: <>Si falta info de este paso, el selector de Comercial muestra <b>⚠ pendiente</b>. Hasta no completarlo, los pasos siguientes quedan incompletos.</>,
     },
     {
@@ -4445,7 +4445,7 @@ function GuiaScreen() {
     {
       a: '#047857', icon: '📦', role: 'Producto', scope: 'Por cada SBU y por cada marca',
       where: <>SBU → marca → paso <b style={{ color: '#047857' }}>Producto</b></>,
-      items: ['AUP — precio promedio por categoría / temporada', 'AUC — costo promedio por categoría / temporada', 'Plan de compras 2028 e inventario', 'Viajes de Producto'],
+      items: ['AUP — precio promedio de venta por categoría / temporada', 'AUC — costo promedio por categoría / temporada', 'Inventario y plan de compras 2028 (por temporada)', 'Margen por categoría', 'Viajes de Producto'],
     },
     {
       a: '#b45309', icon: '🚚', role: 'Logística', scope: 'Por cada SBU y por cada marca',
@@ -4455,15 +4455,19 @@ function GuiaScreen() {
     {
       a: '#db2777', icon: '📣', role: 'Marketing', scope: 'Por cada marca',
       where: <>Entra a <b style={{ color: '#db2777' }}>Marketing</b> → elige la marca</>,
-      items: ['Rubros por mes, por grupo: ATL · BTL · TRADE · DIGITAL · PR · PRE VENTAS', 'En DIGITAL: 321 – Implementación / Desarrollo E-commerce (nuevo)', 'Viajes de Marketing'],
+      items: ['Rubros por mes, por grupo: ATL · BTL · TRADE · DIGITAL · PR · PRE VENTAS', 'En DIGITAL: 321 – Implementación / Desarrollo E-commerce (nuevo)', 'Puedes agregar rubros propios además de los predefinidos', 'Viajes de Marketing'],
     },
     {
       a: '#7c3aed', icon: '🧮', role: 'Finanzas', scope: 'A nivel empresa y dentro de cada SBU',
       where: <>Workspace <b style={{ color: '#7c3aed' }}>Finanzas</b> (varios lugares, ver abajo)</>,
       items: [
+        'Cash Flow → Cash Inicial de cada marca',
+        'Cash Flow → Saldo pendiente por cobrar del 2027: en qué mes de 2028 entra cada cobro (por cliente)',
+        'Cash Flow → Término de cobro de cada cliente (Cash / 30 / 60 / 90 días)',
+        'Cash Flow → Término de pago a proveedores (plazo de pago de las compras)',
+        'Cash Flow → Costos Financieros, Otros ingresos y Otros gastos',
         'Gastos Admin Indirectos — barra lateral «💰 Gastos admin indirectos» (nivel empresa). Se prorratean por el peso de venta de cada SBU; ahí se ve el peso y 3 bloques con el resultado por SBU.',
         'Gastos Admin Directos — entrando a cada SBU → VER: GASTOS ADMIN DIRECTOS',
-        'Cash Flow — Cash Inicial, plazos de cobro, Costos Financieros, Otros ingresos, Otros gastos',
         'Viajes de Finanzas y back office (Admin / Procesos) → caen en Otros gastos',
         'Aprobaciones',
       ],
