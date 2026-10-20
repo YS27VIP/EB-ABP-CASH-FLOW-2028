@@ -4705,12 +4705,12 @@ function FlujoTelarana() {
     director: { x: 150, y: 90, label: '🧭 Director', c: '#4f46e5' },
     producto: { x: 150, y: 250, label: '📦 Producto', c: '#047857' },
     logistica: { x: 150, y: 410, label: '🚚 Logística', c: '#b45309' },
-    marketing: { x: 150, y: 540, label: '📣 Marketing', c: '#db2777' },
-    ventas: { x: 430, y: 150, label: '💵 Ventas', c: '#0891b2' },
-    retail: { x: 430, y: 470, label: '🏬 Retail', c: '#0e7490' },
-    viajes: { x: 430, y: 620, label: '🧳 Viajes', c: '#6b21a8' },
-    finanzas: { x: 700, y: 330, label: '🧮 Finanzas', c: '#7c3aed' },
-    gerencia: { x: 700, y: 110, label: '📈 Gerencia / Holding', c: '#1f2d3d' },
+    marketing: { x: 150, y: 560, label: '📣 Marketing', c: '#db2777' },
+    ventas: { x: 410, y: 110, label: '💵 Ventas', c: '#0891b2' },
+    retail: { x: 480, y: 480, label: '🏬 Retail', c: '#0e7490' },
+    viajes: { x: 330, y: 650, label: '🧳 Viajes', c: '#6b21a8' },
+    finanzas: { x: 715, y: 340, label: '🧮 Finanzas', c: '#7c3aed' },
+    gerencia: { x: 715, y: 110, label: '📈 Gerencia / Holding', c: '#1f2d3d' },
   }
   const E = [
     ['director', 'ventas', 'categorías + % por cliente'],
