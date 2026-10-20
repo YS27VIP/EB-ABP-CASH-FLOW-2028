@@ -4708,38 +4708,50 @@ function FlujoTelarana() {
     marketing: { x: 150, y: 540, label: '📣 Marketing', c: '#db2777' },
     ventas: { x: 430, y: 150, label: '💵 Ventas', c: '#0891b2' },
     retail: { x: 430, y: 470, label: '🏬 Retail', c: '#0e7490' },
+    viajes: { x: 430, y: 620, label: '🧳 Viajes', c: '#6b21a8' },
     finanzas: { x: 700, y: 330, label: '🧮 Finanzas', c: '#7c3aed' },
     gerencia: { x: 700, y: 110, label: '📈 Gerencia / Holding', c: '#1f2d3d' },
   }
   const E = [
     ['director', 'ventas', 'categorías + % por cliente'],
     ['director', 'producto', 'categorías'],
-    ['director', 'finanzas', 'plazo clientes nuevos'],
+    ['director', 'finanzas', 'plazo clientes nuevos + comisiones'],
+    ['director', 'gerencia', 'comisiones + muestras'],
     ['producto', 'ventas', 'AUP → venta $'],
     ['ventas', 'finanzas', 'unidades → cobros'],
     ['producto', 'finanzas', 'AUC + compras → pagos'],
-    ['logistica', 'finanzas', '105/106/107 (aprueba)'],
+    ['director', 'finanzas', '105/106/107 (lo aprueba)'],
+    ['logistica', 'finanzas', '105/106/107 (lo aprueba)'],
     ['ventas', 'gerencia', 'venta / contribución'],
     ['producto', 'gerencia', 'costo / margen'],
     ['logistica', 'gerencia', '% logístico'],
     ['marketing', 'gerencia', 'marketing'],
     ['finanzas', 'gerencia', 'gastos admin + cash flow'],
+    ['retail', 'ventas', 'Intercompañía (lo que Retail compra)'],
     ['retail', 'finanzas', 'P&L Retail EB → EB'],
     ['retail', 'gerencia', 'Retail EB (consolidado)'],
+    ['director', 'viajes', 'viajes del equipo'],
+    ['ventas', 'viajes', 'viajes del equipo'],
+    ['producto', 'viajes', 'viajes del equipo'],
+    ['logistica', 'viajes', 'viajes del equipo'],
+    ['marketing', 'viajes', 'viajes del equipo'],
+    ['finanzas', 'viajes', 'viajes back office (Admin/Procesos)'],
+    ['viajes', 'gerencia', 'línea Viajes (resta al margen)'],
   ]
   const W = 132, H = 40
   const conn = (id) => hover && (hover === id || E.some(([a, b]) => (a === hover && b === id) || (b === hover && a === id)))
   const active = (a, b) => !hover || a === hover || b === hover
   const shorten = (ax, ay, bx, by, pad) => { const dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy) || 1; return [bx - dx / d * pad, by - dy / d * pad] }
   return <div style={{ overflowX: 'auto' }}>
-    <svg viewBox="0 0 860 610" style={{ width: '100%', minWidth: 640, maxWidth: 900 }} xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 860 700" style={{ width: '100%', minWidth: 640, maxWidth: 900 }} xmlns="http://www.w3.org/2000/svg">
       <defs><marker id="arrTel" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#94a3b8" /></marker><marker id="arrTelA" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#334155" /></marker></defs>
       {E.map(([a, b, lbl], i) => {
         const na = N[a], nb = N[b]; const [ex, ey] = shorten(na.x, na.y, nb.x, nb.y, 30); const [sx, sy] = shorten(nb.x, nb.y, na.x, na.y, 30)
-        const act = active(a, b); const mx = (sx + ex) / 2, my = (sy + ey) / 2
-        return <g key={i} opacity={act ? 1 : 0.12}>
-          <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={act && hover ? na.c : '#94a3b8'} strokeWidth={act && hover ? 2.2 : 1.3} markerEnd={act && hover ? 'url(#arrTelA)' : 'url(#arrTel)'} />
-          {(!hover || a === hover || b === hover) && <><rect x={mx - lbl.length * 3.1} y={my - 9} width={lbl.length * 6.2} height={16} rx={4} fill="#fff" stroke="#e5e7eb" /><text x={mx} y={my + 2.5} textAnchor="middle" fontSize="10" fill="#475569" fontWeight="600">{lbl}</text></>}
+        const isOn = hover && (a === hover || b === hover); const mx = (sx + ex) / 2, my = (sy + ey) / 2
+        const op = !hover ? 0.3 : isOn ? 1 : 0.05
+        return <g key={i} opacity={op}>
+          <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={isOn ? na.c : '#b8c0cc'} strokeWidth={isOn ? 2.4 : 1.1} markerEnd={isOn ? 'url(#arrTelA)' : 'url(#arrTel)'} />
+          {isOn && <><rect x={mx - lbl.length * 3.15} y={my - 9} width={lbl.length * 6.3} height={17} rx={4} fill="#fff" stroke={na.c + '66'} /><text x={mx} y={my + 3} textAnchor="middle" fontSize="10.5" fill="#334155" fontWeight="700">{lbl}</text></>}
         </g>
       })}
       {Object.entries(N).map(([id, n]) => { const on = !hover || hover === id || conn(id); return <g key={id} style={{ cursor: 'pointer' }} opacity={on ? 1 : 0.25} onMouseEnter={() => setHover(id)} onMouseLeave={() => setHover(null)} onClick={() => setHover((h) => h === id ? null : id)}>
@@ -4890,7 +4902,7 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
         const chip = (t, c) => <span style={{ display: 'inline-flex', alignItems: 'center', background: c + '14', color: c, border: '1px solid ' + c + '55', borderRadius: 8, padding: '5px 10px', fontWeight: 700, fontSize: 12.5, lineHeight: 1.2 }}>{t}</span>
         return <div style={{ marginTop: 22, borderTop: '1px solid var(--line)', paddingTop: 16 }}>
           <h3 style={{ color: '#4f46e5', margin: '0 0 2px' }}>🔗 Cómo se conecta la información</h3>
-          <div className="sub">Telaraña de roles: cada flecha es un dato que un rol llena y que impacta a otro. <b>Pasa el cursor</b> (o toca) un rol para resaltar su red. Abajo, el detalle del cálculo paso a paso.</div>
+          <div className="sub">Telaraña de roles: cada flecha es un dato que un rol llena y que impacta a otro. <b>Pasa el cursor (o toca) un rol</b> para ver qué datos le llegan y a quién alimenta — las etiquetas aparecen al resaltar. Abajo, el detalle del cálculo paso a paso.</div>
           <div className="panel" style={{ margin: '10px 0', borderLeftColor: '#4f46e5' }}><FlujoTelarana /></div>
           <div style={{ display: 'grid', gap: 10, marginTop: 10 }}>
             {FLOWS.map((f, i) => <div key={i} className="panel" style={{ margin: 0, borderLeftColor: '#4f46e5' }}>
