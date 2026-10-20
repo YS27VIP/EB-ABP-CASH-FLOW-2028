@@ -188,6 +188,8 @@ function refCat(marca, cli, cat) {
 const DEFAULT_GADMIN = [
   ['101', 'SALARIO'], ['103', 'PERFORMANCE BONO'], ['104', 'CARGA SOCIAL Y PASIVO LABORAL'], ['105', 'CAPACITACIONES'], ['106', 'SELECCIÓN DE PERSONAL'], ['107', 'ATENCIONES / CLIENTES / PROVEEDORES'], ['108', 'MEMBRESÍA TARJETA DE CRÉDITO'], ['109', 'PLAN CELULAR'], ['110', 'BENEFICIOS - SEGURO DE SALUD'], ['111', 'SEGURIDAD'], ['112', 'BENEFICIO - GIFT CARD ANNUAL'], ['114', 'GASTOS DE OFICINA'], ['115', 'ALQUILER OFICINA'], ['116', 'AGUA / LUZ'], ['117', 'INTERNET'], ['118', 'TELÉFONO OFICINA'], ['119', 'CARRIER / MENSAJERÍA'], ['120', 'LIMPIEZA'], ['121', 'REPARACIONES Y MANTENIMIENTOS'], ['122', 'CAFETERÍA - INSUMOS'], ['123', 'ACARREO / TRANSFERENCIA DE INVENTARIO'], ['124', 'SEGUROS'], ['125', 'CONTABLE - MICROSOFT 365 / LICENCIAS ADOBE'], ['126', 'SALESFORCE'], ['127', 'SISTEMA DE FACTURACIÓN ELECTRÓNICA'], ['128', 'ASESORÍA LEGAL'], ['129', 'ASESORÍA CONTABLE'], ['130', 'ASESORÍA FISCALES'], ['131', 'SERVICIOS DE RRHH'], ['132', 'SERVICIOS DE IT'], ['133', 'HONORARIOS PROFESIONALES'], ['134', 'OTROS'],
 ].map(([cod, sub]) => ({ cod, sub }))
+// Real 2026 acumulado ENE–SEP (YTD septiembre) por código de sub-rubro, TOTAL empresa (del archivo "EBP Gastos Administrativos - REAL - Septiembre 2026"). Referencia comparativa.
+const GADMIN_REAL_2026_YTD = { '101': 884990, '102': 0, '103': 0, '104': 99049, '105': 2320, '106': 1810, '107': 39605, '108': 300, '109': 6964, '110': 8825, '111': 371, '112': 8167, '113': 0, '114': 30663, '115': 115560, '116': 11830, '117': 2636, '118': 665, '119': 0, '120': 172, '121': 104848, '122': 5408, '123': 0, '124': 0, '125': 30640, '126': 11214, '127': 0, '128': 15554, '129': 10136, '130': 450, '131': 3959, '132': 7483, '133': 117817, '134': 5033, '135': 200391 }
 
 // TUMAR: rubros de gasto reales de TUMAR Performance (MASTER GASTOS), con su categoría. El 2026 de referencia sale de COMPRAS+TESORERIA.
 const TUMAR_GADMIN = [
@@ -3409,6 +3411,37 @@ function GastosAdminDirectosPorSBU({ empresa, sbus }) {
   </>
 }
 
+/* ===== GASTOS ADMIN POR RUBRO — suma directos + indirectos por código, con comparativo real 2026 YTD (sep) ===== */
+function GastosAdminPorRubro({ empresa, sbus }) {
+  useDataVersion()
+  const ls = (k) => { try { return JSON.parse(localStorage.getItem(k) || '{}') } catch { return {} } }
+  const dir = ls(`gadmin_${empresa}`), ind = ls(`gadmin_ind_${empresa}`)
+  let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { }
+  const sbuNames = Object.keys(sbus || {}).filter((s) => s !== 'Retail')
+  const dirM = (cod, m) => { let s = num(dir[`${cod}|${m}`]); sbuNames.forEach((sb) => { s += num(dir[`${sb}||${cod}||${m}`]) }); return s }
+  const rubM = (cod, m) => dirM(cod, m) + num(ind[`${cod}|${m}`])
+  const rowTot = (cod) => MESES.reduce((a, _, m) => a + rubM(cod, m), 0)
+  const ytd28 = (cod) => [0, 1, 2, 3, 4, 5, 6, 7, 8].reduce((a, m) => a + rubM(cod, m), 0)
+  const ref = (cod) => num(GADMIN_REAL_2026_YTD[cod])
+  const colM = (m) => cfg.reduce((a, it) => a + rubM(it.cod, m), 0)
+  const totAnual = cfg.reduce((a, it) => a + rowTot(it.cod), 0)
+  const totYtd28 = cfg.reduce((a, it) => a + ytd28(it.cod), 0)
+  const totRef = cfg.reduce((a, it) => a + ref(it.cod), 0)
+  const dpct = (a, b) => b > 0.5 ? ((a - b) / b * 100) : null
+  const pcell = (a, b) => { const d = dpct(a, b); return <td className="tot ya" style={{ fontWeight: 700, color: d == null ? 'var(--muted)' : d >= 0 ? '#b91c1c' : '#15803d' }}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
+  return <div className="panel" style={{ borderLeftColor: '#0d9488' }}>
+    <h3 style={{ color: '#0d9488' }}>📒 Gastos Admin por rubro — Directos + Indirectos <span className="unit">(suma por código · 2028 · comparado con el real 2026 YTD a sep)</span></h3>
+    <div className="sub">Cada rubro suma lo <b>directo</b> (de las 3 SBU) + lo <b>indirecto</b>. La columna <b>Real 2026 (ene–sep)</b> viene del EBP (nivel empresa, no por SBU) y se compara contra el <b>plan 2028 del mismo periodo</b> (ene–sep). Δ en rojo = el plan 2028 está por encima del real 2026.</div>
+    <div className="tablewrap" style={{ overflowX: 'auto' }}><table className="vfix"><colgroup><col style={{ width: '60px' }} /><col style={{ width: '240px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '60px' }} />)}<col style={{ width: '84px' }} /><col style={{ width: '92px' }} /><col style={{ width: '98px' }} /><col style={{ width: '64px' }} /></colgroup>
+      <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="yb">2028 ene–sep</th><th className="ya">Real 2026 ene–sep</th><th className="ya">Δ</th></tr></thead>
+      <tbody>
+        {cfg.map((it) => <tr key={it.cod}><td>{it.cod}</td><td className="l" style={{ whiteSpace: 'normal', lineHeight: 1.2 }}>{it.sub}</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(rubM(it.cod, m))}</td>)}<td className="tot" style={{ fontWeight: 700 }}>{fmt(rowTot(it.cod))}</td><td className="tot yb">{fmt(ytd28(it.cod))}</td><td className="tot ya">{fmt(ref(it.cod))}</td>{pcell(ytd28(it.cod), ref(it.cod))}</tr>)}
+        <tr className="grandrow"><td className="l" colSpan={2}>TOTAL Gastos Admin</td>{MESES.map((_, m) => <td key={m} className="tot">{fmt(colM(m))}</td>)}<td className="tot">{fmt(totAnual)}</td><td className="tot yb">{fmt(totYtd28)}</td><td className="tot ya">{fmt(totRef)}</td>{pcell(totYtd28, totRef)}</tr>
+      </tbody>
+    </table></div>
+  </div>
+}
+
 /* ===== GASTOS ADMIN — bloque TOTAL (directos + indirectos + aprobado a las áreas) a nivel empresa ===== */
 function GastosAdminTotalBlock({ empresa, sbus }) {
   useDataVersion() // se refresca al guardar cualquier bloque
@@ -3620,6 +3653,7 @@ function FinanzasWorkspace({ empresa, usuario, sbus }) {
             <GastosAdminDirectosPorSBU empresa={empresa} sbus={sbus} />
             <GastosAdminForm empresa={empresa} tipo="ind" sbus={sbus} />
             <GastosRetailEBEspejo empresa={empresa} />
+            <GastosAdminPorRubro empresa={empresa} sbus={sbus} />
             <GastosAdminTotalBlock empresa={empresa} sbus={sbus} />
           </> : <>
             <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#be185d', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>💰 Gastos Admin</span><span className="unit" style={{ alignSelf: 'center' }}>Detalle por centro de costo (nivel empresa).</span></div>
@@ -4403,7 +4437,7 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
           const r27 = (v) => v == null ? '—' : fmt(v)
           const dCell = (v28, v27) => v27 == null ? <td className="tot ya">—</td> : <td className="tot ya" style={{ color: (v28 - v27) >= 0 ? '#15803d' : '#b91c1c' }}>{(v28 - v27) >= 0 ? '+' : ''}{fmt(v28 - v27)}</td>
           const bloque = ({ title, sub, venta, costo, logistica, gastos, marketing, viajes, showRef, accent }) => {
-            const lg = logistica || 0, mb = venta - costo - lg, res = mb - (gastos || 0) - marketing - viajes
+            const lg = logistica || 0, mb = venta - costo - lg, contrib = mb - marketing - viajes, res = contrib - (gastos || 0)
             const pc = (a) => venta > 0 ? <span className="unit"> · {(a / venta * 100).toFixed(1)}%</span> : null
             const row = (lbl, v28, v27, opts = {}) => <tr className={opts.grand ? 'grandrow' : undefined}><td className={'l' + (opts.sub ? ' sub2' : '')} style={opts.color ? { color: opts.color } : undefined}>{lbl}</td><td className="tot" style={{ color: opts.color, fontWeight: opts.grand ? 800 : undefined }}>{fmt(v28)}{opts.pctOf ? pc(v28) : null}</td><td className="tot ya">{r27(v27)}</td>{dCell(v28, v27)}</tr>
             return <div className="panel">
@@ -4415,9 +4449,10 @@ function RetailWorkspace({ empresa, usuario, sbus }) {
                     {row('(−) Costo', costo, showRef ? R27.costo : null, { sub: true, color: '#b91c1c' })}
                     {logistica != null && row('(−) Logística', lg, null, { sub: true, color: '#b91c1c' })}
                     {row('= Margen Bruto', mb, showRef ? R27.margen : null, { grand: true, pctOf: true })}
-                    {gastos != null && row('(−) Gastos', gastos, showRef ? R27.gastos : null, { sub: true, color: '#b91c1c' })}
                     {row('(−) Marketing', marketing, null, { sub: true, color: '#b91c1c' })}
                     {row('(−) Viajes', viajes, null, { sub: true, color: '#b91c1c' })}
+                    {row('= Contribución', contrib, null, { grand: true, pctOf: true })}
+                    {gastos != null && row('(−) Gastos', gastos, showRef ? R27.gastos : null, { sub: true, color: '#b91c1c' })}
                     {row('= Resultado Operativo', res, showRef ? R27.resultado : null, { grand: true, pctOf: true, color: res >= 0 ? '#0f766e' : '#b91c1c' })}
                   </tbody>
                 </table>
@@ -4877,11 +4912,12 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   // Consolidado P&L con las SBU lado a lado (Contribución de la SBU → Gastos Admin → Resultado Operativo)
   const sbuList = Object.entries(sbus).filter(([s]) => !soloSBU || s === soloSBU).map(([s, ms]) => ({ s, a: sbuAgg(ms) }))
   // Energy Brands: Retail es una 4ª unidad (tiendas propias · venta intercompañía). Aún sin datos (pendiente), va en cero.
-  if (!soloSBU && empresa === 'ENERGY BRANDS') { const _rp = retailPLTotales(); const _e = _rp && _rp.EB; sbuList.push({ s: 'Retail', a: _e ? { unidades: 0, ventaNeta: _e.ventaNeta, costo: _e.costo, comisiones: 0, logistica: 0, marketing: _e.marketing, viajes: _e.viajes, margenBruto: _e.margenBruto, brand: _e.brand - _e.gastos } : { unidades: 0, ventaNeta: 0, costo: 0, comisiones: 0, logistica: 0, marketing: 0, viajes: 0, margenBruto: 0, brand: 0 }, pend: !_e }) }
+  if (!soloSBU && empresa === 'ENERGY BRANDS') { const _rp = retailPLTotales(); const _e = _rp && _rp.EB; sbuList.push({ s: 'Retail', a: _e ? { unidades: 0, ventaNeta: _e.ventaNeta, costo: _e.costo, comisiones: 0, logistica: 0, marketing: _e.marketing, viajes: _e.viajes, margenBruto: _e.margenBruto, brand: _e.brand, gastosOwn: _e.gastos } : { unidades: 0, ventaNeta: 0, costo: 0, comisiones: 0, logistica: 0, marketing: 0, viajes: 0, margenBruto: 0, brand: 0, gastosOwn: 0 }, pend: !_e }) }
   const totAgg = sbuList.reduce((acc, { a }) => { Object.keys(a).forEach((k) => acc[k] = (acc[k] || 0) + a[k]); return acc }, {})
   const multiSBU = sbuList.length > 1 // con una sola SBU, la columna TOTAL duplicaría a la SBU → se omite
   const ventaTot = totAgg.ventaNeta || 0
-  const gastosDe = (a) => ventaTot > 0 ? gadminAnual * (a.ventaNeta || 0) / ventaTot : (a === totAgg ? gadminAnual : 0)
+  // Gastos administrativos por columna: Retail usa sus propios gastos (de su P&L); las SBU, el gadmin de empresa prorrateado por venta; el TOTAL = gadmin + gastos de Retail.
+  const gastosDe = (a) => { if (a !== totAgg && a.gastosOwn != null) return a.gastosOwn; const base = ventaTot > 0 ? gadminAnual * (a.ventaNeta || 0) / ventaTot : (a === totAgg ? gadminAnual : 0); return a === totAgg ? base + (totAgg.gastosOwn || 0) : base }
   // Otros gastos de empresa (no SBU ni Retail): viajes de Finanzas + Admin + Procesos (los captura Gerencia). Se prorratean por peso de venta.
   const GVIAJES_MARCAS = ['(FINANZAS)', '(ADMIN)', '(PROCESOS)']
   const otrosAnual = finR.reduce((a, r) => (upper(r[0]) === upper(empresa) && GVIAJES_MARCAS.includes(String(r[3] || '').toUpperCase()) && esVi(String(r[1] || ''))) ? a + MESES.reduce((s, _, m) => s + num(r[4 + m]), 0) : a, 0)
