@@ -257,6 +257,18 @@ const RETAIL_GASTOS = [
 ]
 // Retail: tiendas físicas por defecto (del P&L). Se pueden agregar nuevas en la pestaña Ventas por tienda.
 const RETAIL_TIENDAS = ['Birkenstock Andino', 'Hoka Andino', 'MUH Atlantis', 'MUH Arkadia', 'Sale Factory', 'E-Commerce', 'Mayoristas', 'SINERGY']
+// Preconfiguración por tienda (del ABP 2026_2027 RETAIL): qué marcas·categorías wholesale vende cada tienda. La subcategoría Retail = "MARCA · CATEGORÍA". Editable por el usuario.
+const RETAIL_PRESET = {
+  "Birkenstock Andino": [["BIRKENSTOCK","ACTIVE"],["BIRKENSTOCK","FTW LEATHER"],["BIRKENSTOCK","FTW CLOSE TOE"],["BIRKENSTOCK","FTW EVA"],["BIRKENSTOCK","FTW PAPILLIO"],["BIRKENSTOCK","FTW PROFESIONAL"],["BIRKENSTOCK","SOCKS"]],
+  "Hoka Andino": [["HOKA","FTW Road"],["HOKA","FTW Trail"],["HOKA","FTW Fitness"],["HOKA","FTW Race"],["HOKA","FTW Recovery"],["HOKA","APP Top"],["HOKA","APP Bottom"],["HOKA","Accessories"]],
+  "MUH Atlantis": [["ALTRA","Accessories"],["ALTRA","APP Bottom"],["ALTRA","APP Top"],["ALTRA","FTW Gym"],["ALTRA","FTW Hike"],["ALTRA","FTW Lifestyle"],["ALTRA","FTW Road"],["ALTRA","FTW Trail"],["BIRKENSTOCK","ACTIVE"],["BIRKENSTOCK","FTW CLOSE TOE"],["BIRKENSTOCK","FTW EVA"],["BIRKENSTOCK","FTW LEATHER"],["HOKA","Accessories"],["HOKA","APP Bottom"],["HOKA","APP Top"],["HOKA","FTW Fitness"],["HOKA","FTW Hike"],["HOKA","FTW Lifestyle"],["HOKA","FTW Race"],["HOKA","FTW Recovery"],["HOKA","FTW Road"],["HOKA","FTW Trail"],["HOKA","FTW Work"],["INJINJI","SOCKS"],["MAMMUT","FTW TRAIL RUNNING"],["NORDA","Footwear"],["ARIAT","Accessories"],["ARIAT","ENGLISH"],["ARIAT","WESTERN"],["ARIAT","WORK"],["BIRKENSTOCK","FTW PAPILLIO"],["BIRKENSTOCK","FTW PROFESIONAL"],["BIRKENSTOCK","SOCKS"],["BLUNDSTONE","Boots"],["COTOPAXI","DAYPACKS - SMALL BAGS"],["COTOPAXI","EVERYDAY ACC"],["COTOPAXI","HEADWEAR"],["COTOPAXI","TRAVEL AND TECHNICAL"],["ECCO","Accessories"],["ECCO","Footwear"],["FITFLOP","CORE"],["FITFLOP","ENTRY"],["FITFLOP","PREMIUM"],["FJALLRAVEN","Backpacks & Bags"],["FJALLRAVEN","Hardware Accessories"],["FLOWER MOUNTAIN","Footwear"],["FOAMERS","BASIC"],["FOAMERS","CORE"],["FOAMERS","ELEVATE"],["FOAMERS","PREMIUM"],["FOAMERS","SIGNATURE"],["GOORIN BROS","CORE"],["GOORIN BROS","PREMIUM"],["KEEN","CORE"],["KEEN","ENTRY"],["KEEN","PREMIUM"],["MAMMUT","FTW MOUNTAINEERING"],["MAMMUT","HIGH TIER ACCESSORIES"],["MAMMUT","LOW TIER ACCESSORIES"],["MAMMUT","MID TIER ACCESSORIES"],["UGG","Boots"],["UGG","Sandals"],["UGG","Shoes"],["UGG","Slippers"],["SMARTWOOL","SOCKS"],["IZIPIZI","Accessories"]],
+  "MUH Arkadia": [["ALTRA","Accessories"],["ALTRA","APP Bottom"],["ALTRA","APP Top"],["ALTRA","FTW Gym"],["ALTRA","FTW Hike"],["ALTRA","FTW Lifestyle"],["ALTRA","FTW Road"],["ALTRA","FTW Trail"],["BIRKENSTOCK","ACTIVE"],["BIRKENSTOCK","FTW CLOSE TOE"],["BIRKENSTOCK","FTW EVA"],["BIRKENSTOCK","FTW LEATHER"],["HOKA","Accessories"],["HOKA","APP Bottom"],["HOKA","APP Top"],["HOKA","FTW Fitness"],["HOKA","FTW Hike"],["HOKA","FTW Lifestyle"],["HOKA","FTW Race"],["HOKA","FTW Recovery"],["HOKA","FTW Road"],["HOKA","FTW Trail"],["HOKA","FTW Work"],["INJINJI","SOCKS"],["MAMMUT","FTW TRAIL RUNNING"],["NORDA","Footwear"],["ARIAT","Accessories"],["ARIAT","ENGLISH"],["ARIAT","WESTERN"],["ARIAT","WORK"],["BIRKENSTOCK","FTW PAPILLIO"],["BIRKENSTOCK","FTW PROFESIONAL"],["BIRKENSTOCK","SOCKS"],["BLUNDSTONE","Boots"],["COTOPAXI","DAYPACKS - SMALL BAGS"],["COTOPAXI","EVERYDAY ACC"],["COTOPAXI","HEADWEAR"],["COTOPAXI","TRAVEL AND TECHNICAL"],["ECCO","Accessories"],["ECCO","Footwear"],["FITFLOP","CORE"],["FITFLOP","ENTRY"],["FITFLOP","PREMIUM"],["FJALLRAVEN","Backpacks & Bags"],["FJALLRAVEN","Hardware Accessories"],["FLOWER MOUNTAIN","Footwear"],["FOAMERS","BASIC"],["FOAMERS","CORE"],["FOAMERS","ELEVATE"],["FOAMERS","PREMIUM"],["FOAMERS","SIGNATURE"],["GOORIN BROS","CORE"],["GOORIN BROS","PREMIUM"],["KEEN","CORE"],["KEEN","ENTRY"],["KEEN","PREMIUM"],["MAMMUT","FTW MOUNTAINEERING"],["MAMMUT","HIGH TIER ACCESSORIES"],["MAMMUT","LOW TIER ACCESSORIES"],["MAMMUT","MID TIER ACCESSORIES"],["UGG","Boots"],["UGG","Sandals"],["UGG","Shoes"],["UGG","Slippers"],["SMARTWOOL","SOCKS"],["IZIPIZI","Accessories"]],
+}
+RETAIL_PRESET['Sale Factory'] = RETAIL_PRESET['MUH Atlantis']
+RETAIL_PRESET['E-Commerce'] = RETAIL_PRESET['MUH Atlantis']
+RETAIL_PRESET['Mayoristas'] = RETAIL_PRESET['MUH Atlantis']
+const RETAIL_PRESET_SUBS = (t) => (RETAIL_PRESET[t] || []).map(([m, c]) => `${m} · ${c}`)
+const parseSub = (c) => { const i = String(c).indexOf(' · '); return i > 0 ? [c.slice(0, i), c.slice(i + 3)] : null }
 // Tiendas que pertenecen al bucket SINERGY (su P&L va a la columna SINERGY del Holding, NO a Energy Brands). El resto es P&L Retail EB.
 const SINERGY_TIENDAS = new Set(['SINERGY'])
 // SINERGY es el nombre del grupo de TODAS las tiendas del Retail: su venta, costo y compras van al
@@ -3800,7 +3812,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const [selT, setSelT] = useState(null)
   const [ucvAll, setUcvAll] = useState(false) // Ventas por tienda: ver TODAS (consolidado) vs una tienda
   useEffect(() => { try { const t = JSON.parse(localStorage.getItem(`retail_tiendas_${empresa}`) || 'null'); if (Array.isArray(t) && t.length) setTiendas(t) } catch { } try { setCats(JSON.parse(localStorage.getItem(`retail_cats_${empresa}`) || '{}')) } catch { } try { setVt(JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}')) } catch { } setSelT(null) }, [empresa])
-  const catsOf = (t) => (Array.isArray(cats[t]) && cats[t].length) ? cats[t] : RETAIL_CATS_DEF
+  const catsOf = (t) => (Array.isArray(cats[t]) && cats[t].length) ? cats[t] : (RETAIL_PRESET[t] ? RETAIL_PRESET_SUBS(t) : RETAIL_CATS_DEF)
   const selStore = selT && tiendas.includes(selT) ? selT : (tiendas[0] || null)
   const cvk = (t, c, mi) => `${t}||${c}||U||${mi}`           // (modelo viejo) unidades del mes
   const uaKey = (t, c) => `${t}||${c}||UA`                    // (modelo nuevo) unidades ANUALES por subcategoría/tienda
@@ -3880,11 +3892,15 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const [smap, setSmap] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_map_${empresa}`) || '{}') } catch { return {} } })
   useEffect(() => { try { setSmap(JSON.parse(localStorage.getItem(`retail_map_${empresa}`) || '{}')) } catch { } }, [empresa])
   const cellOf = (c, m) => (smap[c] || {})[m] || {}
-  const pctOf = (c, m) => num(cellOf(c, m).pct)
-  const catOf = (c, m) => cellOf(c, m).cat || ''
+  // Si el usuario no ha editado el mapa de esta subcategoría, se deriva del nombre "MARCA · CATEGORÍA" (100% a esa marca·categoría).
+  const pctOf = (c, m) => { if (smap[c]) return num(cellOf(c, m).pct); const p = parseSub(c); return (p && upper(p[0]) === upper(m)) ? 100 : 0 }
+  const catOf = (c, m) => { if (smap[c]) return cellOf(c, m).cat || ''; const p = parseSub(c); return (p && upper(p[0]) === upper(m)) ? p[1] : '' }
   const setCell = (c, m, field, v) => setSmap((d) => ({ ...d, [c]: { ...(d[c] || {}), [m]: { ...((d[c] || {})[m] || {}), [field]: v } } }))
   const rowSum = (c) => wholesaleMarcas.reduce((a, m) => a + pctOf(c, m), 0)
   const marcasDeSub = (c) => wholesaleMarcas.filter((m) => pctOf(c, m) > 0)
+  // Marcas que vende una tienda (según sus subcategorías) — para mostrar solo esas columnas. Si no hay, muestra todas.
+  const storeMarcas = (t) => { const s = new Set(); catsOf(t).forEach((c) => wholesaleMarcas.forEach((m) => { if (pctOf(c, m) > 0) s.add(m) })); const arr = wholesaleMarcas.filter((m) => s.has(m)); return arr.length ? arr : wholesaleMarcas }
+  const storeMarcasAll = () => { const s = new Set(); tiendas.forEach((t) => storeMarcas(t).forEach((m) => s.add(m))); const arr = wholesaleMarcas.filter((m) => s.has(m)); return arr.length ? arr : wholesaleMarcas }
   const whAvg = (c) => MESES.reduce((a, _, mi) => a + whUnit(c, mi), 0) / 12   // costo wholesale promedio/ud (referencia)
   const allSubcats = [...new Set(tiendas.flatMap((t) => catsOf(t)))]   // universo de subcategorías para el mapa
   // Pares (marca, categoría) usados en el mapa (para el detalle de costo)
@@ -4198,30 +4214,30 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           </div>
           {!selStore ? <div className="sub">No hay tiendas. Usa <b>➕ Agregar tienda</b>.</div>
             : selStore === '__TOTAL__' ? (() => {
-              const subs = allSubcats
+              const subs = allSubcats; const mcs = storeMarcasAll()
               const uSub = (c) => tiendas.reduce((a, t) => a + (catsOf(t).includes(c) ? rowUnits(t, c) : 0), 0)
               const cSub = (c) => tiendas.reduce((a, t) => a + (catsOf(t).includes(c) ? rowCompraCosto(t, c) : 0), 0)
               return <>
                 <div className="toolbar" style={{ margin: '12px 0 6px' }}><span style={{ fontWeight: 800, color: '#7c3aed', fontSize: 15 }}>▣ Total Retail</span><span className="unit" style={{ marginLeft: 8 }}>Suma de todas las tiendas · solo lectura</span></div>
                 <div className="tablewrap" style={{ overflowX: 'auto' }}>
-                  <table className="vfix"><colgroup><col style={{ width: '210px' }} /><col style={{ width: '100px' }} />{wholesaleMarcas.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /></colgroup>
-                    <thead><tr><th className="l">Subcategoría Retail</th><th>Unidades (todas)</th>{wholesaleMarcas.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th></tr></thead>
+                  <table className="vfix"><colgroup><col style={{ width: '230px' }} /><col style={{ width: '100px' }} />{mcs.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /></colgroup>
+                    <thead><tr><th className="l">Subcategoría Retail</th><th>Unidades (todas)</th>{mcs.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th></tr></thead>
                     <tbody>
                       {subs.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; return <tr key={c}>
                         <td className="l sub2">{c}</td>
                         <td className="tot">{fmt(uSub(c))}</td>
-                        {wholesaleMarcas.map((m) => { const p = pctOf(c, m); return <td key={m} className="tot" style={{ fontSize: 11, lineHeight: 1.25 }}>{p > 0 ? <><b>{fmt(p)}%</b><div className="unit">{catOf(c, m) || '—'}</div></> : '—'}</td> })}
+                        {mcs.map((m) => { const p = pctOf(c, m); return <td key={m} className="tot" style={{ fontSize: 11, lineHeight: 1.25 }}>{p > 0 ? <><b>{fmt(p)}%</b><div className="unit">{catOf(c, m) || '—'}</div></> : '—'}</td> })}
                         <td className="tot" style={{ fontWeight: 800, color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%</td>
                         <td className="tot ya">{whAvg(c) > 0 ? (whAvg(c) * factor()).toFixed(2) : '—'}</td>
                         <td className="tot" style={{ color: '#b91c1c' }}>{fmt(cSub(c))}</td>
                       </tr> })}
-                      <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(subs.reduce((a, c) => a + uSub(c), 0))}</td>{wholesaleMarcas.map((_, i) => <td key={i} className="tot"></td>)}<td className="tot"></td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCompras)}</td></tr>
+                      <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(subs.reduce((a, c) => a + uSub(c), 0))}</td>{mcs.map((_, i) => <td key={i} className="tot"></td>)}<td className="tot"></td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCompras)}</td></tr>
                     </tbody>
                   </table>
                 </div>
               </>
             })()
-            : (() => { const t = selStore; const cs = catsOf(t); return <>
+            : (() => { const t = selStore; const cs = catsOf(t); const mcs = storeMarcas(t); return <>
             <div className="toolbar" style={{ margin: '12px 0 6px' }}>
               <span style={{ fontWeight: 800, color: col, fontSize: 15 }}>🏬 {t}</span>
               <span className="unit" style={{ marginLeft: 8 }}>Unidades {fmt(comprasUnidT(t))} · Costo {fmt(tCompras(t))}</span>
@@ -4232,17 +4248,17 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             <div className="sub" style={{ fontWeight: 700, margin: '4px 0 4px' }}>Unidades a comprar <span className="unit" style={{ fontWeight: 400 }}>(cantidad ANUAL · el split por mes lo da el calendario del Paso 1)</span></div>
             <div className="sub" style={{ marginBottom: 4 }}>Por cada subcategoría, en la <b>columna de la marca</b> que la surte pon el <b>%</b> que se le compra y elige su <b>categoría wholesale</b>. La suma de % de cada fila debe dar <b>100%</b>. De ahí sale el <b>Costo/ud ponderado</b> (AUC × factor).</div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
-              <table className="vfix"><colgroup><col style={{ width: '210px' }} /><col style={{ width: '92px' }} />{wholesaleMarcas.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /></colgroup>
+              <table className="vfix"><colgroup><col style={{ width: '230px' }} /><col style={{ width: '92px' }} />{mcs.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /></colgroup>
                 <thead>
-                  <tr><th className="l">Subcategoría Retail</th><th>Unidades (año)</th>{wholesaleMarcas.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th></tr>
+                  <tr><th className="l">Subcategoría Retail</th><th>Unidades (año)</th>{mcs.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th></tr>
                 </thead>
                 <tbody>
-                  {cs.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; return <tr key={c}>
-                    <td className="l sub2">{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}
+                  {cs.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; const esNuevoSub = !(RETAIL_PRESET[t] ? RETAIL_PRESET_SUBS(t).includes(c) : RETAIL_CATS_DEF.includes(c)); return <tr key={c}>
+                    <td className="l sub2">{c}{esNuevoSub && <span className="newbadge">NUEVO</span>}
                       <button title="Quitar subcategoría" onClick={() => delCat(t, c)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>
                     </td>
                     <td className="cell"><input value={vt[uaKey(t, c)] ?? ''} onChange={(e) => setUA(t, c, e.target.value)} inputMode="decimal" title={`${c} · unidades a comprar (año)`} style={{ width: '100%', textAlign: 'center' }} /></td>
-                    {wholesaleMarcas.map((m) => { const p = pctOf(c, m); const faltaCat = p > 0 && !catOf(c, m); return <td key={m} style={{ padding: 4, verticalAlign: 'top', background: faltaCat ? '#ffe4f1' : undefined }}>
+                    {mcs.map((m) => { const p = pctOf(c, m); const faltaCat = p > 0 && !catOf(c, m); return <td key={m} style={{ padding: 4, verticalAlign: 'top', background: faltaCat ? '#ffe4f1' : undefined }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={`${c} ← ${m} · %`} style={{ display: 'block', width: '100%', boxSizing: 'border-box', border: '1px solid #f0e6c9', background: '#fdf7e3', borderRadius: 5, padding: '6px 4px', textAlign: 'center', font: 'inherit' }} />
                         <select value={cellOf(c, m).cat ?? ''} onChange={(e) => setCell(c, m, 'cat', e.target.value)} title="Categoría wholesale de esta marca" style={{ display: 'block', width: '100%', boxSizing: 'border-box', fontSize: 10.5, padding: '4px 2px', borderRadius: 4, border: `1.5px solid ${faltaCat ? '#e11d8f' : '#cbd5e1'}`, color: catOf(c, m) ? '#111' : (faltaCat ? '#e11d8f' : '#94a3b8'), background: '#fff' }}>
@@ -4254,7 +4270,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
                     <td className="tot ya help-bulb" title={whAvg(c) > 0 ? `Costo/ud = $${whAvg(c).toFixed(2)} wholesale (ponderado) × ${factor().toFixed(2)} = $${(whAvg(c) * factor()).toFixed(2)}` : 'Define las fuentes (marca · categoría · %).'}>{whAvg(c) > 0 ? (whAvg(c) * factor()).toFixed(2) : '—'}</td>
                     <td className="tot" style={{ color: '#b91c1c' }}>{fmt(rowCompraCosto(t, c))}</td>
                   </tr> })}
-                  <tr className="grandrow"><td className="l">Total {t}</td><td className="tot">{fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))}</td>{wholesaleMarcas.map((_, i) => <td key={i} className="tot"></td>)}<td className="tot"></td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCompras(t))}</td></tr>
+                  <tr className="grandrow"><td className="l">Total {t}</td><td className="tot">{fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))}</td>{mcs.map((_, i) => <td key={i} className="tot"></td>)}<td className="tot"></td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCompras(t))}</td></tr>
                 </tbody>
               </table>
             </div>
