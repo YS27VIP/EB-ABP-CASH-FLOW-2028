@@ -479,6 +479,32 @@ export default function App() {
     return () => { window.removeEventListener('mousedown', bump, true); window.removeEventListener('keydown', bump, true) }
   }, [roleId])
   useEffect(() => { try { localStorage.setItem('abp_nav_emp', empresa) } catch { } }, [empresa])
+  // Barra de desplazamiento horizontal visible ARRIBA de cada tabla ancha (además de la de abajo),
+  // para poder moverte en horizontal sin tener que bajar hasta el final de tablas altas.
+  useEffect(() => {
+    const sync = (wrap) => {
+      const needs = wrap.scrollWidth > wrap.clientWidth + 2
+      let bar = wrap.previousElementSibling
+      const isBar = !!(bar && bar.classList && bar.classList.contains('hsync'))
+      if (!needs) { if (isBar) bar.remove(); return }
+      if (!isBar) {
+        bar = document.createElement('div'); bar.className = 'hsync'
+        const inner = document.createElement('div'); inner.className = 'hsync-in'; bar.appendChild(inner)
+        wrap.parentNode.insertBefore(bar, wrap)
+        let lock = false
+        bar.addEventListener('scroll', () => { if (lock) return; lock = true; wrap.scrollLeft = bar.scrollLeft; lock = false })
+        wrap.addEventListener('scroll', () => { if (lock) return; lock = true; bar.scrollLeft = wrap.scrollLeft; lock = false })
+      }
+      if (bar.firstChild.style.width !== wrap.scrollWidth + 'px') bar.firstChild.style.width = wrap.scrollWidth + 'px'
+    }
+    const run = () => { try { document.querySelectorAll('.tablewrap').forEach(sync) } catch { } }
+    run()
+    const mo = new MutationObserver(() => { clearTimeout(window.__hsyncT); window.__hsyncT = setTimeout(run, 150) })
+    try { mo.observe(document.body, { childList: true, subtree: true }) } catch { }
+    window.addEventListener('resize', run)
+    const iv = setInterval(run, 1500)
+    return () => { mo.disconnect(); window.removeEventListener('resize', run); clearInterval(iv) }
+  }, [])
 
   useEffect(() => {
     initAuth()
@@ -886,7 +912,7 @@ export default function App() {
 }
 
 /* ===== RoleForm: pestañas de rubro (simple o detalle) ===== */
-function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, onSaved, headerChip, capTitle, readOnly, initRubro }) {
+function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, onSaved, headerChip, capTitle, readOnly, initRubro, splitCfg }) {
   const esTot = String(fixedMarca || '').startsWith('TOTAL::')
   // Los VIAJES ya no se llenan dentro de cada rol: se capturan en la pestaña "🧳 Viajes equipo". Por eso se quitan del selector VER del rol (salvo cuando se pide explícito con rubrosOverride, como en Gerencia/Finanzas/Viajes equipo).
   const rubros = (rubrosOverride || role.rubros.filter((rb) => rb.k !== 'VIAJES')).filter((rb) => !rb.gadmin || esTot).filter((rb) => !(empresa === 'TUMAR' && rb.muestras)) // Gastos admin solo en TOTAL SBU · Muestras no aplica en TUMAR
@@ -900,7 +926,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, on
   if (!rubros.length) return null
   const idx = Math.min(tab, rubros.length - 1)
   const rb = rubros[idx]
-  const common = { role, rubro: rb, usuario, empresa, sbus, data, setData, saving, setSaving, msg, setMsg, fixedMarca, onSaved, headerChip, capTitle, readOnly }
+  const common = { role, rubro: rb, usuario, empresa, sbus, data, setData, saving, setSaving, msg, setMsg, fixedMarca, onSaved, headerChip, capTitle, readOnly, splitCfg }
 
   return (
     <>
@@ -924,7 +950,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, on
 
         : rb.porCat ? <CatCaptureForm key={rb.k} {...common} />
         : rb.cat ? <CategoriasForm key={rb.k} role={role} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
-        : rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} />
+        : rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} splitCfg={splitCfg} />
         : <SimpleForm key={rb.k} {...common} />}
     </>
   )
@@ -1099,7 +1125,7 @@ function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, sa
 }
 
 /* ===== DetalleForm: sub-rubros por marca (Marketing y Viajes) ===== */
-function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, data, setData, saving, setSaving, setMsg, fixedMarca, onSaved, headerChip, capTitle, readOnly }) {
+function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, data, setData, saving, setSaving, setMsg, fixedMarca, onSaved, headerChip, capTitle, readOnly, splitCfg }) {
   const marcas = marcasDe(sbus)
   const [marca, setMarca] = useState(fixedMarca || (marcas[0] && marcas[0].marca) || '')
   useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
@@ -1162,6 +1188,15 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
   const grpTot = (gr) => MESES.reduce((a, _, mi) => a + grpMes(gr, mi), 0)
   const totMes = (mi) => grupos.reduce((s, gr) => s + grpMes(gr, mi), 0)
   const totalGeneral = MESES.reduce((a, _, mi) => a + totMes(mi), 0)
+  // ---- Columnas de reparto "¿quién paga?" (opcional, p.ej. MK Retail): % EB / % 2º pagador por rubro, suman 100% ----
+  const spLabels = (splitCfg && splitCfg.labels) || ['EB', 'SINERGY']
+  const spColors = (splitCfg && splitCfg.colors) || ['#0e7490', '#be185d']
+  const splitKey = (gr, it) => `${gr.g} - ${it.n}`.trim()
+  const ebRaw = (k) => { const v = splitCfg && splitCfg.eb ? splitCfg.eb[k] : undefined; return (v === '' || v == null) ? '' : v }
+  const ebNum = (k) => { const v = ebRaw(k); return v === '' ? 100 : Math.max(0, Math.min(100, num(v))) }
+  const extraCols = splitCfg ? 2 : 0
+  const fullCols = 15 + extraCols
+  const splitEditable = !!splitCfg && !isTotal && !readOnly
 
   function agregarRubro() {
     const n = window.prompt('Nombre del nuevo rubro de ' + rubro.k + ' (se agrega a TODAS las marcas y lo verán todos los roles que ' + (rubro.k === 'VIAJES' ? 'viajan' : 'usan ' + rubro.k) + ' en ' + empresa + '):')
@@ -1188,6 +1223,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
       if (meses.some((v) => v !== 0)) rows.push({ rubro: `${gr.g} - ${it.n}`, sbu: sb, marca: mca, meses })
     })))
     await postRows(role, usuario, empresa, rows, setMsg)
+    if (splitCfg && splitCfg.onSave) { try { await splitCfg.onSave() } catch { } }
     if (onSaved) { try { await onSaved() } catch { } }
     setSaving(false)
   }
@@ -1253,18 +1289,18 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : <>Captura por rubro y mes. Los rubros son iguales para todas las marcas. Un rubro que agregues aquí se suma para <b>toda la empresa</b> y lo verán <b>todos los roles</b> que capturan {rubro.k.toLowerCase()}.</>} Total: <b>${fmt(totalGeneral)}</b></div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th className="cod">Cód.</th><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead>
+            <thead><tr><th className="cod">Cód.</th><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th>{splitCfg && <><th style={{ color: spColors[0] }}>% {spLabels[0]}</th><th style={{ color: spColors[1] }}>% {spLabels[1]}</th></>}</tr></thead>
             <tbody>
               {multi && <>
-                <tr className="secrow"><td colSpan={15}>RESUMEN POR CATEGORÍA</td></tr>
-                <tr className="grandrow"><td className="cod"></td><td className="l">PRESUPUESTO TOTAL</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totalGeneral)}</td></tr>
-                {grupos.map((gr) => (<tr key={'r' + gr.g} className="catrow"><td className="cod"></td><td className="l">{gr.g}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(grpMes(gr, mi))}</td>)}<td className="tot">{fmt(grpTot(gr))}</td></tr>))}
-                <tr className="sep"><td colSpan={15}></td></tr>
-                <tr className="secrow"><td colSpan={15}>DETALLE</td></tr>
+                <tr className="secrow"><td colSpan={fullCols}>RESUMEN POR CATEGORÍA</td></tr>
+                <tr className="grandrow"><td className="cod"></td><td className="l">PRESUPUESTO TOTAL</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totalGeneral)}</td>{splitCfg && <><td className="tot"></td><td className="tot"></td></>}</tr>
+                {grupos.map((gr) => (<tr key={'r' + gr.g} className="catrow"><td className="cod"></td><td className="l">{gr.g}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(grpMes(gr, mi))}</td>)}<td className="tot">{fmt(grpTot(gr))}</td>{splitCfg && <><td className="tot"></td><td className="tot"></td></>}</tr>))}
+                <tr className="sep"><td colSpan={fullCols}></td></tr>
+                <tr className="secrow"><td colSpan={fullCols}>DETALLE</td></tr>
               </>}
               {grupos.map((gr) => (
                 <Fragment2 key={gr.g}>
-                  {multi && <tr className="sburow"><td className="cod"></td><td className="l">{gr.g}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(grpMes(gr, mi))}</td>)}<td className="tot">{fmt(grpTot(gr))}</td></tr>}
+                  {multi && <tr className="sburow"><td className="cod"></td><td className="l">{gr.g}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(grpMes(gr, mi))}</td>)}<td className="tot">{fmt(grpTot(gr))}</td>{splitCfg && <><td className="tot"></td><td className="tot"></td></>}</tr>}
                   {gr.items.map((it) => {
                     const id = idDe(gr.g, it)
                     let tot = 0
@@ -1275,12 +1311,16 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
                       return <td key={mi} className="cell"><input value={v} onChange={(e) => set(k, e.target.value)} inputMode="decimal" /></td>
                     })
                     const esExtra = !it.c && extras.includes(it.n)
-                    return <tr key={id}><td className="cod">{it.c}</td><td className="l sub2">{it.n}{esExtra && <span className="newbadge">NUEVO</span>}{esExtra && !isTotal && <button title="Quitar este rubro de toda la empresa" onClick={() => { if (window.confirm('¿Quitar el rubro "' + it.n + '" de toda la empresa?')) quitarRubro(it.n) }} style={{ marginLeft: 8, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>}</td>{celdas}<td className="tot">{fmt(tot)}</td></tr>
+                    const sk = splitKey(gr, it); const eb = ebNum(sk); const sinP = 100 - eb
+                    const splitCells = splitCfg ? (splitEditable
+                      ? <><td className="cell"><input value={ebRaw(sk)} onChange={(e) => splitCfg.setEb(sk, e.target.value)} inputMode="decimal" placeholder="100" style={{ textAlign: 'right', color: spColors[0], fontWeight: 700 }} /></td><td className="tot" style={{ color: spColors[1], fontWeight: 700 }}>{sinP.toFixed(0)}%</td></>
+                      : <><td className="tot" style={{ color: spColors[0], fontWeight: 700 }}>{eb.toFixed(0)}%</td><td className="tot" style={{ color: spColors[1], fontWeight: 700 }}>{sinP.toFixed(0)}%</td></>) : null
+                    return <tr key={id}><td className="cod">{it.c}</td><td className="l sub2">{it.n}{esExtra && <span className="newbadge">NUEVO</span>}{esExtra && !isTotal && <button title="Quitar este rubro de toda la empresa" onClick={() => { if (window.confirm('¿Quitar el rubro "' + it.n + '" de toda la empresa?')) quitarRubro(it.n) }} style={{ marginLeft: 8, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>}</td>{celdas}<td className="tot">{fmt(tot)}</td>{splitCells}</tr>
                   })}
-                  {gr.g === 'ADICIONALES' && gr.items.length === 0 && <tr><td className="cod"></td><td className="l sub2" colSpan={14} style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Sin rubros adicionales. Usa ➕ Agregar rubro para añadir uno nuevo.</td></tr>}
+                  {gr.g === 'ADICIONALES' && gr.items.length === 0 && <tr><td className="cod"></td><td className="l sub2" colSpan={14 + extraCols} style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Sin rubros adicionales. Usa ➕ Agregar rubro para añadir uno nuevo.</td></tr>}
                 </Fragment2>
               ))}
-              {!multi && <tr className="grandrow"><td className="cod"></td><td className="l">TOTAL</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totalGeneral)}</td></tr>}
+              {!multi && <tr className="grandrow"><td className="cod"></td><td className="l">TOTAL</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totMes(mi))}</td>)}<td className="tot">{fmt(totalGeneral)}</td>{splitCfg && <><td className="tot"></td><td className="tot"></td></>}</tr>}
             </tbody>
           </table>
         </div>
@@ -3941,6 +3981,9 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const setSIN = (line, mi, v) => setSin((d) => ({ ...d, [`${line}|${mi}`]: v }))
   const guardarSin = () => guardarKeys([['retail_sin', sin], ['retail_pl', plSummary()]], 'Captura SINERGY guardada en el Sheet ✓')
   const sinVjAnual = MESES.reduce((a, _, mi) => a + sg('VJDIR', mi) + sg('VJMK', mi), 0)
+  // "Viajes Marketing SINERGY" (VJMK): se captura en el bloque SINERGY pero lo PAGA Retail EB (P&L y Cash Flow Retail EB). Solo "Director SINERGY" (VJDIR) queda en SINERGY.
+  const sinVjDirAnual = MESES.reduce((a, _, mi) => a + sg('VJDIR', mi), 0)
+  const sinVjMkAnual = MESES.reduce((a, _, mi) => a + sg('VJMK', mi), 0)
   const sinMkAnual = MESES.reduce((a, _, mi) => a + sg('MK', mi), 0)
   const sinLogAnual = MESES.reduce((a, _, mi) => a + sg('LOG', mi), 0)
   // Compras (pagos de importación) por bucket y mes = costo de la mercancía, que ya sigue el calendario (Paso 1) vía las unidades mensuales.
@@ -3964,7 +4007,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
     const ini = mi === 0 ? num(cf[fk('INI', 0)]) : prevFin
     const cobros = tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
     const pagos = impMes(mi)
-    const gasto = gastoMes(mi), mk = mkEBMes(mi), vj = vjMes(mi)
+    const gasto = gastoMes(mi), mk = mkEBMes(mi), vj = vjMes(mi) + sg('VJMK', mi)
     const oper = gasto + mk + vj
     const fin = num(cf[fk('FIN', mi)])
     const oIng = num(cf[fk('OING', mi)])
@@ -3989,7 +4032,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
       const gasto = bucket === 'EB' ? gastoEBMes(mi) : bucket === 'SIN' ? gastoMes(mi) : gastoEBMes(mi) + gastoMes(mi)
       const logi = bucket === 'EB' ? 0 : sg('LOG', mi)
       const mk = bucket === 'EB' ? mkEBMes(mi) : bucket === 'SIN' ? mkSinMes(mi) : mkEBMes(mi) + mkSinMes(mi)
-      const vj = bucket === 'EB' ? vjMes(mi) : bucket === 'SIN' ? (sg('VJDIR', mi) + sg('VJMK', mi)) : vjMes(mi) + sg('VJDIR', mi) + sg('VJMK', mi)
+      const vj = bucket === 'EB' ? (vjMes(mi) + sg('VJMK', mi)) : bucket === 'SIN' ? sg('VJDIR', mi) : vjMes(mi) + sg('VJDIR', mi) + sg('VJMK', mi)
       const oper = gasto + logi + mk + vj
       const fin = cfFin(bucket, 'FIN', mi), oIng = cfFin(bucket, 'OING', mi), oGas = cfFin(bucket, 'OGAS', mi)
       const flujo = cobros + oIng - pagos - oper - fin - oGas
@@ -4009,9 +4052,9 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
     MESES.forEach((_, mi) => {
       tiendas.forEach((t) => { const v = storeVentaM(t, mi), c = storeCostoM(t, mi); const B = esTiendaSinergy(t) ? SIN : EB; B.venta[mi] += v; B.costo[mi] += c })
       EB.pagos[mi] = comprasCalMes(tEB, mi); SIN.pagos[mi] = comprasCalMes(tSIN, mi)
-      EB.gastos[mi] = gastoEBMes(mi); EB.mk[mi] = mkEBMes(mi); EB.vj[mi] = vjMes(mi)
+      EB.gastos[mi] = gastoEBMes(mi); EB.mk[mi] = mkEBMes(mi); EB.vj[mi] = vjMes(mi) + sg('VJMK', mi)
       EB.fin[mi] = num(cf[fk('FIN', mi)]); EB.oIng[mi] = num(cf[fk('OING', mi)]); EB.oGas[mi] = num(cf[fk('OGAS', mi)])
-      SIN.gastos[mi] = gastoMes(mi); SIN.mk[mi] = mkSinMes(mi); SIN.vj[mi] = sg('VJDIR', mi) + sg('VJMK', mi); SIN.logistica[mi] = sg('LOG', mi)
+      SIN.gastos[mi] = gastoMes(mi); SIN.mk[mi] = mkSinMes(mi); SIN.vj[mi] = sg('VJDIR', mi); SIN.logistica[mi] = sg('LOG', mi)
       SIN.fin[mi] = num(sin[`CFFIN|${mi}`]); SIN.oIng[mi] = num(sin[`CFOING|${mi}`]); SIN.oGas[mi] = num(sin[`CFOGAS|${mi}`])
     })
     return { EB, SIN }
@@ -4056,35 +4099,8 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
               </tbody>
             </table></div>
           </div> })()}
-        <RoleForm key="retail-mk" role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} capTitle="MARKETING Retail (total por rubro)" />
-        {/* ---- Reparto EB / SINERGY por rubro: define quién paga cada rubro ---- */}
-        {(() => {
-          const rows = capRows.mk || []
-          const anualRubro = (r) => MESES.reduce((a, _, mi) => a + num(r[4 + mi]), 0)
-          return <div className="panel" style={{ marginTop: 14, borderLeftColor: '#7c3aed' }}>
-            <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
-              <span className="empchip" style={{ background: '#7c3aed', marginLeft: 0 }}>🔀 Reparto por rubro: ¿quién paga?</span>
-              <div className="spacer"></div>
-              <SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarMkSplit}>{saving ? 'Guardando…' : '💾 Guardar reparto'}</button>
-            </div>
-            <div className="sub" style={{ marginBottom: 8 }}>Para cada rubro, indica el <b>% EB</b> (lo paga Energy Brands → MK Retail EB) y el <b>% SINERGY</b> (lo paga SINERGY → Marketing SINERGY). Deben sumar <b>100%</b>. El reparto alimenta automáticamente los dos bloques de abajo.</div>
-            <div className="tablewrap" style={{ overflowX: 'auto' }}>
-              <table className="vfix"><colgroup><col style={{ width: '280px' }} /><col style={{ width: '120px' }} /><col style={{ width: '110px' }} /><col style={{ width: '110px' }} /><col style={{ width: '90px' }} /></colgroup>
-                <thead><tr><th className="l">Rubro</th><th>Total 2028 ($)</th><th>% EB</th><th>% SINERGY</th><th>Suma</th></tr></thead>
-                <tbody>
-                  {rows.length === 0 && <tr><td className="l sub2" colSpan={5} style={{ color: 'var(--muted)' }}>Captura primero los rubros arriba (MARKETING Retail) y pulsa 🔄 Actualizar.</td></tr>}
-                  {rows.map((r, i) => { const k = mkRubroKey(r); const eb = ebPctOf(k); const sinP = 100 - eb; const suma = eb + sinP
-                    return <tr key={i}>
-                      <td className="l sub2">{r[1] || `Rubro ${i + 1}`}</td>
-                      <td className="tot">{fmt(anualRubro(r))}</td>
-                      <td className="cell"><input className="fillin" value={mkSplit[k] ?? ''} onChange={(e) => setMkSplitV(k, e.target.value)} inputMode="decimal" placeholder="100" style={{ width: '100%', textAlign: 'right', color: col, fontWeight: 700 }} /></td>
-                      <td className="tot" style={{ color: '#be185d', fontWeight: 700 }}>{sinP.toFixed(0)}%</td>
-                      <td className="tot" style={{ color: suma === 100 ? '#16a34a' : '#dc2626', fontWeight: 800 }}>{suma.toFixed(0)}%</td>
-                    </tr> })}
-                </tbody>
-              </table>
-            </div>
-          </div> })()}
+        <RoleForm key="retail-mk" role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} capTitle="MARKETING Retail — ¿quién paga cada rubro? (% EB / % SINERGY al final)" splitCfg={{ eb: mkSplit, setEb: setMkSplitV, labels: ['EB', 'SINERGY'], colors: [col, '#be185d'], onSave: async () => { try { await guardarMkSplit() } catch { } } }} />
+        <div className="sub" style={{ margin: '6px 2px 0' }}>En la tabla de arriba, las dos últimas columnas (<b style={{ color: col }}>% EB</b> / <b style={{ color: '#be185d' }}>% SINERGY</b>) definen quién paga cada rubro (suman 100%). Eso reparte el marketing hacia los dos bloques siguientes.</div>
         {/* ---- MK Retail EB (automático = % EB): alimenta P&L y Cash Flow Retail EB ---- */}
         <div className="panel" style={{ marginTop: 14, borderLeftColor: col }}>
           <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
@@ -4158,15 +4174,15 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             <div className="spacer"></div>
             <SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarSin}>{saving ? 'Guardando…' : '💾 Guardar SINERGY'}</button>
           </div>
-          <div className="sub" style={{ marginBottom: 6 }}>Captura manual de los viajes de <b>SINERGY</b> (por mes). Alimentan <b>solo</b> el P&L SINERGY, no a Energy Brands.</div>
+          <div className="sub" style={{ marginBottom: 6 }}>Captura manual de los viajes de <b>SINERGY</b> (por mes). <b>Director SINERGY</b> alimenta el P&L y Cash Flow <b>SINERGY</b>. <b>Marketing SINERGY</b> conserva su nombre pero lo paga <b>Retail EB</b> (va al P&L y Cash Flow de Retail EB, no a SINERGY).</div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '85px' }} /></colgroup>
+            <table className="vfix"><colgroup><col style={{ width: '200px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '85px' }} /></colgroup>
               <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
               <tbody>
-                {[['🧑‍💼 Director SINERGY', 'VJDIR'], ['📣 Marketing SINERGY', 'VJMK']].map(([lbl, k]) => (
-                  <tr key={k}><td className="l sub2">{lbl}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={sin[`${k}|${mi}`] ?? ''} onChange={(e) => setSIN(k, mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + sg(k, mi), 0))}</td></tr>
+                {[['🧑‍💼 Director SINERGY', 'VJDIR', '→ SINERGY'], ['📣 Marketing SINERGY', 'VJMK', '→ Retail EB']].map(([lbl, k, dest]) => (
+                  <tr key={k}><td className="l sub2">{lbl} <span className="unit" style={{ color: k === 'VJMK' ? col : '#be185d' }}>{dest}</span></td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={sin[`${k}|${mi}`] ?? ''} onChange={(e) => setSIN(k, mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + sg(k, mi), 0))}</td></tr>
                 ))}
-                <tr className="grandrow"><td className="l">Total viajes SINERGY</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(sg('VJDIR', mi) + sg('VJMK', mi))}</td>)}<td className="tot">{fmt(sinVjAnual)}</td></tr>
+                <tr className="grandrow"><td className="l">Total viajes SINERGY <span className="unit">(solo Director → SINERGY)</span></td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(sg('VJDIR', mi))}</td>)}<td className="tot">{fmt(sinVjDirAnual)}</td></tr>
               </tbody>
             </table>
           </div>
@@ -4521,7 +4537,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           const sum = (arr, f) => arr.reduce((a, t) => a + f(t), 0)
           const ventaEB = sum(vEB, tVenta), costoEB = sum(vEB, tCosto)
           const ventaSIN = sum(vSIN, tVenta), costoSIN = sum(vSIN, tCosto)
-          const mkSinAnual = mkSinSplitAnual, vjSinAnual = sinVjAnual
+          const mkSinAnual = mkSinSplitAnual, vjSinAnual = sinVjDirAnual, vjEBAnual = vjAnual + sinVjMkAnual
           const R27 = { venta: 2363461, costo: 1360521, margen: 1002941, gastos: 2193944, resultado: -1191004 }
           const r27 = (v) => v == null ? '—' : fmt(v)
           const dCell = (v28, v27) => v27 == null ? <td className="tot ya">—</td> : <td className="tot ya" style={{ color: (v28 - v27) >= 0 ? '#15803d' : '#b91c1c' }}>{(v28 - v27) >= 0 ? '+' : ''}{fmt(v28 - v27)}</td>
@@ -4550,8 +4566,8 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           }
           return <>
             <div className="sub" style={{ marginBottom: 6 }}>El P&L de Retail se compone de dos: <b>P&L Retail EB</b> (suma al P&L y Cash Flow de Energy Brands) y <b>P&L SINERGY</b> (solo suma a la columna SINERGY del Holding). El <b>TOTAL</b> es la suma de los dos. La columna <b>2027</b> es la referencia del ABP (solo aplica a EB; SINERGY es nueva).</div>
-            {bloque({ title: '🧾 P&L Retail — TOTAL (EB + SINERGY)', sub: '(EB + SINERGY · 2028)', venta: ventaEB + ventaSIN, costo: costoEB + costoSIN, logistica: sinLogAnual, gastos: gGranEB + gGran, marketing: mkEBAnual + mkSinAnual, viajes: vjAnual + vjSinAnual, showRef: true, accent: '#7c3aed' })}
-            {bloque({ title: '🏬 P&L RETAIL EB', sub: '(alimenta P&L y Cash Flow de Energy Brands)', venta: ventaEB, costo: costoEB, logistica: null, gastos: gGranEB, marketing: mkEBAnual, viajes: vjAnual, showRef: true, accent: col })}
+            {bloque({ title: '🧾 P&L Retail — TOTAL (EB + SINERGY)', sub: '(EB + SINERGY · 2028)', venta: ventaEB + ventaSIN, costo: costoEB + costoSIN, logistica: sinLogAnual, gastos: gGranEB + gGran, marketing: mkEBAnual + mkSinAnual, viajes: vjEBAnual + vjSinAnual, showRef: true, accent: '#7c3aed' })}
+            {bloque({ title: '🏬 P&L RETAIL EB', sub: '(alimenta P&L y Cash Flow de Energy Brands)', venta: ventaEB, costo: costoEB, logistica: null, gastos: gGranEB, marketing: mkEBAnual, viajes: vjEBAnual, showRef: true, accent: col })}
             {bloque({ title: '🤝 P&L SINERGY', sub: '(solo suma a la columna SINERGY del Holding)', venta: ventaSIN, costo: costoSIN, logistica: sinLogAnual, gastos: gGran, marketing: mkSinAnual, viajes: vjSinAnual, showRef: false, accent: '#be185d' })}
           </>
         })()}

@@ -58,6 +58,13 @@ tfoot td{font-weight:800;border-top:2px solid var(--odoo);background:#faf7f9}
 .tablewrap::-webkit-scrollbar-thumb,.cmz-main::-webkit-scrollbar-thumb{background:#9aa3ad;border-radius:7px;border:3px solid #fff}
 .tablewrap::-webkit-scrollbar-thumb:hover,.cmz-main::-webkit-scrollbar-thumb:hover{background:#6b7480}
 .tablewrap::-webkit-scrollbar-track,.cmz-main::-webkit-scrollbar-track{background:#eef1f4;border-radius:7px}
+/* Barra de desplazamiento horizontal ESPEJO, arriba de cada tabla ancha (para no tener que bajar a buscarla) */
+.hsync{overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:3px;border-radius:7px;background:#f3f5f7}
+.hsync-in{height:1px}
+.hsync::-webkit-scrollbar{height:13px;-webkit-appearance:none}
+.hsync::-webkit-scrollbar-thumb{background:#7c8793;border-radius:7px;border:3px solid #f3f5f7}
+.hsync::-webkit-scrollbar-thumb:hover{background:#5b6671}
+.hsync::-webkit-scrollbar-track{background:#e4e8eb;border-radius:7px}
 
 .chartbox{position:relative;height:320px}
 .rowline{cursor:pointer}
