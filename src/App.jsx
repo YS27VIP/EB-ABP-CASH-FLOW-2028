@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_ind', 'gadmin_cfg', 'gadmin_req', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'cfsum', 'vendedores', 'vendcli']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_ind', 'gadmin_cfg', 'gadmin_req', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'retail_mksplit', 'cfsum', 'vendedores', 'vendcli']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -3916,6 +3916,17 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const vjMes = (mi) => capRows.vj.reduce((a, r) => a + num(r[4 + mi]), 0)
   const mkAnual = MESES.reduce((a, _, mi) => a + mkMes(mi), 0)
   const vjAnual = MESES.reduce((a, _, mi) => a + vjMes(mi), 0)
+  // ---- Split de Marketing Retail por rubro: % EB / % Sinergy (suma 100% por rubro). El % Sinergy = 100 − %EB. ----
+  const [mkSplit, setMkSplit] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_mksplit_${empresa}`) || '{}') } catch { return {} } })
+  useEffect(() => { try { setMkSplit(JSON.parse(localStorage.getItem(`retail_mksplit_${empresa}`) || '{}')) } catch { } }, [empresa])
+  const mkRubroKey = (r) => String(r[1] || '').trim()
+  const ebPctOf = (k) => { const v = mkSplit[k]; return (v === '' || v == null) ? 100 : Math.max(0, Math.min(100, num(v))) } // default 100% EB
+  const setMkSplitV = (k, v) => setMkSplit((d) => ({ ...d, [k]: v }))
+  const mkEBMes = (mi) => capRows.mk.reduce((a, r) => a + num(r[4 + mi]) * ebPctOf(mkRubroKey(r)) / 100, 0)
+  const mkSinMes = (mi) => capRows.mk.reduce((a, r) => a + num(r[4 + mi]) * (100 - ebPctOf(mkRubroKey(r))) / 100, 0)
+  const mkEBAnual = MESES.reduce((a, _, mi) => a + mkEBMes(mi), 0)
+  const mkSinSplitAnual = MESES.reduce((a, _, mi) => a + mkSinMes(mi), 0)
+  const guardarMkSplit = () => guardarKeys([['retail_mksplit', mkSplit], ['retail_pl', plSummary()]], 'Reparto EB/Sinergy de marketing guardado ✓')
   // ---- Líneas de Finanzas del Cash Flow (semilla Cash Inicial, Costos Financieros, Otros ing/gastos) ----
   const [cf, setCf] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_cf_${empresa}`) || '{}') } catch { return {} } })
   const [openOper, setOpenOper] = useState(false); const [openFin, setOpenFin] = useState(false)
@@ -3953,7 +3964,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
     const ini = mi === 0 ? num(cf[fk('INI', 0)]) : prevFin
     const cobros = tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
     const pagos = impMes(mi)
-    const gasto = gastoMes(mi), mk = mkMes(mi), vj = vjMes(mi)
+    const gasto = gastoMes(mi), mk = mkEBMes(mi), vj = vjMes(mi)
     const oper = gasto + mk + vj
     const fin = num(cf[fk('FIN', mi)])
     const oIng = num(cf[fk('OING', mi)])
@@ -3977,7 +3988,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
       const pagos = comprasCalMes(ts, mi)
       const gasto = bucket === 'EB' ? gastoEBMes(mi) : bucket === 'SIN' ? gastoMes(mi) : gastoEBMes(mi) + gastoMes(mi)
       const logi = bucket === 'EB' ? 0 : sg('LOG', mi)
-      const mk = bucket === 'EB' ? mkMes(mi) : bucket === 'SIN' ? sg('MK', mi) : mkMes(mi) + sg('MK', mi)
+      const mk = bucket === 'EB' ? mkEBMes(mi) : bucket === 'SIN' ? mkSinMes(mi) : mkEBMes(mi) + mkSinMes(mi)
       const vj = bucket === 'EB' ? vjMes(mi) : bucket === 'SIN' ? (sg('VJDIR', mi) + sg('VJMK', mi)) : vjMes(mi) + sg('VJDIR', mi) + sg('VJMK', mi)
       const oper = gasto + logi + mk + vj
       const fin = cfFin(bucket, 'FIN', mi), oIng = cfFin(bucket, 'OING', mi), oGas = cfFin(bucket, 'OGAS', mi)
@@ -3998,9 +4009,9 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
     MESES.forEach((_, mi) => {
       tiendas.forEach((t) => { const v = storeVentaM(t, mi), c = storeCostoM(t, mi); const B = esTiendaSinergy(t) ? SIN : EB; B.venta[mi] += v; B.costo[mi] += c })
       EB.pagos[mi] = comprasCalMes(tEB, mi); SIN.pagos[mi] = comprasCalMes(tSIN, mi)
-      EB.gastos[mi] = gastoEBMes(mi); EB.mk[mi] = mkMes(mi); EB.vj[mi] = vjMes(mi)
+      EB.gastos[mi] = gastoEBMes(mi); EB.mk[mi] = mkEBMes(mi); EB.vj[mi] = vjMes(mi)
       EB.fin[mi] = num(cf[fk('FIN', mi)]); EB.oIng[mi] = num(cf[fk('OING', mi)]); EB.oGas[mi] = num(cf[fk('OGAS', mi)])
-      SIN.gastos[mi] = gastoMes(mi); SIN.mk[mi] = sg('MK', mi); SIN.vj[mi] = sg('VJDIR', mi) + sg('VJMK', mi); SIN.logistica[mi] = sg('LOG', mi)
+      SIN.gastos[mi] = gastoMes(mi); SIN.mk[mi] = mkSinMes(mi); SIN.vj[mi] = sg('VJDIR', mi) + sg('VJMK', mi); SIN.logistica[mi] = sg('LOG', mi)
       SIN.fin[mi] = num(sin[`CFFIN|${mi}`]); SIN.oIng[mi] = num(sin[`CFOING|${mi}`]); SIN.oGas[mi] = num(sin[`CFOGAS|${mi}`])
     })
     return { EB, SIN }
@@ -4032,31 +4043,76 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
         {/* Marketing sobre la venta (Retail): venta neta = venta por tienda */}
         {(() => { const vnMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0); const vnAn = MESES.reduce((a, _, mi) => a + vnMes(mi), 0); const mkAn = MESES.reduce((a, _, mi) => a + mkMes(mi), 0); const pctC = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
           return <div className="panel" style={{ marginBottom: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, paddingBottom: 8 }}>
-            <h3>MARKETING EB sobre la venta — Retail <span className="unit">(venta = ventas por tienda)</span></h3>
-            <div className="sub">Cuánto pesa <b>Marketing</b> sobre la <b>venta neta</b>, por mes y en total.</div>
+            <h3>MARKETING sobre la venta — Retail <span className="unit">(venta = ventas por tienda)</span></h3>
+            <div className="sub">Cuánto pesa <b>Marketing total</b> (EB + SINERGY) sobre la <b>venta neta</b>. Este resumen es informativo: <b>no</b> impacta ningún P&L ni Cash Flow.</div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
               <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
               <tbody>
                 <tr><td className="l sub2">Venta neta ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(vnMes(mi))}</td>)}<td className="tot">{fmt(vnAn)}</td></tr>
-                <tr><td className="l sub2">MARKETING ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mkMes(mi))}</td>)}<td className="tot">{fmt(mkAn)}</td></tr>
+                <tr><td className="l sub2" style={{ color: col }}>· MK Retail EB ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: col }}>{fmt(mkEBMes(mi))}</td>)}<td className="tot" style={{ color: col }}>{fmt(mkEBAnual)}</td></tr>
+                <tr><td className="l sub2" style={{ color: '#be185d' }}>· Marketing SINERGY ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#be185d' }}>{fmt(mkSinMes(mi))}</td>)}<td className="tot" style={{ color: '#be185d' }}>{fmt(mkSinSplitAnual)}</td></tr>
+                <tr><td className="l sub2">MARKETING TOTAL ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mkMes(mi))}</td>)}<td className="tot">{fmt(mkAn)}</td></tr>
                 <tr className="grandrow"><td className="l">% MARKETING / venta</td>{MESES.map((_, mi) => <td key={mi} className="tot">{pctC(mkMes(mi), vnMes(mi))}</td>)}<td className="tot">{pctC(mkAn, vnAn)}</td></tr>
               </tbody>
             </table></div>
           </div> })()}
-        <RoleForm key="retail-mk" role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} capTitle="MARKETING EB — (Retail)" />
-        {/* ---- Marketing SINERGY: una sola línea de total manual (no por rubro) ---- */}
-        <div className="panel" style={{ marginTop: 14, borderLeftColor: '#be185d' }}>
+        <RoleForm key="retail-mk" role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} capTitle="MARKETING Retail (total por rubro)" />
+        {/* ---- Reparto EB / SINERGY por rubro: define quién paga cada rubro ---- */}
+        {(() => {
+          const rows = capRows.mk || []
+          const anualRubro = (r) => MESES.reduce((a, _, mi) => a + num(r[4 + mi]), 0)
+          return <div className="panel" style={{ marginTop: 14, borderLeftColor: '#7c3aed' }}>
+            <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
+              <span className="empchip" style={{ background: '#7c3aed', marginLeft: 0 }}>🔀 Reparto por rubro: ¿quién paga?</span>
+              <div className="spacer"></div>
+              <SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarMkSplit}>{saving ? 'Guardando…' : '💾 Guardar reparto'}</button>
+            </div>
+            <div className="sub" style={{ marginBottom: 8 }}>Para cada rubro, indica el <b>% EB</b> (lo paga Energy Brands → MK Retail EB) y el <b>% SINERGY</b> (lo paga SINERGY → Marketing SINERGY). Deben sumar <b>100%</b>. El reparto alimenta automáticamente los dos bloques de abajo.</div>
+            <div className="tablewrap" style={{ overflowX: 'auto' }}>
+              <table className="vfix"><colgroup><col style={{ width: '280px' }} /><col style={{ width: '120px' }} /><col style={{ width: '110px' }} /><col style={{ width: '110px' }} /><col style={{ width: '90px' }} /></colgroup>
+                <thead><tr><th className="l">Rubro</th><th>Total 2028 ($)</th><th>% EB</th><th>% SINERGY</th><th>Suma</th></tr></thead>
+                <tbody>
+                  {rows.length === 0 && <tr><td className="l sub2" colSpan={5} style={{ color: 'var(--muted)' }}>Captura primero los rubros arriba (MARKETING Retail) y pulsa 🔄 Actualizar.</td></tr>}
+                  {rows.map((r, i) => { const k = mkRubroKey(r); const eb = ebPctOf(k); const sinP = 100 - eb; const suma = eb + sinP
+                    return <tr key={i}>
+                      <td className="l sub2">{r[1] || `Rubro ${i + 1}`}</td>
+                      <td className="tot">{fmt(anualRubro(r))}</td>
+                      <td className="cell"><input className="fillin" value={mkSplit[k] ?? ''} onChange={(e) => setMkSplitV(k, e.target.value)} inputMode="decimal" placeholder="100" style={{ width: '100%', textAlign: 'right', color: col, fontWeight: 700 }} /></td>
+                      <td className="tot" style={{ color: '#be185d', fontWeight: 700 }}>{sinP.toFixed(0)}%</td>
+                      <td className="tot" style={{ color: suma === 100 ? '#16a34a' : '#dc2626', fontWeight: 800 }}>{suma.toFixed(0)}%</td>
+                    </tr> })}
+                </tbody>
+              </table>
+            </div>
+          </div> })()}
+        {/* ---- MK Retail EB (automático = % EB): alimenta P&L y Cash Flow Retail EB ---- */}
+        <div className="panel" style={{ marginTop: 14, borderLeftColor: col }}>
           <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
-            <span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🤝 Marketing SINERGY</span>
-            <div className="spacer"></div>
-            <SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarSin}>{saving ? 'Guardando…' : '💾 Guardar SINERGY'}</button>
+            <span className="empchip" style={{ background: col, marginLeft: 0 }}>🏬 MK Retail EB</span>
+            <span className="unit" style={{ color: 'var(--muted)' }}>automático</span>
           </div>
-          <div className="sub" style={{ marginBottom: 6 }}>Total de marketing de <b>SINERGY</b> por mes (se llena a mano, sin desglose por rubro). Alimenta <b>solo</b> el P&L SINERGY. Total: <b>${fmt(sinMkAnual)}</b></div>
+          <div className="sub" style={{ marginBottom: 6 }}>Porción <b>EB</b> del marketing (según el reparto de arriba). Alimenta el <b>P&L y Cash Flow de Retail EB</b>. Total: <b>${fmt(mkEBAnual)}</b></div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '85px' }} /></colgroup>
               <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
               <tbody>
-                <tr><td className="l sub2" style={{ color: '#be185d', fontWeight: 700 }}>MARKETING SINERGY ($)</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={sin[`MK|${mi}`] ?? ''} onChange={(e) => setSIN('MK', mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot">{fmt(sinMkAnual)}</td></tr>
+                <tr><td className="l sub2" style={{ color: col, fontWeight: 700 }}>MK RETAIL EB ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mkEBMes(mi))}</td>)}<td className="tot">{fmt(mkEBAnual)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {/* ---- Marketing SINERGY (automático = % SINERGY): alimenta P&L y Cash Flow SINERGY ---- */}
+        <div className="panel" style={{ marginTop: 14, borderLeftColor: '#be185d' }}>
+          <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
+            <span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🤝 Marketing SINERGY</span>
+            <span className="unit" style={{ color: 'var(--muted)' }}>automático</span>
+          </div>
+          <div className="sub" style={{ marginBottom: 6 }}>Porción <b>SINERGY</b> del marketing (según el reparto de arriba). Alimenta <b>solo</b> el P&L y Cash Flow SINERGY. Total: <b>${fmt(mkSinSplitAnual)}</b></div>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '85px' }} /></colgroup>
+              <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
+              <tbody>
+                <tr><td className="l sub2" style={{ color: '#be185d', fontWeight: 700 }}>MARKETING SINERGY ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mkSinMes(mi))}</td>)}<td className="tot">{fmt(mkSinSplitAnual)}</td></tr>
               </tbody>
             </table>
           </div>
@@ -4465,7 +4521,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           const sum = (arr, f) => arr.reduce((a, t) => a + f(t), 0)
           const ventaEB = sum(vEB, tVenta), costoEB = sum(vEB, tCosto)
           const ventaSIN = sum(vSIN, tVenta), costoSIN = sum(vSIN, tCosto)
-          const mkSinAnual = sinMkAnual, vjSinAnual = sinVjAnual
+          const mkSinAnual = mkSinSplitAnual, vjSinAnual = sinVjAnual
           const R27 = { venta: 2363461, costo: 1360521, margen: 1002941, gastos: 2193944, resultado: -1191004 }
           const r27 = (v) => v == null ? '—' : fmt(v)
           const dCell = (v28, v27) => v27 == null ? <td className="tot ya">—</td> : <td className="tot ya" style={{ color: (v28 - v27) >= 0 ? '#15803d' : '#b91c1c' }}>{(v28 - v27) >= 0 ? '+' : ''}{fmt(v28 - v27)}</td>
@@ -4494,8 +4550,8 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           }
           return <>
             <div className="sub" style={{ marginBottom: 6 }}>El P&L de Retail se compone de dos: <b>P&L Retail EB</b> (suma al P&L y Cash Flow de Energy Brands) y <b>P&L SINERGY</b> (solo suma a la columna SINERGY del Holding). El <b>TOTAL</b> es la suma de los dos. La columna <b>2027</b> es la referencia del ABP (solo aplica a EB; SINERGY es nueva).</div>
-            {bloque({ title: '🧾 P&L Retail — TOTAL (EB + SINERGY)', sub: '(EB + SINERGY · 2028)', venta: ventaEB + ventaSIN, costo: costoEB + costoSIN, logistica: sinLogAnual, gastos: gGranEB + gGran, marketing: mkAnual + mkSinAnual, viajes: vjAnual + vjSinAnual, showRef: true, accent: '#7c3aed' })}
-            {bloque({ title: '🏬 P&L RETAIL EB', sub: '(alimenta P&L y Cash Flow de Energy Brands)', venta: ventaEB, costo: costoEB, logistica: null, gastos: gGranEB, marketing: mkAnual, viajes: vjAnual, showRef: true, accent: col })}
+            {bloque({ title: '🧾 P&L Retail — TOTAL (EB + SINERGY)', sub: '(EB + SINERGY · 2028)', venta: ventaEB + ventaSIN, costo: costoEB + costoSIN, logistica: sinLogAnual, gastos: gGranEB + gGran, marketing: mkEBAnual + mkSinAnual, viajes: vjAnual + vjSinAnual, showRef: true, accent: '#7c3aed' })}
+            {bloque({ title: '🏬 P&L RETAIL EB', sub: '(alimenta P&L y Cash Flow de Energy Brands)', venta: ventaEB, costo: costoEB, logistica: null, gastos: gGranEB, marketing: mkEBAnual, viajes: vjAnual, showRef: true, accent: col })}
             {bloque({ title: '🤝 P&L SINERGY', sub: '(solo suma a la columna SINERGY del Holding)', venta: ventaSIN, costo: costoSIN, logistica: sinLogAnual, gastos: gGran, marketing: mkSinAnual, viajes: vjSinAnual, showRef: false, accent: '#be185d' })}
           </>
         })()}
