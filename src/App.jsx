@@ -264,11 +264,18 @@ const RETAIL_PRESET = {
   "MUH Atlantis": [["ALTRA","Accessories"],["ALTRA","APP Bottom"],["ALTRA","APP Top"],["ALTRA","FTW Gym"],["ALTRA","FTW Hike"],["ALTRA","FTW Lifestyle"],["ALTRA","FTW Road"],["ALTRA","FTW Trail"],["BIRKENSTOCK","ACTIVE"],["BIRKENSTOCK","FTW CLOSE TOE"],["BIRKENSTOCK","FTW EVA"],["BIRKENSTOCK","FTW LEATHER"],["HOKA","Accessories"],["HOKA","APP Bottom"],["HOKA","APP Top"],["HOKA","FTW Fitness"],["HOKA","FTW Hike"],["HOKA","FTW Lifestyle"],["HOKA","FTW Race"],["HOKA","FTW Recovery"],["HOKA","FTW Road"],["HOKA","FTW Trail"],["HOKA","FTW Work"],["INJINJI","SOCKS"],["MAMMUT","FTW TRAIL RUNNING"],["NORDA","Footwear"],["ARIAT","Accessories"],["ARIAT","ENGLISH"],["ARIAT","WESTERN"],["ARIAT","WORK"],["BIRKENSTOCK","FTW PAPILLIO"],["BIRKENSTOCK","FTW PROFESIONAL"],["BIRKENSTOCK","SOCKS"],["BLUNDSTONE","Boots"],["COTOPAXI","DAYPACKS - SMALL BAGS"],["COTOPAXI","EVERYDAY ACC"],["COTOPAXI","HEADWEAR"],["COTOPAXI","TRAVEL AND TECHNICAL"],["ECCO","Accessories"],["ECCO","Footwear"],["FITFLOP","CORE"],["FITFLOP","ENTRY"],["FITFLOP","PREMIUM"],["FJALLRAVEN","Backpacks & Bags"],["FJALLRAVEN","Hardware Accessories"],["FLOWER MOUNTAIN","Footwear"],["FOAMERS","BASIC"],["FOAMERS","CORE"],["FOAMERS","ELEVATE"],["FOAMERS","PREMIUM"],["FOAMERS","SIGNATURE"],["GOORIN BROS","CORE"],["GOORIN BROS","PREMIUM"],["KEEN","CORE"],["KEEN","ENTRY"],["KEEN","PREMIUM"],["MAMMUT","FTW MOUNTAINEERING"],["MAMMUT","HIGH TIER ACCESSORIES"],["MAMMUT","LOW TIER ACCESSORIES"],["MAMMUT","MID TIER ACCESSORIES"],["UGG","Boots"],["UGG","Sandals"],["UGG","Shoes"],["UGG","Slippers"],["SMARTWOOL","SOCKS"],["IZIPIZI","Accessories"]],
   "MUH Arkadia": [["ALTRA","Accessories"],["ALTRA","APP Bottom"],["ALTRA","APP Top"],["ALTRA","FTW Gym"],["ALTRA","FTW Hike"],["ALTRA","FTW Lifestyle"],["ALTRA","FTW Road"],["ALTRA","FTW Trail"],["BIRKENSTOCK","ACTIVE"],["BIRKENSTOCK","FTW CLOSE TOE"],["BIRKENSTOCK","FTW EVA"],["BIRKENSTOCK","FTW LEATHER"],["HOKA","Accessories"],["HOKA","APP Bottom"],["HOKA","APP Top"],["HOKA","FTW Fitness"],["HOKA","FTW Hike"],["HOKA","FTW Lifestyle"],["HOKA","FTW Race"],["HOKA","FTW Recovery"],["HOKA","FTW Road"],["HOKA","FTW Trail"],["HOKA","FTW Work"],["INJINJI","SOCKS"],["MAMMUT","FTW TRAIL RUNNING"],["NORDA","Footwear"],["ARIAT","Accessories"],["ARIAT","ENGLISH"],["ARIAT","WESTERN"],["ARIAT","WORK"],["BIRKENSTOCK","FTW PAPILLIO"],["BIRKENSTOCK","FTW PROFESIONAL"],["BIRKENSTOCK","SOCKS"],["BLUNDSTONE","Boots"],["COTOPAXI","DAYPACKS - SMALL BAGS"],["COTOPAXI","EVERYDAY ACC"],["COTOPAXI","HEADWEAR"],["COTOPAXI","TRAVEL AND TECHNICAL"],["ECCO","Accessories"],["ECCO","Footwear"],["FITFLOP","CORE"],["FITFLOP","ENTRY"],["FITFLOP","PREMIUM"],["FJALLRAVEN","Backpacks & Bags"],["FJALLRAVEN","Hardware Accessories"],["FLOWER MOUNTAIN","Footwear"],["FOAMERS","BASIC"],["FOAMERS","CORE"],["FOAMERS","ELEVATE"],["FOAMERS","PREMIUM"],["FOAMERS","SIGNATURE"],["GOORIN BROS","CORE"],["GOORIN BROS","PREMIUM"],["KEEN","CORE"],["KEEN","ENTRY"],["KEEN","PREMIUM"],["MAMMUT","FTW MOUNTAINEERING"],["MAMMUT","HIGH TIER ACCESSORIES"],["MAMMUT","LOW TIER ACCESSORIES"],["MAMMUT","MID TIER ACCESSORIES"],["UGG","Boots"],["UGG","Sandals"],["UGG","Shoes"],["UGG","Slippers"],["SMARTWOOL","SOCKS"],["IZIPIZI","Accessories"]],
 }
-RETAIL_PRESET['Sale Factory'] = RETAIL_PRESET['MUH Atlantis']
-RETAIL_PRESET['E-Commerce'] = RETAIL_PRESET['MUH Atlantis']
-RETAIL_PRESET['Mayoristas'] = RETAIL_PRESET['MUH Atlantis']
-const RETAIL_PRESET_SUBS = (t) => (RETAIL_PRESET[t] || []).map(([m, c]) => `${m} · ${c}`)
-const parseSub = (c) => { const i = String(c).indexOf(' · '); return i > 0 ? [c.slice(0, i), c.slice(i + 3)] : null }
+// Subcategorías Retail por tienda (del ABP 2026_2027 RETAIL · columna SUB-CATEGORIA RETAIL). El % / categoría wholesale lo llena el usuario.
+const RETAIL_SUBS_PRESET = {
+  "Birkenstock Andino": ["Open-Toe Sporty", "Closed-Toe Casual", "Closed-Toe Fashion", "Closed-Toe Sporty", "Slippers", "Low-Cut Boots", "Open-Toe Casual", "Open-Toe Fashion", "Open-Toe Plattform", "Closed-Toe Plattform", "Low-Casual Socks", "High-Casual Socks"],
+  "Hoka Andino": ["Everyday Road", "Everyday Trail", "Training", "Road race", "Trail race", "Recovery Slides", "Recovery Shoes", "Logo wear", "Training top", "Training Bottom", "Race Top", "Race Bottom", "Outlayer", "Wearables", "Head", "Socks", "Vest", "Drinkware", "Phone storage", "Eyewear", "Insoles", "Therapy", "Compression", "Underwear", "Sunscreen", "Gaiters & Neck Gaiters", "laces", "Towels", "Others", "Daily packs", "Fanny packs", "Race packs", "Water packs"],
+  "MUH Atlantis": ["Head", "Socks", "Vest", "Others", "Training Bottom", "Race Bottom", "Training Top", "Outlayer", "Training", "Everyday Trail", "Everyday Road", "Road Race", "Trail Race", "Recovery Slides", "Drinkware", "Compression", "Gaiters & Neck Gaiters", "Towels", "Race Top", "Logowear", "Recovery Shoes", "Headwear", "Eyewear", "Low-Casual Socks", "High-Casual Socks", "Sport Socks", "Insoles", "Closed-Toe Casual", "Cleaning", "Wallets", "Keychains", "Low-Cut Boots", "High-Cut Boots", "Closed-Toe Sporty", "Slippers", "Open-Toe Sporty", "Closed-Toe Fashion", "Open-Toe Casual", "Open-Toe Fashion", "Open-Toe Plattform", "Closed-Toe Plattform", "Daily Packs", "Fanny Packs", "Tote Bags", "Work Packs", "Shopping Bags", "Pouches & Cases", "Duffel Bags", "Toiletry Bag"],
+}
+RETAIL_SUBS_PRESET['MUH Arkadia'] = RETAIL_SUBS_PRESET['MUH Atlantis']
+RETAIL_SUBS_PRESET['Sale Factory'] = RETAIL_SUBS_PRESET['MUH Atlantis']
+RETAIL_SUBS_PRESET['E-Commerce'] = RETAIL_SUBS_PRESET['MUH Atlantis']
+RETAIL_SUBS_PRESET['Mayoristas'] = RETAIL_SUBS_PRESET['MUH Atlantis']
+const _MUH_BRANDS = ["ALTRA", "BIRKENSTOCK", "HOKA", "INJINJI", "MAMMUT", "NORDA", "ARIAT", "BLUNDSTONE", "COTOPAXI", "ECCO", "FITFLOP", "FJALLRAVEN", "FLOWER MOUNTAIN", "FOAMERS", "GOORIN BROS", "KEEN", "UGG", "SMARTWOOL", "IZIPIZI"]
+const RETAIL_STORE_BRANDS = { "Birkenstock Andino": ["BIRKENSTOCK"], "Hoka Andino": ["HOKA"], "MUH Atlantis": _MUH_BRANDS, "MUH Arkadia": _MUH_BRANDS, "Sale Factory": _MUH_BRANDS, "E-Commerce": _MUH_BRANDS, "Mayoristas": _MUH_BRANDS }
 // Tiendas que pertenecen al bucket SINERGY (su P&L va a la columna SINERGY del Holding, NO a Energy Brands). El resto es P&L Retail EB.
 const SINERGY_TIENDAS = new Set(['SINERGY'])
 // SINERGY es el nombre del grupo de TODAS las tiendas del Retail: su venta, costo y compras van al
@@ -3812,7 +3819,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const [selT, setSelT] = useState(null)
   const [ucvAll, setUcvAll] = useState(false) // Ventas por tienda: ver TODAS (consolidado) vs una tienda
   useEffect(() => { try { const t = JSON.parse(localStorage.getItem(`retail_tiendas_${empresa}`) || 'null'); if (Array.isArray(t) && t.length) setTiendas(t) } catch { } try { setCats(JSON.parse(localStorage.getItem(`retail_cats_${empresa}`) || '{}')) } catch { } try { setVt(JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}')) } catch { } setSelT(null) }, [empresa])
-  const catsOf = (t) => (Array.isArray(cats[t]) && cats[t].length) ? cats[t] : (RETAIL_PRESET[t] ? RETAIL_PRESET_SUBS(t) : RETAIL_CATS_DEF)
+  const catsOf = (t) => (Array.isArray(cats[t]) && cats[t].length) ? cats[t] : (RETAIL_SUBS_PRESET[t] || RETAIL_CATS_DEF)
   const selStore = selT && tiendas.includes(selT) ? selT : (tiendas[0] || null)
   const cvk = (t, c, mi) => `${t}||${c}||U||${mi}`           // (modelo viejo) unidades del mes
   const uaKey = (t, c) => `${t}||${c}||UA`                    // (modelo nuevo) unidades ANUALES por subcategoría/tienda
@@ -3892,14 +3899,13 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const [smap, setSmap] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_map_${empresa}`) || '{}') } catch { return {} } })
   useEffect(() => { try { setSmap(JSON.parse(localStorage.getItem(`retail_map_${empresa}`) || '{}')) } catch { } }, [empresa])
   const cellOf = (c, m) => (smap[c] || {})[m] || {}
-  // Si el usuario no ha editado el mapa de esta subcategoría, se deriva del nombre "MARCA · CATEGORÍA" (100% a esa marca·categoría).
-  const pctOf = (c, m) => { if (smap[c]) return num(cellOf(c, m).pct); const p = parseSub(c); return (p && upper(p[0]) === upper(m)) ? 100 : 0 }
-  const catOf = (c, m) => { if (smap[c]) return cellOf(c, m).cat || ''; const p = parseSub(c); return (p && upper(p[0]) === upper(m)) ? p[1] : '' }
+  const pctOf = (c, m) => num(cellOf(c, m).pct)
+  const catOf = (c, m) => cellOf(c, m).cat || ''
   const setCell = (c, m, field, v) => setSmap((d) => ({ ...d, [c]: { ...(d[c] || {}), [m]: { ...((d[c] || {})[m] || {}), [field]: v } } }))
   const rowSum = (c) => wholesaleMarcas.reduce((a, m) => a + pctOf(c, m), 0)
   const marcasDeSub = (c) => wholesaleMarcas.filter((m) => pctOf(c, m) > 0)
   // Marcas que vende una tienda (según sus subcategorías) — para mostrar solo esas columnas. Si no hay, muestra todas.
-  const storeMarcas = (t) => { const s = new Set(); catsOf(t).forEach((c) => wholesaleMarcas.forEach((m) => { if (pctOf(c, m) > 0) s.add(m) })); const arr = wholesaleMarcas.filter((m) => s.has(m)); return arr.length ? arr : wholesaleMarcas }
+  const storeMarcas = (t) => { const s = new Set((RETAIL_STORE_BRANDS[t] || []).map(upper)); catsOf(t).forEach((c) => wholesaleMarcas.forEach((m) => { if (pctOf(c, m) > 0) s.add(upper(m)) })); const arr = wholesaleMarcas.filter((m) => s.has(upper(m))); return arr.length ? arr : wholesaleMarcas }
   const storeMarcasAll = () => { const s = new Set(); tiendas.forEach((t) => storeMarcas(t).forEach((m) => s.add(m))); const arr = wholesaleMarcas.filter((m) => s.has(m)); return arr.length ? arr : wholesaleMarcas }
   const whAvg = (c) => MESES.reduce((a, _, mi) => a + whUnit(c, mi), 0) / 12   // costo wholesale promedio/ud (referencia)
   const allSubcats = [...new Set(tiendas.flatMap((t) => catsOf(t)))]   // universo de subcategorías para el mapa
@@ -4248,12 +4254,12 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             <div className="sub" style={{ fontWeight: 700, margin: '4px 0 4px' }}>Unidades a comprar <span className="unit" style={{ fontWeight: 400 }}>(cantidad ANUAL · el split por mes lo da el calendario del Paso 1)</span></div>
             <div className="sub" style={{ marginBottom: 4 }}>Por cada subcategoría, en la <b>columna de la marca</b> que la surte pon el <b>%</b> que se le compra y elige su <b>categoría wholesale</b>. La suma de % de cada fila debe dar <b>100%</b>. De ahí sale el <b>Costo/ud ponderado</b> (AUC × factor).</div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
-              <table className="vfix"><colgroup><col style={{ width: '230px' }} /><col style={{ width: '92px' }} />{mcs.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /></colgroup>
+              <table className="vfix"><colgroup><col style={{ width: '230px' }} /><col style={{ width: '112px' }} />{mcs.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /></colgroup>
                 <thead>
                   <tr><th className="l">Subcategoría Retail</th><th>Unidades (año)</th>{mcs.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th></tr>
                 </thead>
                 <tbody>
-                  {cs.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; const esNuevoSub = !(RETAIL_PRESET[t] ? RETAIL_PRESET_SUBS(t).includes(c) : RETAIL_CATS_DEF.includes(c)); return <tr key={c}>
+                  {cs.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; const esNuevoSub = !((RETAIL_SUBS_PRESET[t] || RETAIL_CATS_DEF).includes(c)); return <tr key={c}>
                     <td className="l sub2">{c}{esNuevoSub && <span className="newbadge">NUEVO</span>}
                       <button title="Quitar subcategoría" onClick={() => delCat(t, c)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>
                     </td>
