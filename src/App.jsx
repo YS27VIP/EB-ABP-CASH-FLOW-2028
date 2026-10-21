@@ -3380,7 +3380,9 @@ function GastosAdminDirectosPorSBU({ empresa, sbus }) {
   const [data, setData] = useState(() => { try { return JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}') } catch { return {} } })
   useEffect(() => { try { setData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(cfgKey) || 'null'); if (Array.isArray(s) && s.length) setLista(s) } catch { } }, [empresa, ver])
   const [edit, setEdit] = useState(false); const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  const [sel, setSel] = useState(null)
   const sbuNames = Object.keys(sbus || {}).filter((s) => s !== 'Retail')
+  const selSbu = (sel && sbuNames.includes(sel)) ? sel : sbuNames[0]
   const dk = (s, cod, m) => `${s}||${cod}||${m}`
   const set = (s, cod, m, v) => setData((d) => ({ ...d, [dk(s, cod, m)]: v }))
   const g = (s, cod, m) => num(data[dk(s, cod, m)])
@@ -3406,7 +3408,11 @@ function GastosAdminDirectosPorSBU({ empresa, sbus }) {
   return <>
     <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🏢 Gastos Admin Directos · por SBU</span><span className="unit" style={{ alignSelf: 'center' }}>Lo llena <b>Finanzas</b> para cada SBU; el TOTAL los suma (no se llena).</span><div className="spacer"></div><button className={'seg' + (edit ? ' active' : '')} onClick={() => setEdit((e) => !e)}>{edit ? '✓ Editando centros de costo' : '✏️ Editar centros de costo'}</button><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
     {msg && <div className={'note ' + (msg.t === 'ok' ? 'ok' : 'warn')} style={{ marginBottom: 8 }}>{msg.x}</div>}
-    {sbuNames.map((s) => <div key={s}>{tabla(s, true)}</div>)}
+    <div className="toolbar" style={{ marginBottom: 10, gap: 6, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 800, alignSelf: 'center' }}>SBU:</span>
+      {sbuNames.map((s) => { const on = s === selSbu; const c = sbuColor(s); return <button key={s} className={'seg' + (on ? ' active' : '')} onClick={() => setSel(s)} style={on ? { background: c, borderColor: c, color: '#fff' } : { borderColor: c, color: c }}>{s}</button> })}
+    </div>
+    {tabla(selSbu, true)}
     {tabla(null, false)}
   </>
 }
@@ -3735,12 +3741,12 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const col = sbuColor('Retail')
   const ver = useDataVersion()
   const [tab, setTab] = useState(() => (deep && deep.retailTab) ? deep.retailTab : 'comercial')
-  const [comTab, setComTab] = useState(() => (deep && deep.retailComTab) ? deep.retailComTab : 'mapa') // sub-vista de Comercial (paso 1 = mapa)
+  const [comTab, setComTab] = useState(() => { const d = deep && deep.retailComTab; return (d && d !== 'mapa') ? d : 'ventas' }) // sub-vista de Comercial (1 = compras · el mapa ahora va inline)
   const TABS = [
     ['comercial', '🛍️ Comercial'], ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'],
     ['logistica', '🚚 Logística'], ['gastos', '💵 Gastos'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
   ]
-  const COM_TABS = [['mapa', '1. 🧭 Mapa de abastecimiento'], ['ventas', '2. 📦 Compras por tienda'], ['ucv', '3. 🏬 Ventas por tienda']]
+  const COM_TABS = [['ventas', '1. 📦 Compras por tienda'], ['ucv', '2. 🏬 Ventas por tienda']]
   // ---- Importaciones (captura mensual del COSTO de importación por marca, con referencia 2027) ----
   const [imp, setImp] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
@@ -4179,7 +4185,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             <div className="sub" style={{ marginTop: 4 }}>El % define en qué meses llega la mercancía a <b>todas las tiendas</b>. Las <b>unidades anuales</b> del Paso 2 se reparten por mes con este %. {Math.abs(calPctTot - 100) >= 0.5 && <b style={{ color: '#b45309' }}>Ojo: la suma debe ser 100%.</b>}</div>
           </div>
           <PasoH n={2}>Unidades a comprar por tienda <span className="unit" style={{ fontWeight: 400 }}>(cantidad ANUAL por subcategoría · el split mensual lo da el Paso 1)</span></PasoH>
-          <div className="sub">Escoge una <b>tienda</b> y captura por <b>subcategoría Retail</b> las <b>unidades del año</b>. El <b>costo</b> sale del <b>mapa de abastecimiento</b> × el <b>factor</b> global, y se reparte por mes según el calendario.</div>
+          <div className="sub">Escoge una <b>tienda</b> y captura por <b>subcategoría Retail</b> las <b>unidades del año</b>. En la misma fila defines de qué <b>marca · categoría wholesale</b> se surte (%, suma 100%); de ahí sale el <b>costo</b> × el <b>factor</b>, repartido por mes según el calendario.</div>
           <div className="toolbar" style={{ margin: '8px 0 2px', gap: 8, alignItems: 'center' }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Factor wholesale→Retail (×):</label>
             <input className="fillin" value={cf[fk('FACTOR', 0)] ?? ''} onChange={(e) => setCF('FACTOR', 0, e.target.value)} inputMode="decimal" placeholder="1.25" style={{ width: 70, textAlign: 'center' }} />
@@ -4188,8 +4194,34 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           {/* Selector de tienda */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 4px' }}>
             {tiendas.map((t) => <button key={t} className={'seg' + (selStore === t ? ' active' : '')} onClick={() => setSelT(t)} style={selStore === t ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{t}{esTiendaNueva(t) && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 800 }}>NUEVA</span>}</button>)}
+            <button key="__TOTAL__" className={'seg' + (selStore === '__TOTAL__' ? ' active' : '')} onClick={() => setSelT('__TOTAL__')} style={selStore === '__TOTAL__' ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : { border: '1.5px solid #7c3aed', color: '#7c3aed', background: '#fff', fontWeight: 800 }}>▣ Total</button>
           </div>
-          {!selStore ? <div className="sub">No hay tiendas. Usa <b>➕ Agregar tienda</b>.</div> : (() => { const t = selStore; const cs = catsOf(t); return <>
+          {!selStore ? <div className="sub">No hay tiendas. Usa <b>➕ Agregar tienda</b>.</div>
+            : selStore === '__TOTAL__' ? (() => {
+              const subs = allSubcats
+              const uSub = (c) => tiendas.reduce((a, t) => a + (catsOf(t).includes(c) ? rowUnits(t, c) : 0), 0)
+              const cSub = (c) => tiendas.reduce((a, t) => a + (catsOf(t).includes(c) ? rowCompraCosto(t, c) : 0), 0)
+              return <>
+                <div className="toolbar" style={{ margin: '12px 0 6px' }}><span style={{ fontWeight: 800, color: '#7c3aed', fontSize: 15 }}>▣ Total Retail</span><span className="unit" style={{ marginLeft: 8 }}>Suma de todas las tiendas · solo lectura</span></div>
+                <div className="tablewrap" style={{ overflowX: 'auto' }}>
+                  <table className="vfix"><colgroup><col style={{ width: '210px' }} /><col style={{ width: '100px' }} />{wholesaleMarcas.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /></colgroup>
+                    <thead><tr><th className="l">Subcategoría Retail</th><th>Unidades (todas)</th>{wholesaleMarcas.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th></tr></thead>
+                    <tbody>
+                      {subs.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; return <tr key={c}>
+                        <td className="l sub2">{c}</td>
+                        <td className="tot">{fmt(uSub(c))}</td>
+                        {wholesaleMarcas.map((m) => { const p = pctOf(c, m); return <td key={m} className="tot" style={{ fontSize: 11, lineHeight: 1.25 }}>{p > 0 ? <><b>{fmt(p)}%</b><div className="unit">{catOf(c, m) || '—'}</div></> : '—'}</td> })}
+                        <td className="tot" style={{ fontWeight: 800, color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%</td>
+                        <td className="tot ya">{whAvg(c) > 0 ? (whAvg(c) * factor()).toFixed(2) : '—'}</td>
+                        <td className="tot" style={{ color: '#b91c1c' }}>{fmt(cSub(c))}</td>
+                      </tr> })}
+                      <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(subs.reduce((a, c) => a + uSub(c), 0))}</td>{wholesaleMarcas.map((_, i) => <td key={i} className="tot"></td>)}<td className="tot"></td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCompras)}</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            })()
+            : (() => { const t = selStore; const cs = catsOf(t); return <>
             <div className="toolbar" style={{ margin: '12px 0 6px' }}>
               <span style={{ fontWeight: 800, color: col, fontSize: 15 }}>🏬 {t}</span>
               <span className="unit" style={{ marginLeft: 8 }}>Unidades {fmt(comprasUnidT(t))} · Costo {fmt(tCompras(t))}</span>
@@ -4198,23 +4230,31 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             </div>
             {/* Captura de UNIDADES ANUALES A COMPRAR por subcategoría (el costo sale del mapa; el split mensual lo da el Paso 1) */}
             <div className="sub" style={{ fontWeight: 700, margin: '4px 0 4px' }}>Unidades a comprar <span className="unit" style={{ fontWeight: 400 }}>(cantidad ANUAL · el split por mes lo da el calendario del Paso 1)</span></div>
+            <div className="sub" style={{ marginBottom: 4 }}>Por cada subcategoría, en la <b>columna de la marca</b> que la surte pon el <b>%</b> que se le compra y elige su <b>categoría wholesale</b>. La suma de % de cada fila debe dar <b>100%</b>. De ahí sale el <b>Costo/ud ponderado</b> (AUC × factor).</div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
-              <table className="vfix"><colgroup><col style={{ width: '300px' }} /><col style={{ width: '120px' }} /><col style={{ width: '90px' }} /><col style={{ width: '110px' }} /></colgroup>
+              <table className="vfix"><colgroup><col style={{ width: '210px' }} /><col style={{ width: '92px' }} />{wholesaleMarcas.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /></colgroup>
                 <thead>
-                  <tr><th className="l">Subcategoría Retail</th><th>Unidades (año)</th><th className="ya">Costo/ud</th><th>Costo</th></tr>
+                  <tr><th className="l">Subcategoría Retail</th><th>Unidades (año)</th>{wholesaleMarcas.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th></tr>
                 </thead>
                 <tbody>
-                  {cs.map((c) => { const sum = rowSum(c); const nF = marcasDeSub(c).length; return <tr key={c}>
+                  {cs.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; return <tr key={c}>
                     <td className="l sub2">{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}
                       <button title="Quitar subcategoría" onClick={() => delCat(t, c)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>
-                      <button title="Ir a configurar el mapa de abastecimiento" onClick={() => setComTab('mapa')} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: nF ? '#0f766e' : '#b45309', cursor: 'pointer', fontSize: 11 }}>🧭 {nF ? `${nF} fuente${nF > 1 ? 's' : ''}` : 'sin mapa'}</button>
-                      {nF > 0 && Math.round(sum) !== 100 && <span className="unit" style={{ color: '#b45309', marginLeft: 4 }} title="El mapa no suma 100%">⚠ {fmt(sum)}%</span>}
                     </td>
                     <td className="cell"><input value={vt[uaKey(t, c)] ?? ''} onChange={(e) => setUA(t, c, e.target.value)} inputMode="decimal" title={`${c} · unidades a comprar (año)`} style={{ width: '100%', textAlign: 'center' }} /></td>
-                    <td className="tot ya help-bulb" title={whAvg(c) > 0 ? `Costo/ud = $${whAvg(c).toFixed(2)} wholesale (ponderado del mapa) × ${factor().toFixed(2)} factor = $${(whAvg(c) * factor()).toFixed(2)}` : 'Sin mapa: define de qué marca/categoría se compra esta subcategoría.'}>{whAvg(c) > 0 ? (whAvg(c) * factor()).toFixed(2) : '—'}</td>
+                    {wholesaleMarcas.map((m) => { const p = pctOf(c, m); const faltaCat = p > 0 && !catOf(c, m); return <td key={m} style={{ padding: 4, verticalAlign: 'top', background: faltaCat ? '#ffe4f1' : undefined }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={`${c} ← ${m} · %`} style={{ display: 'block', width: '100%', boxSizing: 'border-box', border: '1px solid #f0e6c9', background: '#fdf7e3', borderRadius: 5, padding: '6px 4px', textAlign: 'center', font: 'inherit' }} />
+                        <select value={cellOf(c, m).cat ?? ''} onChange={(e) => setCell(c, m, 'cat', e.target.value)} title="Categoría wholesale de esta marca" style={{ display: 'block', width: '100%', boxSizing: 'border-box', fontSize: 10.5, padding: '4px 2px', borderRadius: 4, border: `1.5px solid ${faltaCat ? '#e11d8f' : '#cbd5e1'}`, color: catOf(c, m) ? '#111' : (faltaCat ? '#e11d8f' : '#94a3b8'), background: '#fff' }}>
+                          <option value="">{faltaCat ? '⚠ categoría' : '—'}</option>{(prodCats[m] || []).map((x) => <option key={x} value={x}>{x}</option>)}
+                        </select>
+                      </div>
+                    </td> })}
+                    <td className="tot" style={{ fontWeight: 800, color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%{!okSum && ' ⚠'}</td>
+                    <td className="tot ya help-bulb" title={whAvg(c) > 0 ? `Costo/ud = $${whAvg(c).toFixed(2)} wholesale (ponderado) × ${factor().toFixed(2)} = $${(whAvg(c) * factor()).toFixed(2)}` : 'Define las fuentes (marca · categoría · %).'}>{whAvg(c) > 0 ? (whAvg(c) * factor()).toFixed(2) : '—'}</td>
                     <td className="tot" style={{ color: '#b91c1c' }}>{fmt(rowCompraCosto(t, c))}</td>
                   </tr> })}
-                  <tr className="grandrow"><td className="l">Total {t}</td><td className="tot">{fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))}</td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCompras(t))}</td></tr>
+                  <tr className="grandrow"><td className="l">Total {t}</td><td className="tot">{fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))}</td>{wholesaleMarcas.map((_, i) => <td key={i} className="tot"></td>)}<td className="tot"></td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCompras(t))}</td></tr>
                 </tbody>
               </table>
             </div>
@@ -4254,35 +4294,6 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
         </div>
       </>}
 
-      {tab === 'comercial' && comTab === 'mapa' && <>
-        <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
-        {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-        <div className="panel">
-          <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Mapa de abastecimiento</span><div className="spacer"></div><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
-          <h3 style={{ color: col }}>Mapa de abastecimiento <span className="unit">(a qué marca · categoría wholesale le compra Retail cada subcategoría)</span></h3>
-          <div className="sub">En cada <b>subcategoría</b> (fila) y <b>marca</b> (columna), pon el <b>%</b> que se le compra y elige la <b>categoría</b> de esa marca. Cada fila debe sumar <b>100%</b> — si no, se marca en rojo. El costo usa el <b>AUC exacto</b> de esa marca·categoría × factor.</div>
-          {allSubcats.length === 0 ? <div className="sub">No hay subcategorías. Agrégalas en "Compras por tienda".</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table style={{ minWidth: (250 + wholesaleMarcas.length * 118 + 70) + 'px', borderCollapse: 'collapse' }}><colgroup><col style={{ width: '180px' }} />{wholesaleMarcas.map((_, i) => <col key={i} style={{ width: '118px' }} />)}<col style={{ width: '70px' }} /></colgroup>
-              <thead><tr><th className="l">Subcategoría</th>{wholesaleMarcas.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th></tr></thead>
-              <tbody>
-                {allSubcats.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; return <tr key={c}>
-                  <td className="l sub2">{c}{!RETAIL_CATS_DEF.includes(c) && <span className="newbadge">NUEVO</span>}</td>
-                  {wholesaleMarcas.map((m) => { const p = pctOf(c, m); const faltaCat = p > 0 && !catOf(c, m); return <td key={m} style={{ padding: 4, verticalAlign: 'top', borderBottom: '1px solid var(--line)', background: faltaCat ? '#ffe4f1' : undefined }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={`${c} ← ${m} · porcentaje`} style={{ display: 'block', width: '100%', boxSizing: 'border-box', border: '1px solid #f0e6c9', background: '#fdf7e3', borderRadius: 5, padding: '6px 4px', textAlign: 'center', font: 'inherit' }} />
-                      <select value={cellOf(c, m).cat ?? ''} onChange={(e) => setCell(c, m, 'cat', e.target.value)} title="Categoría de esta marca" style={{ display: 'block', width: '100%', boxSizing: 'border-box', fontSize: 10.5, padding: '4px 2px', borderRadius: 4, border: `1.5px solid ${faltaCat ? '#e11d8f' : '#cbd5e1'}`, color: catOf(c, m) ? '#111' : (faltaCat ? '#e11d8f' : '#94a3b8'), background: '#fff', fontWeight: faltaCat ? 700 : 400 }}>
-                        <option value="">{faltaCat ? '⚠ elige categoría' : '— categoría —'}</option>{(prodCats[m] || []).map((x) => <option key={x} value={x}>{x}</option>)}
-                      </select>
-                    </div>
-                  </td> })}
-                  <td className="tot" style={{ fontWeight: 800, color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%{!okSum && ' ⚠'}</td>
-                </tr> })}
-              </tbody>
-            </table>
-          </div>}
-          <div className="sub" style={{ marginTop: 6 }}>En cada celda: arriba el <b>%</b>, abajo la <b>categoría</b> de esa marca. Si pones % sin categoría, el menú queda con borde rosado. El costo usa el AUC exacto de esa marca·categoría × factor.</div>
-        </div>
-      </>}
 
       {tab === 'comercial' && comTab === 'ucv' && <>
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
@@ -4891,9 +4902,8 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
       feeds: <>el <b>P&L y Cash Flow Retail EB</b> (que suman a Energy Brands) · el vendedor <b>Intercompañía</b> en Ventas · la tienda <b>SINERGY</b> → P&L y Cash Flow de SINERGY.</>,
       where: <>Entra a <b style={{ color: '#0e7490' }}>Retail</b> (menú)</>,
       items: [
-        { t: 'Mapa de abastecimiento (qué marca/categoría surte cada subcategoría)', to: 'sbu:Retail', d: { retailTab: 'comercial', retailComTab: 'mapa' } },
-        { t: 'Compras por tienda: calendario (% de llegada por mes, suma 100%) + unidades anuales', to: 'sbu:Retail', d: { retailTab: 'comercial', retailComTab: 'mapa' } },
-        { t: 'Ventas por tienda: unidades vendidas por mes + % margen + % descuento (2026 es referencia, solo lectura)', to: 'sbu:Retail', d: { retailTab: 'comercial', retailComTab: 'ventas' } },
+        { t: 'Compras por tienda: calendario (% de llegada por mes) + unidades anuales + de qué marca·categoría wholesale se surte cada subcategoría (%, suma 100%)', to: 'sbu:Retail', d: { retailTab: 'comercial', retailComTab: 'ventas' } },
+        { t: 'Ventas por tienda: unidades vendidas por mes + % margen + % descuento (2026 es referencia, solo lectura)', to: 'sbu:Retail', d: { retailTab: 'comercial', retailComTab: 'ucv' } },
         { t: 'Gastos de tienda (EB) y gastos SINERGY', to: 'sbu:Retail', d: { retailTab: 'gastos' } },
         { t: 'Marketing Retail (EB) y Marketing SINERGY', to: 'sbu:Retail', d: { retailTab: 'mk' } },
         { t: 'Logística SINERGY', to: 'sbu:Retail', d: { retailTab: 'logistica' } },
@@ -5957,6 +5967,31 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
           <div className="sub">Clientes que tenían venta en el año base pero <b>no tienen plan 2028</b> cargado (ni unidades ni venta). Muestra cuántos son y cuánta venta neta representaban, para dimensionar la base que se dejó de atender.</div>
           {blk('2026', lost26, '#b45309')}
           {blk('2025', lost25, '#7c3aed')}
+        </div>
+      })()}
+      {!esT && (() => {
+        const sigue28 = (cli) => (cliU28[cli] || 0) > 0 || (cliV28[cli] || 0) > 0.5
+        const drop = Object.entries(cliV25).filter(([cli, v]) => v > 0.5 && !(cliV26[cli] > 0.5)).map(([cli, v]) => ({ cli, v })).sort((a, b) => b.v - a.v)
+        const dTot = drop.reduce((a, b) => a + b.v, 0)
+        const base25Tot = Object.values(cliV25).reduce((a, b) => a + (b > 0 ? b : 0), 0)
+        const base25N = Object.values(cliV25).filter((v) => v > 0.5).length
+        const base26N = Object.values(cliV26).filter((v) => v > 0.5).length
+        const pct = base25Tot > 0 ? dTot / base25Tot * 100 : 0
+        const vuelven = drop.filter((d) => sigue28(d.cli)).length
+        return <div style={{ marginTop: 18, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+          <h3 style={{ color: col, margin: '0 0 2px' }}>📉 Vendían en 2025 y ya no en 2026</h3>
+          <div className="sub">Clientes con venta en <b>2025</b> que <b>no vendieron en 2026</b> (se perdieron ese año). La columna <b>¿Sigue en 2028?</b> indica si volvieron al plan.</div>
+          {(base25N === 0 || base26N === 0)
+            ? <div className="sub" style={{ marginTop: 8 }}>Se necesita el histórico de <b>2025 y 2026</b> para este corte.</div>
+            : drop.length === 0
+              ? <div className="sub" style={{ marginTop: 8 }}>Ningún cliente de 2025 desapareció en 2026.</div>
+              : <>
+                <div className="sub" style={{ marginTop: 6, marginBottom: 6 }}><b style={{ color: '#b45309' }}>{drop.length}</b> de {base25N} clientes de 2025 no vendieron en 2026. Representaban <b style={{ color: '#b45309' }}>${fmt(dTot)}</b> ({pct.toFixed(1)}% de la venta neta 2025). <b style={{ color: 'var(--ok)' }}>{vuelven}</b> de ellos sí están en el plan 2028.</div>
+                <div className="tablewrap"><table style={{ width: '100%', tableLayout: 'fixed' }}><colgroup><col /><col style={{ width: '190px' }} /><col style={{ width: '120px' }} /><col style={{ width: '130px' }} /></colgroup>
+                  <thead><tr><th className="l">Cliente</th><th>Venta neta 2025</th><th>Peso 2025</th><th>¿Sigue en 2028?</th></tr></thead>
+                  <tbody>{drop.map(({ cli, v }) => <tr key={cli}><td className="l">{cli}</td><td className="tot" style={{ fontWeight: 700 }}>${fmt(v)}</td><td className="tot" style={{ color: 'var(--muted)' }}>{base25Tot > 0 ? (v / base25Tot * 100).toFixed(1) : '0'}%</td><td className="tot" style={{ color: sigue28(cli) ? 'var(--ok)' : 'var(--bad)', fontWeight: 700 }}>{sigue28(cli) ? 'Sí' : 'No'}</td></tr>)}</tbody>
+                </table></div>
+              </>}
         </div>
       })()}
       {!esT && (() => {
