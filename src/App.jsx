@@ -4349,7 +4349,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             </div>
           </> })()}
           {/* Resumen de todas las tiendas: unidades y costo (importación) */}
-          <div className="sub" style={{ fontWeight: 700, color: '#0f766e', margin: '14px 0 6px' }}>Resumen por tienda (todas) <span className="unit" style={{ fontWeight: 400 }}>— unidades a comprar y costo</span></div>
+          <div className="sub" style={{ fontWeight: 700, color: '#0f766e', margin: '14px 0 6px' }}>Resumen de compras por tienda</div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table><thead><tr><th className="l">Tienda</th><th>Unidades</th><th>Costo</th></tr></thead>
               <tbody>
