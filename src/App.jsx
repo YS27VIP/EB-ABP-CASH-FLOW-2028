@@ -3865,12 +3865,11 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const uaKey = (t, c) => `${t}||${c}||UA`                    // (modelo nuevo) unidades ANUALES por subcategoría/tienda
   const cmk = (t, c, f) => `${t}||${c}||${f}`                 // AUC / AUP / DESC (constante por fila)
   // Calendario de importaciones (Paso 1): % por mes (debe sumar 100). El split mensual de las compras lo determina este calendario.
-  // Calendario de importaciones POR TIENDA: % por mes (suma 100). Si una tienda no tiene calendario propio, usa el global viejo (IMPCAL||mi) como respaldo.
-  const hasStoreCal = (t) => MESES.some((_, mi) => { const v = vt[`IMPCAL||${t}||${mi}`]; return v != null && String(v).trim() !== '' })
-  const calPctRaw = (t, mi) => hasStoreCal(t) ? num(vt[`IMPCAL||${t}||${mi}`]) : num(vt[`IMPCAL||${mi}`])
-  const calPctTotT = (t) => MESES.reduce((a, _, mi) => a + calPctRaw(t, mi), 0)
-  const calFrac = (t, mi) => { const tot = calPctTotT(t); return tot > 0 ? calPctRaw(t, mi) / tot : 0 }
-  const setCal = (t, mi, v) => setVt((d) => { const n = { ...d }; const has = MESES.some((_, x) => { const z = d[`IMPCAL||${t}||${x}`]; return z != null && String(z).trim() !== '' }); if (!has) MESES.forEach((_, x) => { n[`IMPCAL||${t}||${x}`] = d[`IMPCAL||${x}`] ?? '' }); n[`IMPCAL||${t}||${mi}`] = v; return n })
+  // Calendario de importaciones GLOBAL (aplica a todas las tiendas): % por mes (debe sumar 100).
+  const calPctRaw = (mi) => num(vt[`IMPCAL||${mi}`])
+  const calPctTot = MESES.reduce((a, _, mi) => a + calPctRaw(mi), 0)
+  const calFrac = (mi) => calPctTot > 0 ? calPctRaw(mi) / calPctTot : 0
+  const setCal = (mi, v) => setVt((d) => ({ ...d, [`IMPCAL||${mi}`]: v }))
   // Disponibilidad de mercancía por marca = lo que PRODUCTO capturó en las temporadas (fecha XFD + tránsito). Solo indica EN QUÉ MESES está disponible cada marca (no cantidades), para que Retail decida cuándo importar.
   const [prodTemp, setProdTemp] = useState(() => { try { return JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}') } catch { return {} } })
   useEffect(() => { try { setProdTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } }, [empresa])
@@ -3881,7 +3880,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   // Unidades anuales por subcategoría (con migración: si aún no hay valor anual, suma lo que haya del modelo viejo por mes).
   const uAnual = (t, c) => { const a = vt[uaKey(t, c)]; if (a != null && String(a).trim() !== '') return num(a); return MESES.reduce((s, _, mi) => s + num(vt[cvk(t, c, mi)]), 0) }
   const setUA = (t, c, v) => setVt((d) => ({ ...d, [uaKey(t, c)]: v }))
-  const uMes = (t, c, mi) => uAnual(t, c) * calFrac(t, mi)       // unidades del mes = anuales × % del calendario de la tienda
+  const uMes = (t, c, mi) => uAnual(t, c) * calFrac(mi)       // unidades del mes = anuales × % del calendario global
   const setMeta = (t, c, f, v) => setVt((d) => ({ ...d, [cmk(t, c, f)]: v }))
   const rowUnits = (t, c) => uAnual(t, c)
   // Nuevo modelo: costo = AUC wholesale ponderado (del mapa) × factor global; venta = costo × (1+margen%) × (1−desc%)
@@ -4274,8 +4273,8 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
         <div className="panel">
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Compras por tienda</span><div className="spacer"></div><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Compras por tienda — 2028 <span className="unit">(unidades a comprar · Retail → Wholesale)</span></h3>
-          <PasoH n={1}>Compras por tienda <span className="unit" style={{ fontWeight: 400 }}>(por cada tienda: unidades ANUALES por subcategoría + calendario de importación)</span></PasoH>
-          <div className="sub">Escoge una <b>tienda</b> y captura, para esa tienda, las <b>unidades del año</b> por <b>subcategoría Retail</b> (definiendo de qué <b>marca · categoría wholesale</b> se surte, %, suma 100%) y su <b>calendario de importación</b> (% por mes). El costo = wholesale × factor, repartido por mes con el calendario de la tienda.</div>
+          <PasoH n={1}>Compras por tienda <span className="unit" style={{ fontWeight: 400 }}>(unidades ANUALES por subcategoría · por tienda · + calendario global de importación)</span></PasoH>
+          <div className="sub">Escoge una <b>tienda</b> y captura sus <b>unidades del año</b> por <b>subcategoría Retail</b> (definiendo de qué <b>marca · categoría wholesale</b> se surte, %, suma 100%). Abajo, el <b>calendario de importación</b> (global, una sola vez) define en qué meses llega la mercancía. El costo = wholesale × factor, repartido por mes con ese calendario.</div>
           <div className="toolbar" style={{ margin: '8px 0 2px', gap: 8, alignItems: 'center' }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Factor wholesale→Retail (×):</label>
             <input className="fillin" value={cf[fk('FACTOR', 0)] ?? ''} onChange={(e) => setCF('FACTOR', 0, e.target.value)} inputMode="decimal" placeholder="1.25" style={{ width: 70, textAlign: 'center' }} />
@@ -4319,7 +4318,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
               <button className="btn" onClick={() => addCat(t)}>➕ Agregar subcategoría</button>
             </div>
             {/* Captura de UNIDADES ANUALES A COMPRAR por subcategoría (el costo sale del mapa; el split mensual lo da el Paso 1) */}
-            <div className="sub" style={{ fontWeight: 700, margin: '4px 0 4px' }}>Unidades a comprar <span className="unit" style={{ fontWeight: 400 }}>(cantidad ANUAL · el split por mes lo da el calendario de la tienda, abajo)</span></div>
+            <div className="sub" style={{ fontWeight: 700, margin: '4px 0 4px' }}>Unidades a comprar <span className="unit" style={{ fontWeight: 400 }}>(cantidad ANUAL · el split por mes lo da el calendario global, abajo)</span></div>
             <div className="sub" style={{ marginBottom: 4 }}>Por cada subcategoría, en la <b>columna de la marca</b> que la surte pon el <b>%</b> que se le compra y elige su <b>categoría wholesale</b>. La suma de % de cada fila debe dar <b>100%</b>. De ahí sale el <b>Costo/ud ponderado</b> (AUC × factor).</div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
               <table className="vfix"><colgroup><col style={{ width: '230px' }} /><col style={{ width: '112px' }} />{mcs.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /></colgroup>
@@ -4348,18 +4347,18 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
                 </tbody>
               </table>
             </div>
-            {/* ---- Calendario de importaciones de ESTA tienda (% por mes · suma 100) ---- */}
-            <div className="sub" style={{ fontWeight: 700, color: col, margin: '14px 0 4px' }}>Calendario de importaciones — {t} <span className="unit" style={{ fontWeight: 400 }}>(% de la compra del año que llega cada mes · debe sumar 100%)</span></div>
-            <div className="tablewrap" style={{ overflowX: 'auto' }}>
-              <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}<col style={{ width: '70px' }} /></colgroup>
-                <thead><tr><th className="l">% importación</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Suma</th></tr></thead>
-                <tbody>
-                  <tr><td className="l sub2">% llega cada mes</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={vt[`IMPCAL||${t}||${mi}`] ?? (vt[`IMPCAL||${mi}`] ?? '')} onChange={(e) => setCal(t, mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>)}<td className="tot" style={{ fontWeight: 800, color: Math.abs(calPctTotT(t) - 100) < 0.5 ? '#0f766e' : '#b45309' }}>{fmt(calPctTotT(t))}%{Math.abs(calPctTotT(t) - 100) < 0.5 ? ' ✓' : ' ⚠'}</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div className="sub" style={{ marginTop: 4 }}>Define en qué meses llega la mercancía a <b>{t}</b>. Las <b>unidades anuales</b> de arriba se reparten por mes con este %. {Math.abs(calPctTotT(t) - 100) >= 0.5 && <b style={{ color: '#b45309' }}>Ojo: la suma debe ser 100%.</b>}</div>
           </> })()}
+          {/* ---- Calendario de importaciones GLOBAL (aplica a todas las tiendas · % por mes · suma 100) ---- */}
+          <div className="sub" style={{ fontWeight: 700, color: col, margin: '14px 0 4px' }}>Calendario de importaciones <span className="unit" style={{ fontWeight: 400 }}>(global · % de la compra del año que llega cada mes · debe sumar 100%)</span></div>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}<col style={{ width: '70px' }} /></colgroup>
+              <thead><tr><th className="l">% importación</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Suma</th></tr></thead>
+              <tbody>
+                <tr><td className="l sub2">% llega cada mes</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={vt[`IMPCAL||${mi}`] ?? ''} onChange={(e) => setCal(mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>)}<td className="tot" style={{ fontWeight: 800, color: Math.abs(calPctTot - 100) < 0.5 ? '#0f766e' : '#b45309' }}>{fmt(calPctTot)}%{Math.abs(calPctTot - 100) < 0.5 ? ' ✓' : ' ⚠'}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="sub" style={{ marginTop: 4 }}>El % define en qué meses llega la mercancía a <b>todas las tiendas</b>. Las <b>unidades anuales</b> de cada tienda se reparten por mes con este %. {Math.abs(calPctTot - 100) >= 0.5 && <b style={{ color: '#b45309' }}>Ojo: la suma debe ser 100%.</b>}</div>
           {/* ---- Espejo: disponibilidad de mercancía por marca (de PRODUCTO · fecha XFD + tránsito) ---- */}
           <div className="panel tight" style={{ marginTop: 10, marginBottom: 10 }}>
             <div className="toolbar" style={{ marginBottom: 2, alignItems: 'center' }}><div className="sub" style={{ fontWeight: 700, color: col, margin: 0 }}>📦 Disponibilidad de mercancía por marca <span className="unit" style={{ fontWeight: 400 }}>(lo que capturó Producto · fecha XFD + tránsito)</span></div><div className="spacer"></div><button className="btn" onClick={() => { try { setProdTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } }}>🔄 Actualizar</button></div>
