@@ -4348,29 +4348,20 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
               </table>
             </div>
           </> })()}
-          {/* Resumen de todas las tiendas: unidades y costo (importación) */}
-          <div className="sub" style={{ fontWeight: 700, color: '#0f766e', margin: '14px 0 6px' }}>Resumen de compras por tienda</div>
-          <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table><thead><tr><th className="l">Tienda</th><th>Unidades</th><th>Costo</th></tr></thead>
+          {/* ---- Paso 2: Resumen de compras por tienda (unidades por marca) ---- */}
+          <PasoH n={2}>Resumen de compras por tienda <span className="unit" style={{ fontWeight: 400 }}>(unidades a comprar por marca · por tienda)</span></PasoH>
+          {(() => { const resMcs = (storeMarcasAll().length ? storeMarcasAll() : wholesaleMarcas); const smu = (t, m) => catsOf(t).reduce((a, c) => a + uAnual(t, c) * (pctOf(c, m) / 100), 0); const colMarca = (m) => tiendas.reduce((a, t) => a + smu(t, m), 0)
+          return <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '170px' }} />{resMcs.map((_, i) => <col key={i} style={{ width: '92px' }} />)}<col style={{ width: '90px' }} /><col style={{ width: '95px' }} /></colgroup>
+              <thead><tr><th className="l">Tienda</th>{resMcs.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Total ud</th><th>Costo</th></tr></thead>
               <tbody>
-                {tiendas.map((t) => { const u = comprasUnidT(t), c = tCompras(t); return <tr key={t} onClick={() => setSelT(t)} style={{ cursor: 'pointer' }}><td className="l">{t}</td><td className="tot">{fmt(u)}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(c)}</td></tr> })}
-                <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(tiendas.reduce((a, t) => a + comprasUnidT(t), 0))}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCompras)}</td></tr>
+                {tiendas.map((t) => <tr key={t} onClick={() => setSelT(t)} style={{ cursor: 'pointer' }}><td className="l">{t}</td>{resMcs.map((m) => { const u = smu(t, m); return <td key={m} className="tot">{u > 0 ? fmt(u) : '—'}</td> })}<td className="tot">{fmt(comprasUnidT(t))}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCompras(t))}</td></tr>)}
+                <tr className="grandrow"><td className="l">TOTAL Retail</td>{resMcs.map((m) => <td key={m} className="tot">{fmt(colMarca(m))}</td>)}<td className="tot">{fmt(tiendas.reduce((a, t) => a + comprasUnidT(t), 0))}</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCompras)}</td></tr>
               </tbody>
             </table>
-          </div>
+          </div> })()}
 
-          {/* Importaciones Retail → Wholesale (calculadas del mapa) */}
-          <div className="sub" style={{ fontWeight: 700, color: col, margin: '18px 0 6px', borderTop: '1px solid var(--line)', paddingTop: 12 }}>Importaciones Retail → Wholesale</div>
-          <div className="sub">Cantidades a importar por marca y mes = unidades a comprar × AUC wholesale (de Producto) × factor ({factor().toFixed(2)}).</div>
-          <div className="tablewrap" style={{ overflowX: 'auto' }}>
-            <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '95px' }} /></colgroup>
-              <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">2027 $</th></tr></thead>
-              <tbody>
-                {wholesaleMarcas.map((m) => { const ref = RETAIL_IMP_2027[m] || {}; const an = impMarcaAnual(m); return <tr key={m}><td className="l" title={ref.c ? `Referencia 2027: ${fmt(ref.u)} ud · $${fmt(ref.c)}` : undefined}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(impMarcaMes(m, mi))}</td>)}<td className="tot">{fmt(an)}</td><td className="tot ya">{fmt(ref.c)}</td></tr> })}
-                <tr className="grandrow"><td className="l">TOTAL Retail</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(impMes(mi))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + impMes(mi), 0))}</td><td className="tot ya">{fmt(RETAIL_MARCAS.reduce((a, m) => a + (RETAIL_IMP_2027[m]?.c || 0), 0))}</td></tr>
-              </tbody>
-            </table>
-          </div>
+          {/* Detalle del costo por marca · categoría */}
           <div className="sub" style={{ fontWeight: 700, color: col, margin: '16px 0 6px' }}>Detalle del costo por marca · categoría <span className="unit" style={{ fontWeight: 400 }}>(AUC wholesale × factor {fmt(factor())})</span></div>
           {mapPairs.length === 0 ? <div className="sub">Aún no hay % en el <b>Mapa de abastecimiento</b>. Configúralo para ver el detalle.</div> : <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table><thead><tr><th className="l">Marca</th><th className="l">Categoría wholesale</th><th>AUC /ud</th><th>× Factor</th><th>Costo /ud</th><th>Importación 2028 $</th></tr></thead>
@@ -4406,6 +4397,19 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             </table>
           </div>
           <div className="sub" style={{ marginTop: 4 }}>El % define en qué meses llega la mercancía a <b>todas las tiendas</b>. Las <b>unidades anuales</b> de cada tienda se reparten por mes con este %. {Math.abs(calPctTot - 100) >= 0.5 && <b style={{ color: '#b45309' }}>Ojo: la suma debe ser 100%.</b>}</div>
+
+          {/* ---- Importaciones Retail → Wholesale (calculadas del mapa) ---- */}
+          <div className="sub" style={{ fontWeight: 700, color: col, margin: '18px 0 6px', borderTop: '1px solid var(--line)', paddingTop: 12 }}>Importaciones Retail → Wholesale</div>
+          <div className="sub">Cantidades a importar por marca y mes = unidades a comprar × AUC wholesale (de Producto) × factor ({factor().toFixed(2)}).</div>
+          <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '95px' }} /></colgroup>
+              <thead><tr><th className="l">Marca</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th><th className="ya">2027 $</th></tr></thead>
+              <tbody>
+                {wholesaleMarcas.map((m) => { const ref = RETAIL_IMP_2027[m] || {}; const an = impMarcaAnual(m); return <tr key={m}><td className="l" title={ref.c ? `Referencia 2027: ${fmt(ref.u)} ud · $${fmt(ref.c)}` : undefined}><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(impMarcaMes(m, mi))}</td>)}<td className="tot">{fmt(an)}</td><td className="tot ya">{fmt(ref.c)}</td></tr> })}
+                <tr className="grandrow"><td className="l">TOTAL Retail</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(impMes(mi))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + impMes(mi), 0))}</td><td className="tot ya">{fmt(RETAIL_MARCAS.reduce((a, m) => a + (RETAIL_IMP_2027[m]?.c || 0), 0))}</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </>}
 
