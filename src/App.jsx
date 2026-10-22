@@ -3866,12 +3866,11 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const uaKey = (t, c) => `${t}||${c}||UA`                    // (modelo nuevo) unidades ANUALES por subcategoría/tienda
   const cmk = (t, c, f) => `${t}||${c}||${f}`                 // AUC / AUP / DESC (constante por fila)
   // Calendario de DESPACHO por MARCA: % por mes (debe sumar 100 por marca). Define en qué meses se despacha cada marca.
-  // Si una marca no tiene calendario propio, usa el global viejo (IMPCAL||mi) como respaldo.
-  const hasCalM = (m) => MESES.some((_, x) => { const z = vt[`IMPCAL||${m}||${x}`]; return z != null && String(z).trim() !== '' })
-  const calPctRaw = (m, mi) => hasCalM(m) ? num(vt[`IMPCAL||${m}||${mi}`]) : num(vt[`IMPCAL||${mi}`])
+  // Empieza en blanco: cada marca la llena el equipo. Mientras una marca no tenga calendario, sus despachos quedan en 0.
+  const calPctRaw = (m, mi) => num(vt[`IMPCAL||${m}||${mi}`])
   const calPctTotM = (m) => MESES.reduce((a, _, mi) => a + calPctRaw(m, mi), 0)
   const calFracM = (m, mi) => { const tot = calPctTotM(m); return tot > 0 ? calPctRaw(m, mi) / tot : 0 }
-  const setCalM = (m, mi, v) => setVt((d) => { const n = { ...d }; const has = MESES.some((_, x) => { const z = d[`IMPCAL||${m}||${x}`]; return z != null && String(z).trim() !== '' }); if (!has) MESES.forEach((_, x) => { n[`IMPCAL||${m}||${x}`] = d[`IMPCAL||${x}`] ?? '' }); n[`IMPCAL||${m}||${mi}`] = v; return n })
+  const setCalM = (m, mi, v) => setVt((d) => ({ ...d, [`IMPCAL||${m}||${mi}`]: v }))
   // Disponibilidad de mercancía por marca = lo que PRODUCTO capturó en las temporadas (fecha XFD + tránsito). Solo indica EN QUÉ MESES está disponible cada marca (no cantidades), para que Retail decida cuándo importar.
   const [prodTemp, setProdTemp] = useState(() => { try { return JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}') } catch { return {} } })
   useEffect(() => { try { setProdTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } }, [empresa])
@@ -4402,7 +4401,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}<col style={{ width: '70px' }} /></colgroup>
               <thead><tr><th className="l">% despacho</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Suma</th></tr></thead>
               <tbody>
-                {wholesaleMarcas.map((m) => { const tot = calPctTotM(m); return <tr key={m}><td className="l sub2"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={vt[`IMPCAL||${m}||${mi}`] ?? (vt[`IMPCAL||${mi}`] ?? '')} onChange={(e) => setCalM(m, mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>)}<td className="tot" style={{ fontWeight: 800, color: Math.abs(tot - 100) < 0.5 ? '#0f766e' : '#b45309' }}>{fmt(tot)}%{Math.abs(tot - 100) < 0.5 ? ' ✓' : ' ⚠'}</td></tr> })}
+                {wholesaleMarcas.map((m) => { const tot = calPctTotM(m); return <tr key={m}><td className="l sub2"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(m), marginRight: 7 }}></span>{m}</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={vt[`IMPCAL||${m}||${mi}`] ?? ''} onChange={(e) => setCalM(m, mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>)}<td className="tot" style={{ fontWeight: 800, color: Math.abs(tot - 100) < 0.5 ? '#0f766e' : '#b45309' }}>{fmt(tot)}%{Math.abs(tot - 100) < 0.5 ? ' ✓' : ' ⚠'}</td></tr> })}
               </tbody>
             </table>
           </div>
