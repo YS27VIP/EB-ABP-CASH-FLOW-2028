@@ -3861,7 +3861,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const [ucvAll, setUcvAll] = useState(false) // Ventas por tienda: ver TODAS (consolidado) vs una tienda
   useEffect(() => { try { const t = JSON.parse(localStorage.getItem(`retail_tiendas_${empresa}`) || 'null'); if (Array.isArray(t) && t.length) setTiendas(t) } catch { } try { setCats(JSON.parse(localStorage.getItem(`retail_cats_${empresa}`) || '{}')) } catch { } try { setVt(JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}')) } catch { } setSelT(null) }, [empresa])
   const catsOf = (t) => (Array.isArray(cats[t]) && cats[t].length) ? cats[t] : (RETAIL_SUBS_PRESET[t] || RETAIL_CATS_DEF)
-  const selStore = selT && tiendas.includes(selT) ? selT : (tiendas[0] || null)
+  const selStore = selT === '__TOTAL__' ? '__TOTAL__' : (selT && tiendas.includes(selT) ? selT : (tiendas[0] || null))
   const cvk = (t, c, mi) => `${t}||${c}||U||${mi}`           // (modelo viejo) unidades del mes
   const uaKey = (t, c) => `${t}||${c}||UA`                    // (modelo nuevo) unidades ANUALES por subcategoría/tienda
   const cmk = (t, c, f) => `${t}||${c}||${f}`                 // AUC / AUP / DESC (constante por fila)
@@ -4297,8 +4297,8 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
               return <>
                 <div className="toolbar" style={{ margin: '12px 0 6px' }}><span style={{ fontWeight: 800, color: '#7c3aed', fontSize: 15 }}>▣ Total Retail</span><span className="unit" style={{ marginLeft: 8 }}>Suma de todas las tiendas · solo lectura</span></div>
                 <div className="tablewrap" style={{ overflowX: 'auto' }}>
-                  <table className="vfix"><colgroup><col style={{ width: '230px' }} /><col style={{ width: '100px' }} />{mcs.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /></colgroup>
-                    <thead><tr><th className="l">Subcategoría Retail</th><th>Unidades (todas)</th>{mcs.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th></tr></thead>
+                  <table className="vfix"><colgroup><col style={{ width: '230px' }} /><col style={{ width: '100px' }} />{mcs.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /><col style={{ width: '72px' }} /></colgroup>
+                    <thead><tr><th className="l">Subcategoría Retail</th><th>Unidades (todas)</th>{mcs.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th><th>% Peso</th></tr></thead>
                     <tbody>
                       {subs.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; return <tr key={c}>
                         <td className="l sub2">{c}</td>
@@ -4307,8 +4307,9 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
                         <td className="tot" style={{ fontWeight: 800, color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%</td>
                         <td className="tot ya">{whAvg(c) > 0 ? (whAvg(c) * factor()).toFixed(2) : '—'}</td>
                         <td className="tot" style={{ color: '#b91c1c' }}>{fmt(cSub(c))}</td>
+                        <td className="tot" style={{ fontWeight: 700 }}>{totCompras > 0 ? (cSub(c) / totCompras * 100).toFixed(1) + '%' : '—'}</td>
                       </tr> })}
-                      <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(subs.reduce((a, c) => a + uSub(c), 0))}</td>{mcs.map((_, i) => <td key={i} className="tot"></td>)}<td className="tot"></td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCompras)}</td></tr>
+                      <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(subs.reduce((a, c) => a + uSub(c), 0))}</td>{mcs.map((_, i) => <td key={i} className="tot"></td>)}<td className="tot"></td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(totCompras)}</td><td className="tot" style={{ fontWeight: 700 }}>{totCompras > 0 ? '100%' : '—'}</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -4325,9 +4326,9 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             <div className="sub" style={{ fontWeight: 700, margin: '4px 0 4px' }}>Unidades a comprar <span className="unit" style={{ fontWeight: 400 }}>(cantidad ANUAL · el split por mes lo da el calendario global, abajo)</span></div>
             <div className="sub" style={{ marginBottom: 4 }}>Por cada subcategoría, en la <b>columna de la marca</b> que la surte pon el <b>%</b> que se le compra y elige su <b>categoría wholesale</b>. La suma de % de cada fila debe dar <b>100%</b>. De ahí sale el <b>Costo/ud ponderado</b> (AUC × factor).</div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
-              <table className="vfix"><colgroup><col style={{ width: '230px' }} /><col style={{ width: '112px' }} />{mcs.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /></colgroup>
+              <table className="vfix"><colgroup><col style={{ width: '230px' }} /><col style={{ width: '112px' }} />{mcs.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /><col style={{ width: '72px' }} /></colgroup>
                 <thead>
-                  <tr><th className="l">Subcategoría Retail</th><th>Unidades (año)</th>{mcs.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th></tr>
+                  <tr><th className="l">Subcategoría Retail</th><th>Unidades (año)</th>{mcs.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th><th>% Peso</th></tr>
                 </thead>
                 <tbody>
                   {cs.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; const esNuevoSub = !((RETAIL_SUBS_PRESET[t] || RETAIL_CATS_DEF).includes(c)); return <tr key={c}>
@@ -4346,8 +4347,9 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
                     <td className="tot" style={{ fontWeight: 800, color: okSum ? '#15803d' : '#b45309' }}>{fmt(sum)}%{!okSum && ' ⚠'}</td>
                     <td className="tot ya help-bulb" title={whAvg(c) > 0 ? `Costo/ud = $${whAvg(c).toFixed(2)} wholesale (ponderado) × ${factor().toFixed(2)} = $${(whAvg(c) * factor()).toFixed(2)}` : 'Define las fuentes (marca · categoría · %).'}>{whAvg(c) > 0 ? (whAvg(c) * factor()).toFixed(2) : '—'}</td>
                     <td className="tot" style={{ color: '#b91c1c' }}>{fmt(rowCompraCosto(t, c))}</td>
+                    <td className="tot" style={{ fontWeight: 700 }}>{tCompras(t) > 0 ? (rowCompraCosto(t, c) / tCompras(t) * 100).toFixed(1) + '%' : '—'}</td>
                   </tr> })}
-                  <tr className="grandrow"><td className="l">Total {t}</td><td className="tot">{fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))}</td>{mcs.map((_, i) => <td key={i} className="tot"></td>)}<td className="tot"></td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCompras(t))}</td></tr>
+                  <tr className="grandrow"><td className="l">Total {t}</td><td className="tot">{fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))}</td>{mcs.map((_, i) => <td key={i} className="tot"></td>)}<td className="tot"></td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCompras(t))}</td><td className="tot" style={{ fontWeight: 700 }}>{tCompras(t) > 0 ? '100%' : '—'}</td></tr>
                 </tbody>
               </table>
             </div>
