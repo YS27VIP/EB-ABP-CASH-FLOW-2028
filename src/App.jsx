@@ -4273,8 +4273,8 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
         <div className="panel">
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Compras por tienda</span><div className="spacer"></div><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Compras por tienda — 2028 <span className="unit">(unidades a comprar · Retail → Wholesale)</span></h3>
-          <PasoH n={1}>Compras por tienda <span className="unit" style={{ fontWeight: 400 }}>(unidades ANUALES por subcategoría · por tienda · + calendario global de importación)</span></PasoH>
-          <div className="sub">Escoge una <b>tienda</b> y captura sus <b>unidades del año</b> por <b>subcategoría Retail</b> (definiendo de qué <b>marca · categoría wholesale</b> se surte, %, suma 100%). Abajo, el <b>calendario de importación</b> (global, una sola vez) define en qué meses llega la mercancía. El costo = wholesale × factor, repartido por mes con ese calendario.</div>
+          <PasoH n={1}>Compras por tienda <span className="unit" style={{ fontWeight: 400 }}>(unidades ANUALES por subcategoría · por tienda · + calendario global de despacho)</span></PasoH>
+          <div className="sub">Escoge una <b>tienda</b> y captura sus <b>unidades del año</b> por <b>subcategoría Retail</b> (definiendo de qué <b>marca · categoría wholesale</b> se surte, %, suma 100%). Abajo, el <b>calendario de despacho</b> (global, una sola vez) define en qué meses llega la mercancía. El costo = wholesale × factor, repartido por mes con ese calendario.</div>
           <div className="toolbar" style={{ margin: '8px 0 2px', gap: 8, alignItems: 'center' }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Factor wholesale→Retail (×):</label>
             <input className="fillin" value={cf[fk('FACTOR', 0)] ?? ''} onChange={(e) => setCF('FACTOR', 0, e.target.value)} inputMode="decimal" placeholder="1.25" style={{ width: 70, textAlign: 'center' }} />
@@ -4349,7 +4349,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             </div>
           </> })()}
           {/* ---- Calendario de importaciones GLOBAL (aplica a todas las tiendas · % por mes · suma 100) ---- */}
-          <div className="sub" style={{ fontWeight: 700, color: col, margin: '14px 0 4px' }}>Calendario de importaciones <span className="unit" style={{ fontWeight: 400 }}>(global · % de la compra del año que llega cada mes · debe sumar 100%)</span></div>
+          <div className="sub" style={{ fontWeight: 700, color: col, margin: '14px 0 4px' }}>Calendario de despacho <span className="unit" style={{ fontWeight: 400 }}>(global · % de la compra del año que llega cada mes · debe sumar 100%)</span></div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table className="vfix"><colgroup><col style={{ width: '150px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '56px' }} />)}<col style={{ width: '70px' }} /></colgroup>
               <thead><tr><th className="l">% importación</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Suma</th></tr></thead>
