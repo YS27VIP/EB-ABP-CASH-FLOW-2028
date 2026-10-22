@@ -3881,6 +3881,11 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   // Vista de la tabla de importaciones: Valor ($) o Unidades
   const [impView, setImpView] = useState('usd')
   const interUnidAnual = (m) => MESES.reduce((a, _, mi) => a + interUnidMes(m, mi), 0)
+  // TRM (COP por USD) por mes + selector de moneda para la tabla de Ventas por tienda
+  const [curView, setCurView] = useState('usd')
+  const trm = (mi) => num(vt[`TRM||${mi}`])
+  const setTRM = (mi, v) => setVt((d) => ({ ...d, [`TRM||${mi}`]: v }))
+  const toCur = (usd, mi) => curView === 'cop' ? usd * trm(mi) : usd   // convierte un valor $ del mes mi a la moneda elegida
   // Unidades anuales por subcategoría (con migración: si aún no hay valor anual, suma lo que haya del modelo viejo por mes).
   const uAnual = (t, c) => { const a = vt[uaKey(t, c)]; if (a != null && String(a).trim() !== '') return num(a); return MESES.reduce((s, _, mi) => s + num(vt[cvk(t, c, mi)]), 0) }
   const setUA = (t, c, v) => setVt((d) => ({ ...d, [uaKey(t, c)]: v }))
@@ -4474,35 +4479,51 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           })()}
           {!ucvAll && selStore && (() => {
             const t = selStore
-            const venta28 = (mi) => storeVentaM(t, mi), costo28 = (mi) => storeCostoM(t, mi)
+            const venta28 = (mi) => toCur(storeVentaM(t, mi), mi), costo28 = (mi) => toCur(storeCostoM(t, mi), mi)
             const sum = (fn) => MESES.reduce((a, _, mi) => a + fn(mi), 0)
             const cell = (val, set, color) => MESES.map((_, mi) => <td key={mi} className="cell ya"><input value={val(mi)} onChange={(e) => set(mi, e.target.value)} inputMode="decimal" placeholder="0" style={color ? { color } : undefined} /></td>)
             const calcRow = (lbl, fn, color, bold) => <tr className={bold ? 'grandrow' : undefined}><td className="l sub2" style={{ color, fontWeight: bold ? 800 : undefined }}>{lbl}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color, fontWeight: bold ? 800 : undefined }}>{fmt(fn(mi))}</td>)}<td className="tot" style={{ color, fontWeight: 800 }}>{fmt(sum(fn))}</td></tr>
-            return <div className="tablewrap" style={{ overflowX: 'auto' }}>
+            const u$ = curView === 'cop' ? '(COP)' : '($)'
+            return <>
+              <div className="toolbar" style={{ margin: '0 0 8px', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Moneda:</span>
+                {[['usd', 'USD ($)'], ['cop', 'COP (pesos)']].map(([k, lbl]) => <button key={k} className={'seg' + (curView === k ? ' active' : '')} onClick={() => setCurView(k)} style={curView === k ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{lbl}</button>)}
+                {curView === 'cop' && <span className="unit">Los valores en $ se convierten con el TRM de cada mes (abajo).</span>}
+              </div>
+              <div className="tablewrap" style={{ overflowX: 'auto', marginBottom: 10 }}>
+                <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '92px' }} /></colgroup>
+                  <thead><tr><th className="l">💱 TRM (COP por USD)</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Prom.</th></tr></thead>
+                  <tbody>
+                    <tr><td className="l sub2" style={{ color: '#0f766e', fontWeight: 700 }}>TRM por mes</td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={vt[`TRM||${mi}`] ?? ''} onChange={(e) => setTRM(mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>)}<td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{(() => { const vals = MESES.map((_, mi) => trm(mi)).filter((x) => x > 0); return vals.length ? fmt(vals.reduce((a, b) => a + b, 0) / vals.length) : '—' })()}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="tablewrap" style={{ overflowX: 'auto' }}>
               <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '92px' }} /></colgroup>
-                <thead><tr><th className="l">🏬 {t}</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
+                <thead><tr><th className="l">🏬 {t} <span className="unit">{u$}</span></th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
                 <tbody>
                   <tr className="secrow"><td colSpan={14}>2028 · venta neta = costo × (1 + %margen) × (1 − %descuento)</td></tr>
                   <tr><td className="l sub2" style={{ color: '#1d4ed8', fontWeight: 700 }}>① Unidades 2028 (manual)</td>{cell((mi) => vt[`${t}||SU||${mi}`] ?? '', (mi, v) => setSell(t, mi, v), '#1d4ed8')}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(sum((mi) => sellU(t, mi)))}</td></tr>
-                  {calcRow('② Costo ($)', costo28, '#b91c1c')}
+                  {calcRow(`② Costo ${u$}`, costo28, '#b91c1c')}
                   <tr><td className="l sub2" style={{ color: '#b45309' }}>③ % Descuento</td>{cell((mi) => vt[`${t}||DESC||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||DESC||${mi}`]: v })), '#b45309')}<td className="tot">—</td></tr>
                   <tr><td className="l sub2" style={{ color: '#15803d' }}>④ % Margen</td>{cell((mi) => vt[`${t}||MARGEN||${mi}`] ?? '', (mi, v) => setVt((d) => ({ ...d, [`${t}||MARGEN||${mi}`]: v })), '#15803d')}<td className="tot">—</td></tr>
-                  {calcRow('= Venta neta 2028 ($)', venta28, '#15803d', true)}
-                  {calcRow('= Utilidad bruta ($)', (mi) => venta28(mi) - costo28(mi), '#0f766e', true)}
+                  {calcRow(`= Venta neta 2028 ${u$}`, venta28, '#15803d', true)}
+                  {calcRow(`= Utilidad bruta ${u$}`, (mi) => venta28(mi) - costo28(mi), '#0f766e', true)}
                   <tr className="secrow"><td colSpan={14}>COMPRAS 2028 (por calendario de despacho)</td></tr>
                   {calcRow('📦 Compras (unidades)', (mi) => catsOf(t).reduce((a, c) => a + uMes(t, c, mi), 0), '#7c3aed')}
-                  {calcRow('📦 Compras ($)', (mi) => comprasCostoMes(t, mi), '#7c3aed')}
+                  {calcRow(`📦 Compras ${u$}`, (mi) => toCur(comprasCostoMes(t, mi), mi), '#7c3aed')}
                   <tr className="secrow"><td colSpan={14}>REFERENCIA 2026 (🪞)</td></tr>
                   <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Unidades 2026</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(u26m(t, mi))}</td>)}<td className="tot">{fmt(sum((mi) => u26m(t, mi)))}</td></tr>
-                  <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Venta neta 2026 ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(vn26m(t, mi))}</td>)}<td className="tot">{fmt(sum((mi) => vn26m(t, mi)))}</td></tr>
+                  <tr><td className="l sub2" style={{ color: 'var(--muted)' }}>Venta neta 2026 {u$}</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: 'var(--muted)' }}>{fmt(toCur(vn26m(t, mi), mi))}</td>)}<td className="tot">{fmt(sum((mi) => toCur(vn26m(t, mi), mi)))}</td></tr>
                   <tr className="secrow"><td colSpan={14}>CRECIMIENTO 2028 vs 2026</td></tr>
                   {(() => { const pc = (a, b) => b > 0 ? ((a - b) / b * 100) : null; const cell2 = (a, b) => { const p = pc(a, b); return <td className="tot" style={{ color: p == null ? 'var(--muted)' : p >= 0 ? '#15803d' : '#b91c1c' }}>{p == null ? '—' : (p >= 0 ? '+' : '') + p.toFixed(1) + '%'}</td> }; return <>
                     <tr><td className="l sub2" style={{ color: '#1d4ed8' }}>Crec. Unidades %</td>{MESES.map((_, mi) => <Fragment2 key={mi}>{cell2(sellU(t, mi), u26m(t, mi))}</Fragment2>)}{cell2(sum((mi) => sellU(t, mi)), sum((mi) => u26m(t, mi)))}</tr>
-                    <tr><td className="l sub2" style={{ color: '#15803d' }}>Crec. Venta neta %</td>{MESES.map((_, mi) => <Fragment2 key={mi}>{cell2(venta28(mi), vn26m(t, mi))}</Fragment2>)}{cell2(sum(venta28), sum((mi) => vn26m(t, mi)))}</tr>
+                    <tr><td className="l sub2" style={{ color: '#15803d' }}>Crec. Venta neta %</td>{MESES.map((_, mi) => <Fragment2 key={mi}>{cell2(storeVentaM(t, mi), vn26m(t, mi))}</Fragment2>)}{cell2(MESES.reduce((a, _, mi) => a + storeVentaM(t, mi), 0), MESES.reduce((a, _, mi) => a + vn26m(t, mi), 0))}</tr>
                   </> })()}
                 </tbody>
               </table>
             </div>
+            </>
           })()}
           {/* Resumen por tienda: venta neta, peso y crecimiento vs 2026 */}
           {(() => {
