@@ -3858,10 +3858,12 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const [cats, setCats] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_cats_${empresa}`) || '{}') } catch { return {} } })
   const [vt, setVt] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}') } catch { return {} } })
   const [selT, setSelT] = useState(null)
+  const [selMK, setSelMK] = useState(null) // Marketing Retail: tienda seleccionada (o '__TOTAL__')
   const [ucvAll, setUcvAll] = useState(false) // Ventas por tienda: ver TODAS (consolidado) vs una tienda
   useEffect(() => { try { const t = JSON.parse(localStorage.getItem(`retail_tiendas_${empresa}`) || 'null'); if (Array.isArray(t) && t.length) setTiendas(t) } catch { } try { setCats(JSON.parse(localStorage.getItem(`retail_cats_${empresa}`) || '{}')) } catch { } try { setVt(JSON.parse(localStorage.getItem(`retail_ventas_${empresa}`) || '{}')) } catch { } setSelT(null) }, [empresa])
   const catsOf = (t) => (Array.isArray(cats[t]) && cats[t].length) ? cats[t] : (RETAIL_SUBS_PRESET[t] || RETAIL_CATS_DEF)
   const selStore = selT === '__TOTAL__' ? '__TOTAL__' : (selT && tiendas.includes(selT) ? selT : (tiendas[0] || null))
+  const selMKStore = selMK === '__TOTAL__' ? '__TOTAL__' : (selMK && tiendas.includes(selMK) ? selMK : (tiendas[0] || '(Retail)'))
   const cvk = (t, c, mi) => `${t}||${c}||U||${mi}`           // (modelo viejo) unidades del mes
   const uaKey = (t, c) => `${t}||${c}||UA`                    // (modelo nuevo) unidades ANUALES por subcategoría/tienda
   const cmk = (t, c, f) => `${t}||${c}||${f}`                 // AUC / AUP / DESC (constante por fila)
@@ -3939,7 +3941,8 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
     const isRetail = (r) => upper(r[0]) === upper(empresa) && upper(r[3]) === '(RETAIL)'
     const esVj = (r) => String(r[1] || '').toUpperCase().startsWith('VIAJES')
     const vjF = (tb) => (out[tb] || []).filter((r) => isRetail(r) && esVj(r))
-    const nmk = (out['Cap_Marketing'] || []).filter((r) => isRetail(r) && !esVj(r))
+    const esMkRetail = (r) => upper(r[0]) === upper(empresa) && !esVj(r) && (upper(r[3]) === '(RETAIL)' || tiendas.some((t) => upper(t) === upper(r[3]))) // marketing Retail: legado '(RETAIL)' + por tienda
+    const nmk = (out['Cap_Marketing'] || []).filter((r) => esMkRetail(r))
     const nvj = tabs.flatMap((tb) => (out[tb] || []).filter((r) => isRetail(r) && esVj(r)))
     const nVjArea = { ventas: vjF('Cap_Ventas'), producto: vjF('Cap_Producto'), marketing: vjF('Cap_Marketing'), director: vjF('Cap_Director') }
     const nprod = (out['Cap_Producto'] || []).filter((r) => upper(r[0]) === upper(empresa))
@@ -4119,8 +4122,30 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
               </tbody>
             </table></div>
           </div> })()}
-        <RoleForm key="retail-mk" role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} capTitle="MARKETING Retail — ¿quién paga cada rubro? (% EB / % SINERGY al final)" splitCfg={{ eb: mkSplit, setEb: setMkSplitV, labels: ['EB', 'SINERGY'], colors: [col, '#be185d'], onSave: async () => { try { await guardarMkSplit() } catch { } } }} />
-        <div className="sub" style={{ margin: '6px 2px 0' }}>En la tabla de arriba, las dos últimas columnas (<b style={{ color: col }}>% EB</b> / <b style={{ color: '#be185d' }}>% SINERGY</b>) definen quién paga cada rubro (suman 100%). Eso reparte el marketing hacia los dos bloques siguientes.</div>
+        {/* Selector de tienda para la captura de Marketing Retail (+ Total). Si agregas una tienda en Ventas, aparece aquí. */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '12px 0 8px' }}>
+          {tiendas.map((t) => <button key={t} className={'seg' + (selMKStore === t ? ' active' : '')} onClick={() => setSelMK(t)} style={selMKStore === t ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{t}{esTiendaNueva(t) && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 800 }}>NUEVA</span>}</button>)}
+          <button key="__TOTAL__" className={'seg' + (selMKStore === '__TOTAL__' ? ' active' : '')} onClick={() => setSelMK('__TOTAL__')} style={selMKStore === '__TOTAL__' ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : { border: '1.5px solid #7c3aed', color: '#7c3aed', background: '#fff', fontWeight: 800 }}>▣ Total</button>
+        </div>
+        {selMKStore === '__TOTAL__' ? (() => {
+          const rubros = [...new Set(capRows.mk.map((r) => mkRubroKey(r)).filter(Boolean))]
+          const rubroMes = (k, mi) => capRows.mk.filter((r) => mkRubroKey(r) === k).reduce((a, r) => a + num(r[4 + mi]), 0)
+          const rubroAn = (k) => MESES.reduce((a, _, mi) => a + rubroMes(k, mi), 0)
+          return <div className="panel" style={{ marginTop: 0 }}>
+            <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}><span style={{ fontWeight: 800, color: '#7c3aed', fontSize: 15 }}>▣ Total Marketing Retail</span><span className="unit" style={{ marginLeft: 8 }}>Suma de todas las tiendas · solo lectura</span><div className="spacer"></div><button className="btn" onClick={() => reloadCaps()}>🔄 Actualizar</button></div>
+            <div className="tablewrap" style={{ overflowX: 'auto' }}>
+              <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '70px' }} /><col style={{ width: '80px' }} /></colgroup>
+                <thead><tr><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th><th style={{ color: col }}>% EB</th><th style={{ color: '#be185d' }}>% SINERGY</th></tr></thead>
+                <tbody>
+                  {rubros.length === 0 && <tr><td className="l sub2" colSpan={16} style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Aún no hay marketing capturado por tienda. Elige una tienda y captura.</td></tr>}
+                  {rubros.map((k) => { const eb = ebPctOf(k); return <tr key={k}><td className="l sub2">{k}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(rubroMes(k, mi))}</td>)}<td className="tot">{fmt(rubroAn(k))}</td><td className="tot" style={{ color: col, fontWeight: 700 }}>{eb.toFixed(0)}%</td><td className="tot" style={{ color: '#be185d', fontWeight: 700 }}>{(100 - eb).toFixed(0)}%</td></tr> })}
+                  <tr className="grandrow"><td className="l">TOTAL Retail</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mkMes(mi))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + mkMes(mi), 0))}</td><td className="tot"></td><td className="tot"></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div> })()
+          : <RoleForm key={'retail-mk-' + selMKStore} role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={selMKStore} onSaved={reloadCaps} capTitle={`MARKETING Retail — ${selMKStore} · ¿quién paga cada rubro? (% EB / % SINERGY al final)`} splitCfg={{ eb: mkSplit, setEb: setMkSplitV, labels: ['EB', 'SINERGY'], colors: [col, '#be185d'], onSave: async () => { try { await guardarMkSplit() } catch { } } }} />}
+        <div className="sub" style={{ margin: '6px 2px 0' }}>Captura el marketing <b>por tienda</b> (elige la tienda arriba; <b>▣ Total</b> suma todas). Las dos últimas columnas (<b style={{ color: col }}>% EB</b> / <b style={{ color: '#be185d' }}>% SINERGY</b>) definen quién paga cada rubro (suman 100%) y reparten el marketing hacia los dos bloques siguientes.</div>
         {/* ---- MK Retail EB (automático = % EB): alimenta P&L y Cash Flow Retail EB ---- */}
         <div className="panel" style={{ marginTop: 14, borderLeftColor: col }}>
           <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
