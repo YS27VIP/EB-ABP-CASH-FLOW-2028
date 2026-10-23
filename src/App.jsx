@@ -1964,7 +1964,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         const RT = (arr) => arr.reduce((a, b) => a + b, 0)
         const spacer = <tr style={{ height: 12 }}><td colSpan={14} style={{ border: 'none', padding: 0 }}></td></tr>
         return (
-          <div className="panel">
+          <div className="panel" style={{ display: sbu === '__ALL__' ? 'none' : undefined }}>
             <h3>Costos logísticos — detalle {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(🪞 espejo · lo llena Logística por marca)</span></h3>
             <div className="sub"><b style={{ color: '#1d4ed8' }}>Azul</b> = costo logístico de la venta (% × costo de venta) · <b style={{ color: '#0f766e' }}>Verde</b> = muestras ($/ud × unidades) · <b style={{ color: '#b45309' }}>Ámbar</b> = mantenimiento (pendiente por CBM). El <b>Total</b> (venta + muestras) alimenta la línea <b>Logística</b> del Cash Flow.</div>
             {isTotal && <div className="tablewrap" style={{ marginBottom: 12, maxWidth: 560 }}>
