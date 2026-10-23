@@ -1333,7 +1333,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
 }
 
 /* ===== CASH FLOW: PSI + Cash Flow, 3 meses 2026 + proyección 2027 ===== */
-function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
+function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoHolding }) {
   const marcas = marcasDe(sbus)
   const [marca, setMarca] = useState(fixedMarca || (marcas[0] && marcas[0].marca) || '')
   useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
@@ -1619,7 +1619,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         </select></>}
         {isTotal && !fixedMarca && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbuLbl}</button>}
         <div className="spacer"></div>
-        {(() => { const ocultarAcc = isTotal && !finEdit && !soloVer; return ocultarAcc ? null : <>
+        {(() => { const ocultarAcc = espejoHolding; return ocultarAcc ? null : <>
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map(() => 0)])))); exportXlsx(aoa, `${role.tab}_CASHFLOW_Plantilla.xlsx`) }}>📄 Plantilla</button>
         {!soloVer && <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>}
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
@@ -1748,7 +1748,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       </div>
 
 
-      <div className="panel" style={{ display: sbu === '__ALL__' ? 'none' : undefined }}>
+      <div className="panel" style={{ display: espejoHolding ? 'none' : undefined }}>
         <h3>{role.label} — Término de cobros a los clientes <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): lo captura Finanzas por marca. Aquí solo se ve.')}</h3>
         {(isTotal || soloVer)
           ? <div className="note ok" style={{ marginBottom: 12 }}>🪞 <b>Espejo (solo lectura):</b> el saldo pendiente por cobrar del 2027 lo captura <b>Finanzas por cada marca</b>. Aquí solo ves el consolidado.</div>
@@ -1902,7 +1902,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         const corpUnid = MESES.map((_, m) => listaM.reduce((a, mca) => a + (esCorpMarca(mca) ? comprasUdMes(mca)[m] : 0), 0))
         const corpPago = MESES.map((_, m) => listaM.reduce((a, mca) => a + corpPagoMes(mca)[m], 0))
         return (
-          <div className="panel" style={{ display: sbu === '__ALL__' ? 'none' : undefined }}>
+          <div className="panel" style={{ display: espejoHolding ? 'none' : undefined }}>
             <h3>{role.label} — Condiciones comerciales con la marca {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(Cash Out)</span></h3>
             <div className="note" style={{ margin: '0 0 10px', background: '#f7f9fb', border: '1px solid var(--line)' }}>
               <div style={{ fontWeight: 800, marginBottom: 6 }}>Consideraciones del Cash Flow</div>
@@ -1964,7 +1964,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         const RT = (arr) => arr.reduce((a, b) => a + b, 0)
         const spacer = <tr style={{ height: 12 }}><td colSpan={14} style={{ border: 'none', padding: 0 }}></td></tr>
         return (
-          <div className="panel" style={{ display: sbu === '__ALL__' ? 'none' : undefined }}>
+          <div className="panel" style={{ display: espejoHolding ? 'none' : undefined }}>
             <h3>Costos logísticos — detalle {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(🪞 espejo · lo llena Logística por marca)</span></h3>
             <div className="sub"><b style={{ color: '#1d4ed8' }}>Azul</b> = costo logístico de la venta (% × costo de venta) · <b style={{ color: '#0f766e' }}>Verde</b> = muestras ($/ud × unidades) · <b style={{ color: '#b45309' }}>Ámbar</b> = mantenimiento (pendiente por CBM). El <b>Total</b> (venta + muestras) alimenta la línea <b>Logística</b> del Cash Flow.</div>
             {isTotal && <div className="tablewrap" style={{ marginBottom: 12, maxWidth: 560 }}>
@@ -2024,7 +2024,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         const tipD = (k, m, lbl) => `${lbl} · ${MESES[m].toUpperCase()} = unidades × AUC de su temporada 2028 (sin ponderar)\n${det[k][m].join('\n') || '(sin movimiento)'}`
         const pctAsig = totComp ? (totSal / totComp * 100) : 0
         return (
-          <div className="panel">
+          <div className="panel" style={{ display: espejoHolding ? 'none' : undefined }}>
             <h3>🪞 Compras 2028: asignado a cliente vs. stock {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`} <span className="unit">(unidades · consulta, solo lectura)</span></h3>
             <div className="sub">De las <b>compras 2028</b>, cuánto ya está <b>asignado a un cliente</b> (vendido) y cuánto <b>queda en stock</b>, mes a mes. Solo cuenta lo de las <b>temporadas de compra 2028</b> (SS28, FW28, SS29), no el stock de temporadas anteriores. El valor en <b>$</b> usa el <b>AUC de cada temporada 2028</b>, sin ponderar. (Las muestras no entran aquí.)</div>{HOVERTIP}
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', margin: '6px 0 14px' }}>
@@ -5329,7 +5329,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
           <button className={'seg' + (cfSbu === '__ALL__' ? ' active' : '')} onClick={() => setCfSbu('__ALL__')} style={cfSbu === '__ALL__' ? { background: '#1f2d3d', borderColor: '#1f2d3d', color: '#fff' } : {}}>▣ TODAS</button>
         </div>}
         {espejo
-          ? <CashFlowForm key="gcfALL" role={{ label: 'Cash Flow', tab: 'Cap_Finanzas' }} rubro={{ k: 'CASH FLOW', cash: true }} usuario="" empresa={empresa} sbus={sbus} fixedMarca="TOTAL::__ALL__" />
+          ? <CashFlowForm key="gcfALL" role={{ label: 'Cash Flow', tab: 'Cap_Finanzas' }} rubro={{ k: 'CASH FLOW', cash: true }} usuario="" empresa={empresa} sbus={sbus} fixedMarca="TOTAL::__ALL__" espejoHolding />
           : cfSbu === '__RETAILEB__' ? <RetailEBCashFlowView />
           : cfSbu && <CashFlowForm key={'gcf' + cfSbu} role={{ label: 'Cash Flow', tab: 'Cap_Finanzas' }} rubro={{ k: 'CASH FLOW', cash: true }} usuario="" empresa={empresa} sbus={cfSbu === '__ALL__' ? sbus : { [cfSbu]: sbus[cfSbu] || [] }} fixedMarca={`TOTAL::${cfSbu}`} />}
       </div>}
