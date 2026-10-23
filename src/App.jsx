@@ -4325,8 +4325,8 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           <PasoH n={1}>Compras por tienda</PasoH>
           <ol className="sub" style={{ margin: '4px 0 8px', paddingLeft: 20, lineHeight: 1.7 }}>
             <li><b>Escoge una tienda</b> y coloca las <b>compras</b> por <b>subcategoría Retail</b>.</li>
-            <li style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>Coloca el <b>Factor wholesale→Retail (×)</b>: <input className="fillin" value={cf[fk('FACTOR', 0)] ?? ''} onChange={(e) => setCF('FACTOR', 0, e.target.value)} inputMode="decimal" placeholder="1.25" style={{ width: 70, textAlign: 'center' }} /> <span>Costo de la venta = costo wholesale × {factor().toFixed(2)}. Si lo dejas vacío usa 1.25.</span></li>
-            <li>Por cada subcategoría, en la <b>columna de la marca</b> que la surte pon el <b>%</b> que se le compra y elige su <b>categoría wholesale</b>. La suma de % de cada fila debe dar <b>100%</b>. De ahí sale el <b>Costo/ud ponderado</b> (AUC × factor).</li>
+            <li>Coloca el <b>Factor wholesale→Retail (×)</b>: <input className="fillin" value={cf[fk('FACTOR', 0)] ?? ''} onChange={(e) => setCF('FACTOR', 0, e.target.value)} inputMode="decimal" placeholder="1.25" style={{ width: 70, textAlign: 'center', verticalAlign: 'middle' }} /> <span>Costo de la venta = costo wholesale × {factor().toFixed(2)}. Si lo dejas vacío usa 1.25.</span></li>
+            <li>Por cada subcategoría, en la <b>columna de la marca</b> que la surte pon el <b>%</b> que se le compra y elige su <b>categoría wholesale</b>. La suma de % de cada fila debe dar <b>100%</b>. El costo es ponderado en base al <b>% por categoría wholesale</b> asignado.</li>
           </ol>
           {/* Selector de tienda */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 4px' }}>
