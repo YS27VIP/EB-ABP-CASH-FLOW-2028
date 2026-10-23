@@ -1619,11 +1619,13 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         </select></>}
         {isTotal && !fixedMarca && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbuLbl}</button>}
         <div className="spacer"></div>
+        {(() => { const ocultarAcc = isTotal && !finEdit && !soloVer; return ocultarAcc ? null : <>
         <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map(() => 0)])))); exportXlsx(aoa, `${role.tab}_CASHFLOW_Plantilla.xlsx`) }}>📄 Plantilla</button>
         {!soloVer && <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>}
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
         {soloVer && <span className="note ok" style={{ margin: 0, padding: '6px 12px' }}>Solo lectura — esto lo llena Finanzas{esDirector ? ' · tú solo defines el plazo de los clientes nuevos (celdas amarillas)' : ''}</span>}
         {(!soloVer || esDirector) && <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : (esDirector ? '💾 Guardar plazos' : '💾 Guardar')}</button>}
+        </> })()}
       </div>
       <div className="panel">
         <h3>{role.label} — CASH FLOW{M$} <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer ? ESP('Espejo (solo lectura): estos valores los llena Finanzas en su Cash Flow. Aquí solo se ven.') : !finEdit && ESP('Otros ingresos/gastos, Cash Inicial y Costos Financieros son espejo (los llena Finanzas en su Cash Flow).')}</h3>
@@ -1746,7 +1748,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
       </div>
 
 
-      <div className="panel">
+      <div className="panel" style={{ display: sbu === '__ALL__' ? 'none' : undefined }}>
         <h3>{role.label} — Término de cobros a los clientes <span className="unit">({isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{!isTotal && !soloVer && <span className="fill-badge">✏️ para llenar</span>}{(isTotal || soloVer) && ESP('Espejo (solo lectura): lo captura Finanzas por marca. Aquí solo se ve.')}</h3>
         {(isTotal || soloVer)
           ? <div className="note ok" style={{ marginBottom: 12 }}>🪞 <b>Espejo (solo lectura):</b> el saldo pendiente por cobrar del 2027 lo captura <b>Finanzas por cada marca</b>. Aquí solo ves el consolidado.</div>
@@ -1900,7 +1902,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca }) {
         const corpUnid = MESES.map((_, m) => listaM.reduce((a, mca) => a + (esCorpMarca(mca) ? comprasUdMes(mca)[m] : 0), 0))
         const corpPago = MESES.map((_, m) => listaM.reduce((a, mca) => a + corpPagoMes(mca)[m], 0))
         return (
-          <div className="panel">
+          <div className="panel" style={{ display: sbu === '__ALL__' ? 'none' : undefined }}>
             <h3>{role.label} — Condiciones comerciales con la marca {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`}{M$} <span className="unit">(Cash Out)</span></h3>
             <div className="note" style={{ margin: '0 0 10px', background: '#f7f9fb', border: '1px solid var(--line)' }}>
               <div style={{ fontWeight: 800, marginBottom: 6 }}>Consideraciones del Cash Flow</div>
