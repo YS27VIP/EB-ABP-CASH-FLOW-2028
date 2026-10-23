@@ -4110,7 +4110,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
         {(() => { const vnMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0); const vnAn = MESES.reduce((a, _, mi) => a + vnMes(mi), 0); const mkAn = MESES.reduce((a, _, mi) => a + mkMes(mi), 0); const pctC = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
           return <div className="panel" style={{ marginBottom: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, paddingBottom: 8 }}>
             <h3>MARKETING sobre la venta — Retail <span className="unit">(venta = ventas por tienda)</span></h3>
-            <div className="sub">Cuánto pesa <b>Marketing total</b> (EB + SINERGY) sobre la <b>venta neta</b>. Este resumen es informativo: <b>no</b> impacta ningún P&L ni Cash Flow.</div>
+            <div className="sub">Cuánto pesa <b>Marketing total</b> (EB + SINERGY) sobre la <b>venta neta</b>. El total <b>SINERGY</b> impacta solo el <b>P&L y Cash Flow SINERGY</b>, y el total <b>Retail EB</b> impacta solo el <b>P&L y Cash Flow Retail EB</b>.</div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
               <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
               <tbody>
