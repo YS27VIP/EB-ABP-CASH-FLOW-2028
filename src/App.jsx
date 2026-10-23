@@ -4323,12 +4323,11 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Compras por tienda</span><div className="spacer"></div><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Compras por tienda — 2028 <span className="unit">(unidades a comprar · Retail → Wholesale)</span></h3>
           <PasoH n={1}>Compras por tienda</PasoH>
-          <div className="sub">Escoge una <b>tienda</b> y coloca las <b>compras</b> por <b>subcategoría Retail</b>. El costo = wholesale × factor, repartido por mes con el calendario de despacho.</div>
-          <div className="toolbar" style={{ margin: '8px 0 2px', gap: 8, alignItems: 'center' }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Factor wholesale→Retail (×):</label>
-            <input className="fillin" value={cf[fk('FACTOR', 0)] ?? ''} onChange={(e) => setCF('FACTOR', 0, e.target.value)} inputMode="decimal" placeholder="1.25" style={{ width: 70, textAlign: 'center' }} />
-            <span className="unit">Costo de la venta = costo wholesale × {factor().toFixed(2)}. Si lo dejas vacío usa 1.25.</span>
-          </div>
+          <ol className="sub" style={{ margin: '4px 0 8px', paddingLeft: 20, lineHeight: 1.7 }}>
+            <li><b>Escoge una tienda</b> y coloca las <b>compras</b> por <b>subcategoría Retail</b>.</li>
+            <li style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>Coloca el <b>Factor wholesale→Retail (×)</b>: <input className="fillin" value={cf[fk('FACTOR', 0)] ?? ''} onChange={(e) => setCF('FACTOR', 0, e.target.value)} inputMode="decimal" placeholder="1.25" style={{ width: 70, textAlign: 'center' }} /> <span>Costo de la venta = costo wholesale × {factor().toFixed(2)}. Si lo dejas vacío usa 1.25.</span></li>
+            <li>Por cada subcategoría, en la <b>columna de la marca</b> que la surte pon el <b>%</b> que se le compra y elige su <b>categoría wholesale</b>. La suma de % de cada fila debe dar <b>100%</b>. De ahí sale el <b>Costo/ud ponderado</b> (AUC × factor).</li>
+          </ol>
           {/* Selector de tienda */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 4px' }}>
             {tiendas.map((t) => <button key={t} className={'seg' + (selStore === t ? ' active' : '')} onClick={() => setSelT(t)} style={selStore === t ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{t}{esTiendaNueva(t) && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 800 }}>NUEVA</span>}</button>)}
@@ -4369,7 +4368,6 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             </div>
             {/* Captura de UNIDADES ANUALES A COMPRAR por subcategoría (el costo sale del mapa; el split mensual lo da el Paso 1) */}
             <div className="sub" style={{ fontWeight: 700, margin: '4px 0 4px' }}>Unidades a comprar <span className="unit" style={{ fontWeight: 400 }}>(cantidad ANUAL · el split por mes lo da el calendario global, abajo)</span></div>
-            <div className="sub" style={{ marginBottom: 4 }}>Por cada subcategoría, en la <b>columna de la marca</b> que la surte pon el <b>%</b> que se le compra y elige su <b>categoría wholesale</b>. La suma de % de cada fila debe dar <b>100%</b>. De ahí sale el <b>Costo/ud ponderado</b> (AUC × factor).</div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
               <table className="vfix"><colgroup><col style={{ width: '230px' }} /><col style={{ width: '112px' }} />{mcs.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /><col style={{ width: '72px' }} /></colgroup>
                 <thead>
