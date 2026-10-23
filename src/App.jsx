@@ -1280,11 +1280,13 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         </table></div>
       </div>}
       <div className="panel">
-        <div className="toolbar" style={{ alignItems: 'center', marginBottom: 2 }}>
+        <div className="toolbar" style={{ alignItems: 'center', marginBottom: 2, flexWrap: 'wrap', gap: 6 }}>
           <h3 style={{ margin: 0 }}>{capTitle ? capTitle : <>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$}</>} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>solo lectura</span> : <Responsable empresa={empresa} seccion="Finanzas" />}</h3>
           <div className="spacer"></div>
-          {!isTotal && !readOnly && (!String(fixedMarca || '').startsWith('(') || fixedMarca === '(Retail)') && <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>}
-          {acciones}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            {!isTotal && !readOnly && (!String(fixedMarca || '').startsWith('(') || fixedMarca === '(Retail)') && <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>}
+            {acciones}
+          </div>
         </div>
         <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : retailLean ? null : <>Captura por rubro y mes. Los rubros son iguales para todas las marcas. Un rubro que agregues aquí se suma para <b>toda la empresa</b> y lo verán <b>todos los roles</b> que capturan {rubro.k.toLowerCase()}. </>}Total: <b>${fmt(totalGeneral)}</b></div>
         <div className="tablewrap">
