@@ -4287,7 +4287,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           )
           return <>
             <div className="panel" style={{ borderLeftColor: col, marginBottom: 12 }}>
-              <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>🏬 Gastos EB Directos</span><span className="unit" style={{ alignSelf: 'center' }}>Mismo formato de centros de costo de Finanzas</span><div className="spacer"></div><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+              <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>🏬 Gastos EB Directos</span><div className="spacer"></div><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
               <div className="tablewrap" style={{ overflowX: 'auto' }}>
                 <table className="vfix"><colgroup><col style={{ width: '60px' }} /><col style={{ width: '260px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
                   <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
@@ -4323,7 +4323,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>Compras por tienda</span><div className="spacer"></div><button className="btn" onClick={addTienda}>➕ Agregar tienda</button>{selStore && <button className="btn" onClick={() => delTienda(selStore)} style={{ color: '#b91c1c' }}>🗑 Quitar tienda</button>}<SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarVentas}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
           <h3 style={{ color: col }}>Compras por tienda — 2028 <span className="unit">(unidades a comprar · Retail → Wholesale)</span></h3>
           <PasoH n={1}>Compras por tienda</PasoH>
-          <div className="sub">Escoge una <b>tienda</b> y captura sus <b>unidades del año</b> por <b>subcategoría Retail</b>. El costo = wholesale × factor, repartido por mes con el calendario de despacho.</div>
+          <div className="sub">Escoge una <b>tienda</b> y coloca las <b>compras</b> por <b>subcategoría Retail</b>. El costo = wholesale × factor, repartido por mes con el calendario de despacho.</div>
           <div className="toolbar" style={{ margin: '8px 0 2px', gap: 8, alignItems: 'center' }}>
             <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>Factor wholesale→Retail (×):</label>
             <input className="fillin" value={cf[fk('FACTOR', 0)] ?? ''} onChange={(e) => setCF('FACTOR', 0, e.target.value)} inputMode="decimal" placeholder="1.25" style={{ width: 70, textAlign: 'center' }} />
