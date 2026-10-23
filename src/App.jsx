@@ -912,7 +912,7 @@ export default function App() {
 }
 
 /* ===== RoleForm: pestañas de rubro (simple o detalle) ===== */
-function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, onSaved, headerChip, capTitle, readOnly, initRubro, splitCfg }) {
+function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, onSaved, headerChip, capTitle, readOnly, initRubro, splitCfg, retailLean }) {
   const esTot = String(fixedMarca || '').startsWith('TOTAL::')
   // Los VIAJES ya no se llenan dentro de cada rol: se capturan en la pestaña "🧳 Viajes equipo". Por eso se quitan del selector VER del rol (salvo cuando se pide explícito con rubrosOverride, como en Gerencia/Finanzas/Viajes equipo).
   const rubros = (rubrosOverride || role.rubros.filter((rb) => rb.k !== 'VIAJES')).filter((rb) => !rb.gadmin || esTot).filter((rb) => !(empresa === 'TUMAR' && rb.muestras)) // Gastos admin solo en TOTAL SBU · Muestras no aplica en TUMAR
@@ -926,7 +926,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, on
   if (!rubros.length) return null
   const idx = Math.min(tab, rubros.length - 1)
   const rb = rubros[idx]
-  const common = { role, rubro: rb, usuario, empresa, sbus, data, setData, saving, setSaving, msg, setMsg, fixedMarca, onSaved, headerChip, capTitle, readOnly, splitCfg }
+  const common = { role, rubro: rb, usuario, empresa, sbus, data, setData, saving, setSaving, msg, setMsg, fixedMarca, onSaved, headerChip, capTitle, readOnly, splitCfg, retailLean }
 
   return (
     <>
@@ -950,7 +950,7 @@ function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, on
 
         : rb.porCat ? <CatCaptureForm key={rb.k} {...common} />
         : rb.cat ? <CategoriasForm key={rb.k} role={role} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} />
-        : rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} splitCfg={splitCfg} />
+        : rb.detalle ? <DetalleForm key={rb.k} {...common} groups={rb.detalle} extrasKey={rb.extrasKey} splitCfg={splitCfg} retailLean={retailLean} />
         : <SimpleForm key={rb.k} {...common} />}
     </>
   )
@@ -1125,7 +1125,7 @@ function CatCaptureForm({ role, rubro, usuario, empresa, sbus, data, setData, sa
 }
 
 /* ===== DetalleForm: sub-rubros por marca (Marketing y Viajes) ===== */
-function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, data, setData, saving, setSaving, setMsg, fixedMarca, onSaved, headerChip, capTitle, readOnly, splitCfg }) {
+function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, data, setData, saving, setSaving, setMsg, fixedMarca, onSaved, headerChip, capTitle, readOnly, splitCfg, retailLean }) {
   const marcas = marcasDe(sbus)
   const [marca, setMarca] = useState(fixedMarca || (marcas[0] && marcas[0].marca) || '')
   useEffect(() => { if (fixedMarca) setMarca(fixedMarca) }, [fixedMarca])
@@ -1246,9 +1246,15 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
     ev.target.value = ''
   }
 
+  const acciones = readOnly ? <span className="empchip" style={{ background: '#15803d' }}>🪞 Espejo · solo lectura</span> : <>
+        <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'GRUPO', 'RUBRO', 'SBU', 'MARCA', ...MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, gr.g, it.n, sb, mca, ...MESES.map(() => 0)])))); exportXlsx(aoa, `Plantilla_${role.tab}_${rubro.k}.xlsx`) }}>📄 Plantilla</button>
+        <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
+        <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+      </>
   return (
     <>
-      <div className="toolbar">
+      {(!fixedMarca || headerChip) && <div className="toolbar">
         {!fixedMarca && <><label>Marca</label>
         <select value={marca} onChange={(e) => setMarca(e.target.value)}>
           {Object.entries(sbus).map(([s, ms]) => (<optgroup key={s} label={s}>
@@ -1258,15 +1264,8 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         </select></>}
         {headerChip}
         {isTotal && !fixedMarca && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbu}</button>}
-        <div className="spacer"></div>
-        {readOnly ? <span className="empchip" style={{ background: '#15803d' }}>🪞 Espejo · solo lectura</span> : <>
-        <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'GRUPO', 'RUBRO', 'SBU', 'MARCA', ...MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => grupos.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, gr.g, it.n, sb, mca, ...MESES.map(() => 0)])))); exportXlsx(aoa, `Plantilla_${role.tab}_${rubro.k}.xlsx`) }}>📄 Plantilla</button>
-        <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>
-        <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
-        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
-        </>}
-      </div>
-      {!String(fixedMarca || '').startsWith('(') && (rubro.k !== 'VIAJES' || isTotal) && <div className="panel" style={{ marginBottom: 8 }}>
+      </div>}
+      {!String(fixedMarca || '').startsWith('(') && (rubro.k !== 'VIAJES' || isTotal) && !retailLean && <div className="panel" style={{ marginBottom: 8 }}>
         <h3>{rubro.k} sobre la venta — {isTotal ? `TOTAL ${sbu}` : marca}{M$} <span className="unit">(venta viene de Comercial)</span></h3>
         <div className="sub">Cuánto pesa <b>{rubro.k}</b> sobre la <b>venta neta</b>, por mes y en total.</div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
@@ -1285,8 +1284,9 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
           <h3 style={{ margin: 0 }}>{capTitle ? capTitle : <>{role.label} · {rubro.k} — {isTotal ? `TOTAL ${sbu}` : marca}{M$}</>} <span className="unit">(USD · {empresa})</span>{isTotal ? <span className="unit" style={{ marginLeft: 8 }}>solo lectura</span> : <Responsable empresa={empresa} seccion="Finanzas" />}</h3>
           <div className="spacer"></div>
           {!isTotal && !readOnly && (!String(fixedMarca || '').startsWith('(') || fixedMarca === '(Retail)') && <button className="btn" onClick={agregarRubro}>➕ Agregar rubro</button>}
+          {acciones}
         </div>
-        <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : <>Captura por rubro y mes. Los rubros son iguales para todas las marcas. Un rubro que agregues aquí se suma para <b>toda la empresa</b> y lo verán <b>todos los roles</b> que capturan {rubro.k.toLowerCase()}.</>} Total: <b>${fmt(totalGeneral)}</b></div>
+        <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : retailLean ? null : <>Captura por rubro y mes. Los rubros son iguales para todas las marcas. Un rubro que agregues aquí se suma para <b>toda la empresa</b> y lo verán <b>todos los roles</b> que capturan {rubro.k.toLowerCase()}. </>}Total: <b>${fmt(totalGeneral)}</b></div>
         <div className="tablewrap">
           <table>
             <thead><tr><th className="cod">Cód.</th><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th>{splitCfg && <><th style={{ color: spColors[0] }}>% {spLabels[0]}</th><th style={{ color: spColors[1] }}>% {spLabels[1]}</th></>}</tr></thead>
@@ -1314,7 +1314,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
                     const sk = splitKey(gr, it); const eb = ebNum(sk); const sinP = 100 - eb
                     const clamp100 = (x) => Math.max(0, Math.min(100, x))
                     const splitCells = splitCfg ? (splitEditable
-                      ? <><td className="cell"><input value={ebRaw(sk)} onChange={(e) => splitCfg.setEb(sk, e.target.value)} inputMode="decimal" placeholder="100" style={{ textAlign: 'right', color: spColors[0], fontWeight: 700 }} /></td><td className="cell"><input value={ebRaw(sk) === '' ? '' : String(sinP)} onChange={(e) => splitCfg.setEb(sk, e.target.value === '' ? '' : String(clamp100(100 - num(e.target.value))))} inputMode="decimal" placeholder="0" style={{ textAlign: 'right', color: spColors[1], fontWeight: 700 }} /></td></>
+                      ? <><td className="cell"><input value={ebRaw(sk)} onChange={(e) => splitCfg.setEb(sk, e.target.value)} inputMode="decimal" placeholder="%" style={{ textAlign: 'right', color: spColors[0], fontWeight: 700 }} /></td><td className="cell"><input value={ebRaw(sk) === '' ? '' : String(sinP)} onChange={(e) => splitCfg.setEb(sk, e.target.value === '' ? '' : String(clamp100(100 - num(e.target.value))))} inputMode="decimal" placeholder="%" style={{ textAlign: 'right', color: spColors[1], fontWeight: 700 }} /></td></>
                       : <><td className="tot" style={{ color: spColors[0], fontWeight: 700 }}>{eb.toFixed(0)}%</td><td className="tot" style={{ color: spColors[1], fontWeight: 700 }}>{sinP.toFixed(0)}%</td></>) : null
                     return <tr key={id}><td className="cod">{it.c}</td><td className="l sub2">{it.n}{esExtra && <span className="newbadge">NUEVO</span>}{esExtra && !isTotal && <button title="Quitar este rubro de toda la empresa" onClick={() => { if (window.confirm('¿Quitar el rubro "' + it.n + '" de toda la empresa?')) quitarRubro(it.n) }} style={{ marginLeft: 8, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>}</td>{celdas}<td className="tot">{fmt(tot)}</td>{splitCells}</tr>
                   })}
@@ -4144,7 +4144,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
               </table>
             </div>
           </div> })()
-          : <RoleForm key={'retail-mk-' + selMKStore} role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={selMKStore} onSaved={reloadCaps} capTitle={`MARKETING Retail — ${selMKStore} · ¿quién paga cada rubro? (% EB / % SINERGY al final)`} splitCfg={{ eb: mkSplit, setEb: setMkSplitV, labels: ['EB', 'SINERGY'], colors: [col, '#be185d'], onSave: async () => { try { await guardarMkSplit() } catch { } } }} />}
+          : <RoleForm key={'retail-mk-' + selMKStore} role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={selMKStore} onSaved={reloadCaps} retailLean capTitle={`MARKETING Retail — ${selMKStore} · ¿quién paga cada rubro? (% EB / % SINERGY al final)`} splitCfg={{ eb: mkSplit, setEb: setMkSplitV, labels: ['EB', 'SINERGY'], colors: [col, '#be185d'], onSave: async () => { try { await guardarMkSplit() } catch { } } }} />}
         <div className="sub" style={{ margin: '6px 2px 0' }}>Captura el marketing <b>por tienda</b> (elige la tienda arriba; <b>▣ Total</b> suma todas). Las dos últimas columnas (<b style={{ color: col }}>% EB</b> / <b style={{ color: '#be185d' }}>% SINERGY</b>) definen quién paga cada rubro (suman 100%) y reparten el marketing hacia los dos bloques siguientes.</div>
         {/* ---- MK Retail EB (automático = % EB): alimenta P&L y Cash Flow Retail EB ---- */}
         <div className="panel" style={{ marginTop: 14, borderLeftColor: col }}>
