@@ -276,7 +276,7 @@ RETAIL_SUBS_PRESET['E-Commerce'] = RETAIL_SUBS_PRESET['MUH Atlantis']
 RETAIL_SUBS_PRESET['Mayoristas'] = RETAIL_SUBS_PRESET['MUH Atlantis']
 const _MUH_BRANDS = ["ALTRA", "BIRKENSTOCK", "HOKA", "INJINJI", "MAMMUT", "NORDA", "ARIAT", "BLUNDSTONE", "COTOPAXI", "ECCO", "FITFLOP", "FJALLRAVEN", "FLOWER MOUNTAIN", "FOAMERS", "GOORIN BROS", "KEEN", "UGG", "SMARTWOOL", "IZIPIZI"]
 const RETAIL_STORE_BRANDS = { "Birkenstock Andino": ["BIRKENSTOCK"], "Hoka Andino": ["HOKA"], "MUH Atlantis": _MUH_BRANDS, "MUH Arkadia": _MUH_BRANDS, "Sale Factory": _MUH_BRANDS, "E-Commerce": _MUH_BRANDS, "Mayoristas": _MUH_BRANDS }
-// Tiendas que pertenecen al bucket SINERGY (su P&L va a la columna SINERGY del Holding, NO a Energy Brands). El resto es P&L Retail EB.
+// Tiendas que pertenecen al bucket SINERGY (su P&L va a la columna SINERGY & DYNAMICS del Holding, NO a Energy Brands). El resto es P&L Retail EB.
 const SINERGY_TIENDAS = new Set(['SINERGY'])
 // SINERGY es el nombre del grupo de TODAS las tiendas del Retail: su venta, costo y compras van al
 // P&L y Cash Flow de SINERGY, NO al de Energy Brands. (La venta intercompañía de EB a estas tiendas
@@ -294,7 +294,7 @@ function retailPLTotales() {
 // Cash Flow de Retail EB (solo lectura) a partir del resumen retail_pl.EB — para verlo como una "SBU" más en el Cash Flow de Gerencia de Energy Brands.
 function RetailEBCashFlowView({ which = 'EB', title, accent = '#0e7490' } = {}) {
   let e = null; try { const d = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null'); e = d && d[which] } catch { }
-  const nombre = title || (which === 'SIN' ? 'SINERGY' : 'Retail EB')
+  const nombre = title || (which === 'SIN' ? 'SINERGY & DYNAMICS' : 'Retail EB')
   if (!e) return <div className="panel"><div className="sub">Aún no hay datos de {nombre}. Entra a <b>Retail → Cash Flow</b>, llena y guarda; aquí aparecerá el espejo.</div></div>
   const g = (a, i) => Number((a || [])[i]) || 0
   const rows = []; let prev = 0
@@ -4002,14 +4002,14 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const fk = (line, mi) => `${line}|${mi}`
   const setCF = (line, mi, v) => setCf((d) => ({ ...d, [fk(line, mi)]: v }))
   const guardarCF = () => guardarKeys([['retail_cf', cf]], 'Cash Flow guardado en el Sheet ✓')
-  // ---- Capturas SINERGY (manuales): viajes Director/Marketing + marketing total. Alimentan SOLO el P&L SINERGY. ----
+  // ---- Capturas SINERGY (manuales): viajes Director/Marketing + marketing total. Alimentan SOLO el P&L SINERGY & DYNAMICS. ----
   const [sin, setSin] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_sin_${empresa}`) || '{}') } catch { return {} } })
   useEffect(() => { try { setSin(JSON.parse(localStorage.getItem(`retail_sin_${empresa}`) || '{}')) } catch { } }, [empresa])
   const sg = (line, mi) => num(sin[`${line}|${mi}`])
   const setSIN = (line, mi, v) => setSin((d) => ({ ...d, [`${line}|${mi}`]: v }))
-  const guardarSin = () => guardarKeys([['retail_sin', sin], ['retail_pl', plSummary()]], 'Captura SINERGY guardada en el Sheet ✓')
+  const guardarSin = () => guardarKeys([['retail_sin', sin], ['retail_pl', plSummary()]], 'Captura SINERGY & DYNAMICS guardada en el Sheet ✓')
   const sinVjAnual = MESES.reduce((a, _, mi) => a + sg('VJDIR', mi) + sg('VJMK', mi), 0)
-  // "Viajes Marketing SINERGY" (VJMK): se captura en el bloque SINERGY pero lo PAGA Retail EB (P&L y Cash Flow Retail EB). Solo "Director SINERGY" (VJDIR) queda en SINERGY.
+  // "Viajes Marketing SINERGY & DYNAMICS" (VJMK): se captura en el bloque SINERGY pero lo PAGA Retail EB (P&L y Cash Flow Retail EB). Solo "Director SINERGY & DYNAMICS" (VJDIR) queda en SINERGY.
   const sinVjDirAnual = MESES.reduce((a, _, mi) => a + sg('VJDIR', mi), 0)
   const sinVjMkAnual = MESES.reduce((a, _, mi) => a + sg('VJMK', mi), 0)
   const sinMkAnual = MESES.reduce((a, _, mi) => a + sg('MK', mi), 0)
@@ -4048,7 +4048,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const cfSum = (k) => cfRows.reduce((a, r) => a + r[k], 0)
 
   // ---- Cash Flow por bucket (EB / SINERGY / TOTAL), misma separación que el P&L ----
-  // Inputs financieros: EB usa las claves de retail_cf; SINERGY usa claves 'CF…' dentro de retail_sin; TOTAL = EB + SINERGY (solo lectura).
+  // Inputs financieros: EB usa las claves de retail_cf; SINERGY usa claves 'CF…' dentro de retail_sin; TOTAL = EB + SINERGY & DYNAMICS (solo lectura).
   const cfFin = (bucket, line, mi) => bucket === 'EB' ? num(cf[fk(line, mi)]) : bucket === 'SIN' ? num(sin[`CF${line}|${mi}`]) : num(cf[fk(line, mi)]) + num(sin[`CF${line}|${mi}`])
   const cfRowsBucket = (bucket) => {
     const ts = bucket === 'TOTAL' ? tiendas : tiendas.filter((t) => bucket === 'SIN' ? esTiendaSinergy(t) : !esTiendaSinergy(t))
@@ -4115,13 +4115,13 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
         {(() => { const vnMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0); const vnAn = MESES.reduce((a, _, mi) => a + vnMes(mi), 0); const mkAn = MESES.reduce((a, _, mi) => a + mkMes(mi), 0); const pctC = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
           return <div className="panel" style={{ marginBottom: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, paddingBottom: 8 }}>
             <h3>MARKETING sobre la venta — Retail · TOTAL TIENDAS <span className="unit">(venta = ventas por tienda)</span></h3>
-            <div className="sub">Cuánto pesa <b>Marketing total</b> (EB + SINERGY) sobre la <b>venta neta</b>. El total <b>SINERGY</b> impacta solo el <b>P&L y Cash Flow SINERGY</b>, y el total <b>Retail EB</b> impacta solo el <b>P&L y Cash Flow Retail EB</b>.</div>
+            <div className="sub">Cuánto pesa <b>Marketing total</b> (EB + SINERGY & DYNAMICS) sobre la <b>venta neta</b>. El total <b>SINERGY & DYNAMICS</b> impacta solo el <b>P&L y Cash Flow SINERGY & DYNAMICS</b>, y el total <b>Retail EB</b> impacta solo el <b>P&L y Cash Flow Retail EB</b>.</div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}><table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '90px' }} /></colgroup>
               <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
               <tbody>
                 <tr><td className="l sub2">Venta neta ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(vnMes(mi))}</td>)}<td className="tot">{fmt(vnAn)}</td></tr>
                 <tr><td className="l sub2" style={{ color: col }}>· MK Retail EB ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: col }}>{fmt(mkEBMes(mi))}</td>)}<td className="tot" style={{ color: col }}>{fmt(mkEBAnual)}</td></tr>
-                <tr><td className="l sub2" style={{ color: '#be185d' }}>· Marketing SINERGY ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#be185d' }}>{fmt(mkSinMes(mi))}</td>)}<td className="tot" style={{ color: '#be185d' }}>{fmt(mkSinSplitAnual)}</td></tr>
+                <tr><td className="l sub2" style={{ color: '#be185d' }}>· Marketing SINERGY & DYNAMICS ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#be185d' }}>{fmt(mkSinMes(mi))}</td>)}<td className="tot" style={{ color: '#be185d' }}>{fmt(mkSinSplitAnual)}</td></tr>
                 <tr><td className="l sub2">MARKETING TOTAL ($)</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(mkMes(mi))}</td>)}<td className="tot">{fmt(mkAn)}</td></tr>
                 <tr className="grandrow"><td className="l">% MARKETING / venta</td>{MESES.map((_, mi) => <td key={mi} className="tot">{pctC(mkMes(mi), vnMes(mi))}</td>)}<td className="tot">{pctC(mkAn, vnAn)}</td></tr>
               </tbody>
@@ -4140,7 +4140,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}><span style={{ fontWeight: 800, color: '#7c3aed', fontSize: 15 }}>▣ Total Marketing Retail</span><span className="unit" style={{ marginLeft: 8 }}>Suma de todas las tiendas · solo lectura</span><div className="spacer"></div><button className="btn" onClick={() => reloadCaps()}>🔄 Actualizar</button></div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
               <table className="vfix"><colgroup><col style={{ width: '220px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '85px' }} /><col style={{ width: '70px' }} /><col style={{ width: '80px' }} /></colgroup>
-                <thead><tr><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th><th style={{ color: col }}>% EB</th><th style={{ color: '#be185d' }}>% SINERGY</th></tr></thead>
+                <thead><tr><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th><th style={{ color: col }}>% EB</th><th style={{ color: '#be185d' }}>% SINERGY & DYNAMICS</th></tr></thead>
                 <tbody>
                   {rubros.length === 0 && <tr><td className="l sub2" colSpan={16} style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Aún no hay marketing capturado por tienda. Elige una tienda y captura.</td></tr>}
                   {rubros.map((k) => { const eb = ebPctOf(k); return <tr key={k}><td className="l sub2">{k}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(rubroMes(k, mi))}</td>)}<td className="tot">{fmt(rubroAn(k))}</td><td className="tot" style={{ color: col, fontWeight: 700 }}>{eb.toFixed(0)}%</td><td className="tot" style={{ color: '#be185d', fontWeight: 700 }}>{(100 - eb).toFixed(0)}%</td></tr> })}
@@ -4149,7 +4149,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
               </table>
             </div>
           </div> })()
-          : <RoleForm key={'retail-mk-' + selMKStore} role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={selMKStore} onSaved={reloadCaps} retailLean capTitle={`MARKETING Retail — ${selMKStore} · ¿quién paga cada rubro? (% EB / % SINERGY al final)`} splitCfg={{ eb: mkSplit, setEb: setMkSplitV, labels: ['EB', 'SINERGY'], colors: [col, '#be185d'], onSave: async () => { try { await guardarMkSplit() } catch { } } }} />}
+          : <RoleForm key={'retail-mk-' + selMKStore} role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[mkRubro]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca={selMKStore} onSaved={reloadCaps} retailLean capTitle={`MARKETING Retail — ${selMKStore} · ¿quién paga cada rubro? (% EB / % SINERGY al final)`} splitCfg={{ eb: mkSplit, setEb: setMkSplitV, labels: ['EB', 'SINERGY & DYNAMICS'], colors: [col, '#be185d'], onSave: async () => { try { await guardarMkSplit() } catch { } } }} />}
         {(() => {
           const isMKTot = selMKStore === '__TOTAL__'
           const scope = isMKTot ? 'TOTAL TIENDAS' : selMKStore
@@ -4161,7 +4161,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
         <div className="panel" style={{ marginTop: 14, borderLeftColor: col }}>
           <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
             <span className="empchip" style={{ background: col, marginLeft: 0 }}>🏬 MK Retail EB · {scope}</span>
-            <span className="unit" style={{ color: 'var(--muted)' }}>automático</span>
+            <span className="unit" style={{ color: 'var(--muted)' }}>🪞 espejo · solo lectura</span>
           </div>
           <div className="sub" style={{ marginBottom: 6 }}>Porción <b>EB</b> del marketing de <b>{scope}</b> (según el reparto de arriba). El <b>P&L y Cash Flow de Retail EB</b> usa el <b>total de todas las tiendas</b>. {isMKTot ? 'Total' : 'Tienda'}: <b>${fmt(ebAn)}</b></div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
@@ -4173,13 +4173,13 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             </table>
           </div>
         </div>
-        {/* ---- Marketing SINERGY (automático = % SINERGY): alimenta P&L y Cash Flow SINERGY ---- */}
+        {/* ---- Marketing SINERGY & DYNAMICS (automático = % SINERGY): alimenta P&L y Cash Flow SINERGY & DYNAMICS ---- */}
         <div className="panel" style={{ marginTop: 14, borderLeftColor: '#be185d' }}>
           <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
-            <span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🤝 Marketing SINERGY · {scope}</span>
-            <span className="unit" style={{ color: 'var(--muted)' }}>automático</span>
+            <span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🤝 Marketing SINERGY & DYNAMICS · {scope}</span>
+            <span className="unit" style={{ color: 'var(--muted)' }}>🪞 espejo · solo lectura</span>
           </div>
-          <div className="sub" style={{ marginBottom: 6 }}>Porción <b>SINERGY</b> del marketing de <b>{scope}</b> (según el reparto de arriba). El <b>P&L y Cash Flow SINERGY</b> usa el <b>total de todas las tiendas</b>. {isMKTot ? 'Total' : 'Tienda'}: <b>${fmt(sinAn)}</b></div>
+          <div className="sub" style={{ marginBottom: 6 }}>Porción <b>SINERGY</b> del marketing de <b>{scope}</b> (según el reparto de arriba). El <b>P&L y Cash Flow SINERGY & DYNAMICS</b> usa el <b>total de todas las tiendas</b>. {isMKTot ? 'Total' : 'Tienda'}: <b>${fmt(sinAn)}</b></div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '85px' }} /></colgroup>
               <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -4218,25 +4218,25 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             </div>
           </div>
         })()}
-        <div className="sub" style={{ marginBottom: 8 }}>Viajes <b>EB</b>: Producto, Director, Marketing y Controler (cada bloque con su captura). Abajo, los viajes <b>SINERGY</b>: <b>Director SINERGY</b> alimenta solo el P&L SINERGY, y <b>Marketing SINERGY</b> (conserva su nombre) lo paga <b>Retail EB</b>.</div>
+        <div className="sub" style={{ marginBottom: 8 }}>Viajes <b>EB</b>: Producto, Director, Marketing y Controler (cada bloque con su captura). Abajo, los viajes <b>SINERGY</b>: <b>Director SINERGY & DYNAMICS</b> alimenta solo el P&L SINERGY & DYNAMICS, y <b>Marketing SINERGY & DYNAMICS</b> (conserva su nombre) lo paga <b>Retail EB</b>.</div>
         {vjRoles.map((r) => (
           <div key={r.id} style={{ marginTop: 14 }}>
             <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} headerChip={<span style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 13, padding: '6px 12px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 15 }}>{r.icon}</span> Viajes de {r.label} EB — Retail</span>} />
           </div>
         ))}
-        {/* ---- Viajes SINERGY (manual): Director SINERGY + Marketing SINERGY ---- */}
+        {/* ---- Viajes SINERGY & DYNAMICS (manual): Director SINERGY & DYNAMICS + Marketing SINERGY & DYNAMICS ---- */}
         <div className="panel" style={{ marginTop: 18, borderLeftColor: '#be185d' }}>
           <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
-            <span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🤝 Viajes SINERGY</span>
+            <span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🤝 Viajes SINERGY & DYNAMICS</span>
             <div className="spacer"></div>
-            <SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarSin}>{saving ? 'Guardando…' : '💾 Guardar SINERGY'}</button>
+            <SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarSin}>{saving ? 'Guardando…' : '💾 Guardar SINERGY & DYNAMICS'}</button>
           </div>
-          <div className="sub" style={{ marginBottom: 6 }}>Captura manual de los viajes de <b>SINERGY</b> (por mes). <b>Director SINERGY</b> alimenta el P&L y Cash Flow <b>SINERGY</b>. <b>Marketing SINERGY</b> conserva su nombre pero lo paga <b>Retail EB</b> (va al P&L y Cash Flow de Retail EB, no a SINERGY).</div>
+          <div className="sub" style={{ marginBottom: 6 }}>Captura manual de los viajes de <b>SINERGY</b> (por mes). <b>Director SINERGY & DYNAMICS</b> alimenta el P&L y Cash Flow <b>SINERGY</b>. <b>Marketing SINERGY & DYNAMICS</b> conserva su nombre pero lo paga <b>Retail EB</b> (va al P&L y Cash Flow de Retail EB, no a SINERGY).</div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table className="vfix"><colgroup><col style={{ width: '200px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '85px' }} /></colgroup>
               <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
               <tbody>
-                {[['🧑‍💼 Director SINERGY', 'VJDIR', '→ SINERGY'], ['📣 Marketing SINERGY', 'VJMK', '→ Retail EB']].map(([lbl, k, dest]) => (
+                {[['🧑‍💼 Director SINERGY & DYNAMICS', 'VJDIR', '→ SINERGY'], ['📣 Marketing SINERGY & DYNAMICS', 'VJMK', '→ Retail EB']].map(([lbl, k, dest]) => (
                   <tr key={k}><td className="l sub2">{lbl} <span className="unit" style={{ color: k === 'VJMK' ? col : '#be185d' }}>{dest}</span></td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={sin[`${k}|${mi}`] ?? ''} onChange={(e) => setSIN(k, mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + sg(k, mi), 0))}</td></tr>
                 ))}
                 <tr className="grandrow"><td className="l">Total viajes SINERGY <span className="unit">(solo Director → SINERGY)</span></td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(sg('VJDIR', mi))}</td>)}<td className="tot">{fmt(sinVjDirAnual)}</td></tr>
@@ -4250,11 +4250,11 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         <div className="panel" style={{ borderLeftColor: '#be185d' }}>
           <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
-            <span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🚚 Logística SINERGY</span>
+            <span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🚚 Logística SINERGY & DYNAMICS</span>
             <div className="spacer"></div>
-            <SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarSin}>{saving ? 'Guardando…' : '💾 Guardar SINERGY'}</button>
+            <SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarSin}>{saving ? 'Guardando…' : '💾 Guardar SINERGY & DYNAMICS'}</button>
           </div>
-          <div className="sub" style={{ marginBottom: 6 }}>Costo logístico de <b>SINERGY</b> por mes (se llena a mano). Alimenta <b>solo</b> el P&L SINERGY (línea Logística). Total: <b>${fmt(sinLogAnual)}</b></div>
+          <div className="sub" style={{ marginBottom: 6 }}>Costo logístico de <b>SINERGY</b> por mes. Alimenta <b>solo</b> el P&L SINERGY & DYNAMICS (línea Logística). Total: <b>${fmt(sinLogAnual)}</b></div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table className="vfix"><colgroup><col style={{ width: '180px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '85px' }} /></colgroup>
               <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
@@ -4269,7 +4269,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
       {tab === 'gastos' && <>
         <div style={{ marginBottom: 10 }}><TurnoBanner /></div>
         {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
-        <div className="sub" style={{ marginBottom: 6 }}>Los <b>Gastos EB Directos</b> impactan el <b>P&L Retail EB</b> (y a Energy Brands); los <b>Gastos Sinergy</b> impactan el <b>P&L SINERGY</b>. El <b>TOTAL</b> es la suma de ambos.</div>
+        <div className="sub" style={{ marginBottom: 6 }}>Los <b>Gastos EB Directos</b> impactan el <b>P&L Retail EB</b> (y a Energy Brands); los <b>Gastos Sinergy</b> impactan el <b>P&L SINERGY & DYNAMICS</b>. El <b>TOTAL</b> es la suma de ambos.</div>
         {(() => {
           const gBlock = (title, accent, data, setFn, rowFn, colFn, gran, editable) => (
             <div className="panel" style={{ borderLeftColor: accent, marginBottom: 12 }}>
@@ -4298,7 +4298,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
                 </table>
               </div>
             </div>
-            {gBlock('🤝 Gastos Sinergy', '#be185d', gastos, setG, gRow, gCol, gGran, true)}
+            {gBlock('🤝 Gastos Sinergy & Dynamics', '#be185d', gastos, setG, gRow, gCol, gGran, true)}
             <div className="panel" style={{ borderLeftColor: '#7c3aed', marginBottom: 12 }}>
               <div className="toolbar"><span className="empchip" style={{ background: '#7c3aed', marginLeft: 0 }}>🧾 Gastos TOTAL (EB + Sinergy)</span><div className="spacer"></div><span className="empchip" style={{ background: '#64748b' }}>solo lectura · sin desglose</span></div>
               <div className="tablewrap" style={{ overflowX: 'auto' }}>
@@ -4306,7 +4306,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
                   <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
                   <tbody>
                     <tr><td className="l sub2" style={{ color: col }}>🏬 Gastos EB Directos</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(gColEB(mi))}</td>)}<td className="tot" style={{ color: col, fontWeight: 800 }}>{fmt(gGranEB)}</td></tr>
-                    <tr><td className="l sub2" style={{ color: '#be185d' }}>🤝 Gastos Sinergy</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(gCol(mi))}</td>)}<td className="tot" style={{ color: '#be185d', fontWeight: 800 }}>{fmt(gGran)}</td></tr>
+                    <tr><td className="l sub2" style={{ color: '#be185d' }}>🤝 Gastos Sinergy & Dynamics</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(gCol(mi))}</td>)}<td className="tot" style={{ color: '#be185d', fontWeight: 800 }}>{fmt(gGran)}</td></tr>
                     <tr className="grandrow"><td className="l">TOTAL gastos</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(gColEB(mi) + gCol(mi))}</td>)}<td className="tot">{fmt(gGranEB + gGran)}</td></tr>
                   </tbody>
                 </table>
@@ -4621,10 +4621,10 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             </div>
           }
           return <>
-            <div className="sub" style={{ marginBottom: 6 }}><b>Cash Final = Cash Inicial + Cobros + Otros ingresos − Pagos − Costos operativos − Costos financieros − Otros gastos</b>. Hay <b>3 cash flow</b>: <b>TOTAL</b> (EB + SINERGY, solo lectura), <b>Retail EB</b> y <b>SINERGY</b> (editables). Cobros/Pagos/operativos salen con la misma lógica del P&L.</div>
-            {cfBlock('TOTAL', '💰 Cash Flow — TOTAL (EB + SINERGY)', '#7c3aed', false)}
+            <div className="sub" style={{ marginBottom: 6 }}><b>Cash Final = Cash Inicial + Cobros + Otros ingresos − Pagos − Costos operativos − Costos financieros − Otros gastos</b>. Hay <b>3 cash flow</b>: <b>TOTAL</b> (EB + SINERGY & DYNAMICS, solo lectura), <b>Retail EB</b> y <b>SINERGY & DYNAMICS</b> (editables). Cobros/Pagos/operativos salen con la misma lógica del P&L.</div>
+            {cfBlock('TOTAL', '💰 Cash Flow — TOTAL (EB + SINERGY & DYNAMICS)', '#7c3aed', false)}
             {cfBlock('EB', '🏬 Cash Flow — Retail EB', col, true)}
-            {cfBlock('SIN', '🤝 Cash Flow — SINERGY', '#be185d', true)}
+            {cfBlock('SIN', '🤝 Cash Flow — SINERGY & DYNAMICS', '#be185d', true)}
           </>
         })()}
       </>}
@@ -4664,10 +4664,10 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             </div>
           }
           return <>
-            <div className="sub" style={{ marginBottom: 6 }}>El P&L de Retail se compone de dos: <b>P&L Retail EB</b> (suma al P&L y Cash Flow de Energy Brands) y <b>P&L SINERGY</b> (solo suma a la columna SINERGY del Holding). El <b>TOTAL</b> es la suma de los dos. La columna <b>2027</b> es la referencia del ABP (solo aplica a EB; SINERGY es nueva).</div>
-            {bloque({ title: '🧾 P&L Retail — TOTAL (EB + SINERGY)', sub: '(EB + SINERGY · 2028)', venta: ventaEB + ventaSIN, costo: costoEB + costoSIN, logistica: sinLogAnual, gastos: gGranEB + gGran, marketing: mkEBAnual + mkSinAnual, viajes: vjEBAnual + vjSinAnual, showRef: true, accent: '#7c3aed' })}
+            <div className="sub" style={{ marginBottom: 6 }}>El P&L de Retail se compone de dos: <b>P&L Retail EB</b> (suma al P&L y Cash Flow de Energy Brands) y <b>P&L SINERGY & DYNAMICS</b> (solo suma a la columna SINERGY & DYNAMICS del Holding). El <b>TOTAL</b> es la suma de los dos. La columna <b>2027</b> es la referencia del ABP (solo aplica a EB; SINERGY & DYNAMICS es nueva).</div>
+            {bloque({ title: '🧾 P&L Retail — TOTAL (EB + SINERGY & DYNAMICS)', sub: '(EB + SINERGY & DYNAMICS · 2028)', venta: ventaEB + ventaSIN, costo: costoEB + costoSIN, logistica: sinLogAnual, gastos: gGranEB + gGran, marketing: mkEBAnual + mkSinAnual, viajes: vjEBAnual + vjSinAnual, showRef: true, accent: '#7c3aed' })}
             {bloque({ title: '🏬 P&L RETAIL EB', sub: '(alimenta P&L y Cash Flow de Energy Brands)', venta: ventaEB, costo: costoEB, logistica: null, gastos: gGranEB, marketing: mkEBAnual, viajes: vjEBAnual, showRef: true, accent: col })}
-            {bloque({ title: '🤝 P&L SINERGY', sub: '(solo suma a la columna SINERGY del Holding)', venta: ventaSIN, costo: costoSIN, logistica: sinLogAnual, gastos: gGran, marketing: mkSinAnual, viajes: vjSinAnual, showRef: false, accent: '#be185d' })}
+            {bloque({ title: '🤝 P&L SINERGY & DYNAMICS', sub: '(solo suma a la columna SINERGY & DYNAMICS del Holding)', venta: ventaSIN, costo: costoSIN, logistica: sinLogAnual, gastos: gGran, marketing: mkSinAnual, viajes: vjSinAnual, showRef: false, accent: '#be185d' })}
           </>
         })()}
       </>}
@@ -5091,15 +5091,15 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
     },
     {
       nav: { go: 'sbu:Retail' },
-      a: '#0e7490', icon: '🏬', role: 'Retail', scope: 'Tiendas propias EB + SINERGY',
+      a: '#0e7490', icon: '🏬', role: 'Retail', scope: 'Tiendas propias EB + SINERGY & DYNAMICS',
       feeds: <>el <b>P&L y Cash Flow Retail EB</b> (que suman a Energy Brands) · el vendedor <b>Intercompañía</b> en Ventas · la tienda <b>SINERGY</b> → P&L y Cash Flow de SINERGY.</>,
       where: <>Entra a <b style={{ color: '#0e7490' }}>Retail</b> (menú)</>,
       items: [
         { t: 'Compras por tienda: calendario (% de llegada por mes) + unidades anuales + de qué marca·categoría wholesale se surte cada subcategoría (%, suma 100%)', to: 'sbu:Retail', d: { retailTab: 'comercial', retailComTab: 'ventas' } },
         { t: 'Ventas por tienda: unidades vendidas por mes + % margen + % descuento (2026 es referencia, solo lectura)', to: 'sbu:Retail', d: { retailTab: 'comercial', retailComTab: 'ucv' } },
         { t: 'Gastos de tienda (EB) y gastos SINERGY', to: 'sbu:Retail', d: { retailTab: 'gastos' } },
-        { t: 'Marketing Retail (EB) y Marketing SINERGY', to: 'sbu:Retail', d: { retailTab: 'mk' } },
-        { t: 'Logística SINERGY', to: 'sbu:Retail', d: { retailTab: 'logistica' } },
+        { t: 'Marketing Retail (EB) y Marketing SINERGY & DYNAMICS', to: 'sbu:Retail', d: { retailTab: 'mk' } },
+        { t: 'Logística SINERGY & DYNAMICS', to: 'sbu:Retail', d: { retailTab: 'logistica' } },
         { t: 'Viajes: EB y SINERGY (Director + Marketing)', to: 'sbu:Retail', d: { retailTab: 'viajes' } },
         { t: 'Cash Flow: líneas financieras EB y SINERGY', to: 'sbu:Retail', d: { retailTab: 'cf' } },
       ],
