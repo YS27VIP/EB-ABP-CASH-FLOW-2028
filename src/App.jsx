@@ -5196,6 +5196,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   const T = empresa === 'TUMAR' && tumar ? tumar : null
   const esT = empresa === 'TUMAR' // TUMAR no usa nada del EBP: sus referencias salen solo de TUMAR Performance
   const esEB = empresa === 'ENERGY BRANDS' // el ABP 2027 por marca es SOLO de Energy Brands; otras empresas no tienen 2027 propio
+  const esTaho = empresa === 'TAHO' // TAHO no tiene venta real 2025/2026 ni ABP 2027 propios → columnas vacías
   // FY (histórico) y ABP2027 (PLAN) para un conjunto de marcas
   const fySet = (ms, year, tipo) => { let s = 0; hist.forEach((r) => { if (String(r[1]) !== String(year)) return; if (!ms.some((m) => upper(m) === upper(r[5]))) return; if (String(r[3] || '').toUpperCase().indexOf(tipo) < 0) return; s += num(r[7]) }); return s }
   const abpSet = (ms, campo) => ms.reduce((a, m) => { const o = plan[upper(m)]; return a + (o ? o[campo] || 0 : 0) }, 0)
@@ -5276,17 +5277,17 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   const otrosTip = `Otros gastos = viajes nivel empresa (prorrateados por venta):\n🧮 Admin: ${fmt(otrosTag('(ADMIN)'))}\n⚙️ Procesos: ${fmt(otrosTag('(PROCESOS)'))}\n💰 Finanzas: ${fmt(otrosTag('(FINANZAS)'))}\n= Total: ${fmt(otrosAnual)}`
   const allM = sbuList.flatMap(({ s }) => sbus[s] || [])
   // TUMAR: la columna de Real 2026 viene de TUMAR Performance (gTumarReal, en USD), no del EBP.
-  const v26 = T ? sum12(T.totalVenta) : fySet(allM, 2026, 'VENTA')
-  const c26 = T ? sum12(T.totalCosto) : fySet(allM, 2026, 'COSTO')
+  const v26 = T ? sum12(T.totalVenta) : (esTaho ? null : fySet(allM, 2026, 'VENTA'))
+  const c26 = T ? sum12(T.totalCosto) : (esTaho ? null : fySet(allM, 2026, 'COSTO'))
   const com26 = T ? sum12(T.lines.comisiones) : null
   const log26 = T ? sum12(T.lines.logistica) : null
   const filasG = [
     { k: 'Unidades', g: (a) => a.unidades, fy26: T ? sum12(T.totalUnid) : null },
-    { k: 'Venta Neta', g: (a) => a.ventaNeta, strong: true, fy26: v26, fy25: esT ? null : fySet(allM, 2025, 'VENTA'), abp27: esEB ? abpSet(allM, 'venta') : null },
-    { k: '(−) Costo', g: (a) => a.costo, fy26: c26, fy25: esT ? null : fySet(allM, 2025, 'COSTO'), abp27: esEB ? abpSet(allM, 'costo') : null },
+    { k: 'Venta Neta', g: (a) => a.ventaNeta, strong: true, fy26: v26, fy25: (esT || esTaho) ? null : fySet(allM, 2025, 'VENTA'), abp27: esEB ? abpSet(allM, 'venta') : null },
+    { k: '(−) Costo', g: (a) => a.costo, fy26: c26, fy25: (esT || esTaho) ? null : fySet(allM, 2025, 'COSTO'), abp27: esEB ? abpSet(allM, 'costo') : null },
     { k: '(−) Comisiones', g: (a) => a.comisiones, fy26: com26 },
     { k: '(−) Logística', g: (a) => a.logistica, fy26: log26 },
-    { k: '= Margen Bruto', g: (a) => a.margenBruto, strong: true, fy26: T ? (v26 - c26 - (com26 || 0) - (log26 || 0)) : (fySet(allM, 2026, 'VENTA') - fySet(allM, 2026, 'COSTO')), fy25: esT ? null : (fySet(allM, 2025, 'VENTA') - fySet(allM, 2025, 'COSTO')), abp27: esEB ? (abpSet(allM, 'venta') - abpSet(allM, 'costo')) : null },
+    { k: '= Margen Bruto', g: (a) => a.margenBruto, strong: true, fy26: T ? (v26 - c26 - (com26 || 0) - (log26 || 0)) : (esTaho ? null : (fySet(allM, 2026, 'VENTA') - fySet(allM, 2026, 'COSTO'))), fy25: (esT || esTaho) ? null : (fySet(allM, 2025, 'VENTA') - fySet(allM, 2025, 'COSTO')), abp27: esEB ? (abpSet(allM, 'venta') - abpSet(allM, 'costo')) : null },
     { k: '(−) Marketing', g: (a) => a.marketing, fy26: T ? sum12(T.lines.marketing) : null },
     { k: '(−) Viajes', g: (a) => a.viajes, fy26: T ? sum12(T.lines.viajes) : null },
     { k: '= Contribución de la SBU', g: (a) => a.brand, strong: true },
