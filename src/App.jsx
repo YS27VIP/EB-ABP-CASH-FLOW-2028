@@ -6901,15 +6901,22 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
   useEffect(() => { try { localStorage.setItem('cattipo_' + empresa, JSON.stringify(catTipo)) } catch { } }, [catTipo, empresa])
   const tipoKey = (cat) => marca + '|' + cat
   const setTipo = (cat, v) => setCatTipo({ ...catTipo, [tipoKey(cat)]: v })
+  // Preconfiguración: categorías por marca tomadas del ABP (Producto · filas "AUC · categoría"). El director puede modificarlas.
+  const [prodCats, setProdCats] = useState({})
   useEffect(() => {
     (async () => {
       try {
         const j = await gReadTab('Cap_Categorias')
         if (j && j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (!catRowOk(row, empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) }
       } catch { }
+      try {
+        const jp = await gReadTab('Cap_Producto')
+        if (jp && jp.ok && jp.values) { const out = {}; jp.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const rub = String(row[1] || ''); if (!/^auc\s*·/i.test(rub)) return; const cat = rub.replace(/^auc\s*·\s*/i, '').trim(); const mar = row[3]; if (!mar || !cat) return; (out[mar] = out[mar] || []); if (!out[mar].includes(cat)) out[mar].push(cat) }); setProdCats(out) }
+      } catch { }
     })()
   }, [empresa])
-  const lista = cats[marca] || []
+  // Si la marca aún no tiene categorías guardadas, se precargan las del ABP (Producto). El director las edita y guarda.
+  const lista = (cats[marca] && cats[marca].length) ? cats[marca] : (prodCats[marca] || []).map((c) => ({ cat: c, peso: '' }))
   const setLista = (arr) => setCats({ ...cats, [marca]: arr })
   const suma = lista.reduce((s, o) => s + num(o.peso), 0)
   // Clientes de la marca (para el % por cliente) + referencia FW26/SS26
