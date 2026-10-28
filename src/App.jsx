@@ -4407,7 +4407,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         <input value={cellOf(c, m).pct ?? ''} onChange={(e) => setCell(c, m, 'pct', e.target.value)} inputMode="decimal" placeholder="%" title={`${c} ← ${m} · %`} style={{ display: 'block', width: '100%', boxSizing: 'border-box', border: '1px solid #f0e6c9', background: '#fdf7e3', borderRadius: 5, padding: '6px 4px', textAlign: 'center', font: 'inherit' }} />
                         <select value={cellOf(c, m).cat ?? ''} onChange={(e) => setCell(c, m, 'cat', e.target.value)} title="Categoría wholesale de esta marca" style={{ display: 'block', width: '100%', boxSizing: 'border-box', fontSize: 10.5, padding: '4px 2px', borderRadius: 4, border: `1.5px solid ${faltaCat ? '#e11d8f' : '#cbd5e1'}`, color: catOf(c, m) ? '#111' : (faltaCat ? '#e11d8f' : '#94a3b8'), background: '#fff' }}>
-                          <option value="">{faltaCat ? '⚠ categoría' : '—'}</option>{(prodCats[m] || []).map((x) => <option key={x} value={x}>{x}</option>)}
+                          <option value="">{faltaCat ? '⚠ categoría' : '—'}</option>{((prodCats[m] && prodCats[m].length) ? prodCats[m] : (catPresetDe(m) || [])).map((x) => <option key={x} value={x}>{x}</option>)}
                         </select>
                       </div>
                     </td> })}
