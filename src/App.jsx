@@ -178,6 +178,28 @@ const REF_CAT = {
     'TAHO': { ROAD: { fw: 49 }, TRAIL: { fw: 51 } },
   },
 }
+// Categorías por marca preconfiguradas del ABP 2026_2027 EB (Brand Contribution). El Director solo revisa/modifica.
+// Claves normalizadas (mayúsculas, sin espacios) para calzar con los nombres de marca de la app.
+const CAT_PRESET_2027 = {
+  HOKA: ['FTW Road', 'FTW Trail', 'FTW Race', 'FTW Hike', 'FTW Lifestyle', 'FTW Recovery', 'FTW Fitness', 'FTW Work', 'FTW Kids', 'APP Top', 'APP Bottom', 'Accessories'],
+  ALTRA: ['FTW Road', 'FTW Trail', 'FTW Hike', 'FTW Gym', 'FTW Lifestyle', 'APP Top', 'APP Bottom', 'Accessories'],
+  FJALLRAVEN: ['Apparel Accessories', 'Apparel Bottoms', 'Apparel Top', 'Backpacks & Bags', 'Hardware Accessories'],
+  INJINJI: ['SOCKS'],
+  NORDA: ['Footwear'],
+  BIRKENSTOCK: ['FTW LEATHER', 'FTW EVA', 'FTW PAPILLIO', 'FTW PROFESIONAL', 'FTW CLOSE TOE', 'SOCKS', 'ACTIVE'],
+  ARIAT: ['ENGLISH', 'WESTERN', 'WORK'],
+  BLUNDSTONE: ['BOOTS'],
+  ECCO: ['ACCESSORIES', 'FOOTWEAR'],
+  UGG: ['Boots', 'Shoes', 'Slippers', 'Sandals'],
+  COTOPAXI: ['HEADWEAR', 'OUTERWEAR', 'GRAPHICS', 'EVERYDAY ACC', 'DAYPACKS - SMALL BAGS', 'TRAVEL AND TECHNICAL'],
+  FOAMERS: ['BASIC', 'CORE', 'ELEVATE', 'PREMIUM', 'SIGNATURE'],
+  MAMMUT: ['APP-OUTERLAYER', 'APP-MIDLAYERS', 'APP-BASELAYERS', 'BOTTOMS', 'LOW TIER ACCESSORIES', 'MID TIER ACCESSORIES', 'HIGH TIER ACCESSORIES', 'FTW TRAIL RUNNING', 'FTW MOUNTAINEERING'],
+  GOORINBROS: ['CORE', 'PREMIUM'],
+  FITFLOP: ['ENTRY', 'CORE', 'PREMIUM'],
+  KEEN: ['ENTRY', 'CORE', 'PREMIUM'],
+  IZIPIZI: ['HEADWEAR', 'OUTERWEAR', 'GRAPHICS', 'EVERYDAY ACC', 'DAYPACKS - SMALL BAGS', 'TRAVEL AND TECHNICAL'],
+}
+const catPresetDe = (marca) => CAT_PRESET_2027[String(marca || '').toUpperCase().replace(/\s+/g, '')] || null
 function refCat(marca, cli, cat) {
   const tbl = REF_CAT[upper(marca)]; if (!tbl) return null
   const key = Object.keys(tbl).find((k) => upper(cli).indexOf(k) >= 0); if (!key) return null
@@ -6901,22 +6923,16 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
   useEffect(() => { try { localStorage.setItem('cattipo_' + empresa, JSON.stringify(catTipo)) } catch { } }, [catTipo, empresa])
   const tipoKey = (cat) => marca + '|' + cat
   const setTipo = (cat, v) => setCatTipo({ ...catTipo, [tipoKey(cat)]: v })
-  // Preconfiguración: categorías por marca tomadas del ABP (Producto · filas "AUC · categoría"). El director puede modificarlas.
-  const [prodCats, setProdCats] = useState({})
   useEffect(() => {
     (async () => {
       try {
         const j = await gReadTab('Cap_Categorias')
         if (j && j.ok && j.values) { const out = {}; j.values.slice(1).forEach((row) => { if (!catRowOk(row, empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out) }
       } catch { }
-      try {
-        const jp = await gReadTab('Cap_Producto')
-        if (jp && jp.ok && jp.values) { const out = {}; jp.values.slice(1).forEach((row) => { if (upper(row[0]) !== upper(empresa)) return; const rub = String(row[1] || ''); if (!/^auc\s*·/i.test(rub)) return; const cat = rub.replace(/^auc\s*·\s*/i, '').trim(); const mar = row[3]; if (!mar || !cat) return; (out[mar] = out[mar] || []); if (!out[mar].includes(cat)) out[mar].push(cat) }); setProdCats(out) }
-      } catch { }
     })()
   }, [empresa])
-  // Si la marca aún no tiene categorías guardadas, se precargan las del ABP (Producto). El director las edita y guarda.
-  const lista = (cats[marca] && cats[marca].length) ? cats[marca] : (prodCats[marca] || []).map((c) => ({ cat: c, peso: '' }))
+  // Si la marca aún no tiene categorías guardadas, se precargan las del ABP 2027 (CAT_PRESET_2027). El director las revisa, edita y guarda.
+  const lista = (cats[marca] && cats[marca].length) ? cats[marca] : (catPresetDe(marca) || []).map((c) => ({ cat: c, peso: '' }))
   const setLista = (arr) => setCats({ ...cats, [marca]: arr })
   const suma = lista.reduce((s, o) => s + num(o.peso), 0)
   // Clientes de la marca (para el % por cliente) + referencia FW26/SS26
