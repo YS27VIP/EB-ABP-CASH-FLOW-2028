@@ -716,7 +716,7 @@ export default function App() {
               <label className="who">Empresa:
                 <span className="inline">
                   {veTodasEff
-                    ? <select value={empresa} onChange={(e) => setEmpresa(e.target.value)}>{empresas.filter((e) => e !== 'SINERGY').map((e) => <option key={e}>{e}</option>)}</select>
+                    ? <select value={empresa} onChange={(e) => { const v = e.target.value; if (v === '__HOLDING__') setRoleId('holding'); else setEmpresa(v) }}>{empresas.filter((e) => e !== 'SINERGY').map((e) => <option key={e}>{e}</option>)}{esAdmin && empresas.length > 1 && <option value="__HOLDING__">🏛️ TOTAL HOLDING FINANZAS</option>}</select>
                     : <span className="empchip" style={{ marginLeft: 0, background: 'var(--odoo)' }}>{empresa}</span>}
                 </span>
               </label>
@@ -744,10 +744,6 @@ export default function App() {
             {esAdmin && <button className="app" onClick={() => setRoleId('gerencia')}>
               <span className="appicon" style={{ background: '#1f2d3d' }}>📈</span>
               <span className="applabel">Gerencia</span>
-            </button>}
-            {esAdmin && empresas.length > 1 && <button className="app" onClick={() => setRoleId('holding')}>
-              <span className="appicon" style={{ background: '#7c3aed' }}>🏛️</span>
-              <span className="applabel">Total Holding</span>
             </button>}
             <button className="app" onClick={() => setRoleId('calendario')}>
               <span className="appicon" style={{ background: '#0e7490' }}>📅</span>
