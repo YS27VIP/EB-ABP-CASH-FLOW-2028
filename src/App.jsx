@@ -2368,7 +2368,7 @@ function TahoEspejo({ empresa, marca }) {
       {(!d || totU === 0)
         ? <div className="sub">TAHO aún no ha cargado compras {oneMarca ? `de ${marca} ` : ''}para {empresa}. Cuando las cargue en su Producto, aquí aparecerán como espejo (no afecta tus totales).</div>
         : <>
-          <div className="sub">Lo que <b>TAHO planea comprarle a {empresa}</b> en 2028: <b>unidades</b> por mes y su <b>valor ($ = unidades × AUC de TAHO)</b>. Es un <b>espejo informativo</b>: no cambia tus totales.</div>
+          <div className="sub">Lo que <b>TAHO planea comprarle a {empresa}</b> en 2028: <b>unidades</b> por mes y su <b>valor ($ = unidades × AUC de TAHO)</b>.</div>
           <div className="tablewrap"><table className="vfix logcost-tbl"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '96px' }} /></colgroup>
             <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
             <tbody>
