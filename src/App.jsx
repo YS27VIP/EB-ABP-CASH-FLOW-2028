@@ -5421,28 +5421,32 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
 function HoldingCashFlow({ empresas }) {
   const read = (e) => { try { return JSON.parse(localStorage.getItem(`cfsum_${e}`) || 'null') } catch { return null } }
   const sinFromRetail = () => { try { const d = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null'); const s = d && d.SIN; if (!s) return null; const g = (a, i) => Number((a || [])[i]) || 0; const o = { cobros: [], pagos: [], oper: [], fin: [], oIng: [], oGas: [], flujo: [], ini0: Number(s.ini) || 0 }; for (let i = 0; i < 12; i++) { const cob = g(s.venta, i), pag = (s.pagos ? g(s.pagos, i) : g(s.costo, i)), op = g(s.gastos, i) + g(s.logistica, i) + g(s.mk, i) + g(s.vj, i), fn = g(s.fin, i), oi = g(s.oIng, i), og = g(s.oGas, i); o.cobros.push(cob); o.pagos.push(pag); o.oper.push(op); o.fin.push(fn); o.oIng.push(oi); o.oGas.push(og); o.flujo.push(cob - pag - op - fn - og + oi) } return o } catch { return null } }
-  const parts = (empresas || []).map((e) => e === 'SINERGY' ? sinFromRetail() : read(e)).filter(Boolean)
+  const partsE = (empresas || []).map((e) => ({ e, p: e === 'SINERGY' ? sinFromRetail() : read(e) })).filter((x) => x.p)
+  const parts = partsE.map((x) => x.p)
   if (!parts.length) return <div className="panel" style={{ borderLeftColor: '#7c3aed' }}><h3 style={{ color: '#7c3aed' }}>💵 Cash Flow consolidado — Total Holding</h3><div className="sub">Aún no hay cash flow guardado. Entra a cada empresa → <b>Gerencia → Cash Flow (▣ TODAS)</b> y guarda; aquí se sumarán todas.</div></div>
   const sumArr = (k) => Array.from({ length: 12 }, (_, i) => parts.reduce((a, p) => a + (Number((p[k] || [])[i]) || 0), 0))
   const cobros = sumArr('cobros'), pagos = sumArr('pagos'), oper = sumArr('oper'), fin = sumArr('fin'), oIng = sumArr('oIng'), oGas = sumArr('oGas'), flujo = sumArr('flujo')
   const ini0 = parts.reduce((a, p) => a + (Number(p.ini0) || 0), 0)
   const ini = [], final = []; let prev = 0; for (let i = 0; i < 12; i++) { ini[i] = i === 0 ? ini0 : prev; final[i] = ini[i] + flujo[i]; prev = final[i] }
   const S = (a) => a.reduce((x, y) => x + y, 0)
-  const rowCalc = (lbl, arr, color, sign) => <tr><td className="l" style={{ color }}>{lbl}</td>{arr.map((v, i) => <td key={i} className="tot yb" style={{ color }}>{sign && v > 0.5 ? sign + ' ' : ''}{fmt(v)}</td>)}<td className="tot" style={{ color }}>{sign ? sign + ' ' : ''}{fmt(S(arr))}</td></tr>
+  // Desglose por empresa para el tooltip (💡): qué aporta cada empresa a ese concepto/mes.
+  const brk = (lbl, k, i) => `${lbl} · ${MESES[i].toUpperCase()}\n` + partsE.map(({ e, p }) => `${e === 'SINERGY' ? 'SINERGY & DYNAMICS' : e}: ${fmt(Number((p[k] || [])[i]) || 0)}`).join('\n')
+  const rowCalc = (lbl, arr, color, sign, k) => <tr><td className="l" style={{ color }}>{lbl}</td>{arr.map((v, i) => <td key={i} className="tot yb help-bulb" style={{ color }} title={brk(lbl, k, i)}>{sign && v > 0.5 ? sign + ' ' : ''}{fmt(v)}</td>)}<td className="tot" style={{ color }}>{sign ? sign + ' ' : ''}{fmt(S(arr))}</td></tr>
   return <div className="panel" style={{ borderLeftColor: '#7c3aed' }}>
     <h3 style={{ color: '#7c3aed' }}>💵 Cash Flow consolidado — Total Holding <span className="unit">(suma de todas las empresas · solo lectura)</span></h3>
+    <div className="sub">💡 Pasa el cursor sobre un número para ver el <b>desglose por empresa</b>.</div>
     <div className="tablewrap" style={{ overflowX: 'auto' }}>
       <table className="vfix"><colgroup><col style={{ width: '230px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '66px' }} />)}<col style={{ width: '95px' }} /></colgroup>
         <thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m} className="yb">{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
         <tbody>
           <tr><td className="l" style={{ fontWeight: 700 }}>Cash Inicial</td>{ini.map((v, i) => <td key={i} className="tot yb">{fmt(v)}</td>)}<td className="tot">—</td></tr>
-          {rowCalc('Cash In (Cobros)', cobros, '#15803d', '+')}
-          {rowCalc('Cash Out (Pagos)', pagos, '#b91c1c', '−')}
-          {rowCalc('Costos Operativos', oper, '#b91c1c', '−')}
-          {rowCalc('Costos Financieros', fin, '#b91c1c', '−')}
-          {rowCalc('Otros ingresos', oIng, '#15803d', '+')}
-          {rowCalc('Otros gastos', oGas, '#b91c1c', '−')}
-          <tr className="grandrow"><td className="l">= Flujo neto del mes</td>{flujo.map((v, i) => { const s = v > 0.5 ? '+ ' : v < -0.5 ? '− ' : ''; return <td key={i} className="tot yb" style={{ color: v < -0.5 ? '#b91c1c' : v > 0.5 ? '#15803d' : undefined }}>{s}{fmt(Math.abs(v))}</td> })}<td className="tot">{fmt(S(flujo))}</td></tr>
+          {rowCalc('Cash In (Cobros)', cobros, '#15803d', '+', 'cobros')}
+          {rowCalc('Cash Out (Pagos)', pagos, '#b91c1c', '−', 'pagos')}
+          {rowCalc('Costos Operativos', oper, '#b91c1c', '−', 'oper')}
+          {rowCalc('Costos Financieros', fin, '#b91c1c', '−', 'fin')}
+          {rowCalc('Otros ingresos', oIng, '#15803d', '+', 'oIng')}
+          {rowCalc('Otros gastos', oGas, '#b91c1c', '−', 'oGas')}
+          <tr className="grandrow"><td className="l">= Flujo neto del mes</td>{flujo.map((v, i) => { const s = v > 0.5 ? '+ ' : v < -0.5 ? '− ' : ''; return <td key={i} className="tot yb help-bulb" title={brk('Flujo neto', 'flujo', i)} style={{ color: v < -0.5 ? '#b91c1c' : v > 0.5 ? '#15803d' : undefined }}>{s}{fmt(Math.abs(v))}</td> })}<td className="tot">{fmt(S(flujo))}</td></tr>
           <tr><td className="l" style={{ fontWeight: 700 }}>Cash Final</td>{final.map((v, i) => <td key={i} className="tot yb" style={{ fontWeight: 700 }}>{fmt(v)}</td>)}<td className="tot">—</td></tr>
         </tbody>
       </table>
