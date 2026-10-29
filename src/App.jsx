@@ -5523,13 +5523,14 @@ function HoldingScreen({ empresas, sbusFor }) {
     <>
       <div className="panel">
         <h3>🏛️ Total Holding — Resultado Operativo consolidado <span className="unit">(todas las empresas · 2028 · solo lectura)</span></h3>
+        <div className="sub">💡 Pasa el cursor sobre la columna <b>TOTAL HOLDING</b> para ver el <b>desglose por empresa</b>.</div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{byEmp.map(({ e }) => <th key={e}>{e}</th>)}<th style={{ color: '#7c3aed' }}>TOTAL HOLDING</th></tr></thead>
           <tbody>
             {filas.map((f) => <tr key={f.k} className={f.strong ? 'grandrow' : undefined}>
               <td className="l">{f.k}</td>
               {byEmp.map(({ e, v }) => <td key={e} className="tot">{fmt(f.g(v))}</td>)}
-              <td className="tot" style={{ fontWeight: 800, color: '#7c3aed' }}>{fmt(totHold(f.g))}</td>
+              <td className="tot help-bulb" style={{ fontWeight: 800, color: '#7c3aed' }} title={`${f.k} · TOTAL HOLDING = suma por empresa:\n` + byEmp.map(({ e, v }) => `${e === 'SINERGY' ? 'SINERGY & DYNAMICS' : e}: ${fmt(f.g(v))}`).join('\n')}>{fmt(totHold(f.g))}</td>
             </tr>)}
           </tbody>
         </table></div>
