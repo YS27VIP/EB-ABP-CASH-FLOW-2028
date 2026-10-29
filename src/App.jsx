@@ -479,6 +479,7 @@ export default function App() {
   const [roleId, setRoleId] = useState(() => { try { const v = localStorage.getItem('abp_nav_role'); const ts = Number(localStorage.getItem('abp_nav_ts') || 0); return (v && Date.now() - ts < 8 * 60 * 60 * 1000) ? v : null } catch { return null } }) // tras 8 horas de inactividad, vuelve al menú
   const firstNav = useRef(true) // evita borrar la ubicación guardada en el primer render
   const [navDeep, setNavDeep] = useState(null) // objetivo profundo para la Guía por rol (lleva al paso exacto dentro de una SBU)
+  const [holdingMode, setHoldingMode] = useState(false) // al elegir "TOTAL HOLDING FINANZAS" en el selector, el menú muestra la tarjeta del Holding (como las SBU)
   const goTo = (rid, deep = null) => { setNavDeep(deep); setRoleId(rid) } // navega, opcionalmente con deep-link
   const [connError, setConnError] = useState(false)
   const [authed, setAuthed] = useState(isSignedIn())
@@ -716,13 +717,17 @@ export default function App() {
               <label className="who">Empresa:
                 <span className="inline">
                   {veTodasEff
-                    ? <select value={empresa} onChange={(e) => { const v = e.target.value; if (v === '__HOLDING__') setRoleId('holding'); else setEmpresa(v) }}>{empresas.filter((e) => e !== 'SINERGY').map((e) => <option key={e}>{e}</option>)}{esAdmin && empresas.length > 1 && <option value="__HOLDING__">🏛️ TOTAL HOLDING FINANZAS</option>}</select>
+                    ? <select value={holdingMode ? '__HOLDING__' : empresa} onChange={(e) => { const v = e.target.value; if (v === '__HOLDING__') setHoldingMode(true); else { setHoldingMode(false); setEmpresa(v) } }}>{empresas.filter((e) => e !== 'SINERGY').map((e) => <option key={e}>{e}</option>)}{esAdmin && empresas.length > 1 && <option value="__HOLDING__">🏛️ TOTAL HOLDING FINANZAS</option>}</select>
                     : <span className="empchip" style={{ marginLeft: 0, background: 'var(--odoo)' }}>{empresa}</span>}
                 </span>
               </label>
             </div>
           </div>
           <div className="apps">
+            {holdingMode ? <button className="app" onClick={() => setRoleId('holding')}>
+              <span className="appicon" style={{ background: '#7c3aed' }}>🏛️</span>
+              <span className="applabel">Total Holding</span>
+            </button> : <>
             {Object.keys(sbus).map((s) => (
               <button key={s} className="app" onClick={() => goTo('sbu:' + s)}>
                 <span className="appicon" style={{ background: sbuColor(s) }}>🧩</span>
@@ -761,6 +766,7 @@ export default function App() {
               <span className="appicon" style={{ background: '#5b6470' }}>⚙️</span>
               <span className="applabel">Configuración</span>
             </button>}
+            </>}
           </div>
           {acceso && <p className="sub" style={{ marginTop: 14 }}>Ves solo las secciones asignadas a tu usuario. Si falta alguna, pídele a un administrador que ajuste tu acceso en Combinaciones → Colaboradores.</p>}
         </main>
