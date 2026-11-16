@@ -1812,7 +1812,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoH
           ? <div className="note ok" style={{ marginBottom: 12 }}>🪞 <b>Espejo (solo lectura):</b> el saldo pendiente por cobrar del 2027 lo captura <b>Finanzas por cada marca</b>. Aquí solo ves el consolidado.</div>
           : <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b><div style={{ marginTop: 6, paddingLeft: 16 }}><div>Coloca las <b>cuentas por cobrar del 2027</b> en el mes en que debe efectuarse el cobro (enero a marzo).</div></div></div>}
         {buscador}
-        {(!soloVer || esDirector) && <div className="toolbar" style={{ marginBottom: 8 }}><div style={{ flex: 1 }}></div>{!soloVer && <><button className="btn" onClick={plantillaCob}>📄 Descargar plantilla</button><label className="btn" style={{ cursor: 'pointer' }}>📥 Importar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={importarCob} style={{ display: 'none' }} /></label><button className="btn" onClick={exportarCob}>⬇ Exportar Excel</button></>}<button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : (esDirector && soloVer ? '💾 Guardar plazos' : '💾 Guardar')}</button></div>}
+        {(!soloVer || esDirector) && !isTotal && <div className="toolbar" style={{ marginBottom: 8 }}><div style={{ flex: 1 }}></div>{!soloVer && <><button className="btn" onClick={plantillaCob}>📄 Descargar plantilla</button><label className="btn" style={{ cursor: 'pointer' }}>📥 Importar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={importarCob} style={{ display: 'none' }} /></label><button className="btn" onClick={exportarCob}>⬇ Exportar Excel</button></>}<button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : (esDirector && soloVer ? '💾 Guardar plazos' : '💾 Guardar')}</button></div>}
         {(() => {
           const arrIdx = [0, 1, 2]; const arrLbl = CF_M2028.slice(0, 3); const DIV = { borderLeft: '3px solid var(--odoo)' }; const STK = { position: 'sticky', top: 0, zIndex: 3, background: '#f7fafb' }; const STK2 = { position: 'sticky', top: 33, zIndex: 3, background: '#f7fafb' }
           if (isTotal) {
@@ -5425,6 +5425,27 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       const tmp = JSON.parse(localStorage.getItem('temp_' + empresa) || '{}')
       const prows = allM.map((mca) => { let t = 0; const cs = MH.map((_, mi) => { const v = SEASONS.reduce((s, se) => s + num(tmp[`CP|${mca}|${se}|${mi}`]), 0); t += v; return C(v ? n0(v) : '') }); const tr = Math.max(0, Math.round(num(tmp[`TR|${mca}`]))); return { cells: [C(mca), C(tr + ' m'), ...cs, C(n0(t))] } }).filter((r) => r.cells.some((c, i) => i >= 2 && c.t))
       if (prows.length) { out.push(sec('Producto — Compras por temporada (fecha XFD)', 'unidades · 2028')); out.push(tbl(['Marca', 'Tránsito', ...MH, 'Total'], prows)) }
+    } catch { }
+    // ---- Producto — Resumen de inventario por marca (inicial/compras/disponible/venta/saldo + valor $) ----
+    try {
+      const tmpI = JSON.parse(localStorage.getItem('temp_' + empresa) || '{}')
+      const precI = JSON.parse(localStorage.getItem('precios_' + empresa) || '{}')
+      const invOut = []
+      allM.forEach((mca) => {
+        const cl = (cats[mca] || []).filter((c) => c.cat).map((c) => ({ cat: c.cat, peso: num(c.peso) }))
+        const catL = cl.length ? cl : [{ cat: 'General', peso: 0 }]
+        const sAUC = (s) => { let n = 0, d = 0; catL.forEach(({ cat, peso }) => { const a = num(precI[`PAUC|${mca}|${s}|${cat}`]); const w = (num(peso) || 0) + 0.0001; if (a > 0) { n += a * w; d += w } }); return d ? n / d : 0 }
+        let flujos = {}; try { flujos = (inventarioCalc(tmpI, mca, ventaMarcaMes(ventas, empresa, mca)) || {}).flujos || {} } catch { flujos = {} }
+        const rt = (arr, key) => (arr || []).reduce((a, x) => a + (x[key] || 0), 0)
+        const res = seasonsFor(empresa).map((s) => { const f = flujos[s] || []; const ini = num(tmpI[`II|${mca}|${s}`]); const comp = rt(f, 'comp'); const vend = rt(f, 'sal'); const queda = (f[11] || {}).fin || 0; return { s, ini, comp, disp: ini + comp, vend, queda, auc: sAUC(s) } })
+        if (!res.some((r) => r.ini || r.comp || r.vend || r.queda)) return
+        const T = res.reduce((a, r) => ({ ini: a.ini + r.ini, comp: a.comp + r.comp, disp: a.disp + r.disp, vend: a.vend + r.vend, queda: a.queda + r.queda, $q: a.$q + r.queda * r.auc }), { ini: 0, comp: 0, disp: 0, vend: 0, queda: 0, $q: 0 })
+        invOut.push(`<div class="subh">${E(mca)} <span>· inventario (unidades · saldo $)</span></div>`)
+        const body = res.map((r) => ({ cells: [C(sLbl(r.s)), C(n0(r.ini)), C(BUY_SEASONS.includes(r.s) ? n0(r.comp) : '—'), C(n0(r.disp)), C(n0(r.vend)), C(n0(r.queda)), C(r.auc ? '$' + n0(r.queda * r.auc) : '—')] }))
+        body.push({ cls: 'tot', cells: [C('TOTAL'), C(n0(T.ini)), C(n0(T.comp)), C(n0(T.disp)), C(n0(T.vend)), C(n0(T.queda)), C('$' + n0(T.$q))] })
+        invOut.push(tbl(['Temporada', 'Inicial', 'Compras', 'Disponible', 'Venta', 'Saldo fin año', 'Saldo $'], body))
+      })
+      if (invOut.length) { out.push(sec('Producto — Resumen de inventario por marca', 'inicial + compras − ventas · 2028')); invOut.forEach((h) => out.push(h)) }
     } catch { }
     // ---- Logística — modelo por marca (de logcost_<empresa>) ----
     try {
