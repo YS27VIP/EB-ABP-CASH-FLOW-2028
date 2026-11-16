@@ -5259,7 +5259,7 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
 
 /* ===== GERENCIA: consolidado de solo lectura por SBU y marca ===== */
 // ===== Reporte ABP (HTML/PDF): CSS y apertura compartidos =====
-const ABP_REPORT_CSS = `:root{--teal:#0e7490;--dark:#134e4a;--ink:#1f2d3d;--muted:#64748b;--line:#e1e7eb;--zebra:#f3f8fa;--totbg:#e8f3f5;--pos:#15803d;--neg:#b91c1c}*{box-sizing:border-box}body{margin:0;background:#eef2f4;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px}.page{max-width:1120px;margin:0 auto;padding:0 24px 60px}.cover{background:linear-gradient(135deg,var(--teal),var(--dark));color:#fff;border-radius:0 0 18px 18px;padding:44px 40px 30px;margin-bottom:12px;box-shadow:0 8px 24px rgba(13,78,84,.18)}.cover h1{margin:0;font-size:46px;font-weight:800;letter-spacing:.5px}.cover .sub{font-size:19px;opacity:.95;margin-top:6px;font-weight:600}.cover .meta{font-size:13px;opacity:.82;margin-top:16px}.toolbar{position:sticky;top:0;z-index:5;display:flex;gap:10px;justify-content:flex-end;padding:12px 0;background:#eef2f4}.btn{border:none;border-radius:9px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;background:var(--teal);color:#fff;box-shadow:0 2px 6px rgba(14,116,144,.3)}.sec{margin:30px 0 10px;display:flex;align-items:center;gap:12px}.sec .bar{width:6px;height:26px;border-radius:4px;background:var(--teal)}.sec h2{margin:0;font-size:21px;color:var(--teal);font-weight:800}.sec .tag{margin-left:auto;font-size:11px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-weight:600}.subh{margin:14px 0 4px;font-weight:700;color:var(--ink);font-size:14px}.subh span{color:var(--muted);font-weight:500}.divider{margin:40px 0 6px;font-size:13px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--dark);border-bottom:2px solid var(--teal);padding-bottom:6px}.card{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(31,45,61,.05);margin-bottom:16px}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{padding:8px 12px;text-align:right;white-space:nowrap}th.l,td.l{text-align:left;white-space:normal}thead th{background:var(--teal);color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}tbody tr:nth-child(even){background:var(--zebra)}tbody td{border-top:1px solid var(--line)}tr.tot td{background:var(--totbg);font-weight:800;border-top:2px solid var(--teal)}tr.strong td{font-weight:700}td.ref{background:#f6eefb}.scroll{overflow-x:auto}@media print{body{background:#fff}.toolbar{display:none}.page{max-width:none;padding:0 10px}.sec,.card{break-inside:avoid}.card{box-shadow:none}.cover{border-radius:0}}`
+const ABP_REPORT_CSS = `:root{--teal:#0e7490;--dark:#134e4a;--ink:#1f2d3d;--muted:#64748b;--line:#e1e7eb;--zebra:#f3f8fa;--totbg:#e8f3f5;--pos:#15803d;--neg:#b91c1c}*{box-sizing:border-box}body{margin:0;background:#eef2f4;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px}.page{max-width:1120px;margin:0 auto;padding:0 24px 60px}.cover{background:linear-gradient(135deg,var(--teal),var(--dark));color:#fff;border-radius:0 0 18px 18px;padding:44px 40px 30px;margin-bottom:12px;box-shadow:0 8px 24px rgba(13,78,84,.18)}.cover h1{margin:0;font-size:46px;font-weight:800;letter-spacing:.5px}.cover .sub{font-size:19px;opacity:.95;margin-top:6px;font-weight:600}.cover .meta{font-size:13px;opacity:.82;margin-top:16px}.toolbar{position:sticky;top:0;z-index:5;display:flex;gap:10px;justify-content:flex-end;padding:12px 0;background:#eef2f4}.btn{border:none;border-radius:9px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;background:var(--teal);color:#fff;box-shadow:0 2px 6px rgba(14,116,144,.3)}.sec{margin:30px 0 10px;display:flex;align-items:center;gap:12px}.sec .bar{width:6px;height:26px;border-radius:4px;background:var(--teal)}.sec h2{margin:0;font-size:21px;color:var(--teal);font-weight:800}.sec .tag{margin-left:auto;font-size:11px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-weight:600}.subh{margin:14px 0 4px;font-weight:700;color:var(--ink);font-size:14px}.subh span{color:var(--muted);font-weight:500}.divider{margin:40px 0 6px;font-size:13px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--dark);border-bottom:2px solid var(--teal);padding-bottom:6px}.card{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(31,45,61,.05);margin-bottom:16px}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{padding:8px 12px;text-align:right;white-space:nowrap}th.l,td.l{text-align:left;white-space:normal}thead th{background:var(--teal);color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}tbody tr:nth-child(even){background:var(--zebra)}tbody td{border-top:1px solid var(--line)}tr.tot td{background:var(--totbg);font-weight:800;border-top:2px solid var(--teal)}tr.strong td{font-weight:700}td.ref{background:#f6eefb}.scroll{overflow-x:auto}.dept{border:1.6px solid var(--c);border-radius:16px;margin:26px 0;overflow:hidden;box-shadow:0 3px 16px rgba(31,45,61,.08);background:#fff}.dept-head{background:var(--c);color:#fff;font-size:19px;font-weight:800;padding:14px 22px;letter-spacing:.3px}.dept-body{padding:6px 20px 18px}.dept-body .sec{margin:22px 0 10px}.dept-body .sec .bar{background:var(--c)}.dept-body .sec h2{color:var(--c);font-size:18px}.dept-body thead th{background:var(--c)}.dept-body tr.tot td{border-top-color:var(--c)}.dept-body .subh{color:var(--c)}@media print{body{background:#fff}.toolbar{display:none}.page{max-width:none;padding:0 10px}.dept,.sec,.card{break-inside:avoid}.dept{box-shadow:none}.card{box-shadow:none;border:none}.cover{border-radius:0}}`
 function abpOpenReport(titulo, subtitulo, bodyHTML, win) {
   const E = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
   const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${E(titulo)}</title><style>${ABP_REPORT_CSS}</style></head><body><div class="toolbar page"><button class="btn" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button></div><div class="cover"><h1>ABP 2028</h1><div class="sub">${E(subtitulo)}</div><div class="meta">Espejo — detalle de lo capturado · ${new Date().toLocaleDateString('es')}</div></div><div class="page">${bodyHTML}</div></body></html>`
@@ -5351,6 +5351,9 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
     const n0 = (v) => Math.round(num(v)).toLocaleString('en-US')
     const MH = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
     const out = []
+    // Cada sección cae en su departamento; al final se emite cada depto como un bloque con contorno y color.
+    const G = { resumen: [], ventas: [], producto: [], marketing: [], logistica: [], director: [], finanzas: [], retail: [] }
+    const P = (dep, ...h) => { for (const x of h) G[dep].push(x) }
     const sec = (title, tag) => `<div class="sec"><span class="bar"></span><h2>${E(title)}</h2>${tag ? `<span class="tag">${E(tag)}</span>` : ''}</div>`
     const tbl = (head, rows) => `<div class="card"><div class="scroll"><table><thead><tr>${head.map((h, i) => `<th class="${i === 0 ? 'l' : ''}">${E(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr class="${r.cls || ''}">${r.cells.map((c, i) => `<td class="${i === 0 ? 'l ' : ''}${c.cls || ''}">${c.t == null ? '' : E(c.t)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`
     const C = (t, cls) => ({ t, cls })
@@ -5361,7 +5364,6 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
     const fy = (y, t) => esTaho ? null : fySet(allM, y, t), ab = (c) => esEB ? abpSet(allM, c) : null
     const D = (v) => v == null ? '—' : n0(v)
     const prow = (lbl, get, abp, f26, f25, st) => ({ cls: st || '', cells: [C(lbl), ...aggs.map(({ a }) => C(n0(get(a)))), C(n0(get(tot))), C(D(abp), 'ref'), C(D(f26)), C(D(f25))] })
-    out.push(sec('Resultado Operativo consolidado — ' + empresa, 'SBU lado a lado · 2028'))
     const headR = ['Concepto', ...aggs.map(({ sn }) => sn), 'TOTAL', 'ABP2027', 'FY2026', 'FY2025']
     const rowsR = [
       prow('Unidades', (a) => a.unidades || 0, null, null, null),
@@ -5375,7 +5377,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       { cls: '', cells: [C('(−) Gastos administrativos'), ...aggs.map(() => C('')), C(n0(gadminAnual)), C('—', 'ref'), C('—'), C('—')] },
       { cls: 'tot', cells: [C('= Resultado operativo'), ...aggs.map(() => C('')), C(n0((tot.brand || 0) - gadminAnual)), C('—', 'ref'), C('—'), C('—')] },
     ]
-    out.push(tbl(headR, rowsR))
+    P('resumen', sec('Resultado Operativo consolidado — ' + empresa, 'SBU lado a lado · 2028'), tbl(headR, rowsR))
     // ---- Cash Flow consolidado (cfsum) ----
     try {
       const cfs = JSON.parse(localStorage.getItem('cfsum_' + empresa) || 'null')
@@ -5385,8 +5387,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         const ini = [], finl = []; let prev = num(cfs.ini0); for (let i = 0; i < 12; i++) { ini[i] = i === 0 ? num(cfs.ini0) : prev; finl[i] = ini[i] + fl[i]; prev = finl[i] }
         const tF = (a) => a.reduce((x, y) => x + y, 0)
         const cfRow = (lbl, arr, st, totMode) => ({ cls: st || '', cells: [C(lbl), ...arr.map((v) => C(n0(v))), C(totMode === 'none' ? '—' : totMode === 'last' ? n0(arr[11]) : n0(tF(arr)))] })
-        out.push(sec('Cash Flow consolidado — ' + empresa, 'mensual · 2028'))
-        out.push(tbl(['Concepto', ...MH, 'Total/Final'], [cfRow('Cash Inicial', ini, 'strong', 'none'), cfRow('Cash In (Cobros)', cob), cfRow('Cash Out (Pagos)', pag), cfRow('Costos Operativos', op), cfRow('Costos Financieros', fin), cfRow('Otros ingresos', oi), cfRow('Otros gastos', og), cfRow('= Flujo neto del mes', fl, 'tot'), cfRow('Cash Final', finl, 'strong', 'last')]))
+        P('resumen', sec('Cash Flow consolidado — ' + empresa, 'mensual · 2028'), tbl(['Concepto', ...MH, 'Total/Final'], [cfRow('Cash Inicial', ini, 'strong', 'none'), cfRow('Cash In (Cobros)', cob), cfRow('Cash Out (Pagos)', pag), cfRow('Costos Operativos', op), cfRow('Costos Financieros', fin), cfRow('Otros ingresos', oi), cfRow('Otros gastos', og), cfRow('= Flujo neto del mes', fl, 'tot'), cfRow('Cash Final', finl, 'strong', 'last')]))
       }
     } catch { }
     // ---- P&L mensual por marca ----
@@ -5407,37 +5408,36 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         await Y()
       }
     }
-    if (plOut.length) { out.push(sec('P&L mensual por marca', 'detalle · 2028')); plOut.forEach((h) => out.push(h)) }
+    if (plOut.length) { P('resumen', sec('P&L mensual por marca', 'detalle · 2028'), ...plOut) }
     await Y()
     // ---- Capturas crudas ----
-    const dump = (titulo, tag, rows, modo) => {
+    const dump = (dep, titulo, tag, rows, modo) => {
       const flt = (rows || []).filter((rr) => upper(rr[0]) === upper(empresa) && (modo === 'vj' ? esVi(String(rr[1] || '')) : modo === 'novj' ? !esVi(String(rr[1] || '')) : true))
       const body = flt.map((rr) => { let t = 0; const cs = MH.map((_, mi) => { const v = num(rr[4 + mi]); t += v; return C(v ? n0(v) : '') }); return { cells: [C(String(rr[1] || '')), C(String(rr[3] || '')), ...cs, C(n0(t))] } }).filter((row) => row.cells.some((c, i) => i >= 2 && c.t))
       if (!body.length) return
-      out.push(sec(titulo, tag)); out.push(tbl(['Rubro / Concepto', 'Marca', ...MH, 'Total'], body))
+      P(dep, sec(titulo, tag), tbl(['Rubro / Concepto', 'Marca', ...MH, 'Total'], body))
     }
-    out.push(`<div class="divider">Capturas (detalle de lo llenado)</div>`)
-    dump('Ventas — unidades por cliente', 'Cap_Ventas', ventas, 'novj')
-    dump('Producto — AUC / AUP por categoría', 'Cap_Producto', producto, 'all')
-    dump('Marketing', 'Cap_Marketing', mk, 'novj')
-    dump('Viajes — Marketing', 'viajes', mk, 'vj'); dump('Viajes — Director', 'viajes', dir, 'vj'); dump('Viajes — Ventas', 'viajes', ventas, 'vj'); dump('Viajes — Producto', 'viajes', producto, 'vj'); dump('Viajes — Logística', 'viajes', log, 'vj')
-    dump('Logística', 'Cap_Logistica', log, 'novj')
-    dump('Finanzas — Cash Flow / Otros', 'Cap_Finanzas', finR, 'all')
+    dump('ventas', 'Ventas — unidades por cliente', 'Cap_Ventas', ventas, 'novj')
+    dump('producto', 'Producto — AUC / AUP por categoría', 'Cap_Producto', producto, 'all')
+    dump('marketing', 'Marketing', 'Cap_Marketing', mk, 'novj')
+    dump('marketing', 'Viajes — Marketing', 'viajes', mk, 'vj'); dump('director', 'Viajes — Director', 'viajes', dir, 'vj'); dump('ventas', 'Viajes — Ventas', 'viajes', ventas, 'vj'); dump('producto', 'Viajes — Producto', 'viajes', producto, 'vj'); dump('logistica', 'Viajes — Logística', 'viajes', log, 'vj')
+    dump('logistica', 'Logística', 'Cap_Logistica', log, 'novj')
+    dump('finanzas', 'Finanzas — Cash Flow / Otros', 'Cap_Finanzas', finR, 'all')
     // Categorías
     const catRows = []; Object.entries(cats).forEach(([mca, arr]) => (arr || []).forEach((c) => catRows.push({ cells: [C(mca), C(String(c.cat || '')), C(c.peso != null ? n0(c.peso) : '')] })))
-    if (catRows.length) { out.push(sec('Categorías por marca', 'Cap_Categorias')); out.push(tbl(['Marca', 'Categoría', 'Peso'], catRows)) }
+    if (catRows.length) { P('director', sec('Categorías por marca', 'Cap_Categorias'), tbl(['Marca', 'Categoría', 'Peso'], catRows)) }
     // Gastos Admin
     try {
       const gad = JSON.parse(localStorage.getItem('gadmin_' + empresa) || '{}'); const acc = {}
       Object.keys(gad).forEach((k) => { const p = k.split('||'); let sbu = '', cod = '', mi = -1; if (p.length === 3) { sbu = p[0]; cod = p[1]; mi = +p[2] } else { const q = k.split('|'); cod = q[0]; mi = +q[1] } if (!cod || isNaN(mi)) return; const kk = sbu + '§' + cod; (acc[kk] = acc[kk] || { sbu, cod, m: Array(12).fill(0) }).m[mi] = num(gad[k]) })
       const gRows = Object.values(acc).filter((o) => o.m.some((v) => v)).map((o) => { let t = 0; const cs = o.m.map((v) => { t += v; return C(v ? n0(v) : '') }); return { cells: [C(o.sbu || '—'), C(o.cod), ...cs, C(n0(t))] } })
-      if (gRows.length) { out.push(sec('Gastos Admin (Finanzas)', 'gadmin')); out.push(tbl(['SBU', 'Cód', ...MH, 'Total'], gRows)) }
+      if (gRows.length) { P('finanzas', sec('Gastos Admin directos', 'por SBU · 2028'), tbl(['SBU', 'Cód', ...MH, 'Total'], gRows)) }
     } catch { }
     // ---- Producto — Compras por temporada (de temp_<empresa>) ----
     try {
       const tmp = JSON.parse(localStorage.getItem('temp_' + empresa) || '{}')
       const prows = allM.map((mca) => { let t = 0; const cs = MH.map((_, mi) => { const v = SEASONS.reduce((s, se) => s + num(tmp[`CP|${mca}|${se}|${mi}`]), 0); t += v; return C(v ? n0(v) : '') }); const tr = Math.max(0, Math.round(num(tmp[`TR|${mca}`]))); return { cells: [C(mca), C(tr + ' m'), ...cs, C(n0(t))] } }).filter((r) => r.cells.some((c, i) => i >= 2 && c.t))
-      if (prows.length) { out.push(sec('Producto — Compras por temporada (fecha XFD)', 'unidades · 2028')); out.push(tbl(['Marca', 'Tránsito', ...MH, 'Total'], prows)) }
+      if (prows.length) { P('producto', sec('Producto — Compras por temporada (fecha XFD)', 'unidades · 2028'), tbl(['Marca', 'Tránsito', ...MH, 'Total'], prows)) }
     } catch { }
     // ---- Producto — Resumen de inventario por marca (inicial/compras/disponible/venta/saldo + valor $) ----
     try {
@@ -5458,13 +5458,13 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         body.push({ cls: 'tot', cells: [C('TOTAL'), C(n0(T.ini)), C(n0(T.comp)), C(n0(T.disp)), C(n0(T.vend)), C(n0(T.queda)), C('$' + n0(T.$q))] })
         invOut.push(tbl(['Temporada', 'Inicial', 'Compras', 'Disponible', 'Venta', 'Saldo fin año', 'Saldo $'], body))
       })
-      if (invOut.length) { out.push(sec('Producto — Resumen de inventario por marca', 'inicial + compras − ventas · 2028')); invOut.forEach((h) => out.push(h)) }
+      if (invOut.length) { P('producto', sec('Producto — Resumen de inventario por marca', 'inicial + compras − ventas · 2028'), ...invOut) }
     } catch { }
     // ---- Logística — modelo por marca (de logcost_<empresa>) ----
     try {
       const lc = JSON.parse(localStorage.getItem('logcost_' + empresa) || '{}')
       const lrows = allM.map((mca) => { const pct = num(lc[`${mca}|PCT_LOGVENTA`]); const mue = MH.reduce((a, _, m) => a + num(lc[`${mca}|MUECOST|${m}`]), 0); return { mca, pct, mue } }).filter((o) => o.pct || o.mue)
-      if (lrows.length) { out.push(sec('Logística — modelo por marca', 'espejo · 2028')); out.push(tbl(['Marca', '% Log / venta', 'Muestras ($)'], lrows.map((o) => ({ cells: [C(o.mca), C(o.pct ? o.pct + '%' : '—'), C(n0(o.mue))] })))) }
+      if (lrows.length) { P('logistica', sec('Logística — modelo por marca', 'espejo · 2028'), tbl(['Marca', '% Log / venta', 'Muestras ($)'], lrows.map((o) => ({ cells: [C(o.mca), C(o.pct ? o.pct + '%' : '—'), C(n0(o.mue))] })))) }
     } catch { }
     // ---- Logística — detalle por marca (% log, % mant, muestras, CBM por categoría) ----
     try {
@@ -5474,7 +5474,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         const cbm = (cats[mca] || []).filter((c) => num(lc[`${mca}|CBM|${c.cat}`])).map((c) => `${c.cat}: ${num(lc[`${mca}|CBM|${c.cat}`])}`).join(' · ')
         return { mca, pctLog, pctMant, mue, cbm }
       }).filter((o) => o.pctLog || o.pctMant || o.mue || o.cbm)
-      if (lrows.length) { out.push(sec('Logística — detalle por marca', 'costos logísticos · 2028')); out.push(tbl(['Marca', '% Log/venta', '% Mantenim.', 'Muestras ($)', 'CBM por categoría'], lrows.map((o) => ({ cells: [C(o.mca), C(o.pctLog ? o.pctLog + '%' : '—'), C(o.pctMant ? o.pctMant + '%' : '—'), C(n0(o.mue)), C(o.cbm || '—')] })))) }
+      if (lrows.length) { P('logistica', sec('Logística — detalle por marca', 'costos logísticos · 2028'), tbl(['Marca', '% Log/venta', '% Mantenim.', 'Muestras ($)', 'CBM por categoría'], lrows.map((o) => ({ cells: [C(o.mca), C(o.pctLog ? o.pctLog + '%' : '—'), C(o.pctMant ? o.pctMant + '%' : '—'), C(n0(o.mue)), C(o.cbm || '—')] })))) }
     } catch { }
     // ---- Comisiones por marca (de comis_<empresa>) ----
     try {
@@ -5483,7 +5483,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         const cn = (cats[mca] || []).map((c) => c.cat); const r = realAupAuc(empresa, mca, ventas, producto, cn)
         const t = comisionCalc(mca, cd, r.ventaMes).total; return { mca, m: t, tot: t.reduce((a, b) => a + b, 0) }
       }).filter((o) => o.tot)
-      if (crows.length) { out.push(sec('Comisiones por marca', 'Director · % sobre venta externa · 2028')); out.push(tbl(['Marca', ...MH, 'Total'], crows.map((o) => ({ cells: [C(o.mca), ...o.m.map((v) => C(v ? n0(v) : '')), C(n0(o.tot))] })))) }
+      if (crows.length) { P('director', sec('Comisiones por marca', '% sobre venta externa · 2028'), tbl(['Marca', ...MH, 'Total'], crows.map((o) => ({ cells: [C(o.mca), ...o.m.map((v) => C(v ? n0(v) : '')), C(n0(o.tot))] })))) }
     } catch { }
     // ---- Muestras a comprar (ud + $) por marca (de muestras_<empresa>) ----
     try {
@@ -5501,13 +5501,13 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         mrows.push({ cells: [C(mca), C('ud'), ...ud.map((v) => C(v ? n0(v) : '')), C(n0(tU))] })
         mrows.push({ cls: 'strong', cells: [C(mca), C('$'), ...usd.map((v) => C(v ? n0(v) : '')), C(n0(tD))] })
       })
-      if (mrows.length) { out.push(sec('Muestras a comprar por marca', 'Director · unidades + $ · 2028')); out.push(tbl(['Marca', '', ...MH, 'Total'], mrows)) }
+      if (mrows.length) { P('director', sec('Muestras a comprar por marca', 'unidades + $ · 2028'), tbl(['Marca', '', ...MH, 'Total'], mrows)) }
     } catch { }
     // ---- Aprobaciones de Finanzas (logística / compras por marca) ----
     try {
       const ap = JSON.parse(localStorage.getItem('aprob_' + empresa) || '{}')
       const arows = allM.map((mca) => ({ mca, log: ap[`LOGISTICA|${mca}`] ? '✓ Aprobado' : '—', com: ap[`COMPRA|${mca}`] ? '✓ Aprobado' : '—' })).filter((o) => o.log !== '—' || o.com !== '—')
-      if (arows.length) { out.push(sec('Aprobaciones de Finanzas', 'por marca · 2028')); out.push(tbl(['Marca', 'Costos logísticos', 'Términos de compra'], arows.map((o) => ({ cells: [C(o.mca), C(o.log), C(o.com)] })))) }
+      if (arows.length) { P('finanzas', sec('Aprobaciones de Finanzas', 'por marca · 2028'), tbl(['Marca', 'Costos logísticos', 'Términos de compra'], arows.map((o) => ({ cells: [C(o.mca), C(o.log), C(o.com)] })))) }
     } catch { }
     await Y()
     // ---- Finanzas — Cuentas por cobrar 2027 + Términos de cliente + Pago a proveedor (de cf_<empresa>) ----
@@ -5521,7 +5521,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         Object.keys(cf).forEach((k) => { const m = k.match(/^COB2027\|([^|]+)\|(.+)\|(\d+)$/); if (m && upper(m[1]) === upper(mca)) cliSet.add(m[2]) })
         ;[...cliSet].forEach((cli) => { const v = [0, 1, 2].map((mi) => num(cf[`COB2027|${mca}|${cli}|${mi}`])); const t = v[0] + v[1] + v[2]; const term = cf[`TERM|${mca}|${cli}`] || ''; if (t) cobRows.push({ mca, cli, term, v, t }) })
       })
-      if (cobRows.length) { out.push(sec('Finanzas — Cuentas por cobrar del 2027', 'saldo pendiente · entra a caja en 2028')); out.push(tbl(['Marca', 'Cliente', 'Término', 'ENE', 'FEB', 'MAR', 'Total'], cobRows.map((o) => ({ cells: [C(o.mca), C(o.cli), C(o.term || '—'), ...o.v.map((x) => C(x ? n0(x) : '')), C(n0(o.t))] })))) }
+      if (cobRows.length) { P('finanzas', sec('Finanzas — Cuentas por cobrar del 2027', 'saldo pendiente · entra a caja en 2028'), tbl(['Marca', 'Cliente', 'Término', 'ENE', 'FEB', 'MAR', 'Total'], cobRows.map((o) => ({ cells: [C(o.mca), C(o.cli), C(o.term || '—'), ...o.v.map((x) => C(x ? n0(x) : '')), C(n0(o.t))] })))) }
       // Términos de pago de clientes: % del universo por plazo (por marca)
       const termRows = []
       allM.forEach((mca) => {
@@ -5529,7 +5529,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli || cli.toUpperCase().startsWith('VIAJES')) return; const term = cf[`TERM|${mca}|${cli}`] || '—'; byTerm[term] = (byTerm[term] || 0) + 1; tot++ })
         if (tot) Object.entries(byTerm).sort((a, b) => b[1] - a[1]).forEach(([term, n]) => termRows.push({ cells: [C(mca), C(term), C(n + ''), C((n / tot * 100).toFixed(0) + '%')] }))
       })
-      if (termRows.length) { out.push(sec('Finanzas — Términos de pago de clientes', 'universo de clientes por plazo · por marca')); out.push(tbl(['Marca', 'Término', 'Clientes', '% del universo'], termRows)) }
+      if (termRows.length) { P('finanzas', sec('Finanzas — Términos de pago de clientes', 'universo de clientes por plazo · por marca'), tbl(['Marca', 'Término', 'Clientes', '% del universo'], termRows)) }
       // Pago a proveedor (Cash Out): término de compra por marca + pagos por mes
       const tmp = JSON.parse(localStorage.getItem('temp_' + empresa) || '{}')
       const aucMesM = (mca) => { const a = Array(12).fill(0); producto.forEach((r) => { if (upper(r[0]) === upper(empresa) && upper(r[3]) === upper(mca) && upper(r[1]) === 'AUC') { for (let j = 0; j < 12; j++) a[j] = num(r[4 + j]) } }); return a }
@@ -5539,7 +5539,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         const pagos = MH.map((_, mi) => (mi >= plazo ? compraUsd[mi - plazo] : 0)); const tP = pagos.reduce((a, b) => a + b, 0)
         return { mca, term, plazo, pagos, tP }
       }).filter((o) => o.tP || o.term)
-      if (provRows.length) { out.push(sec('Finanzas — Pago a proveedor (Cash Out)', 'cuándo la compra se vuelve pago · 2028')); out.push(tbl(['Marca', 'Término proveedor', ...MH, 'Total'], provRows.map((o) => ({ cells: [C(o.mca), C(o.term ? `${o.term} (${o.plazo}m)` : '—'), ...o.pagos.map((x) => C(x ? n0(x) : '')), C(n0(o.tP))] })))) }
+      if (provRows.length) { P('finanzas', sec('Finanzas — Pago a proveedor (Cash Out)', 'cuándo la compra se vuelve pago · 2028'), tbl(['Marca', 'Término proveedor', ...MH, 'Total'], provRows.map((o) => ({ cells: [C(o.mca), C(o.term ? `${o.term} (${o.plazo}m)` : '—'), ...o.pagos.map((x) => C(x ? n0(x) : '')), C(n0(o.tP))] })))) }
     } catch { }
     await Y()
     // ---- Gastos Admin indirectos (gadmin_ind_<empresa>) ----
@@ -5547,7 +5547,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       const di = JSON.parse(localStorage.getItem('gadmin_ind_' + empresa) || '{}')
       let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem('gadmin_cfg_' + empresa) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { }
       const gRows = cfg.map((it) => { const m = MH.map((_, mi) => num(di[`${it.cod}|${mi}`])); const t = m.reduce((a, b) => a + b, 0); return { it, m, t } }).filter((o) => o.t)
-      if (gRows.length) { out.push(sec('Gastos Admin indirectos (corporativos)', 'se prorratean por peso de venta · 2028')); out.push(tbl(['Cód', 'Rubro', ...MH, 'Total'], gRows.map((o) => ({ cells: [C(o.it.cod), C(o.it.sub), ...o.m.map((x) => C(x ? n0(x) : '')), C(n0(o.t))] })))) }
+      if (gRows.length) { P('finanzas', sec('Gastos Admin indirectos (corporativos)', 'se prorratean por peso de venta · 2028'), tbl(['Cód', 'Rubro', ...MH, 'Total'], gRows.map((o) => ({ cells: [C(o.it.cod), C(o.it.sub), ...o.m.map((x) => C(x ? n0(x) : '')), C(n0(o.t))] })))) }
     } catch { }
     // ---- Producto — Precios por temporada × categoría (precios_<empresa>) ----
     try {
@@ -5559,12 +5559,11 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         SEASONS.forEach((s) => catL.forEach((c) => { const inv = num(pr[`INV|${mca}|${s}|${c}`]); const auc = num(pr[`PAUC|${mca}|${s}|${c}`]); const aup = num(pr[`PAUP|${mca}|${s}|${c}`]); if (inv || auc || aup) rows.push({ cells: [C(sLbl(s)), C(c), C(inv ? n0(inv) : ''), C(auc ? n0(auc) : ''), C(aup ? n0(aup) : '')] }) }))
         if (rows.length) { pm.push(`<div class="subh">${E(mca)} <span>· precios por temporada × categoría</span></div>`); pm.push(tbl(['Temporada', 'Categoría', 'Inventario (ud)', 'AUC (costo)', 'AUP (precio)'], rows)) }
       })
-      if (pm.length) { out.push(sec('Producto — Precios por temporada y categoría', 'inventario · AUC · AUP · 2028')); pm.forEach((h) => out.push(h)) }
+      if (pm.length) { P('producto', sec('Producto — Precios por temporada y categoría', 'inventario · AUC · AUP · 2028'), ...pm) }
     } catch { }
     await Y()
     // ---- Retail (solo Energy Brands) ----
     if (upper(empresa) === 'ENERGY BRANDS') {
-      out.push(`<div class="divider">Retail — tiendas propias</div>`)
       // P&L / Cash Flow mensual por bucket (EB y SINERGY) desde retail_pl
       try {
         const pl = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null')
@@ -5574,8 +5573,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
           const venta = g12(b.venta), costo = g12(b.costo), logi = g12(b.logistica), mkt = g12(b.mk), vj = g12(b.vj), gas = g12(b.gastos), pag = g12(b.pagos)
           const mb = MH.map((_, m) => venta[m] - costo[m] - logi[m]); const res = MH.map((_, m) => mb[m] - mkt[m] - vj[m] - gas[m])
           const row = (lbl, arr, cls) => ({ cls: cls || '', cells: [C(lbl), ...arr.map((v) => C(v ? n0(v) : '')), C(n0(tF(arr)))] })
-          out.push(sec(titulo, 'mensual · 2028'))
-          out.push(tbl(['Concepto', ...MH, 'Total'], [row('Venta Neta', venta, 'strong'), row('(−) Costo', costo), row('(−) Logística', logi), row('= Margen Bruto', mb, 'strong'), row('(−) Marketing', mkt), row('(−) Viajes', vj), row('(−) Gastos', gas), row('= Resultado', res, 'tot'), row('Pagos a proveedor', pag)]))
+          P('retail', sec(titulo, 'mensual · 2028'), tbl(['Concepto', ...MH, 'Total'], [row('Venta Neta', venta, 'strong'), row('(−) Costo', costo), row('(−) Logística', logi), row('= Margen Bruto', mb, 'strong'), row('(−) Marketing', mkt), row('(−) Viajes', vj), row('(−) Gastos', gas), row('= Resultado', res, 'tot'), row('Pagos a proveedor', pag)]))
         }
         if (pl && pl.EB) plMes(pl.EB, 'Retail — P&L / Cash Flow Retail EB')
         if (pl && pl.SIN) plMes(pl.SIN, 'Retail — P&L / Cash Flow SINERGY & DYNAMICS')
@@ -5586,22 +5584,34 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         const vt = JSON.parse(localStorage.getItem('retail_ventas_ENERGY BRANDS') || '{}')
         let tiendas = RETAIL_TIENDAS; try { const t = JSON.parse(localStorage.getItem('retail_tiendas_ENERGY BRANDS') || 'null'); if (Array.isArray(t) && t.length) tiendas = t } catch { }
         const vrows = tiendas.map((t) => { const u = MH.map((_, mi) => num(vt[`${t}||SU||${mi}`])); const tot = u.reduce((a, b) => a + b, 0); return { t, u, tot } }).filter((o) => o.tot)
-        if (vrows.length) { out.push(sec('Retail — Ventas por tienda', 'unidades sell-through · 2028')); out.push(tbl(['Tienda', ...MH, 'Total'], vrows.map((o) => ({ cells: [C(o.t), ...o.u.map((v) => C(v ? n0(v) : '')), C(n0(o.tot))] })))) }
+        if (vrows.length) { P('retail', sec('Retail — Ventas por tienda', 'unidades sell-through · 2028'), tbl(['Tienda', ...MH, 'Total'], vrows.map((o) => ({ cells: [C(o.t), ...o.u.map((v) => C(v ? n0(v) : '')), C(n0(o.tot))] })))) }
       } catch { }
       // Compras por marca (retail_imp)
       try {
         const imp = JSON.parse(localStorage.getItem('retail_imp_ENERGY BRANDS') || '{}')
         const irows = RETAIL_MARCAS.map((m) => { const a = MH.map((_, mi) => num(imp[`${m}|${mi}`])); const t = a.reduce((x, y) => x + y, 0); return { m, a, t } }).filter((o) => o.t)
-        if (irows.length) { out.push(sec('Retail — Compras / importaciones por marca', 'costo USD · 2028')); out.push(tbl(['Marca', ...MH, 'Total'], irows.map((o) => ({ cells: [C(o.m), ...o.a.map((v) => C(v ? n0(v) : '')), C(n0(o.t))] })))) }
+        if (irows.length) { P('retail', sec('Retail — Compras / importaciones por marca', 'costo USD · 2028'), tbl(['Marca', ...MH, 'Total'], irows.map((o) => ({ cells: [C(o.m), ...o.a.map((v) => C(v ? n0(v) : '')), C(n0(o.t))] })))) }
       } catch { }
       // Gastos EB por centro de costo (retail_gastos_eb)
       try {
         const ge = JSON.parse(localStorage.getItem('retail_gastos_eb_ENERGY BRANDS') || '{}')
         const grows = DEFAULT_GADMIN.map((it) => { const a = MH.map((_, mi) => num(ge[`G|${it.cod}|${mi}`])); const t = a.reduce((x, y) => x + y, 0); return { it, a, t } }).filter((o) => o.t)
-        if (grows.length) { out.push(sec('Retail — Gastos EB (centros de costo)', 'por código · 2028')); out.push(tbl(['Cód', 'Rubro', ...MH, 'Total'], grows.map((o) => ({ cells: [C(o.it.cod), C(o.it.sub), ...o.a.map((v) => C(v ? n0(v) : '')), C(n0(o.t))] })))) }
+        if (grows.length) { P('retail', sec('Retail — Gastos EB (centros de costo)', 'por código · 2028'), tbl(['Cód', 'Rubro', ...MH, 'Total'], grows.map((o) => ({ cells: [C(o.it.cod), C(o.it.sub), ...o.a.map((v) => C(v ? n0(v) : '')), C(n0(o.t))] })))) }
       } catch { }
       await Y()
     }
+    // ---- Ensamblado final: cada departamento es un bloque con contorno y color ----
+    const DEPTS = [
+      ['resumen', '📊 Dirección — Resultado & Cash Flow', '#0e7490'],
+      ['ventas', '📈 Ventas', '#0891b2'],
+      ['producto', '📦 Producto', '#017e84'],
+      ['marketing', '📣 Marketing', '#d9822b'],
+      ['logistica', '🚚 Logística', '#3b6ea5'],
+      ['director', '🧭 Dirección comercial (Director)', '#0d9488'],
+      ['finanzas', '💰 Finanzas', '#2e7d32'],
+      ['retail', '🏬 Retail — tiendas propias', '#7c3aed'],
+    ]
+    DEPTS.forEach(([k, title, c]) => { if (G[k].length) out.push(`<section class="dept" style="--c:${c}"><div class="dept-head">${E(title)}</div><div class="dept-body">${G[k].join('')}</div></section>`) })
     abpOpenReport('ABP 2028 — Espejo ' + empresa, 'Annual Business Plan + Cash Flow · ' + empresa, out.join(''), win)
   }
   async function descargarPptx() {
