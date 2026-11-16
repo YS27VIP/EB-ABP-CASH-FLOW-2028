@@ -5509,14 +5509,98 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       const arows = allM.map((mca) => ({ mca, log: ap[`LOGISTICA|${mca}`] ? '✓ Aprobado' : '—', com: ap[`COMPRA|${mca}`] ? '✓ Aprobado' : '—' })).filter((o) => o.log !== '—' || o.com !== '—')
       if (arows.length) { out.push(sec('Aprobaciones de Finanzas', 'por marca · 2028')); out.push(tbl(['Marca', 'Costos logísticos', 'Términos de compra'], arows.map((o) => ({ cells: [C(o.mca), C(o.log), C(o.com)] })))) }
     } catch { }
+    await Y()
+    // ---- Finanzas — Cuentas por cobrar 2027 + Términos de cliente + Pago a proveedor (de cf_<empresa>) ----
+    try {
+      const cf = JSON.parse(localStorage.getItem('cf_' + empresa) || '{}')
+      // Cuentas por cobrar del 2027 (saldo pendiente, se cobra ene–mar 2028) por marca/cliente
+      const cobRows = []
+      allM.forEach((mca) => {
+        const cliSet = new Set()
+        ventas.forEach((r) => { if (upper(r[0]) === upper(empresa) && upper(r[3]) === upper(mca)) { const c = String(r[1] || '').trim(); if (c && !c.toUpperCase().startsWith('VIAJES')) cliSet.add(c) } })
+        Object.keys(cf).forEach((k) => { const m = k.match(/^COB2027\|([^|]+)\|(.+)\|(\d+)$/); if (m && upper(m[1]) === upper(mca)) cliSet.add(m[2]) })
+        ;[...cliSet].forEach((cli) => { const v = [0, 1, 2].map((mi) => num(cf[`COB2027|${mca}|${cli}|${mi}`])); const t = v[0] + v[1] + v[2]; const term = cf[`TERM|${mca}|${cli}`] || ''; if (t) cobRows.push({ mca, cli, term, v, t }) })
+      })
+      if (cobRows.length) { out.push(sec('Finanzas — Cuentas por cobrar del 2027', 'saldo pendiente · entra a caja en 2028')); out.push(tbl(['Marca', 'Cliente', 'Término', 'ENE', 'FEB', 'MAR', 'Total'], cobRows.map((o) => ({ cells: [C(o.mca), C(o.cli), C(o.term || '—'), ...o.v.map((x) => C(x ? n0(x) : '')), C(n0(o.t))] })))) }
+      // Términos de pago de clientes: % del universo por plazo (por marca)
+      const termRows = []
+      allM.forEach((mca) => {
+        const byTerm = {}; let tot = 0
+        ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli || cli.toUpperCase().startsWith('VIAJES')) return; const term = cf[`TERM|${mca}|${cli}`] || '—'; byTerm[term] = (byTerm[term] || 0) + 1; tot++ })
+        if (tot) Object.entries(byTerm).sort((a, b) => b[1] - a[1]).forEach(([term, n]) => termRows.push({ cells: [C(mca), C(term), C(n + ''), C((n / tot * 100).toFixed(0) + '%')] }))
+      })
+      if (termRows.length) { out.push(sec('Finanzas — Términos de pago de clientes', 'universo de clientes por plazo · por marca')); out.push(tbl(['Marca', 'Término', 'Clientes', '% del universo'], termRows)) }
+      // Pago a proveedor (Cash Out): término de compra por marca + pagos por mes
+      const tmp = JSON.parse(localStorage.getItem('temp_' + empresa) || '{}')
+      const aucMesM = (mca) => { const a = Array(12).fill(0); producto.forEach((r) => { if (upper(r[0]) === upper(empresa) && upper(r[3]) === upper(mca) && upper(r[1]) === 'AUC') { for (let j = 0; j < 12; j++) a[j] = num(r[4 + j]) } }); return a }
+      const provRows = allM.map((mca) => {
+        const term = cf[`PTERM|${mca}`] || ''; const plazo = CF_PLAZO_MESES[term] ?? 0; const au = aucMesM(mca)
+        const compraUsd = MH.map((_, mi) => SEASONS.reduce((a, s) => a + num(tmp[`CP|${mca}|${s}|${mi}`]), 0) * au[mi])
+        const pagos = MH.map((_, mi) => (mi >= plazo ? compraUsd[mi - plazo] : 0)); const tP = pagos.reduce((a, b) => a + b, 0)
+        return { mca, term, plazo, pagos, tP }
+      }).filter((o) => o.tP || o.term)
+      if (provRows.length) { out.push(sec('Finanzas — Pago a proveedor (Cash Out)', 'cuándo la compra se vuelve pago · 2028')); out.push(tbl(['Marca', 'Término proveedor', ...MH, 'Total'], provRows.map((o) => ({ cells: [C(o.mca), C(o.term ? `${o.term} (${o.plazo}m)` : '—'), ...o.pagos.map((x) => C(x ? n0(x) : '')), C(n0(o.tP))] })))) }
+    } catch { }
+    await Y()
+    // ---- Gastos Admin indirectos (gadmin_ind_<empresa>) ----
+    try {
+      const di = JSON.parse(localStorage.getItem('gadmin_ind_' + empresa) || '{}')
+      let cfg = DEFAULT_GADMIN; try { const s = JSON.parse(localStorage.getItem('gadmin_cfg_' + empresa) || 'null'); if (Array.isArray(s) && s.length) cfg = s } catch { }
+      const gRows = cfg.map((it) => { const m = MH.map((_, mi) => num(di[`${it.cod}|${mi}`])); const t = m.reduce((a, b) => a + b, 0); return { it, m, t } }).filter((o) => o.t)
+      if (gRows.length) { out.push(sec('Gastos Admin indirectos (corporativos)', 'se prorratean por peso de venta · 2028')); out.push(tbl(['Cód', 'Rubro', ...MH, 'Total'], gRows.map((o) => ({ cells: [C(o.it.cod), C(o.it.sub), ...o.m.map((x) => C(x ? n0(x) : '')), C(n0(o.t))] })))) }
+    } catch { }
+    // ---- Producto — Precios por temporada × categoría (precios_<empresa>) ----
+    try {
+      const pr = JSON.parse(localStorage.getItem('precios_' + empresa) || '{}')
+      const pm = []
+      allM.forEach((mca) => {
+        const catL = (cats[mca] || []).map((c) => c.cat); if (!catL.length) return
+        const rows = []
+        SEASONS.forEach((s) => catL.forEach((c) => { const inv = num(pr[`INV|${mca}|${s}|${c}`]); const auc = num(pr[`PAUC|${mca}|${s}|${c}`]); const aup = num(pr[`PAUP|${mca}|${s}|${c}`]); if (inv || auc || aup) rows.push({ cells: [C(sLbl(s)), C(c), C(inv ? n0(inv) : ''), C(auc ? n0(auc) : ''), C(aup ? n0(aup) : '')] }) }))
+        if (rows.length) { pm.push(`<div class="subh">${E(mca)} <span>· precios por temporada × categoría</span></div>`); pm.push(tbl(['Temporada', 'Categoría', 'Inventario (ud)', 'AUC (costo)', 'AUP (precio)'], rows)) }
+      })
+      if (pm.length) { out.push(sec('Producto — Precios por temporada y categoría', 'inventario · AUC · AUP · 2028')); pm.forEach((h) => out.push(h)) }
+    } catch { }
+    await Y()
     // ---- Retail (solo Energy Brands) ----
     if (upper(empresa) === 'ENERGY BRANDS') {
+      out.push(`<div class="divider">Retail — tiendas propias</div>`)
+      // P&L / Cash Flow mensual por bucket (EB y SINERGY) desde retail_pl
       try {
         const pl = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null')
-        const blk = (b) => { const s = (a) => (a || []).reduce((x, y) => x + num(y), 0); const venta = s(b.venta), costo = s(b.costo), logi = s(b.logistica), mkt = s(b.mk), vj = s(b.vj), gas = s(b.gastos); const mb = venta - costo - logi; return [{ cls: 'strong', cells: [C('Venta Neta'), C(n0(venta))] }, { cells: [C('(−) Costo'), C(n0(costo))] }, { cells: [C('(−) Logística'), C(n0(logi))] }, { cls: 'strong', cells: [C('= Margen Bruto'), C(n0(mb))] }, { cells: [C('(−) Marketing'), C(n0(mkt))] }, { cells: [C('(−) Viajes'), C(n0(vj))] }, { cells: [C('(−) Gastos'), C(n0(gas))] }, { cls: 'tot', cells: [C('= Resultado'), C(n0(mb - mkt - vj - gas))] }] }
-        if (pl && pl.EB) { out.push(sec('Retail — P&L Retail EB', 'anual · 2028')); out.push(tbl(['Concepto', 'Total'], blk(pl.EB))) }
-        if (pl && pl.SIN) { out.push(sec('Retail — P&L SINERGY & DYNAMICS', 'anual · 2028')); out.push(tbl(['Concepto', 'Total'], blk(pl.SIN))) }
+        const g12 = (a) => { const o = (a || []).map((x) => num(x)); while (o.length < 12) o.push(0); return o.slice(0, 12) }
+        const tF = (a) => a.reduce((x, y) => x + y, 0)
+        const plMes = (b, titulo) => {
+          const venta = g12(b.venta), costo = g12(b.costo), logi = g12(b.logistica), mkt = g12(b.mk), vj = g12(b.vj), gas = g12(b.gastos), pag = g12(b.pagos)
+          const mb = MH.map((_, m) => venta[m] - costo[m] - logi[m]); const res = MH.map((_, m) => mb[m] - mkt[m] - vj[m] - gas[m])
+          const row = (lbl, arr, cls) => ({ cls: cls || '', cells: [C(lbl), ...arr.map((v) => C(v ? n0(v) : '')), C(n0(tF(arr)))] })
+          out.push(sec(titulo, 'mensual · 2028'))
+          out.push(tbl(['Concepto', ...MH, 'Total'], [row('Venta Neta', venta, 'strong'), row('(−) Costo', costo), row('(−) Logística', logi), row('= Margen Bruto', mb, 'strong'), row('(−) Marketing', mkt), row('(−) Viajes', vj), row('(−) Gastos', gas), row('= Resultado', res, 'tot'), row('Pagos a proveedor', pag)]))
+        }
+        if (pl && pl.EB) plMes(pl.EB, 'Retail — P&L / Cash Flow Retail EB')
+        if (pl && pl.SIN) plMes(pl.SIN, 'Retail — P&L / Cash Flow SINERGY & DYNAMICS')
       } catch { }
+      await Y()
+      // Ventas por tienda (unidades sell-through + margen/desc capturados)
+      try {
+        const vt = JSON.parse(localStorage.getItem('retail_ventas_ENERGY BRANDS') || '{}')
+        let tiendas = RETAIL_TIENDAS; try { const t = JSON.parse(localStorage.getItem('retail_tiendas_ENERGY BRANDS') || 'null'); if (Array.isArray(t) && t.length) tiendas = t } catch { }
+        const vrows = tiendas.map((t) => { const u = MH.map((_, mi) => num(vt[`${t}||SU||${mi}`])); const tot = u.reduce((a, b) => a + b, 0); return { t, u, tot } }).filter((o) => o.tot)
+        if (vrows.length) { out.push(sec('Retail — Ventas por tienda', 'unidades sell-through · 2028')); out.push(tbl(['Tienda', ...MH, 'Total'], vrows.map((o) => ({ cells: [C(o.t), ...o.u.map((v) => C(v ? n0(v) : '')), C(n0(o.tot))] })))) }
+      } catch { }
+      // Compras por marca (retail_imp)
+      try {
+        const imp = JSON.parse(localStorage.getItem('retail_imp_ENERGY BRANDS') || '{}')
+        const irows = RETAIL_MARCAS.map((m) => { const a = MH.map((_, mi) => num(imp[`${m}|${mi}`])); const t = a.reduce((x, y) => x + y, 0); return { m, a, t } }).filter((o) => o.t)
+        if (irows.length) { out.push(sec('Retail — Compras / importaciones por marca', 'costo USD · 2028')); out.push(tbl(['Marca', ...MH, 'Total'], irows.map((o) => ({ cells: [C(o.m), ...o.a.map((v) => C(v ? n0(v) : '')), C(n0(o.t))] })))) }
+      } catch { }
+      // Gastos EB por centro de costo (retail_gastos_eb)
+      try {
+        const ge = JSON.parse(localStorage.getItem('retail_gastos_eb_ENERGY BRANDS') || '{}')
+        const grows = DEFAULT_GADMIN.map((it) => { const a = MH.map((_, mi) => num(ge[`G|${it.cod}|${mi}`])); const t = a.reduce((x, y) => x + y, 0); return { it, a, t } }).filter((o) => o.t)
+        if (grows.length) { out.push(sec('Retail — Gastos EB (centros de costo)', 'por código · 2028')); out.push(tbl(['Cód', 'Rubro', ...MH, 'Total'], grows.map((o) => ({ cells: [C(o.it.cod), C(o.it.sub), ...o.a.map((v) => C(v ? n0(v) : '')), C(n0(o.t))] })))) }
+      } catch { }
+      await Y()
     }
     abpOpenReport('ABP 2028 — Espejo ' + empresa, 'Annual Business Plan + Cash Flow · ' + empresa, out.join(''), win)
   }
