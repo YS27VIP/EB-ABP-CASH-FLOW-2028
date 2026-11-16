@@ -162,6 +162,8 @@ const CF_TERMINOS = ['Cash', '30 días', '60 días', '90 días', '120 días', '1
 const CF_PLAZO_MESES = { 'Cash': 0, '30 días': 1, '60 días': 2, '90 días': 3, '120 días': 4, '150 días': 5, '180 días': 6, 'Intercompañía': 0 }
 /* Costos Operativos = suma de estos 4 sub-rubros (el usuario los llena; el total es calculado) */
 const CF_COSTOS_PARENT = 'Costos Operativos'
+// Conceptos del Cash Flow que el usuario realmente LLENA (el resto es calculado/espejo). La Plantilla solo incluye estos.
+const CF_LLENAR = new Set(['Cash Inicial', 'Costos Financieros', 'Otros ingresos', 'Otros gastos'])
 const CF_COSTOS = ['Gastos Admin Directos', 'Gastos Admin Indirectos', 'Logística', 'Viajes', 'Marketing', 'Comisiones']
 /* Nuevas líneas que llena Finanzas (nivel empresa, solo en la vista TOTAL), antes del Flujo neto */
 const CF_FIN_PARENT = 'Costos Financieros'
@@ -1644,7 +1646,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoH
         {isTotal && !fixedMarca && <button className="seg active" onClick={() => setMarca((sbus[sbu] || [])[0])}>Viendo total {sbuLbl}</button>}
         <div className="spacer"></div>
         {(() => { const ocultarAcc = espejoHolding; return ocultarAcc ? null : <>
-        <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map(() => 0)])))); exportXlsx(aoa, `${role.tab}_CASHFLOW_Plantilla.xlsx`) }}>📄 Plantilla</button>
+        <button className="btn" onClick={() => { const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]; marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.filter((it) => CF_LLENAR.has(it)).forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map(() => 0)])))); exportXlsx(aoa, `${role.tab}_CASHFLOW_Plantilla.xlsx`) }}>📄 Plantilla</button>
         {!soloVer && <label className="btnfile">⬆ Importar Excel<input type="file" accept=".xlsx,.xls" onChange={importar} hidden /></label>}
         <button className="btn" onClick={exportar}>⬇ Exportar Excel</button>
         {soloVer && <span className="note ok" style={{ margin: 0, padding: '6px 12px' }}>Solo lectura — esto lo llena Finanzas{esDirector ? ' · tú solo defines el plazo de los clientes nuevos (celdas amarillas)' : ''}</span>}
@@ -1885,7 +1887,14 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoH
         return (
           <div className="panel">
             <h3>{role.label} — Venta, cobro y saldo por cliente 2028{M$} <span className="unit">({marca})</span></h3>
-            <div className="sub">Por cada cliente: la <b>Venta</b> (Unid×AUP) en su mes, el <b>Cobro</b> de esas ventas cuando entra según su plazo, el <b style={{ color: '#b45309' }}>Cobro del saldo pendiente del 2027</b> ({soloVer ? 'lo que capturó Finanzas' : 'lo que colocaste arriba'}), y el <b>Saldo por cobrar</b> de 2028 que va quedando.{soloVer ? ' 🪞 Solo lectura.' : ''}</div>
+            <div className="sub" style={{ marginBottom: 2 }}>Por cada cliente:</div>
+            <ul className="sub" style={{ margin: '0 0 8px', paddingLeft: 20, lineHeight: 1.7 }}>
+              <li><b>Venta</b> (Unid × AUP) en su mes.</li>
+              <li><b>Cobro</b> de esas ventas cuando entra según su plazo.</li>
+              <li><b style={{ color: '#b45309' }}>Cobro del saldo pendiente del 2027</b> ({soloVer ? 'lo que capturó Finanzas' : 'lo que colocaste arriba'}).</li>
+              <li><b>Saldo por cobrar</b> de 2028 que va quedando.</li>
+            </ul>
+            {soloVer && <div className="sub" style={{ marginBottom: 8 }}>🪞 Solo lectura.</div>}
             <div className="toolbar" style={{ margin: '4px 0 10px', gap: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>Ver:</span>
               {[['todo', 'Todo'], ['venta', 'Venta'], ['cobro', 'Cobro'], ['saldo', 'Saldo']].map(([k, lbl]) => <button key={k} className={'seg' + (vistaCC === k ? ' active' : '')} onClick={() => setVistaCC(k)}>{lbl}</button>)}
@@ -2327,7 +2336,7 @@ function ReporteScreen({ empresa, sbus }) {
         </div>
       </div>
       <div className="panel">
-        <h3>Términos de pago a proveedor — por marca <span className="unit">(cuándo la marca le paga a su proveedor)</span></h3>
+        <h3>🪞 Términos de pago a proveedor — por marca <span className="unit">(🪞 espejo · solo lectura · cuándo la marca le paga a su proveedor)</span></h3>
         <div className="sub">El plazo que cada marca cargó para <b>pagar a su proveedor</b> (Cash, 30, 60… días); define cuándo la compra 2028 se vuelve <b>pago (Cash Out)</b>.</div>
         <div className="tablewrap" style={{ maxHeight: '50vh', overflowY: 'auto' }}>
           <table>
@@ -3004,7 +3013,7 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
   }, [precios, marca])
   return (
     <>
-      <div className="note ok" style={{ marginBottom: 8 }}><b>Instrucciones:</b> <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Compras 2028 y disponibilidad (SS28/FW28) · <b>3)</b> Combinación de temporadas (unidades por mes) — el saldo inicial se toma solo del paso 1 · <b>4)</b> Evolución mensual del AUP/AUC (consecuencia) · <b>5)</b> Resumen. Recuerda hacer clic en guardar.</div>
+      <div className="note ok" style={{ marginBottom: 8 }}><b>Instrucciones:</b> <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Compras 2028 y disponibilidad (SS28/FW28) · <b>3)</b> Combinación de temporadas (unidades por mes) — el saldo inicial se toma solo del paso 1 · <b>4)</b> Evolución mensual del AUP/AUC (ponderado) · <b>5)</b> Resumen. Recuerda hacer clic en guardar.</div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
         <PasoH n={1}>Inventario, costo y precio por temporada y categoría</PasoH>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="matriz" />
@@ -3018,7 +3027,7 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
         <TemporadaForm empresa={empresa} sbus={sbus} fixedMarca={fixedMarca} mode="capture" tempState={temp} setTempState={setTemp} sinResumen iiAuto />
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
-        <PasoH n={4}>Evolución mensual del AUP/AUC (consecuencia)</PasoH>
+        <PasoH n={4}>Evolución mensual del AUP/AUC (ponderado)</PasoH>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="evolucion" />
       </div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14 }}>
@@ -3268,7 +3277,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
       </div>}
 
       {showEvol && <div className="panel">
-        <h3>Evolución mensual del AUP / AUC — {marca}{M$} <span className="unit">(consecuencia de la combinación)</span></h3>
+        <h3>Evolución mensual del AUP / AUC — {marca}{M$} <span className="unit">(ponderado de la combinación)</span></h3>
         {HOVERTIP}
         {!MESES.some((_, m) => unitsMes(m) > 0.5) && <div className="note warn" style={{ marginBottom: 10 }}>Sale <b>vacía</b> porque aún no hay <b>salidas de inventario</b>. Ya pusiste las unidades arriba; ahora falta escribir las <b>unidades a rotar</b> por temporada en el bloque de Combinación de temporadas (Paso 2). Eso define qué se vende cada mes.</div>}
         {cats.length > 1 && <div className="toolbar" style={{ marginBottom: 8 }}><input value={catBuscar} onChange={(e) => setCatBuscar(e.target.value)} placeholder="🔍 Buscar categoría…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />{catBuscar && <button className="btn" onClick={() => setCatBuscar('')}>✕ limpiar</button>}</div>}
@@ -3481,6 +3490,30 @@ function GastosAdminDirectosPorSBU({ empresa, sbus }) {
   const totCol = (m) => lista.reduce((a, it) => a + totMonth(it.cod, m), 0)
   async function guardar() { setSaving(true); setMsg(null); try { localStorage.setItem(cfgKey, JSON.stringify(lista)); await gSaveEstado(empresa, 'gadmin_cfg', JSON.stringify(lista)); localStorage.setItem(`gadmin_${empresa}`, JSON.stringify(data)); await gSaveEstado(empresa, 'gadmin', JSON.stringify(data)); bumpData(); setMsg({ t: 'ok', x: 'Guardado en Google Sheet ✓ Los centros de costo aplican a todas las SBU.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar. Revisa tu conexión.' }) } setSaving(false) }
   const editar = (i, campo, v) => setLista(lista.map((x, j) => j === i ? { ...x, [campo]: v } : x))
+  const normX = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase()
+  function plantilla() { const aoa = [['SBU', 'CÓD', 'SUB RUBRO', ...MESES.map((m) => m.toUpperCase())]]; sbuNames.forEach((s) => lista.forEach((it) => aoa.push([s, it.cod, it.sub, ...MESES.map(() => '')]))); exportXlsx(aoa, `Plantilla_Gastos_Admin_Directos_SBU_${empresa}.xlsx`) }
+  function exportar() { const aoa = [['SBU', 'CÓD', 'SUB RUBRO', ...MESES.map((m) => m.toUpperCase())]]; sbuNames.forEach((s) => lista.forEach((it) => aoa.push([s, it.cod, it.sub, ...MESES.map((_, m) => g(s, it.cod, m))]))); exportXlsx(aoa, `Gastos_Admin_Directos_SBU_${empresa}.xlsx`) }
+  function importar(ev) {
+    const file = ev.target.files[0]; ev.target.value = ''; if (!file) return
+    importXlsx(file, (aoa) => {
+      if (!aoa || aoa.length < 2) { setMsg({ t: 'bad', x: 'El Excel no tiene filas para importar.' }); return }
+      const hdr = (aoa[0] || []).map(normX)
+      const iSbu = hdr.findIndex((h) => h.indexOf('SBU') >= 0)
+      const iCod = hdr.findIndex((h) => h.indexOf('COD') >= 0)
+      const iSub = hdr.findIndex((h) => h.indexOf('RUBRO') >= 0 || h.indexOf('SUB') >= 0)
+      const base = Math.max(iSbu, iCod, iSub, -1) + 1
+      const monthCol = MESES.map((m, mi) => { const mm = normX(m).slice(0, 3); const i = hdr.findIndex((h) => h.indexOf(mm) >= 0); return i >= 0 ? i : base + mi })
+      const sbuMatch = (v) => { const n = normX(v); return sbuNames.find((s) => normX(s) === n) || sbuNames.find((s) => normX(s).indexOf(n) >= 0 || n.indexOf(normX(s)) >= 0) }
+      const nd = { ...data }; let filas = 0
+      aoa.slice(1).forEach((r) => {
+        if (!r || r.every((c) => c === '' || c == null)) return
+        const s = sbuMatch(iSbu >= 0 ? r[iSbu] : r[0]); const cod = String((iCod >= 0 ? r[iCod] : r[1]) || '').trim()
+        if (!s || !cod) return
+        MESES.forEach((_, m) => { const v = r[monthCol[m]]; if (v !== '' && v != null) nd[dk(s, cod, m)] = String(v).replace(/[^0-9.\-]/g, '') }); filas++
+      })
+      setData(nd); setMsg({ t: 'ok', x: `Importadas ${filas} fila(s). Revisa los números y pulsa 💾 Guardar.` })
+    })
+  }
   const tabla = (s, editable) => (
     <div className="panel" style={{ borderLeftColor: editable ? sbuColor(s) : '#7c3aed' }}>
       <h3 style={{ color: editable ? sbuColor(s) : '#7c3aed' }}>{editable ? <>Gastos Admin Directos — {s}</> : <>Σ Gastos Admin Directos — TOTAL (suma de las SBU)</>} <span className="unit">{editable ? '(para llenar)' : '(solo lectura)'}</span></h3>
@@ -3494,7 +3527,7 @@ function GastosAdminDirectosPorSBU({ empresa, sbus }) {
     </div>
   )
   return <>
-    <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🏢 Gastos Admin Directos · por SBU</span><span className="unit" style={{ alignSelf: 'center' }}>Lo llena <b>Finanzas</b> para cada SBU; el TOTAL los suma (no se llena).</span><div className="spacer"></div><button className={'seg' + (edit ? ' active' : '')} onClick={() => setEdit((e) => !e)}>{edit ? '✓ Editando centros de costo' : '✏️ Editar centros de costo'}</button><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+    <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🏢 Gastos Admin Directos · por SBU</span><span className="unit" style={{ alignSelf: 'center' }}>Lo llena <b>Finanzas</b> para cada SBU; el TOTAL los suma (no se llena).</span><div className="spacer"></div><button className={'seg' + (edit ? ' active' : '')} onClick={() => setEdit((e) => !e)}>{edit ? '✓ Editando centros de costo' : '✏️ Editar centros de costo'}</button><button className="btn" onClick={plantilla}>📄 Descargar plantilla</button><label className="btn" style={{ cursor: 'pointer' }}>📥 Importar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={importar} style={{ display: 'none' }} /></label><button className="btn" onClick={exportar}>⬇ Exportar Excel</button><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
     {msg && <div className={'note ' + (msg.t === 'ok' ? 'ok' : 'warn')} style={{ marginBottom: 8 }}>{msg.x}</div>}
     <div className="toolbar" style={{ marginBottom: 10, gap: 6, flexWrap: 'wrap' }}>
       <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 800, alignSelf: 'center' }}>SBU:</span>
@@ -7239,7 +7272,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         </div>
       </div>}
 
-      <div className="toolbar">
+      <div className="toolbar" style={fixedMarca ? { marginTop: -52, position: 'relative', zIndex: 2 } : undefined}>
         {!fixedMarca && <><label>Marca</label>
         <select value={marca} onChange={(e) => setMarca(e.target.value)}>{Object.entries(sbus).map(([s, ms]) => <optgroup key={s} label={s}>{ms.map((m) => <option key={m}>{m}</option>)}</optgroup>)}</select></>}
         <div className="spacer"></div>
