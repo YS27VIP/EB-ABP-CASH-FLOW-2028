@@ -5390,7 +5390,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       }
     } catch { }
     // ---- P&L mensual por marca ----
-    out.push(sec('P&L mensual por marca', 'detalle · 2028'))
+    const plOut = []
     for (const [sn, ms] of Object.entries(sbus)) {
       for (const mca of (ms || [])) {
         const cn = (cats[mca] || []).map((c) => c.cat); const r = realAupAuc(empresa, mca, ventas, producto, cn)
@@ -5402,11 +5402,12 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         const tF = (a) => a.reduce((x, y) => x + y, 0)
         if (tF(venta) === 0 && tF(unid) === 0) continue
         const mrow = (lbl, arr, st) => ({ cls: st || '', cells: [C(lbl), ...arr.map((v) => C(n0(v))), C(n0(tF(arr)))] })
-        out.push(`<div class="subh">${E(mca)} <span>· ${E(sn)}</span></div>`)
-        out.push(tbl(['Concepto', ...MH, 'Total'], [mrow('Unidades', unid), mrow('Venta Neta', venta, 'strong'), mrow('(−) Costo', costo), mrow('(−) Logística', logM), mrow('= Margen Bruto', margen, 'strong'), mrow('(−) Marketing', mkM), mrow('(−) Viajes', vjM), mrow('= Contribución', brand, 'tot')]))
+        plOut.push(`<div class="subh">${E(mca)} <span>· ${E(sn)}</span></div>`)
+        plOut.push(tbl(['Concepto', ...MH, 'Total'], [mrow('Unidades', unid), mrow('Venta Neta', venta, 'strong'), mrow('(−) Costo', costo), mrow('(−) Logística', logM), mrow('= Margen Bruto', margen, 'strong'), mrow('(−) Marketing', mkM), mrow('(−) Viajes', vjM), mrow('= Contribución', brand, 'tot')]))
         await Y()
       }
     }
+    if (plOut.length) { out.push(sec('P&L mensual por marca', 'detalle · 2028')); plOut.forEach((h) => out.push(h)) }
     await Y()
     // ---- Capturas crudas ----
     const dump = (titulo, tag, rows, modo) => {
