@@ -5458,6 +5458,9 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
     try {
       const tmpI = JSON.parse(localStorage.getItem('temp_' + empresa) || '{}')
       const precI = JSON.parse(localStorage.getItem('precios_' + empresa) || '{}')
+      // Inventario inicial por temporada = suma de las unidades de la matriz (INV), igual que lo calcula Producto en vivo.
+      // Solo temporadas anteriores (no las de compra 2028), para que no se duplique con las compras.
+      allM.forEach((mca) => SEASONS.forEach((s) => { if (BUY_SEASONS.includes(s)) return; const pre = `INV|${mca}|${s}|`; let sum = 0; Object.keys(precI).forEach((k) => { if (k.indexOf(pre) === 0) sum += num(precI[k]) }); tmpI[`II|${mca}|${s}`] = sum }))
       const invOut = []
       allM.forEach((mca) => {
         const cl = (cats[mca] || []).filter((c) => c.cat).map((c) => ({ cat: c.cat, peso: num(c.peso) }))
@@ -5594,12 +5597,33 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         if (pl && pl.SIN) plMes(pl.SIN, 'Retail — P&L / Cash Flow SINERGY & DYNAMICS')
       } catch { }
       await Y()
-      // Ventas por tienda (unidades sell-through + margen/desc capturados)
+      // Detalle por tienda: venta neta, costo y margen (réplica del cálculo de Retail: costo/ud del mapa × factor, margen y descuento)
       try {
         const vt = JSON.parse(localStorage.getItem('retail_ventas_ENERGY BRANDS') || '{}')
+        const rcats = JSON.parse(localStorage.getItem('retail_cats_ENERGY BRANDS') || '{}')
+        const smap = JSON.parse(localStorage.getItem('retail_map_ENERGY BRANDS') || '{}')
+        const rcf = JSON.parse(localStorage.getItem('retail_cf_ENERGY BRANDS') || '{}')
         let tiendas = RETAIL_TIENDAS; try { const t = JSON.parse(localStorage.getItem('retail_tiendas_ENERGY BRANDS') || 'null'); if (Array.isArray(t) && t.length) tiendas = t } catch { }
+        const factor = (() => { const f = num(rcf['FACTOR|0']); return f > 0 ? f : 1.25 })()
+        const catsOf = (t) => rcats[t] || []
+        const pctOf = (c, m) => num(((smap[c] || {})[m] || {}).pct)
+        const catOf = (c, m) => ((smap[c] || {})[m] || {}).cat || ''
+        const aucMC = (marca, cat, mi) => { const pfx = 'AUC · ' + cat; let v = 0; producto.forEach((r) => { if (upper(r[3]) !== upper(marca)) return; if (String(r[1] || '') === pfx) v = num(r[4 + mi]) }); return v }
+        const whUnit = (c, mi) => allM.reduce((a, m) => a + pctOf(c, m) / 100 * aucMC(m, catOf(c, m), mi), 0)
+        const whAvg = (c) => MH.reduce((a, _, mi) => a + whUnit(c, mi), 0) / 12
+        const uAnual = (t, c) => { const ua = vt[`${t}||${c}||UA`]; if (ua != null && String(ua) !== '') return num(ua); return MH.reduce((a, _, mi) => a + num(vt[`${t}||${c}||U||${mi}`]), 0) }
+        const storeAvgCogs = (t) => { let u = 0, c = 0; catsOf(t).forEach((ct) => { const uu = uAnual(t, ct); const cg = whAvg(ct) * factor; u += uu; c += uu * cg }); if (u > 0) return c / u; let n = 0, s = 0; catsOf(t).forEach((ct) => { const cg = whAvg(ct) * factor; if (cg > 0) { s += cg; n++ } }); return n > 0 ? s / n : 0 }
+        const sellU = (t, mi) => num(vt[`${t}||SU||${mi}`]), margenPct = (t, mi) => num(vt[`${t}||MARGEN||${mi}`]), descPct = (t, mi) => num(vt[`${t}||DESC||${mi}`])
+        const rows = tiendas.map((t) => { const cogs = storeAvgCogs(t); let un = 0, ve = 0, co = 0; MH.forEach((_, mi) => { const su = sellU(t, mi); un += su; co += su * cogs; ve += su * cogs * (1 + margenPct(t, mi) / 100) * (1 - descPct(t, mi) / 100) }); return { t, un, ve, co, mg: ve - co } }).filter((o) => o.un || o.ve)
+        if (rows.length) {
+          const T = rows.reduce((a, o) => ({ un: a.un + o.un, ve: a.ve + o.ve, co: a.co + o.co }), { un: 0, ve: 0, co: 0 })
+          const body = rows.map((o) => ({ cells: [C(o.t), C(n0(o.un)), C(n0(o.ve)), C(n0(o.co)), C(n0(o.mg)), C(o.ve > 0 ? (o.mg / o.ve * 100).toFixed(1) + '%' : '—')] }))
+          body.push({ cls: 'tot', cells: [C('TOTAL'), C(n0(T.un)), C(n0(T.ve)), C(n0(T.co)), C(n0(T.ve - T.co)), C(T.ve > 0 ? ((T.ve - T.co) / T.ve * 100).toFixed(1) + '%' : '—')] })
+          P('retail', sec('Retail — Detalle por tienda', 'venta · costo · margen · 2028'), tbl(['Tienda', 'Unidades', 'Venta Neta', 'Costo', 'Margen', 'Margen %'], body))
+        }
+        // Unidades sell-through por mes y tienda
         const vrows = tiendas.map((t) => { const u = MH.map((_, mi) => num(vt[`${t}||SU||${mi}`])); const tot = u.reduce((a, b) => a + b, 0); return { t, u, tot } }).filter((o) => o.tot)
-        if (vrows.length) { P('retail', sec('Retail — Ventas por tienda', 'unidades sell-through · 2028'), tbl(['Tienda', ...MH, 'Total'], vrows.map((o) => ({ cells: [C(o.t), ...o.u.map((v) => C(v ? n0(v) : '')), C(n0(o.tot))] })))) }
+        if (vrows.length) { P('retail', sec('Retail — Unidades por tienda y mes', 'sell-through · 2028'), tbl(['Tienda', ...MH, 'Total'], vrows.map((o) => ({ cells: [C(o.t), ...o.u.map((v) => C(v ? n0(v) : '')), C(n0(o.tot))] })))) }
       } catch { }
       // Compras por marca (retail_imp)
       try {
@@ -5612,6 +5636,14 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         const ge = JSON.parse(localStorage.getItem('retail_gastos_eb_ENERGY BRANDS') || '{}')
         const grows = DEFAULT_GADMIN.map((it) => { const a = MH.map((_, mi) => num(ge[`G|${it.cod}|${mi}`])); const t = a.reduce((x, y) => x + y, 0); return { it, a, t } }).filter((o) => o.t)
         if (grows.length) { P('retail', sec('Retail — Gastos EB (centros de costo)', 'por código · 2028'), tbl(['Cód', 'Rubro', ...MH, 'Total'], grows.map((o) => ({ cells: [C(o.it.cod), C(o.it.sub), ...o.a.map((v) => C(v ? n0(v) : '')), C(n0(o.t))] })))) }
+      } catch { }
+      // Gastos SINERGY & DYNAMICS por rubro (retail_gastos)
+      try {
+        const gs = JSON.parse(localStorage.getItem('retail_gastos_ENERGY BRANDS') || '{}')
+        const acc = {}
+        Object.keys(gs).forEach((k) => { const m = k.match(/^G\|(.+)\|(\d+)$/); if (!m) return; const name = m[1], mi = +m[2]; (acc[name] = acc[name] || Array(12).fill(0))[mi] = num(gs[k]) })
+        const grows = Object.entries(acc).map(([name, a]) => ({ name, a, t: a.reduce((x, y) => x + y, 0) })).filter((o) => o.t)
+        if (grows.length) { P('retail', sec('Retail — Gastos SINERGY & DYNAMICS', 'por rubro · 2028'), tbl(['Rubro', ...MH, 'Total'], grows.map((o) => ({ cells: [C(o.name), ...o.a.map((v) => C(v ? n0(v) : '')), C(n0(o.t))] })))) }
       } catch { }
       await Y()
     }
@@ -6187,34 +6219,133 @@ function SbuResultDownload({ empresa, sbuName, marcasSBU }) {
     setTimeout(() => { try { build(win) } catch (e) { if (win && !win.closed) win.close(); alert('No se pudo generar el reporte: ' + (e && e.message)) } setPpt(false) }, 40)
   }
   function build(win) {
-    {
-      const n0 = (v) => Math.round(v || 0).toLocaleString('en-US')
-      const C = (t, cls) => ({ text: t == null ? '' : String(t), cls })
-      const E = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
-      const sec = (t, tag) => `<div class="sec"><span class="bar"></span><h2>${E(t)}</h2>${tag ? `<span class="tag">${E(tag)}</span>` : ''}</div>`
-      const tbl = (heads, rows) => {
-        const th = heads.map((h, i) => `<th class="${i === 0 ? 'l' : ''}">${E(h)}</th>`).join('')
-        const body = rows.map((r) => `<tr class="${r.cls || ''}">${r.cells.map((c, i) => `<td class="${i === 0 ? 'l ' : ''}${c.cls || ''}">${E(c.text)}</td>`).join('')}</tr>`).join('')
-        return `<div class="card"><div class="scroll"><table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div></div>`
-      }
-      const cols = (marcasSBU || []).map((m) => ({ m, v: calc(m) }))
-      const tot = cols.reduce((a, { v }) => { Object.keys(v).forEach((k) => a[k] = (a[k] || 0) + v[k]); return a }, {})
-      const out = []
-      const filasP = [['Unidades', (v) => n0(v.unidades), ''], ['Venta Neta', (v) => n0(v.ventaNeta), 'strong'], ['(−) Costo', (v) => n0(v.costo), ''], ['(−) Logística', (v) => n0(v.logistica), ''], ['= Margen Bruto', (v) => n0(v.margenBruto), 'strong'], ['(−) Marketing', (v) => n0(v.marketing), ''], ['(−) Viajes', (v) => n0(v.viajes), ''], ['= Contribución', (v) => n0(v.brand), 'tot']]
-      out.push(sec('Contribución de la SBU — ' + sbuName, 'marcas lado a lado · 2028'))
-      out.push(tbl(['Concepto', ...cols.map((c) => c.m), 'TOTAL'], filasP.map(([lbl, f, cls]) => ({ cls, cells: [C(lbl), ...cols.map((c) => C(f(c.v))), C(f(tot))] }))))
-      out.push(sec('Unidades · Venta · Costo · Margen', 'por marca'))
-      const ur = cols.map(({ m, v }) => { const mg = v.ventaNeta - v.costo; return { cells: [C(m), C(n0(v.unidades)), C(n0(v.ventaNeta)), C(n0(v.costo)), C(n0(mg)), C(v.ventaNeta > 0 ? (mg / v.ventaNeta * 100).toFixed(1) + '%' : '—')] } })
-      const mgT = tot.ventaNeta - tot.costo; ur.push({ cls: 'tot', cells: [C('TOTAL'), C(n0(tot.unidades)), C(n0(tot.ventaNeta)), C(n0(tot.costo)), C(n0(mgT)), C(tot.ventaNeta > 0 ? (mgT / tot.ventaNeta * 100).toFixed(1) + '%' : '—')] })
-      out.push(tbl(['Marca', 'Unidades', 'Venta', 'Costo', 'Margen', 'Margen %'], ur))
-      out.push(sec('Resultado operativo', '2028'))
-      out.push(tbl(['Concepto', '2028'], [
-        { cells: [C('Contribución de la SBU'), C(n0(tot.brand))] },
-        { cells: [C('(−) Gastos administrativos'), C(n0(gadminAnual))] },
-        { cls: 'tot', cells: [C('= Resultado operativo'), C(n0((tot.brand || 0) - gadminAnual))] },
-      ]))
-      abpOpenReport('ABP 2028 — ' + sbuName + ' · ' + empresa, 'Resultados de la SBU · ' + sbuName + ' · ' + empresa, out.join(''), win)
+    const MH = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
+    const n0 = (v) => Math.round(num(v)).toLocaleString('en-US')
+    const C = (t, cls) => ({ text: t == null ? '' : String(t), cls })
+    const E = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+    const sec = (t, tag) => `<div class="sec"><span class="bar"></span><h2>${E(t)}</h2>${tag ? `<span class="tag">${E(tag)}</span>` : ''}</div>`
+    const tbl = (heads, rows) => `<div class="card"><div class="scroll"><table><thead><tr>${heads.map((h, i) => `<th class="${i === 0 ? 'l' : ''}">${E(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr class="${r.cls || ''}">${r.cells.map((c, i) => `<td class="${i === 0 ? 'l ' : ''}${c.cls || ''}">${E(c.text)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`
+    const G = { resumen: [], ventas: [], producto: [], marketing: [], logistica: [], director: [], finanzas: [] }
+    const PUSH = (dep, ...h) => { for (const x of h) G[dep].push(x) }
+    const marcas = marcasSBU || []
+    const inSBU = (r) => upper(r[0]) === upper(empresa) && marcas.some((m) => upper(m) === upper(r[3]))
+    const esVi = (rub) => String(rub).toUpperCase().startsWith('VIAJES')
+    const { ven, prod, cats, mk, log, dir } = P
+    // ---- Dirección: contribución de la SBU + P&L por marca ----
+    const cols = marcas.map((m) => ({ m, v: calc(m) }))
+    const tot = cols.reduce((a, { v }) => { Object.keys(v).forEach((k) => a[k] = (a[k] || 0) + v[k]); return a }, {})
+    const filasP = [['Unidades', (v) => n0(v.unidades), ''], ['Venta Neta', (v) => n0(v.ventaNeta), 'strong'], ['(−) Costo', (v) => n0(v.costo), ''], ['(−) Logística', (v) => n0(v.logistica), ''], ['= Margen Bruto', (v) => n0(v.margenBruto), 'strong'], ['(−) Marketing', (v) => n0(v.marketing), ''], ['(−) Viajes', (v) => n0(v.viajes), ''], ['= Contribución', (v) => n0(v.brand), 'tot']]
+    PUSH('resumen', sec('Contribución de la SBU — ' + sbuName, 'marcas lado a lado · 2028'), tbl(['Concepto', ...cols.map((c) => c.m), 'TOTAL'], filasP.map(([lbl, f, cls]) => ({ cls, cells: [C(lbl), ...cols.map((c) => C(f(c.v))), C(f(tot))] }))))
+    PUSH('resumen', sec('Resultado operativo de la SBU', '2028'), tbl(['Concepto', '2028'], [{ cells: [C('Contribución de la SBU'), C(n0(tot.brand))] }, { cells: [C('(−) Gastos administrativos'), C(n0(gadminAnual))] }, { cls: 'tot', cells: [C('= Resultado operativo'), C(n0((tot.brand || 0) - gadminAnual))] }]))
+    // P&L mensual por marca
+    const plOut = []
+    marcas.forEach((mca) => {
+      const cn = (cats[mca] || []).map((c) => c.cat); const r = realAupAuc(empresa, mca, ven, prod, cn)
+      const mesSum = (rows, filt) => MH.map((_, mi) => (rows || []).reduce((s, row) => (upper(row[0]) === upper(empresa) && upper(row[3]) === upper(mca) && (!filt || filt(String(row[1] || '')))) ? s + num(row[4 + mi]) : s, 0))
+      const mkM = mesSum(mk, (x) => !esVi(x)); const logM = mesSum(log, (x) => !esVi(x))
+      const vjM = MH.map((_, mi) => [ven, prod, mk, log, dir].reduce((t, rows) => t + (rows || []).reduce((s, row) => (upper(row[0]) === upper(empresa) && upper(row[3]) === upper(mca) && esVi(String(row[1] || ''))) ? s + num(row[4 + mi]) : s, 0), 0))
+      const venta = r.ventaMes, costo = r.costoMes, unid = r.totalUnits
+      const margen = MH.map((_, mi) => venta[mi] - costo[mi] - logM[mi]), brand = MH.map((_, mi) => margen[mi] - mkM[mi] - vjM[mi])
+      const tF = (a) => a.reduce((x, y) => x + y, 0)
+      if (tF(venta) === 0 && tF(unid) === 0) return
+      const mrow = (lbl, arr, st) => ({ cls: st || '', cells: [C(lbl), ...arr.map((v) => C(v ? n0(v) : '')), C(n0(tF(arr)))] })
+      plOut.push(`<div class="subh">${E(mca)}</div>`)
+      plOut.push(tbl(['Concepto', ...MH, 'Total'], [mrow('Unidades', unid), mrow('Venta Neta', venta, 'strong'), mrow('(−) Costo', costo), mrow('(−) Logística', logM), mrow('= Margen Bruto', margen, 'strong'), mrow('(−) Marketing', mkM), mrow('(−) Viajes', vjM), mrow('= Contribución', brand, 'tot')]))
+    })
+    if (plOut.length) PUSH('resumen', sec('P&L mensual por marca', 'detalle · 2028'), ...plOut)
+    // ---- Capturas por depto (filtradas a la SBU) ----
+    const dump = (dep, titulo, tag, rows, modo) => {
+      const flt = (rows || []).filter((rr) => inSBU(rr) && (modo === 'vj' ? esVi(String(rr[1] || '')) : modo === 'novj' ? !esVi(String(rr[1] || '')) : true))
+      const body = flt.map((rr) => { let t = 0; const cs = MH.map((_, mi) => { const v = num(rr[4 + mi]); t += v; return C(v ? n0(v) : '') }); return { cells: [C(String(rr[1] || '')), C(String(rr[3] || '')), ...cs, C(n0(t))] } }).filter((row) => row.cells.some((c, i) => i >= 2 && c.text))
+      if (body.length) PUSH(dep, sec(titulo, tag), tbl(['Rubro / Concepto', 'Marca', ...MH, 'Total'], body))
     }
+    dump('ventas', 'Ventas — unidades por cliente', 'Cap_Ventas', ven, 'novj')
+    dump('ventas', 'Viajes — Ventas', 'viajes', ven, 'vj')
+    dump('producto', 'Producto — AUC / AUP por categoría', 'Cap_Producto', prod, 'all')
+    dump('producto', 'Viajes — Producto', 'viajes', prod, 'vj')
+    dump('marketing', 'Marketing', 'Cap_Marketing', mk, 'novj')
+    dump('marketing', 'Viajes — Marketing', 'viajes', mk, 'vj')
+    dump('logistica', 'Logística', 'Cap_Logistica', log, 'novj')
+    dump('logistica', 'Viajes — Logística', 'viajes', log, 'vj')
+    dump('director', 'Viajes — Director', 'viajes', dir, 'vj')
+    // Categorías (Director)
+    const catRows = []; marcas.forEach((mca) => (cats[mca] || []).forEach((c) => catRows.push({ cells: [C(mca), C(String(c.cat || '')), C(c.peso != null ? n0(c.peso) : '')] })))
+    if (catRows.length) PUSH('director', sec('Categorías por marca', 'Cap_Categorias'), tbl(['Marca', 'Categoría', 'Peso'], catRows))
+    // Producto — compras por temporada + resumen inventario + precios
+    try {
+      const tmp = JSON.parse(localStorage.getItem('temp_' + empresa) || '{}')
+      const precI = JSON.parse(localStorage.getItem('precios_' + empresa) || '{}')
+      marcas.forEach((mca) => SEASONS.forEach((s) => { if (BUY_SEASONS.includes(s)) return; const pre = `INV|${mca}|${s}|`; let sum = 0; Object.keys(precI).forEach((k) => { if (k.indexOf(pre) === 0) sum += num(precI[k]) }); tmp[`II|${mca}|${s}`] = sum }))
+      const prows = marcas.map((mca) => { let t = 0; const cs = MH.map((_, mi) => { const v = SEASONS.reduce((s, se) => s + num(tmp[`CP|${mca}|${se}|${mi}`]), 0); t += v; return C(v ? n0(v) : '') }); const tr = Math.max(0, Math.round(num(tmp[`TR|${mca}`]))); return { cells: [C(mca), C(tr + ' m'), ...cs, C(n0(t))] } }).filter((r) => r.cells.some((c, i) => i >= 2 && c.text))
+      if (prows.length) PUSH('producto', sec('Producto — Compras por temporada (XFD)', 'unidades · 2028'), tbl(['Marca', 'Tránsito', ...MH, 'Total'], prows))
+      const invOut = []
+      marcas.forEach((mca) => {
+        const cl = (cats[mca] || []).filter((c) => c.cat).map((c) => ({ cat: c.cat, peso: num(c.peso) })); const catL = cl.length ? cl : [{ cat: 'General', peso: 0 }]
+        const sAUC = (s) => { let n = 0, d = 0; catL.forEach(({ cat, peso }) => { const a = num(precI[`PAUC|${mca}|${s}|${cat}`]); const w = (num(peso) || 0) + 0.0001; if (a > 0) { n += a * w; d += w } }); return d ? n / d : 0 }
+        let flujos = {}; try { flujos = (inventarioCalc(tmp, mca, ventaMarcaMes(ven, empresa, mca)) || {}).flujos || {} } catch { }
+        const rt = (arr, key) => (arr || []).reduce((a, x) => a + (x[key] || 0), 0)
+        const res = seasonsFor(empresa).map((s) => { const f = flujos[s] || []; const ini = num(tmp[`II|${mca}|${s}`]); const comp = rt(f, 'comp'); const vend = rt(f, 'sal'); const queda = (f[11] || {}).fin || 0; return { s, ini, comp, disp: ini + comp, vend, queda, auc: sAUC(s) } })
+        if (!res.some((r) => r.ini || r.comp || r.vend || r.queda)) return
+        const T = res.reduce((a, r) => ({ ini: a.ini + r.ini, comp: a.comp + r.comp, disp: a.disp + r.disp, vend: a.vend + r.vend, queda: a.queda + r.queda, $q: a.$q + r.queda * r.auc }), { ini: 0, comp: 0, disp: 0, vend: 0, queda: 0, $q: 0 })
+        invOut.push(`<div class="subh">${E(mca)} · inventario</div>`)
+        const bd = res.map((r) => ({ cells: [C(sLbl(r.s)), C(n0(r.ini)), C(BUY_SEASONS.includes(r.s) ? n0(r.comp) : '—'), C(n0(r.disp)), C(n0(r.vend)), C(n0(r.queda)), C(r.auc ? '$' + n0(r.queda * r.auc) : '—')] }))
+        bd.push({ cls: 'tot', cells: [C('TOTAL'), C(n0(T.ini)), C(n0(T.comp)), C(n0(T.disp)), C(n0(T.vend)), C(n0(T.queda)), C('$' + n0(T.$q))] })
+        invOut.push(tbl(['Temporada', 'Inicial', 'Compras', 'Disponible', 'Venta', 'Saldo fin año', 'Saldo $'], bd))
+      })
+      if (invOut.length) PUSH('producto', sec('Producto — Resumen de inventario por marca', '2028'), ...invOut)
+      const pm = []
+      marcas.forEach((mca) => {
+        const catL = (cats[mca] || []).map((c) => c.cat); if (!catL.length) return
+        const rows = []
+        SEASONS.forEach((s) => catL.forEach((c) => { const inv = num(precI[`INV|${mca}|${s}|${c}`]); const auc = num(precI[`PAUC|${mca}|${s}|${c}`]); const aup = num(precI[`PAUP|${mca}|${s}|${c}`]); if (inv || auc || aup) rows.push({ cells: [C(sLbl(s)), C(c), C(inv ? n0(inv) : ''), C(auc ? n0(auc) : ''), C(aup ? n0(aup) : '')] }) }))
+        if (rows.length) { pm.push(`<div class="subh">${E(mca)} · precios</div>`); pm.push(tbl(['Temporada', 'Categoría', 'Inv (ud)', 'AUC', 'AUP'], rows)) }
+      })
+      if (pm.length) PUSH('producto', sec('Producto — Precios por temporada × categoría', '2028'), ...pm)
+    } catch { }
+    // Logística detalle
+    try {
+      const lc = JSON.parse(localStorage.getItem('logcost_' + empresa) || '{}')
+      const lrows = marcas.map((mca) => { const pctLog = num(lc[`${mca}|PCT_LOGVENTA`]); const pctMant = num(lc[`${mca}|PCT_MANT`]); const mue = MH.reduce((a, _, m) => a + num(lc[`${mca}|MUECOST|${m}`]), 0); const cbm = (cats[mca] || []).filter((c) => num(lc[`${mca}|CBM|${c.cat}`])).map((c) => `${c.cat}: ${num(lc[`${mca}|CBM|${c.cat}`])}`).join(' · '); return { mca, pctLog, pctMant, mue, cbm } }).filter((o) => o.pctLog || o.pctMant || o.mue || o.cbm)
+      if (lrows.length) PUSH('logistica', sec('Logística — detalle por marca', 'costos logísticos · 2028'), tbl(['Marca', '% Log/venta', '% Mantenim.', 'Muestras ($)', 'CBM por categoría'], lrows.map((o) => ({ cells: [C(o.mca), C(o.pctLog ? o.pctLog + '%' : '—'), C(o.pctMant ? o.pctMant + '%' : '—'), C(n0(o.mue)), C(o.cbm || '—')] }))))
+    } catch { }
+    // Director: comisiones + muestras
+    try {
+      const cd = JSON.parse(localStorage.getItem('comis_' + empresa) || '{}')
+      const crows = marcas.map((mca) => { const cn = (cats[mca] || []).map((c) => c.cat); const r = realAupAuc(empresa, mca, ven, prod, cn); const t = comisionCalc(mca, cd, r.ventaMes).total; return { mca, m: t, tot: t.reduce((a, b) => a + b, 0) } }).filter((o) => o.tot)
+      if (crows.length) PUSH('director', sec('Comisiones por marca', '% sobre venta externa · 2028'), tbl(['Marca', ...MH, 'Total'], crows.map((o) => ({ cells: [C(o.mca), ...o.m.map((v) => C(v ? n0(v) : '')), C(n0(o.tot))] }))))
+      const md = JSON.parse(localStorage.getItem('muestras_' + empresa) || '{}'); const precM = JSON.parse(localStorage.getItem('precios_' + empresa) || '{}')
+      const seasonOf = (m) => m < 6 ? 'SS28' : m < 10 ? 'FW28' : 'SS29'
+      const mrows = []
+      marcas.forEach((mca) => {
+        const catL = (cats[mca] || []).filter((c) => c.cat); const cl = catL.length ? catL : [{ cat: 'General', peso: 0 }]
+        const sAUC = (s) => { let n = 0, d = 0; cl.forEach(({ cat, peso }) => { const a = num(precM[`PAUC|${mca}|${s}|${cat}`]); const w = (num(peso) || 0) + 0.0001; if (a > 0) { n += a * w; d += w } }); return d ? n / d : 0 }
+        const ud = MH.map((_, mi) => num(md[`${mca}|PV|${mi}`]) + num(md[`${mca}|SE|${mi}`])); const usd = MH.map((_, mi) => ud[mi] * sAUC(seasonOf(mi)))
+        const tU = ud.reduce((a, b) => a + b, 0); if (!tU) return
+        mrows.push({ cells: [C(mca), C('ud'), ...ud.map((v) => C(v ? n0(v) : '')), C(n0(tU))] }); mrows.push({ cls: 'strong', cells: [C(mca), C('$'), ...usd.map((v) => C(v ? n0(v) : '')), C(n0(usd.reduce((a, b) => a + b, 0)))] })
+      })
+      if (mrows.length) PUSH('director', sec('Muestras a comprar por marca', 'unidades + $ · 2028'), tbl(['Marca', '', ...MH, 'Total'], mrows))
+    } catch { }
+    // Finanzas: cuentas por cobrar 2027 + pago a proveedor (marcas de la SBU)
+    try {
+      const cf = JSON.parse(localStorage.getItem('cf_' + empresa) || '{}')
+      const cobRows = []
+      marcas.forEach((mca) => {
+        const cliSet = new Set()
+        ven.forEach((r) => { if (upper(r[0]) === upper(empresa) && upper(r[3]) === upper(mca)) { const c = String(r[1] || '').trim(); if (c && !c.toUpperCase().startsWith('VIAJES')) cliSet.add(c) } })
+        Object.keys(cf).forEach((k) => { const m = k.match(/^COB2027\|([^|]+)\|(.+)\|(\d+)$/); if (m && upper(m[1]) === upper(mca)) cliSet.add(m[2]) })
+        ;[...cliSet].forEach((cli) => { const v = [0, 1, 2].map((mi) => num(cf[`COB2027|${mca}|${cli}|${mi}`])); const t = v[0] + v[1] + v[2]; if (t) cobRows.push({ cells: [C(mca), C(cli), C(cf[`TERM|${mca}|${cli}`] || '—'), ...v.map((x) => C(x ? n0(x) : '')), C(n0(t))] }) })
+      })
+      if (cobRows.length) PUSH('finanzas', sec('Finanzas — Cuentas por cobrar del 2027', 'saldo pendiente · 2028'), tbl(['Marca', 'Cliente', 'Término', 'ENE', 'FEB', 'MAR', 'Total'], cobRows))
+      const tmp = JSON.parse(localStorage.getItem('temp_' + empresa) || '{}')
+      const aucMesM = (mca) => { const a = Array(12).fill(0); prod.forEach((r) => { if (upper(r[0]) === upper(empresa) && upper(r[3]) === upper(mca) && upper(r[1]) === 'AUC') { for (let j = 0; j < 12; j++) a[j] = num(r[4 + j]) } }); return a }
+      const provRows = marcas.map((mca) => { const term = cf[`PTERM|${mca}`] || ''; const plazo = CF_PLAZO_MESES[term] ?? 0; const au = aucMesM(mca); const compraUsd = MH.map((_, mi) => SEASONS.reduce((a, s) => a + num(tmp[`CP|${mca}|${s}|${mi}`]), 0) * au[mi]); const pagos = MH.map((_, mi) => (mi >= plazo ? compraUsd[mi - plazo] : 0)); return { mca, term, plazo, pagos, tP: pagos.reduce((a, b) => a + b, 0) } }).filter((o) => o.tP || o.term)
+      if (provRows.length) PUSH('finanzas', sec('Finanzas — Pago a proveedor (Cash Out)', '2028'), tbl(['Marca', 'Término proveedor', ...MH, 'Total'], provRows.map((o) => ({ cells: [C(o.mca), C(o.term ? `${o.term} (${o.plazo}m)` : '—'), ...o.pagos.map((x) => C(x ? n0(x) : '')), C(n0(o.tP))] }))))
+    } catch { }
+    // ---- Ensamblado por departamento ----
+    const DEPTS = [['resumen', '📊 Resultado de la SBU', '#0e7490'], ['ventas', '📈 Ventas', '#0891b2'], ['producto', '📦 Producto', '#017e84'], ['marketing', '📣 Marketing', '#d9822b'], ['logistica', '🚚 Logística', '#3b6ea5'], ['director', '🧭 Dirección comercial (Director)', '#0d9488'], ['finanzas', '💰 Finanzas', '#2e7d32']]
+    const out = []
+    DEPTS.forEach(([k, title, c]) => { if (G[k].length) out.push(`<section class="dept" style="--c:${c}"><div class="dept-head">${E(title)}</div><div class="dept-body">${G[k].join('')}</div></section>`) })
+    abpOpenReport('ABP 2028 — ' + sbuName + ' · ' + empresa, 'Espejo de la SBU · ' + sbuName + ' · ' + empresa, out.join(''), win)
   }
   return <button className="btn primary" disabled={ppt || !P} onClick={descargar} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#0e7490' }} title="Genera el reporte de resultados de la SBU (contribución, margen, resultado operativo) en HTML/PDF.">{ppt ? 'Generando…' : '📄 Reporte SBU (PDF)'}</button>
 }
