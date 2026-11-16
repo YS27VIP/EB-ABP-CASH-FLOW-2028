@@ -107,9 +107,9 @@ function catRowOk(row, empresa) {
 // Clientes semilla por empresa (TUMAR, del Excel de facturación · sin país).
 const SEED_CLIENTES = { 'TUMAR': ['LA LOMITA OUTDOORS SRL', 'HERNANDEZ ISMAEL MARIA', 'RIVAROLA MARIA ESTELA', 'MARTHA HEADWEAR SA S. A.', 'WILBERGER NOELIA MARILINA', 'GIGENA JUAN MANUEL', 'UNIAVENTURA S.A.', 'FOURCANS MARTIN OSCAR', 'MORIS CESAR OSVALDO', 'SCALZO OSVALDO NESTOR', 'ANGLER S AVENTURAS SOCIEDAD DE RESPONSABILIDAD LIMITADA', 'CRISTOBAL COLON S. R. L.', 'GROUP MOBILE S.A.', 'EL VIAJERO CAMPING S.R.L.', 'RANCHOCAVALIER S.R.L.', 'BASSI JUAN PABLO', 'PARALELO 42 S. CAP I SECC IV', 'PLACE IT S.A'] }
 /* Empresas del grupo (el nombre debe coincidir con la columna EMPRESA del Histórico). */
-const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO', 'SINERGY']
+const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO', 'GUBRANDS', 'SINERGY']
 // Orden fijo de columnas en el Total Holding (las demás empresas se agregan al final).
-const HOLDING_ORDER = ['ENERGY BRANDS', 'SINERGY', 'TAHO', 'TUMAR']
+const HOLDING_ORDER = ['ENERGY BRANDS', 'SINERGY', 'TAHO', 'TUMAR', 'GUBRANDS']
 
 /* Colores por SBU y por marca (identidad visual dinámica) */
 const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'SBU 4': '#be185d', 'RETAIL': '#4338ca', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
@@ -5329,7 +5329,55 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       const f2 = pptx.addSlide(); f2.addText('Resultado operativo', { x: 0.7, y: 1.4, w: 12, h: 0.8, fontSize: 30, bold: true, color: TEAL })
       const rr = [[{ text: 'Concepto', options: { bold: true, color: 'FFFFFF', fill: TEAL } }, { text: '2028', options: { bold: true, color: 'FFFFFF', fill: TEAL, align: 'right' } }], [{ text: 'Contribución de las BU' }, { text: M$f(granBrand), options: { align: 'right' } }], [{ text: '(−) Gastos administrativos' }, { text: M$f(gadminAnual), options: { align: 'right' } }], [{ text: '= Resultado operativo', options: { bold: true } }, { text: M$f(granBrand - gadminAnual), options: { align: 'right', bold: true } }]]
       f2.addTable(rr, { x: 2.5, y: 2.6, w: 8, fontSize: 16, border: { type: 'solid', pt: 0.5, color: 'D7DDE3' }, valign: 'middle', rowH: 0.5 })
-      await pptx.writeFile({ fileName: `ABP_2028_${empresa}.pptx` })
+
+      // ===== ESPEJO TOTAL: detalle de todo lo capturado en la empresa =====
+      const MH = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
+      const n0 = (v) => Math.round(num(v)).toLocaleString('en-US')
+      const hFill = (t, al) => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: TEAL, align: al || 'left', fontSize: 9 } })
+      const sep = (t) => { const sx = pptx.addSlide(); sx.background = { color: 'EAF3F5' }; sx.addText(t, { x: 0.7, y: 3.1, w: 12, h: 1, fontSize: 32, bold: true, color: TEAL }) }
+      const tablaSlides = (titulo, headRow, bodyRows, perPage) => { const pp = perPage || 12; if (!bodyRows.length) return; for (let i = 0; i < bodyRows.length; i += pp) { const chunk = bodyRows.slice(i, i + pp); const sl = pptx.addSlide(); sl.addText(titulo + (bodyRows.length > pp ? ` (${Math.floor(i / pp) + 1}/${Math.ceil(bodyRows.length / pp)})` : ''), { x: 0.35, y: 0.22, w: 12.6, h: 0.5, fontSize: 17, bold: true, color: TEAL }); sl.addTable([headRow, ...chunk], { x: 0.25, y: 0.9, w: 12.8, fontSize: 8, border: { type: 'solid', pt: 0.5, color: 'D7DDE3' }, valign: 'middle', autoPage: false }) } }
+      // Dump genérico de una pestaña de captura (filas: empresa, rubro, sbu, marca, 12 meses)
+      const dumpTab = (titulo, rows, modo) => { // modo: 'all' | 'novj' | 'vj'
+        const flt = (rows || []).filter((r) => upper(r[0]) === upper(empresa) && (modo === 'vj' ? esVi(String(r[1] || '')) : modo === 'novj' ? !esVi(String(r[1] || '')) : true))
+        const body = flt.map((r) => { let tot = 0; const cs = MH.map((_, mi) => { const v = num(r[4 + mi]); tot += v; return { text: v ? n0(v) : '', options: { align: 'right', fontSize: 8 } } }); return [{ text: String(r[1] || ''), options: { fontSize: 8 } }, { text: String(r[3] || ''), options: { fontSize: 8 } }, ...cs, { text: n0(tot), options: { align: 'right', bold: true, fontSize: 8 } }] }).filter((row) => row.some((c, i) => i >= 2 && c.text))
+        if (!body.length) return
+        tablaSlides(titulo, [hFill('Rubro / Concepto'), hFill('Marca'), ...MH.map((m) => hFill(m, 'right')), hFill('Total', 'right')], body)
+      }
+      sep('Detalle capturado — ' + empresa)
+      // P&L mensual por marca
+      const todasM = Object.values(sbus).flat()
+      todasM.forEach((mca) => {
+        const cn = (cats[mca] || []).map((c) => c.cat); const r = realAupAuc(empresa, mca, ventas, producto, cn)
+        const mesSum = (rows, filt) => MH.map((_, mi) => (rows || []).reduce((s, row) => (upper(row[0]) === upper(empresa) && upper(row[3]) === upper(mca) && (!filt || filt(String(row[1] || '')))) ? s + num(row[4 + mi]) : s, 0))
+        const mkM = mesSum(mk, (x) => !esVi(x)); const logM = LOG_SIMPLE(empresa) ? MH.map(() => 0) : mesSum(log, (x) => !esVi(x))
+        const vjM = MH.map((_, mi) => [ventas, producto, mk, log, dir].reduce((t, rows) => t + (rows || []).reduce((s, row) => (upper(row[0]) === upper(empresa) && upper(row[3]) === upper(mca) && esVi(String(row[1] || ''))) ? s + num(row[4 + mi]) : s, 0), 0))
+        const venta = r.ventaMes, costo = r.costoMes, unid = r.totalUnits
+        const margen = MH.map((_, mi) => venta[mi] - costo[mi] - logM[mi]); const brand = MH.map((_, mi) => margen[mi] - mkM[mi] - vjM[mi])
+        const totF = (a) => a.reduce((x, y) => x + y, 0)
+        if (totF(venta) === 0 && totF(unid) === 0) return
+        const filP = [['Unidades', unid], ['Venta Neta', venta], ['(−) Costo', costo], ['(−) Logística', logM], ['= Margen Bruto', margen], ['(−) Marketing', mkM], ['(−) Viajes', vjM], ['= Contribución', brand]]
+        const body = filP.map(([lbl, arr]) => { const st = lbl.startsWith('=') || lbl === 'Venta Neta'; return [{ text: lbl, options: { bold: st, fontSize: 8 } }, ...MH.map((_, mi) => ({ text: n0(arr[mi]), options: { align: 'right', fontSize: 8 } })), { text: n0(totF(arr)), options: { align: 'right', bold: true, fontSize: 8 } }] })
+        tablaSlides('P&L mensual — ' + mca, [hFill('Concepto'), ...MH.map((m) => hFill(m, 'right')), hFill('Total', 'right')], body, 20)
+      })
+      // Capturas crudas
+      dumpTab('Ventas — unidades por cliente', ventas, 'novj')
+      dumpTab('Producto — AUC / AUP por categoría', producto, 'all')
+      dumpTab('Marketing', mk, 'novj')
+      dumpTab('Viajes — Marketing', mk, 'vj'); dumpTab('Viajes — Director', dir, 'vj'); dumpTab('Viajes — Ventas', ventas, 'vj'); dumpTab('Viajes — Producto', producto, 'vj'); dumpTab('Viajes — Logística', log, 'vj')
+      dumpTab('Logística', log, 'novj')
+      dumpTab('Finanzas — Cash Flow / Otros', finR, 'all')
+      // Categorías por marca
+      const catBody = []; Object.entries(cats).forEach(([mca, arr]) => (arr || []).forEach((c) => catBody.push([{ text: mca, options: { fontSize: 9 } }, { text: String(c.cat || ''), options: { fontSize: 9 } }, { text: c.peso != null ? n0(c.peso) : '', options: { align: 'right', fontSize: 9 } }])))
+      tablaSlides('Categorías por marca', [hFill('Marca'), hFill('Categoría'), hFill('Peso', 'right')], catBody, 16)
+      // Gastos Admin (Finanzas) — por sub-rubro (y por SBU si aplica)
+      try {
+        const gad = JSON.parse(localStorage.getItem('gadmin_' + empresa) || '{}')
+        const acc = {}; Object.keys(gad).forEach((k) => { const p = k.split('||'); let sbu = '', cod = '', mi = -1; if (p.length === 3) { sbu = p[0]; cod = p[1]; mi = +p[2] } else { const q = k.split('|'); cod = q[0]; mi = +q[1] } if (!cod || isNaN(mi)) return; const kk = sbu + '§' + cod; (acc[kk] = acc[kk] || { sbu, cod, m: Array(12).fill(0) }).m[mi] = num(gad[k]) })
+        const gBody = Object.values(acc).filter((o) => o.m.some((v) => v)).map((o) => { let tot = 0; const cs = o.m.map((v) => { tot += v; return { text: v ? n0(v) : '', options: { align: 'right', fontSize: 8 } } }); return [{ text: o.sbu || '—', options: { fontSize: 8 } }, { text: o.cod, options: { fontSize: 8 } }, ...cs, { text: n0(tot), options: { align: 'right', bold: true, fontSize: 8 } }] })
+        tablaSlides('Gastos Admin (Finanzas)', [hFill('SBU'), hFill('Cód'), ...MH.map((m) => hFill(m, 'right')), hFill('Total', 'right')], gBody)
+      } catch { }
+
+      await pptx.writeFile({ fileName: `ABP_2028_${empresa}_ESPEJO.pptx` })
     } catch (e) { alert('No se pudo generar la presentación: ' + e.message) }
     setPpt(false)
   }
