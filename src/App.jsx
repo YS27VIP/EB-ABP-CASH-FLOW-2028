@@ -5453,6 +5453,49 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       const lrows = allM.map((mca) => { const pct = num(lc[`${mca}|PCT_LOGVENTA`]); const mue = MH.reduce((a, _, m) => a + num(lc[`${mca}|MUECOST|${m}`]), 0); return { mca, pct, mue } }).filter((o) => o.pct || o.mue)
       if (lrows.length) { out.push(sec('Logística — modelo por marca', 'espejo · 2028')); out.push(tbl(['Marca', '% Log / venta', 'Muestras ($)'], lrows.map((o) => ({ cells: [C(o.mca), C(o.pct ? o.pct + '%' : '—'), C(n0(o.mue))] })))) }
     } catch { }
+    // ---- Logística — detalle por marca (% log, % mant, muestras, CBM por categoría) ----
+    try {
+      const lc = JSON.parse(localStorage.getItem('logcost_' + empresa) || '{}')
+      const lrows = allM.map((mca) => {
+        const pctLog = num(lc[`${mca}|PCT_LOGVENTA`]); const pctMant = num(lc[`${mca}|PCT_MANT`]); const mue = MH.reduce((a, _, m) => a + num(lc[`${mca}|MUECOST|${m}`]), 0)
+        const cbm = (cats[mca] || []).filter((c) => num(lc[`${mca}|CBM|${c.cat}`])).map((c) => `${c.cat}: ${num(lc[`${mca}|CBM|${c.cat}`])}`).join(' · ')
+        return { mca, pctLog, pctMant, mue, cbm }
+      }).filter((o) => o.pctLog || o.pctMant || o.mue || o.cbm)
+      if (lrows.length) { out.push(sec('Logística — detalle por marca', 'costos logísticos · 2028')); out.push(tbl(['Marca', '% Log/venta', '% Mantenim.', 'Muestras ($)', 'CBM por categoría'], lrows.map((o) => ({ cells: [C(o.mca), C(o.pctLog ? o.pctLog + '%' : '—'), C(o.pctMant ? o.pctMant + '%' : '—'), C(n0(o.mue)), C(o.cbm || '—')] })))) }
+    } catch { }
+    // ---- Comisiones por marca (de comis_<empresa>) ----
+    try {
+      const cd = JSON.parse(localStorage.getItem('comis_' + empresa) || '{}')
+      const crows = allM.map((mca) => {
+        const cn = (cats[mca] || []).map((c) => c.cat); const r = realAupAuc(empresa, mca, ventas, producto, cn)
+        const t = comisionCalc(mca, cd, r.ventaMes).total; return { mca, m: t, tot: t.reduce((a, b) => a + b, 0) }
+      }).filter((o) => o.tot)
+      if (crows.length) { out.push(sec('Comisiones por marca', 'Director · % sobre venta externa · 2028')); out.push(tbl(['Marca', ...MH, 'Total'], crows.map((o) => ({ cells: [C(o.mca), ...o.m.map((v) => C(v ? n0(v) : '')), C(n0(o.tot))] })))) }
+    } catch { }
+    // ---- Muestras a comprar (ud + $) por marca (de muestras_<empresa>) ----
+    try {
+      const md = JSON.parse(localStorage.getItem('muestras_' + empresa) || '{}')
+      const precM = JSON.parse(localStorage.getItem('precios_' + empresa) || '{}')
+      const seasonOf = (m) => m < 6 ? 'SS28' : m < 10 ? 'FW28' : 'SS29'
+      const mrows = []
+      allM.forEach((mca) => {
+        const catL = (cats[mca] || []).filter((c) => c.cat); const cl = catL.length ? catL : [{ cat: 'General', peso: 0 }]
+        const sAUC = (s) => { let n = 0, d = 0; cl.forEach(({ cat, peso }) => { const a = num(precM[`PAUC|${mca}|${s}|${cat}`]); const w = (num(peso) || 0) + 0.0001; if (a > 0) { n += a * w; d += w } }); return d ? n / d : 0 }
+        const ud = MH.map((_, mi) => num(md[`${mca}|PV|${mi}`]) + num(md[`${mca}|SE|${mi}`]))
+        const usd = MH.map((_, mi) => ud[mi] * sAUC(seasonOf(mi)))
+        const tU = ud.reduce((a, b) => a + b, 0), tD = usd.reduce((a, b) => a + b, 0)
+        if (!tU) return
+        mrows.push({ cells: [C(mca), C('ud'), ...ud.map((v) => C(v ? n0(v) : '')), C(n0(tU))] })
+        mrows.push({ cls: 'strong', cells: [C(mca), C('$'), ...usd.map((v) => C(v ? n0(v) : '')), C(n0(tD))] })
+      })
+      if (mrows.length) { out.push(sec('Muestras a comprar por marca', 'Director · unidades + $ · 2028')); out.push(tbl(['Marca', '', ...MH, 'Total'], mrows)) }
+    } catch { }
+    // ---- Aprobaciones de Finanzas (logística / compras por marca) ----
+    try {
+      const ap = JSON.parse(localStorage.getItem('aprob_' + empresa) || '{}')
+      const arows = allM.map((mca) => ({ mca, log: ap[`LOGISTICA|${mca}`] ? '✓ Aprobado' : '—', com: ap[`COMPRA|${mca}`] ? '✓ Aprobado' : '—' })).filter((o) => o.log !== '—' || o.com !== '—')
+      if (arows.length) { out.push(sec('Aprobaciones de Finanzas', 'por marca · 2028')); out.push(tbl(['Marca', 'Costos logísticos', 'Términos de compra'], arows.map((o) => ({ cells: [C(o.mca), C(o.log), C(o.com)] })))) }
+    } catch { }
     // ---- Retail (solo Energy Brands) ----
     if (upper(empresa) === 'ENERGY BRANDS') {
       try {
