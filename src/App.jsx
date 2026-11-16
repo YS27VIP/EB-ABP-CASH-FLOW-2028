@@ -2090,7 +2090,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoH
         const pctAsig = totComp ? (totSal / totComp * 100) : 0
         return (
           <div className="panel" style={{ display: espejoHolding ? 'none' : undefined }}>
-            <h3>🪞 Compras 2028: asignado a cliente vs. stock {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`} <span className="unit">(unidades · consulta, solo lectura)</span></h3>
+            <h3>Compras 2028: asignado a cliente vs. stock {isTotal ? `· TOTAL ${sbuLbl}` : `· ${marca}`} <span className="unit">(🪞 espejo · solo lectura · unidades)</span></h3>
             <div className="sub">De las <b>compras 2028</b>, cuánto ya está <b>asignado a un cliente</b> (vendido) y cuánto <b>queda en stock</b>, mes a mes. Solo cuenta lo de las <b>temporadas de compra 2028</b> (SS28, FW28, SS29), no el stock de temporadas anteriores. El valor en <b>$</b> usa el <b>AUC de cada temporada 2028</b>, sin ponderar. (Las muestras no entran aquí.)</div>{HOVERTIP}
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', margin: '6px 0 14px' }}>
               <div className="kpi"><div className="k">Comprado 2028</div><div className="v">{fmt(totComp)}</div><div className="s">unidades · ${fmt(totCompD)}</div></div>
@@ -2405,7 +2405,7 @@ function TahoEspejo({ empresa, marca }) {
   const title = oneMarca ? `🪞 Compras TAHO — ${marca}` : '🪞 Compras TAHO — espejo'
   return (
     <div className="panel">
-      <h3>{title} <span className="unit">(lo que TAHO planea comprarle a {empresa} · solo lectura)</span></h3>
+      <h3>{title} <span className="unit">(🪞 espejo · solo lectura · lo que TAHO planea comprarle a {empresa})</span></h3>
       {(!d || totU === 0)
         ? <div className="sub">TAHO aún no ha cargado compras {oneMarca ? `de ${marca} ` : ''}para {empresa}. Cuando las cargue en su Producto, aquí aparecerán como espejo (no afecta tus totales).</div>
         : <>
