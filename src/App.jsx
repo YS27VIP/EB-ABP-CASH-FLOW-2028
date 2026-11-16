@@ -5277,6 +5277,27 @@ function abpOpenReport(titulo, subtitulo, bodyHTML, win) {
   } catch { dl() }
 }
 const _gerCache = {} // cache de lecturas por empresa (para que cambiar de empresa en el Holding sea instantáneo)
+const _gerInflight = {} // dedupe: si ya se está cargando una empresa, se reutiliza la misma promesa (no se dispara 2 veces)
+// Carga (y cachea) todos los datos de una empresa. Dedupe por empresa. Lo usan GerenciaScreen y el precargador del Holding.
+async function gerLoad(empresa) {
+  if (_gerCache[empresa]) return _gerCache[empresa]
+  if (_gerInflight[empresa]) return _gerInflight[empresa]
+  _gerInflight[empresa] = (async () => {
+    try {
+      const g = async (t) => { try { const j = await gReadTab(t); return j && j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
+      const [ven, prod, capC, mkR, logR, dirR, finRR, histR, planR, tumarR] = await Promise.all([
+        g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director'), g('Cap_Finanzas'),
+        (async () => { try { const j = await gHistorico(); return j && j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } })(),
+        (async () => { try { const jp = await gPlan2027(); return jp && jp.map ? jp.map : {} } catch { return {} } })(),
+        (empresa === 'TUMAR' ? (async () => { try { return await gTumarReal() } catch { return null } })() : Promise.resolve(null)),
+      ])
+      const out = {}; capC.forEach((row) => { if (!catRowOk(row, empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) })
+      _gerCache[empresa] = { ven, prod, cats: out, mk: mkR, log: logR, dir: dirR, finR: finRR, hist: histR, plan: planR, tumar: tumarR }
+      return _gerCache[empresa]
+    } finally { delete _gerInflight[empresa] }
+  })()
+  return _gerInflight[empresa]
+}
 function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   const [ventas, setVentas] = useState([])
   const [producto, setProducto] = useState([])
@@ -5288,25 +5309,11 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   const [cargando, setCargando] = useState(true)
   useEffect(() => {
     let cancel = false
-    // Cache por empresa: al volver a una empresa ya cargada, es instantáneo (no se traba).
+    const apply = (d) => { setVentas(d.ven); setProducto(d.prod); setCats(d.cats); setMk(d.mk); setLog(d.log); setDir(d.dir); setFinR(d.finR); setHist(d.hist); setPlan(d.plan); setTumar(d.tumar || null); setCargando(false) }
     const cached = _gerCache[empresa]
-    if (cached) { setVentas(cached.ven); setProducto(cached.prod); setCats(cached.cats); setMk(cached.mk); setLog(cached.log); setDir(cached.dir); setFinR(cached.finR); setHist(cached.hist); setPlan(cached.plan); setTumar(cached.tumar || null); setCargando(false); return () => { } }
-    ;(async () => {
-      setCargando(true)
-      const g = async (t) => { try { const j = await gReadTab(t); return j && j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
-      // Todas las lecturas EN PARALELO (antes iban en serie → se trababa al cambiar de empresa).
-      const [ven, prod, capC, mkR, logR, dirR, finRR, histR, planR, tumarR] = await Promise.all([
-        g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director'), g('Cap_Finanzas'),
-        (async () => { try { const j = await gHistorico(); return j && j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } })(),
-        (async () => { try { const jp = await gPlan2027(); return jp && jp.map ? jp.map : {} } catch { return {} } })(),
-        (empresa === 'TUMAR' ? (async () => { try { return await gTumarReal() } catch { return null } })() : Promise.resolve(null)),
-      ])
-      if (cancel) return
-      const out = {}; capC.forEach((row) => { if (!catRowOk(row, empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) })
-      _gerCache[empresa] = { ven, prod, cats: out, mk: mkR, log: logR, dir: dirR, finR: finRR, hist: histR, plan: planR, tumar: tumarR }
-      setVentas(ven); setProducto(prod); setCats(out); setMk(mkR); setLog(logR); setDir(dirR); setFinR(finRR); setHist(histR); setPlan(planR); if (empresa === 'TUMAR') setTumar(tumarR)
-      setCargando(false)
-    })()
+    if (cached) { apply(cached); return () => { } }
+    setCargando(true)
+    gerLoad(empresa).then((d) => { if (!cancel && d) apply(d) }).catch(() => { if (!cancel) setCargando(false) })
     return () => { cancel = true }
   }, [empresa])
   const sum12 = (a) => (a || []).reduce((x, y) => x + y, 0)
@@ -5336,9 +5343,10 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
     setPpt(true)
     const win = window.open('about:blank', '_blank') // abierto en el gesto del clic → no lo bloquea el navegador
     if (win) { try { win.document.write('<!doctype html><meta charset="utf-8"><title>Generando…</title><body style="font:16px -apple-system,sans-serif;color:#0e7490;padding:40px">Generando el reporte ABP…</body>') } catch { } }
-    setTimeout(() => { try { buildReporte(win) } catch (e) { if (win && !win.closed) win.close(); alert('No se pudo generar el reporte: ' + (e && e.message)) } setPpt(false) }, 40)
+    setTimeout(async () => { try { await buildReporte(win) } catch (e) { if (win && !win.closed) win.close(); alert('No se pudo generar el reporte: ' + (e && e.message)) } setPpt(false) }, 40)
   }
-  function buildReporte(win) {
+  async function buildReporte(win) {
+    const Y = () => new Promise((r) => setTimeout(r)) // cede el hilo para que la pestaña no se congele mientras genera
     const E = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
     const n0 = (v) => Math.round(num(v)).toLocaleString('en-US')
     const MH = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
@@ -5383,19 +5391,23 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
     } catch { }
     // ---- P&L mensual por marca ----
     out.push(sec('P&L mensual por marca', 'detalle · 2028'))
-    Object.entries(sbus).forEach(([sn, ms]) => (ms || []).forEach((mca) => {
-      const cn = (cats[mca] || []).map((c) => c.cat); const r = realAupAuc(empresa, mca, ventas, producto, cn)
-      const mesSum = (rows, filt) => MH.map((_, mi) => (rows || []).reduce((s, row) => (upper(row[0]) === upper(empresa) && upper(row[3]) === upper(mca) && (!filt || filt(String(row[1] || '')))) ? s + num(row[4 + mi]) : s, 0))
-      const mkM = mesSum(mk, (x) => !esVi(x)); const logM = LOG_SIMPLE(empresa) ? MH.map(() => 0) : mesSum(log, (x) => !esVi(x))
-      const vjM = MH.map((_, mi) => [ventas, producto, mk, log, dir].reduce((t, rows) => t + (rows || []).reduce((s, row) => (upper(row[0]) === upper(empresa) && upper(row[3]) === upper(mca) && esVi(String(row[1] || ''))) ? s + num(row[4 + mi]) : s, 0), 0))
-      const venta = r.ventaMes, costo = r.costoMes, unid = r.totalUnits
-      const margen = MH.map((_, mi) => venta[mi] - costo[mi] - logM[mi]), brand = MH.map((_, mi) => margen[mi] - mkM[mi] - vjM[mi])
-      const tF = (a) => a.reduce((x, y) => x + y, 0)
-      if (tF(venta) === 0 && tF(unid) === 0) return
-      const mrow = (lbl, arr, st) => ({ cls: st || '', cells: [C(lbl), ...arr.map((v) => C(n0(v))), C(n0(tF(arr)))] })
-      out.push(`<div class="subh">${E(mca)} <span>· ${E(sn)}</span></div>`)
-      out.push(tbl(['Concepto', ...MH, 'Total'], [mrow('Unidades', unid), mrow('Venta Neta', venta, 'strong'), mrow('(−) Costo', costo), mrow('(−) Logística', logM), mrow('= Margen Bruto', margen, 'strong'), mrow('(−) Marketing', mkM), mrow('(−) Viajes', vjM), mrow('= Contribución', brand, 'tot')]))
-    }))
+    for (const [sn, ms] of Object.entries(sbus)) {
+      for (const mca of (ms || [])) {
+        const cn = (cats[mca] || []).map((c) => c.cat); const r = realAupAuc(empresa, mca, ventas, producto, cn)
+        const mesSum = (rows, filt) => MH.map((_, mi) => (rows || []).reduce((s, row) => (upper(row[0]) === upper(empresa) && upper(row[3]) === upper(mca) && (!filt || filt(String(row[1] || '')))) ? s + num(row[4 + mi]) : s, 0))
+        const mkM = mesSum(mk, (x) => !esVi(x)); const logM = LOG_SIMPLE(empresa) ? MH.map(() => 0) : mesSum(log, (x) => !esVi(x))
+        const vjM = MH.map((_, mi) => [ventas, producto, mk, log, dir].reduce((t, rows) => t + (rows || []).reduce((s, row) => (upper(row[0]) === upper(empresa) && upper(row[3]) === upper(mca) && esVi(String(row[1] || ''))) ? s + num(row[4 + mi]) : s, 0), 0))
+        const venta = r.ventaMes, costo = r.costoMes, unid = r.totalUnits
+        const margen = MH.map((_, mi) => venta[mi] - costo[mi] - logM[mi]), brand = MH.map((_, mi) => margen[mi] - mkM[mi] - vjM[mi])
+        const tF = (a) => a.reduce((x, y) => x + y, 0)
+        if (tF(venta) === 0 && tF(unid) === 0) continue
+        const mrow = (lbl, arr, st) => ({ cls: st || '', cells: [C(lbl), ...arr.map((v) => C(n0(v))), C(n0(tF(arr)))] })
+        out.push(`<div class="subh">${E(mca)} <span>· ${E(sn)}</span></div>`)
+        out.push(tbl(['Concepto', ...MH, 'Total'], [mrow('Unidades', unid), mrow('Venta Neta', venta, 'strong'), mrow('(−) Costo', costo), mrow('(−) Logística', logM), mrow('= Margen Bruto', margen, 'strong'), mrow('(−) Marketing', mkM), mrow('(−) Viajes', vjM), mrow('= Contribución', brand, 'tot')]))
+        await Y()
+      }
+    }
+    await Y()
     // ---- Capturas crudas ----
     const dump = (titulo, tag, rows, modo) => {
       const flt = (rows || []).filter((rr) => upper(rr[0]) === upper(empresa) && (modo === 'vj' ? esVi(String(rr[1] || '')) : modo === 'novj' ? !esVi(String(rr[1] || '')) : true))
@@ -5843,6 +5855,13 @@ function HoldingScreen({ empresas, sbusFor }) {
       try { await Promise.all(empresas.map((e) => hydrateEstado(e))) } catch { }
       setData({ ventas, producto, capCat, mk, log, dir })
     })()
+  }, [])
+  // Precarga en segundo plano el detalle de cada empresa (secuencial, aprovecha la caché de lecturas),
+  // para que al hacer clic en "Detalle por empresa" el cambio sea instantáneo y no se trabe.
+  useEffect(() => {
+    let stop = false
+    ;(async () => { for (const e of empresas) { if (stop) break; if (upper(e) === 'SINERGY') continue; try { await gerLoad(e) } catch { } } })()
+    return () => { stop = true }
   }, [])
   if (!data) return <div className="panel"><div className="banner">⏳ Consolidando las {empresas.length} empresas del holding…</div></div>
   const calcEmp = (emp) => {
