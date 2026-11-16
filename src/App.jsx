@@ -5654,7 +5654,7 @@ function HoldingScreen({ empresas, sbusFor }) {
           <span style={{ fontWeight: 800, fontSize: 15 }}>🔎 Detalle por empresa</span>
           {empsOrden.map((e) => <button key={e} className={'seg' + (detEmp === e ? ' active' : '')} onClick={() => setDetEmp(e)} style={detEmp === e ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : {}}>{e}</button>)}
         </div>
-        {detEmp && (detEmp === 'SINERGY' ? sinPanel(detEmp) : <GerenciaScreen key={detEmp} empresa={detEmp} sbus={sbusFor(detEmp)} espejo />)}
+        {detEmp && (detEmp === 'SINERGY' ? sinPanel(detEmp) : <GerenciaScreen empresa={detEmp} sbus={sbusFor(detEmp)} espejo />)}
       </div>
     </>
   )
