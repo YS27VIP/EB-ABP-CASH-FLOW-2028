@@ -5309,6 +5309,104 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   const sbuAgg = (ms) => (ms || []).reduce((a, m) => { const c = fullCalc(m); Object.keys(c).forEach((k) => a[k] = (a[k] || 0) + c[k]); return a }, {})
   const gadminAnual = gadminAnualOf(empresa)
   const [ppt, setPpt] = useState(false)
+  // ===== Reporte HTML/PDF — ESPEJO TOTAL del ABP (bonito, se abre en pestaña para imprimir/guardar PDF) =====
+  function descargarReporte() {
+    const E = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+    const n0 = (v) => Math.round(num(v)).toLocaleString('en-US')
+    const MH = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
+    const out = []
+    const sec = (title, tag) => `<div class="sec"><span class="bar"></span><h2>${E(title)}</h2>${tag ? `<span class="tag">${E(tag)}</span>` : ''}</div>`
+    const tbl = (head, rows) => `<div class="card"><div class="scroll"><table><thead><tr>${head.map((h, i) => `<th class="${i === 0 ? 'l' : ''}">${E(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr class="${r.cls || ''}">${r.cells.map((c, i) => `<td class="${i === 0 ? 'l ' : ''}${c.cls || ''}">${c.t == null ? '' : E(c.t)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`
+    const C = (t, cls) => ({ t, cls })
+    // ---- Resultado consolidado (SBU + TOTAL + referencias) ----
+    const ents = Object.entries(sbus); const aggs = ents.map(([sn, ms]) => ({ sn, a: sbuAgg(ms) }))
+    const tot = aggs.reduce((acc, { a }) => { Object.keys(a).forEach((k) => acc[k] = (acc[k] || 0) + a[k]); return acc }, {})
+    const allM = Object.values(sbus).flat()
+    const fy = (y, t) => esTaho ? null : fySet(allM, y, t), ab = (c) => esEB ? abpSet(allM, c) : null
+    const D = (v) => v == null ? '—' : n0(v)
+    const prow = (lbl, get, abp, f26, f25, st) => ({ cls: st || '', cells: [C(lbl), ...aggs.map(({ a }) => C(n0(get(a)))), C(n0(get(tot))), C(D(abp), 'ref'), C(D(f26)), C(D(f25))] })
+    out.push(sec('Resultado Operativo consolidado — ' + empresa, 'SBU lado a lado · 2028'))
+    const headR = ['Concepto', ...aggs.map(({ sn }) => sn), 'TOTAL', 'ABP2027', 'FY2026', 'FY2025']
+    const rowsR = [
+      prow('Unidades', (a) => a.unidades || 0, null, null, null),
+      prow('Venta Neta', (a) => a.ventaNeta || 0, ab('venta'), fy(2026, 'VENTA'), fy(2025, 'VENTA'), 'strong'),
+      prow('(−) Costo', (a) => a.costo || 0, ab('costo'), fy(2026, 'COSTO'), fy(2025, 'COSTO')),
+      prow('(−) Logística', (a) => a.logistica || 0, null, null, null),
+      prow('= Margen Bruto', (a) => a.margenBruto || 0, (ab('venta') != null ? ab('venta') - ab('costo') : null), (fy(2026, 'VENTA') != null ? fy(2026, 'VENTA') - fy(2026, 'COSTO') : null), (fy(2025, 'VENTA') != null ? fy(2025, 'VENTA') - fy(2025, 'COSTO') : null), 'strong'),
+      prow('(−) Marketing', (a) => a.marketing || 0, null, null, null),
+      prow('(−) Viajes', (a) => a.viajes || 0, null, null, null),
+      prow('= Contribución de las BU', (a) => a.brand || 0, null, null, null, 'strong'),
+      { cls: '', cells: [C('(−) Gastos administrativos'), ...aggs.map(() => C('')), C(n0(gadminAnual)), C('—', 'ref'), C('—'), C('—')] },
+      { cls: 'tot', cells: [C('= Resultado operativo'), ...aggs.map(() => C('')), C(n0((tot.brand || 0) - gadminAnual)), C('—', 'ref'), C('—'), C('—')] },
+    ]
+    out.push(tbl(headR, rowsR))
+    // ---- Cash Flow consolidado (cfsum) ----
+    try {
+      const cfs = JSON.parse(localStorage.getItem('cfsum_' + empresa) || 'null')
+      if (cfs) {
+        const gA = (k) => (cfs[k] || Array(12).fill(0)).map((x) => num(x))
+        const cob = gA('cobros'), pag = gA('pagos'), op = gA('oper'), fin = gA('fin'), oi = gA('oIng'), og = gA('oGas'), fl = gA('flujo')
+        const ini = [], finl = []; let prev = num(cfs.ini0); for (let i = 0; i < 12; i++) { ini[i] = i === 0 ? num(cfs.ini0) : prev; finl[i] = ini[i] + fl[i]; prev = finl[i] }
+        const tF = (a) => a.reduce((x, y) => x + y, 0)
+        const cfRow = (lbl, arr, st, totMode) => ({ cls: st || '', cells: [C(lbl), ...arr.map((v) => C(n0(v))), C(totMode === 'none' ? '—' : totMode === 'last' ? n0(arr[11]) : n0(tF(arr)))] })
+        out.push(sec('Cash Flow consolidado — ' + empresa, 'mensual · 2028'))
+        out.push(tbl(['Concepto', ...MH, 'Total/Final'], [cfRow('Cash Inicial', ini, 'strong', 'none'), cfRow('Cash In (Cobros)', cob), cfRow('Cash Out (Pagos)', pag), cfRow('Costos Operativos', op), cfRow('Costos Financieros', fin), cfRow('Otros ingresos', oi), cfRow('Otros gastos', og), cfRow('= Flujo neto del mes', fl, 'tot'), cfRow('Cash Final', finl, 'strong', 'last')]))
+      }
+    } catch { }
+    // ---- P&L mensual por marca ----
+    out.push(sec('P&L mensual por marca', 'detalle · 2028'))
+    Object.entries(sbus).forEach(([sn, ms]) => (ms || []).forEach((mca) => {
+      const cn = (cats[mca] || []).map((c) => c.cat); const r = realAupAuc(empresa, mca, ventas, producto, cn)
+      const mesSum = (rows, filt) => MH.map((_, mi) => (rows || []).reduce((s, row) => (upper(row[0]) === upper(empresa) && upper(row[3]) === upper(mca) && (!filt || filt(String(row[1] || '')))) ? s + num(row[4 + mi]) : s, 0))
+      const mkM = mesSum(mk, (x) => !esVi(x)); const logM = LOG_SIMPLE(empresa) ? MH.map(() => 0) : mesSum(log, (x) => !esVi(x))
+      const vjM = MH.map((_, mi) => [ventas, producto, mk, log, dir].reduce((t, rows) => t + (rows || []).reduce((s, row) => (upper(row[0]) === upper(empresa) && upper(row[3]) === upper(mca) && esVi(String(row[1] || ''))) ? s + num(row[4 + mi]) : s, 0), 0))
+      const venta = r.ventaMes, costo = r.costoMes, unid = r.totalUnits
+      const margen = MH.map((_, mi) => venta[mi] - costo[mi] - logM[mi]), brand = MH.map((_, mi) => margen[mi] - mkM[mi] - vjM[mi])
+      const tF = (a) => a.reduce((x, y) => x + y, 0)
+      if (tF(venta) === 0 && tF(unid) === 0) return
+      const mrow = (lbl, arr, st) => ({ cls: st || '', cells: [C(lbl), ...arr.map((v) => C(n0(v))), C(n0(tF(arr)))] })
+      out.push(`<div class="subh">${E(mca)} <span>· ${E(sn)}</span></div>`)
+      out.push(tbl(['Concepto', ...MH, 'Total'], [mrow('Unidades', unid), mrow('Venta Neta', venta, 'strong'), mrow('(−) Costo', costo), mrow('(−) Logística', logM), mrow('= Margen Bruto', margen, 'strong'), mrow('(−) Marketing', mkM), mrow('(−) Viajes', vjM), mrow('= Contribución', brand, 'tot')]))
+    }))
+    // ---- Capturas crudas ----
+    const dump = (titulo, tag, rows, modo) => {
+      const flt = (rows || []).filter((rr) => upper(rr[0]) === upper(empresa) && (modo === 'vj' ? esVi(String(rr[1] || '')) : modo === 'novj' ? !esVi(String(rr[1] || '')) : true))
+      const body = flt.map((rr) => { let t = 0; const cs = MH.map((_, mi) => { const v = num(rr[4 + mi]); t += v; return C(v ? n0(v) : '') }); return { cells: [C(String(rr[1] || '')), C(String(rr[3] || '')), ...cs, C(n0(t))] } }).filter((row) => row.cells.some((c, i) => i >= 2 && c.t))
+      if (!body.length) return
+      out.push(sec(titulo, tag)); out.push(tbl(['Rubro / Concepto', 'Marca', ...MH, 'Total'], body))
+    }
+    out.push(`<div class="divider">Capturas (detalle de lo llenado)</div>`)
+    dump('Ventas — unidades por cliente', 'Cap_Ventas', ventas, 'novj')
+    dump('Producto — AUC / AUP por categoría', 'Cap_Producto', producto, 'all')
+    dump('Marketing', 'Cap_Marketing', mk, 'novj')
+    dump('Viajes — Marketing', 'viajes', mk, 'vj'); dump('Viajes — Director', 'viajes', dir, 'vj'); dump('Viajes — Ventas', 'viajes', ventas, 'vj'); dump('Viajes — Producto', 'viajes', producto, 'vj'); dump('Viajes — Logística', 'viajes', log, 'vj')
+    dump('Logística', 'Cap_Logistica', log, 'novj')
+    dump('Finanzas — Cash Flow / Otros', 'Cap_Finanzas', finR, 'all')
+    // Categorías
+    const catRows = []; Object.entries(cats).forEach(([mca, arr]) => (arr || []).forEach((c) => catRows.push({ cells: [C(mca), C(String(c.cat || '')), C(c.peso != null ? n0(c.peso) : '')] })))
+    if (catRows.length) { out.push(sec('Categorías por marca', 'Cap_Categorias')); out.push(tbl(['Marca', 'Categoría', 'Peso'], catRows)) }
+    // Gastos Admin
+    try {
+      const gad = JSON.parse(localStorage.getItem('gadmin_' + empresa) || '{}'); const acc = {}
+      Object.keys(gad).forEach((k) => { const p = k.split('||'); let sbu = '', cod = '', mi = -1; if (p.length === 3) { sbu = p[0]; cod = p[1]; mi = +p[2] } else { const q = k.split('|'); cod = q[0]; mi = +q[1] } if (!cod || isNaN(mi)) return; const kk = sbu + '§' + cod; (acc[kk] = acc[kk] || { sbu, cod, m: Array(12).fill(0) }).m[mi] = num(gad[k]) })
+      const gRows = Object.values(acc).filter((o) => o.m.some((v) => v)).map((o) => { let t = 0; const cs = o.m.map((v) => { t += v; return C(v ? n0(v) : '') }); return { cells: [C(o.sbu || '—'), C(o.cod), ...cs, C(n0(t))] } })
+      if (gRows.length) { out.push(sec('Gastos Admin (Finanzas)', 'gadmin')); out.push(tbl(['SBU', 'Cód', ...MH, 'Total'], gRows)) }
+    } catch { }
+    // ---- Retail (solo Energy Brands) ----
+    if (upper(empresa) === 'ENERGY BRANDS') {
+      try {
+        const pl = JSON.parse(localStorage.getItem('retail_pl_ENERGY BRANDS') || 'null')
+        const blk = (b) => { const s = (a) => (a || []).reduce((x, y) => x + num(y), 0); const venta = s(b.venta), costo = s(b.costo), logi = s(b.logistica), mkt = s(b.mk), vj = s(b.vj), gas = s(b.gastos); const mb = venta - costo - logi; return [{ cls: 'strong', cells: [C('Venta Neta'), C(n0(venta))] }, { cells: [C('(−) Costo'), C(n0(costo))] }, { cells: [C('(−) Logística'), C(n0(logi))] }, { cls: 'strong', cells: [C('= Margen Bruto'), C(n0(mb))] }, { cells: [C('(−) Marketing'), C(n0(mkt))] }, { cells: [C('(−) Viajes'), C(n0(vj))] }, { cells: [C('(−) Gastos'), C(n0(gas))] }, { cls: 'tot', cells: [C('= Resultado'), C(n0(mb - mkt - vj - gas))] }] }
+        if (pl && pl.EB) { out.push(sec('Retail — P&L Retail EB', 'anual · 2028')); out.push(tbl(['Concepto', 'Total'], blk(pl.EB))) }
+        if (pl && pl.SIN) { out.push(sec('Retail — P&L SINERGY & DYNAMICS', 'anual · 2028')); out.push(tbl(['Concepto', 'Total'], blk(pl.SIN))) }
+      } catch { }
+    }
+    const CSS = `:root{--teal:#0e7490;--dark:#134e4a;--ink:#1f2d3d;--muted:#64748b;--line:#e1e7eb;--zebra:#f3f8fa;--totbg:#e8f3f5;--pos:#15803d;--neg:#b91c1c}*{box-sizing:border-box}body{margin:0;background:#eef2f4;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px}.page{max-width:1120px;margin:0 auto;padding:0 24px 60px}.cover{background:linear-gradient(135deg,var(--teal),var(--dark));color:#fff;border-radius:0 0 18px 18px;padding:44px 40px 30px;margin-bottom:12px;box-shadow:0 8px 24px rgba(13,78,84,.18)}.cover h1{margin:0;font-size:46px;font-weight:800;letter-spacing:.5px}.cover .sub{font-size:19px;opacity:.95;margin-top:6px;font-weight:600}.cover .meta{font-size:13px;opacity:.82;margin-top:16px}.toolbar{position:sticky;top:0;z-index:5;display:flex;gap:10px;justify-content:flex-end;padding:12px 0;background:#eef2f4}.btn{border:none;border-radius:9px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;background:var(--teal);color:#fff;box-shadow:0 2px 6px rgba(14,116,144,.3)}.sec{margin:30px 0 10px;display:flex;align-items:center;gap:12px}.sec .bar{width:6px;height:26px;border-radius:4px;background:var(--teal)}.sec h2{margin:0;font-size:21px;color:var(--teal);font-weight:800}.sec .tag{margin-left:auto;font-size:11px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-weight:600}.subh{margin:14px 0 4px;font-weight:700;color:var(--ink);font-size:14px}.subh span{color:var(--muted);font-weight:500}.divider{margin:40px 0 6px;font-size:13px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--dark);border-bottom:2px solid var(--teal);padding-bottom:6px}.card{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(31,45,61,.05);margin-bottom:16px}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{padding:8px 12px;text-align:right;white-space:nowrap}th.l,td.l{text-align:left;white-space:normal}thead th{background:var(--teal);color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}tbody tr:nth-child(even){background:var(--zebra)}tbody td{border-top:1px solid var(--line)}tr.tot td{background:var(--totbg);font-weight:800;border-top:2px solid var(--teal)}tr.strong td{font-weight:700}td.ref{background:#f6eefb}.scroll{overflow-x:auto}@media print{body{background:#fff}.toolbar{display:none}.page{max-width:none;padding:0 10px}.sec,.card{break-inside:avoid}.card{box-shadow:none}.cover{border-radius:0}}`
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ABP 2028 — Espejo ${E(empresa)}</title><style>${CSS}</style></head><body><div class="toolbar page"><button class="btn" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button></div><div class="cover"><h1>ABP 2028</h1><div class="sub">Annual Business Plan + Cash Flow · ${E(empresa)}</div><div class="meta">Espejo total de la empresa — detalle de todo lo capturado · ${new Date().toLocaleDateString('es')}</div></div><div class="page">${out.join('')}</div></body></html>`
+    const w = window.open('', '_blank')
+    if (!w) { alert('Permite las ventanas emergentes para ver el reporte.'); return }
+    w.document.open(); w.document.write(html); w.document.close()
+  }
   async function descargarPptx() {
     setPpt(true)
     try { await loadPptx() } catch { alert('No se pudo cargar el generador de PowerPoint. Revisa tu conexión.'); setPpt(false); return }
@@ -5360,8 +5458,10 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       // Dump genérico de una pestaña de captura (filas: empresa, rubro, sbu, marca, 12 meses)
       const dumpTab = (titulo, rows, modo) => { // modo: 'all' | 'novj' | 'vj'
         const flt = (rows || []).filter((r) => upper(r[0]) === upper(empresa) && (modo === 'vj' ? esVi(String(r[1] || '')) : modo === 'novj' ? !esVi(String(r[1] || '')) : true))
-        const body = flt.map((r) => { let tot = 0; const cs = MH.map((_, mi) => { const v = num(r[4 + mi]); tot += v; return { text: v ? n0(v) : '', options: { align: 'right', fontSize: 8 } } }); return [{ text: String(r[1] || ''), options: { fontSize: 8 } }, { text: String(r[3] || ''), options: { fontSize: 8 } }, ...cs, { text: n0(tot), options: { align: 'right', bold: true, fontSize: 8 } }] }).filter((row) => row.some((c, i) => i >= 2 && c.text))
+        let body = flt.map((r) => { let tot = 0; const cs = MH.map((_, mi) => { const v = num(r[4 + mi]); tot += v; return { text: v ? n0(v) : '', options: { align: 'right', fontSize: 8 } } }); return [{ text: String(r[1] || ''), options: { fontSize: 8 } }, { text: String(r[3] || ''), options: { fontSize: 8 } }, ...cs, { text: n0(tot), options: { align: 'right', bold: true, fontSize: 8 } }] }).filter((row) => row.some((c, i) => i >= 2 && c.text))
         if (!body.length) return
+        const CAP = 60
+        if (body.length > CAP) { const extra = body.length - CAP; body = body.slice(0, CAP); body.push([{ text: `… y ${extra} fila(s) más (usa Exportar Excel para el detalle completo)`, options: { italic: true, fontSize: 8, color: '888888', colspan: 15 } }]) }
         tablaSlides(titulo, [hFill('Rubro / Concepto'), hFill('Marca'), ...MH.map((m) => hFill(m, 'right')), hFill('Total', 'right')], body)
       }
       // ===== Mirror del ABP: Resultado Operativo consolidado (SBU lado a lado + TOTAL + referencias) =====
@@ -5511,7 +5611,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
         {!espejo && <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno.</div>}
         {HOVERTIP}
-        <div className="toolbar" style={{ marginBottom: 8 }}><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar</>)}</button></div>
+        <div className="toolbar" style={{ marginBottom: 8, gap: 8 }}><div className="spacer"></div><button className="btn primary" onClick={descargarReporte} style={{ background: '#0e7490', display: 'inline-flex', alignItems: 'center', gap: 8 }}>📄 Reporte ABP (PDF)</button><button className="btn" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>PowerPoint</>)}</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}{multiSBU && <th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th>}<th className="yb">ABP2027</th><th className="yb">Δ 28·27</th><th className="ya">{T ? (T.decDone ? 'FY2026' : 'YTD 2026') : lbl26(hist)}</th><th className="ya">Δ 28·26</th><th className="ya">FY2025</th><th className="ya">Δ 28·25</th></tr></thead>
           <tbody>
