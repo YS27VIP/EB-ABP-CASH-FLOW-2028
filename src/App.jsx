@@ -1384,15 +1384,9 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoH
   const [logcost, setLogcost] = useState({}); const [precios, setPrecios] = useState({}) // % logísticos por marca (los llena Logística) + costos por temporada
   const [gadminData, setGadminData] = useState({}); const [gadminCfg, setGadminCfg] = useState(DEFAULT_GADMIN); const [gadminIndData, setGadminIndData] = useState({})
   // Cliente NUEVO (sin histórico 2025/2026): lo agregó Ventas. Se marca discretamente para que Finanzas lo sepa.
-  const newSet = (() => {
-    try {
-      const add = JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}')
-      const names = new Set(); Object.values(add).forEach((arr) => (arr || []).forEach((c) => { if (c) names.add(upper(c)) }))
-      const histAll = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) histAll.add(upper(cli)) })
-      const out = new Set(); names.forEach((n) => { if (!histAll.has(n)) out.add(n) }); return out
-    } catch { return new Set() }
-  })()
-  const esNew = (cli) => newSet.has(upper(cli))
+  // Histórico 2025/2026 por cliente: un cliente SIN histórico es NUEVO (lo capturó Ventas este año).
+  const histAllSet = (() => { const s = new Set(); try { hist.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) s.add(upper(cli)) }) } catch { } return s })()
+  const esNew = (cli) => { const u = upper(cli); return !!u && !histAllSet.has(u) }
   const [mkRows, setMkRows] = useState([]); const [logRows, setLogRows] = useState([]); const [dirRows, setDirRows] = useState([]); const [finRows, setFinRows] = useState([]) // Marketing / Logística / Director / Finanzas (para espejo de Costos Operativos)
   const cfVer = useDataVersion() // al guardar en cualquier área, el Cash Flow se recarga
   useEffect(() => { try { setTemp(JSON.parse(localStorage.getItem(`temp_${empresa}`) || '{}')) } catch { } try { setComisData(JSON.parse(localStorage.getItem(`comis_${empresa}`) || '{}')) } catch { } try { setLogcost(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setPrecios(JSON.parse(localStorage.getItem(`precios_${empresa}`) || '{}')) } catch { } try { setGadminData(JSON.parse(localStorage.getItem(`gadmin_${empresa}`) || '{}')) } catch { } try { setGadminIndData(JSON.parse(localStorage.getItem(`gadmin_ind_${empresa}`) || '{}')) } catch { } try { const s = JSON.parse(localStorage.getItem(`gadmin_cfg_${empresa}`) || 'null'); if (Array.isArray(s) && s.length) setGadminCfg(s) } catch { } }, [empresa, cfVer])
