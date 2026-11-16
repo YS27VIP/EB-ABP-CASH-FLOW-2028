@@ -1631,6 +1631,44 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoH
     })
     ev.target.value = ''
   }
+  // ---- Plantilla / Importar / Exportar del SALDO PENDIENTE POR COBRAR 2027 (varía por marca y cliente) ----
+  const cobMarcas = (isTotal ? sbuMarcas : [marca])
+  function plantillaCob() {
+    const aoa = [['MARCA', 'CLIENTE', 'PLAZO', 'ENE-28', 'FEB-28', 'MAR-28']]
+    cobMarcas.forEach((mca) => clientesDe(mca).forEach((cli) => aoa.push([mca, cli, data[`TERM|${mca}|${cli}`] || '', '', '', ''])))
+    exportXlsx(aoa, `Plantilla_Cobros2027_${empresa}.xlsx`)
+  }
+  function exportarCob() {
+    const aoa = [['MARCA', 'CLIENTE', 'PLAZO', 'ENE-28', 'FEB-28', 'MAR-28']]
+    cobMarcas.forEach((mca) => clientesDe(mca).forEach((cli) => aoa.push([mca, cli, data[`TERM|${mca}|${cli}`] || '', num(data[`COB2027|${mca}|${cli}|0`]), num(data[`COB2027|${mca}|${cli}|1`]), num(data[`COB2027|${mca}|${cli}|2`])])))
+    exportXlsx(aoa, `Cobros2027_${empresa}.xlsx`)
+  }
+  function importarCob(ev) {
+    const file = ev.target.files[0]; ev.target.value = ''; if (!file) return
+    const norm = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase()
+    importXlsx(file, (aoa) => {
+      if (!aoa || aoa.length < 2) { setMsg({ t: 'bad', x: 'El Excel no tiene filas para importar.' }); return }
+      const hdr = (aoa[0] || []).map(norm)
+      const iMar = hdr.findIndex((h) => h.indexOf('MARCA') >= 0)
+      const iCli = hdr.findIndex((h) => h.indexOf('CLIENTE') >= 0)
+      const iPl = hdr.findIndex((h) => h.indexOf('PLAZO') >= 0 || h.indexOf('TERM') >= 0)
+      const mCol = [0, 1, 2].map((k) => { const mm = norm(MESES[k]).slice(0, 3); return hdr.findIndex((h) => h.indexOf(mm) >= 0) })
+      const todas = (isTotal ? sbuMarcas : marcas.map(({ marca: m }) => m))
+      const marN = todas.map((m) => ({ m, n: norm(m) }))
+      const nd = { ...data }; let filas = 0
+      aoa.slice(1).forEach((r) => {
+        if (!r || r.every((c) => c === '' || c == null)) return
+        const mv = norm(iMar >= 0 ? r[iMar] : r[0])
+        const hit = marN.find((x) => x.n === mv) || marN.find((x) => x.n.indexOf(mv) >= 0 || mv.indexOf(x.n) >= 0)
+        const mca = hit && hit.m; const cli = String((iCli >= 0 ? r[iCli] : r[1]) || '').trim()
+        if (!mca || !cli) return
+        if (iPl >= 0 && r[iPl] != null && String(r[iPl]).trim() !== '') nd[`TERM|${mca}|${cli}`] = String(r[iPl]).trim()
+        for (let k = 0; k < 3; k++) { const ci = mCol[k] >= 0 ? mCol[k] : (iPl >= 0 ? iPl + 1 + k : 3 + k); const v = r[ci]; if (v !== '' && v != null) nd[`COB2027|${mca}|${cli}|${k}`] = String(v).replace(/[^0-9.\-]/g, '') }
+        filas++
+      })
+      setData(nd); setMsg({ t: 'ok', x: `Importadas ${filas} fila(s) de cobros 2027. Revisa y pulsa 💾 Guardar.` })
+    })
+  }
 
   return (
     <>
@@ -1780,7 +1818,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoH
           ? <div className="note ok" style={{ marginBottom: 12 }}>🪞 <b>Espejo (solo lectura):</b> el saldo pendiente por cobrar del 2027 lo captura <b>Finanzas por cada marca</b>. Aquí solo ves el consolidado.</div>
           : <div className="note ok" style={{ marginBottom: 12 }}>💡 <b>Cómo funciona:</b><div style={{ marginTop: 6, paddingLeft: 16 }}><div>Coloca las <b>cuentas por cobrar del 2027</b> en el mes en que debe efectuarse el cobro (enero a marzo).</div></div></div>}
         {buscador}
-        {(!soloVer || esDirector) && <div className="toolbar" style={{ marginBottom: 8 }}><div style={{ flex: 1 }}></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : (esDirector && soloVer ? '💾 Guardar plazos' : '💾 Guardar')}</button></div>}
+        {(!soloVer || esDirector) && <div className="toolbar" style={{ marginBottom: 8 }}><div style={{ flex: 1 }}></div>{!soloVer && <><button className="btn" onClick={plantillaCob}>📄 Descargar plantilla</button><label className="btn" style={{ cursor: 'pointer' }}>📥 Importar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={importarCob} style={{ display: 'none' }} /></label><button className="btn" onClick={exportarCob}>⬇ Exportar Excel</button></>}<button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : (esDirector && soloVer ? '💾 Guardar plazos' : '💾 Guardar')}</button></div>}
         {(() => {
           const arrIdx = [0, 1, 2]; const arrLbl = CF_M2028.slice(0, 3); const DIV = { borderLeft: '3px solid var(--odoo)' }; const STK = { position: 'sticky', top: 0, zIndex: 3, background: '#f7fafb' }; const STK2 = { position: 'sticky', top: 33, zIndex: 3, background: '#f7fafb' }
           if (isTotal) {
