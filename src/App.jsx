@@ -5258,6 +5258,7 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
 }
 
 /* ===== GERENCIA: consolidado de solo lectura por SBU y marca ===== */
+const _gerCache = {} // cache de lecturas por empresa (para que cambiar de empresa en el Holding sea instantáneo)
 function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   const [ventas, setVentas] = useState([])
   const [producto, setProducto] = useState([])
@@ -5269,6 +5270,9 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   const [cargando, setCargando] = useState(true)
   useEffect(() => {
     let cancel = false
+    // Cache por empresa: al volver a una empresa ya cargada, es instantáneo (no se traba).
+    const cached = _gerCache[empresa]
+    if (cached) { setVentas(cached.ven); setProducto(cached.prod); setCats(cached.cats); setMk(cached.mk); setLog(cached.log); setDir(cached.dir); setFinR(cached.finR); setHist(cached.hist); setPlan(cached.plan); setTumar(cached.tumar || null); setCargando(false); return () => { } }
     ;(async () => {
       setCargando(true)
       const g = async (t) => { try { const j = await gReadTab(t); return j && j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
@@ -5280,9 +5284,9 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         (empresa === 'TUMAR' ? (async () => { try { return await gTumarReal() } catch { return null } })() : Promise.resolve(null)),
       ])
       if (cancel) return
-      setVentas(ven); setProducto(prod)
-      const out = {}; capC.forEach((row) => { if (!catRowOk(row, empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) }); setCats(out)
-      setMk(mkR); setLog(logR); setDir(dirR); setFinR(finRR); setHist(histR); setPlan(planR); if (empresa === 'TUMAR') setTumar(tumarR)
+      const out = {}; capC.forEach((row) => { if (!catRowOk(row, empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) })
+      _gerCache[empresa] = { ven, prod, cats: out, mk: mkR, log: logR, dir: dirR, finR: finRR, hist: histR, plan: planR, tumar: tumarR }
+      setVentas(ven); setProducto(prod); setCats(out); setMk(mkR); setLog(logR); setDir(dirR); setFinR(finRR); setHist(histR); setPlan(planR); if (empresa === 'TUMAR') setTumar(tumarR)
       setCargando(false)
     })()
     return () => { cancel = true }
@@ -5391,6 +5395,18 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       Object.keys(gad).forEach((k) => { const p = k.split('||'); let sbu = '', cod = '', mi = -1; if (p.length === 3) { sbu = p[0]; cod = p[1]; mi = +p[2] } else { const q = k.split('|'); cod = q[0]; mi = +q[1] } if (!cod || isNaN(mi)) return; const kk = sbu + '§' + cod; (acc[kk] = acc[kk] || { sbu, cod, m: Array(12).fill(0) }).m[mi] = num(gad[k]) })
       const gRows = Object.values(acc).filter((o) => o.m.some((v) => v)).map((o) => { let t = 0; const cs = o.m.map((v) => { t += v; return C(v ? n0(v) : '') }); return { cells: [C(o.sbu || '—'), C(o.cod), ...cs, C(n0(t))] } })
       if (gRows.length) { out.push(sec('Gastos Admin (Finanzas)', 'gadmin')); out.push(tbl(['SBU', 'Cód', ...MH, 'Total'], gRows)) }
+    } catch { }
+    // ---- Producto — Compras por temporada (de temp_<empresa>) ----
+    try {
+      const tmp = JSON.parse(localStorage.getItem('temp_' + empresa) || '{}')
+      const prows = allM.map((mca) => { let t = 0; const cs = MH.map((_, mi) => { const v = SEASONS.reduce((s, se) => s + num(tmp[`CP|${mca}|${se}|${mi}`]), 0); t += v; return C(v ? n0(v) : '') }); const tr = Math.max(0, Math.round(num(tmp[`TR|${mca}`]))); return { cells: [C(mca), C(tr + ' m'), ...cs, C(n0(t))] } }).filter((r) => r.cells.some((c, i) => i >= 2 && c.t))
+      if (prows.length) { out.push(sec('Producto — Compras por temporada (fecha XFD)', 'unidades · 2028')); out.push(tbl(['Marca', 'Tránsito', ...MH, 'Total'], prows)) }
+    } catch { }
+    // ---- Logística — modelo por marca (de logcost_<empresa>) ----
+    try {
+      const lc = JSON.parse(localStorage.getItem('logcost_' + empresa) || '{}')
+      const lrows = allM.map((mca) => { const pct = num(lc[`${mca}|PCT_LOGVENTA`]); const mue = MH.reduce((a, _, m) => a + num(lc[`${mca}|MUECOST|${m}`]), 0); return { mca, pct, mue } }).filter((o) => o.pct || o.mue)
+      if (lrows.length) { out.push(sec('Logística — modelo por marca', 'espejo · 2028')); out.push(tbl(['Marca', '% Log / venta', 'Muestras ($)'], lrows.map((o) => ({ cells: [C(o.mca), C(o.pct ? o.pct + '%' : '—'), C(n0(o.mue))] })))) }
     } catch { }
     // ---- Retail (solo Energy Brands) ----
     if (upper(empresa) === 'ENERGY BRANDS') {
@@ -5611,7 +5627,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
         {!espejo && <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno.</div>}
         {HOVERTIP}
-        <div className="toolbar" style={{ marginBottom: 8, gap: 8 }}><div className="spacer"></div><button className="btn primary" onClick={descargarReporte} style={{ background: '#0e7490', display: 'inline-flex', alignItems: 'center', gap: 8 }}>📄 Reporte ABP (PDF)</button><button className="btn" disabled={ppt} onClick={descargarPptx} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>PowerPoint</>)}</button></div>
+        <div className="toolbar" style={{ marginBottom: 8, gap: 8 }}><div className="spacer"></div><button className="btn primary" onClick={descargarReporte} style={{ background: '#0e7490', display: 'inline-flex', alignItems: 'center', gap: 8 }}>📄 Reporte ABP (PDF)</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}{multiSBU && <th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th>}<th className="yb">ABP2027</th><th className="yb">Δ 28·27</th><th className="ya">{T ? (T.decDone ? 'FY2026' : 'YTD 2026') : lbl26(hist)}</th><th className="ya">Δ 28·26</th><th className="ya">FY2025</th><th className="ya">Δ 28·25</th></tr></thead>
           <tbody>
