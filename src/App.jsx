@@ -5260,16 +5260,21 @@ function GuiaScreen({ go, sbuNames = [], miPerfil }) {
 /* ===== GERENCIA: consolidado de solo lectura por SBU y marca ===== */
 // ===== Reporte ABP (HTML/PDF): CSS y apertura compartidos =====
 const ABP_REPORT_CSS = `:root{--teal:#0e7490;--dark:#134e4a;--ink:#1f2d3d;--muted:#64748b;--line:#e1e7eb;--zebra:#f3f8fa;--totbg:#e8f3f5;--pos:#15803d;--neg:#b91c1c}*{box-sizing:border-box}body{margin:0;background:#eef2f4;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px}.page{max-width:1120px;margin:0 auto;padding:0 24px 60px}.cover{background:linear-gradient(135deg,var(--teal),var(--dark));color:#fff;border-radius:0 0 18px 18px;padding:44px 40px 30px;margin-bottom:12px;box-shadow:0 8px 24px rgba(13,78,84,.18)}.cover h1{margin:0;font-size:46px;font-weight:800;letter-spacing:.5px}.cover .sub{font-size:19px;opacity:.95;margin-top:6px;font-weight:600}.cover .meta{font-size:13px;opacity:.82;margin-top:16px}.toolbar{position:sticky;top:0;z-index:5;display:flex;gap:10px;justify-content:flex-end;padding:12px 0;background:#eef2f4}.btn{border:none;border-radius:9px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;background:var(--teal);color:#fff;box-shadow:0 2px 6px rgba(14,116,144,.3)}.sec{margin:30px 0 10px;display:flex;align-items:center;gap:12px}.sec .bar{width:6px;height:26px;border-radius:4px;background:var(--teal)}.sec h2{margin:0;font-size:21px;color:var(--teal);font-weight:800}.sec .tag{margin-left:auto;font-size:11px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-weight:600}.subh{margin:14px 0 4px;font-weight:700;color:var(--ink);font-size:14px}.subh span{color:var(--muted);font-weight:500}.divider{margin:40px 0 6px;font-size:13px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--dark);border-bottom:2px solid var(--teal);padding-bottom:6px}.card{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(31,45,61,.05);margin-bottom:16px}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{padding:8px 12px;text-align:right;white-space:nowrap}th.l,td.l{text-align:left;white-space:normal}thead th{background:var(--teal);color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}tbody tr:nth-child(even){background:var(--zebra)}tbody td{border-top:1px solid var(--line)}tr.tot td{background:var(--totbg);font-weight:800;border-top:2px solid var(--teal)}tr.strong td{font-weight:700}td.ref{background:#f6eefb}.scroll{overflow-x:auto}@media print{body{background:#fff}.toolbar{display:none}.page{max-width:none;padding:0 10px}.sec,.card{break-inside:avoid}.card{box-shadow:none}.cover{border-radius:0}}`
-function abpOpenReport(titulo, subtitulo, bodyHTML) {
+function abpOpenReport(titulo, subtitulo, bodyHTML, win) {
   const E = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
   const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${E(titulo)}</title><style>${ABP_REPORT_CSS}</style></head><body><div class="toolbar page"><button class="btn" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button></div><div class="cover"><h1>ABP 2028</h1><div class="sub">${E(subtitulo)}</div><div class="meta">Espejo — detalle de lo capturado · ${new Date().toLocaleDateString('es')}</div></div><div class="page">${bodyHTML}</div></body></html>`
+  const dl = () => { try { const blob = new Blob([html], { type: 'text/html;charset=utf-8' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = String(titulo || 'ABP_2028_Reporte').replace(/[^\w]+/g, '_') + '.html'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => { try { URL.revokeObjectURL(url) } catch { } }, 30000) } catch (e) { alert('No se pudo generar el reporte: ' + (e && e.message)) } }
   try {
+    if (win && !win.closed) {
+      // Pestaña abierta en el gesto del clic (no la bloquea el navegador): escribimos el reporte dentro.
+      win.document.open(); win.document.write(html); win.document.close()
+      return
+    }
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const w = window.open(url, '_blank')
-    if (!w) { const a = document.createElement('a'); a.href = url; a.download = String(titulo || 'ABP_2028_Reporte').replace(/[^\w]+/g, '_') + '.html'; document.body.appendChild(a); a.click(); a.remove() }
-    setTimeout(() => { try { URL.revokeObjectURL(url) } catch { } }, 30000)
-  } catch (e) { alert('No se pudo generar el reporte: ' + (e && e.message)) }
+    if (!w) { dl() } else { setTimeout(() => { try { URL.revokeObjectURL(url) } catch { } }, 30000) }
+  } catch { dl() }
 }
 const _gerCache = {} // cache de lecturas por empresa (para que cambiar de empresa en el Holding sea instantáneo)
 function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
@@ -5328,6 +5333,12 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   const [ppt, setPpt] = useState(false)
   // ===== Reporte HTML/PDF — ESPEJO TOTAL del ABP (bonito, se abre en pestaña para imprimir/guardar PDF) =====
   function descargarReporte() {
+    setPpt(true)
+    const win = window.open('about:blank', '_blank') // abierto en el gesto del clic → no lo bloquea el navegador
+    if (win) { try { win.document.write('<!doctype html><meta charset="utf-8"><title>Generando…</title><body style="font:16px -apple-system,sans-serif;color:#0e7490;padding:40px">Generando el reporte ABP…</body>') } catch { } }
+    setTimeout(() => { try { buildReporte(win) } catch (e) { if (win && !win.closed) win.close(); alert('No se pudo generar el reporte: ' + (e && e.message)) } setPpt(false) }, 40)
+  }
+  function buildReporte(win) {
     const E = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
     const n0 = (v) => Math.round(num(v)).toLocaleString('en-US')
     const MH = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC']
@@ -5430,7 +5441,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         if (pl && pl.SIN) { out.push(sec('Retail — P&L SINERGY & DYNAMICS', 'anual · 2028')); out.push(tbl(['Concepto', 'Total'], blk(pl.SIN))) }
       } catch { }
     }
-    abpOpenReport('ABP 2028 — Espejo ' + empresa, 'Annual Business Plan + Cash Flow · ' + empresa, out.join(''))
+    abpOpenReport('ABP 2028 — Espejo ' + empresa, 'Annual Business Plan + Cash Flow · ' + empresa, out.join(''), win)
   }
   async function descargarPptx() {
     setPpt(true)
@@ -5636,7 +5647,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
         {!espejo && <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno.</div>}
         {HOVERTIP}
-        <div className="toolbar" style={{ marginBottom: 8, gap: 8 }}><div className="spacer"></div><button className="btn primary" onClick={descargarReporte} style={{ background: '#0e7490', display: 'inline-flex', alignItems: 'center', gap: 8 }}>📄 Reporte ABP (PDF)</button></div>
+        <div className="toolbar" style={{ marginBottom: 8, gap: 8 }}><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarReporte} style={{ background: '#0e7490', display: 'inline-flex', alignItems: 'center', gap: 8, opacity: ppt ? 0.6 : 1 }}>{ppt ? 'Generando…' : '📄 Reporte ABP (PDF)'}</button></div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}{multiSBU && <th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th>}<th className="yb">ABP2027</th><th className="yb">Δ 28·27</th><th className="ya">{T ? (T.decDone ? 'FY2026' : 'YTD 2026') : lbl26(hist)}</th><th className="ya">Δ 28·26</th><th className="ya">FY2025</th><th className="ya">Δ 28·25</th></tr></thead>
           <tbody>
@@ -5975,39 +5986,44 @@ function SbuResultDownload({ empresa, sbuName, marcasSBU }) {
     const margenBruto = ventaNeta - costo - logistica, brand = margenBruto - marketing - viajes
     return { unidades, ventaNeta, costo, logistica, marketing, viajes, margenBruto, brand }
   }
-  async function descargar() {
+  function descargar() {
+    if (!P) return
     setPpt(true)
-    try { await loadPptx() } catch { alert('No se pudo cargar el generador de PowerPoint. Revisa tu conexión.'); setPpt(false); return }
-    try {
-      const M$f = (v) => '$' + Math.round(v || 0).toLocaleString('en-US'); const UD = (v) => Math.round(v || 0).toLocaleString('en-US')
-      const TEAL = '0E7490', DARK = '134E4A'
+    const win = window.open('about:blank', '_blank')
+    if (win) { try { win.document.write('<!doctype html><meta charset="utf-8"><title>Generando…</title><body style="font:16px -apple-system,sans-serif;color:#0e7490;padding:40px">Generando el reporte…</body>') } catch { } }
+    setTimeout(() => { try { build(win) } catch (e) { if (win && !win.closed) win.close(); alert('No se pudo generar el reporte: ' + (e && e.message)) } setPpt(false) }, 40)
+  }
+  function build(win) {
+    {
+      const n0 = (v) => Math.round(v || 0).toLocaleString('en-US')
+      const C = (t, cls) => ({ text: t == null ? '' : String(t), cls })
+      const E = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+      const sec = (t, tag) => `<div class="sec"><span class="bar"></span><h2>${E(t)}</h2>${tag ? `<span class="tag">${E(tag)}</span>` : ''}</div>`
+      const tbl = (heads, rows) => {
+        const th = heads.map((h, i) => `<th class="${i === 0 ? 'l' : ''}">${E(h)}</th>`).join('')
+        const body = rows.map((r) => `<tr class="${r.cls || ''}">${r.cells.map((c, i) => `<td class="${i === 0 ? 'l ' : ''}${c.cls || ''}">${E(c.text)}</td>`).join('')}</tr>`).join('')
+        return `<div class="card"><div class="scroll"><table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div></div>`
+      }
       const cols = (marcasSBU || []).map((m) => ({ m, v: calc(m) }))
       const tot = cols.reduce((a, { v }) => { Object.keys(v).forEach((k) => a[k] = (a[k] || 0) + v[k]); return a }, {})
-      const pptx = new window.PptxGenJS(); pptx.defineLayout({ name: 'W', width: 13.33, height: 7.5 }); pptx.layout = 'W'
-      let s = pptx.addSlide(); s.background = { color: 'F7FAFB' }
-      s.addText('ABP 2028', { x: 0.7, y: 2.3, w: 12, h: 1.1, fontSize: 54, bold: true, color: TEAL })
-      s.addText('Resultados de la SBU — ' + sbuName + ' · ' + empresa, { x: 0.7, y: 3.5, w: 12, h: 0.6, fontSize: 22, color: DARK })
-      s.addText(new Date().toLocaleDateString('es'), { x: 0.7, y: 6.7, w: 12, h: 0.4, fontSize: 12, color: '888888' })
-      const filasP = [['Unidades', (v) => UD(v.unidades)], ['Venta Neta', (v) => M$f(v.ventaNeta)], ['(−) Costo', (v) => M$f(v.costo)], ['(−) Logística', (v) => M$f(v.logistica)], ['= Margen Bruto', (v) => M$f(v.margenBruto)], ['(−) Marketing', (v) => M$f(v.marketing)], ['(−) Viajes', (v) => M$f(v.viajes)], ['= Contribución', (v) => M$f(v.brand)]]
-      const head = [{ text: 'Concepto', options: { bold: true, color: 'FFFFFF', fill: TEAL } }, ...cols.map((c) => ({ text: c.m, options: { bold: true, color: 'FFFFFF', fill: TEAL, align: 'right' } })), { text: 'TOTAL', options: { bold: true, color: 'FFFFFF', fill: DARK, align: 'right' } }]
-      const rows = [head]; filasP.forEach(([lbl, f]) => { const stg = lbl.startsWith('=') || lbl === 'Venta Neta'; rows.push([{ text: lbl, options: { bold: stg } }, ...cols.map((c) => ({ text: f(c.v), options: { align: 'right' } })), { text: f(tot), options: { align: 'right', bold: true } }]) })
-      const sl = pptx.addSlide(); sl.addText('Contribución de la SBU — ' + sbuName, { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 26, bold: true, color: TEAL })
-      sl.addTable(rows, { x: 0.5, y: 1.1, w: 12.3, fontSize: 12, border: { type: 'solid', pt: 0.5, color: 'D7DDE3' }, valign: 'middle' })
-      // Unid · Venta · Costo · Margen por marca
-      const u2 = pptx.addSlide(); u2.addText('Unidades · Venta · Costo · Margen — ' + sbuName, { x: 0.5, y: 0.3, w: 12.3, h: 0.6, fontSize: 24, bold: true, color: TEAL })
-      const uh = [{ text: 'Marca', options: { bold: true, color: 'FFFFFF', fill: TEAL } }, ...['Unidades', 'Venta', 'Costo', 'Margen', 'Margen %'].map((h) => ({ text: h, options: { bold: true, color: 'FFFFFF', fill: TEAL, align: 'right' } }))]
-      const ur = [uh]; cols.forEach(({ m, v }) => { const mg = v.ventaNeta - v.costo; ur.push([{ text: m }, { text: UD(v.unidades), options: { align: 'right' } }, { text: M$f(v.ventaNeta), options: { align: 'right' } }, { text: M$f(v.costo), options: { align: 'right' } }, { text: M$f(mg), options: { align: 'right' } }, { text: (v.ventaNeta > 0 ? (mg / v.ventaNeta * 100).toFixed(1) : '0') + '%', options: { align: 'right' } }]) })
-      const mgT = tot.ventaNeta - tot.costo; ur.push([{ text: 'TOTAL', options: { bold: true, fill: 'EEF6F8' } }, { text: UD(tot.unidades), options: { align: 'right', bold: true } }, { text: M$f(tot.ventaNeta), options: { align: 'right', bold: true } }, { text: M$f(tot.costo), options: { align: 'right', bold: true } }, { text: M$f(mgT), options: { align: 'right', bold: true } }, { text: (tot.ventaNeta > 0 ? (mgT / tot.ventaNeta * 100).toFixed(1) : '0') + '%', options: { align: 'right', bold: true } }])
-      u2.addTable(ur, { x: 0.5, y: 1.1, w: 12.3, fontSize: 12, border: { type: 'solid', pt: 0.5, color: 'D7DDE3' }, valign: 'middle' })
-      // Resultado operativo
-      const f2 = pptx.addSlide(); f2.addText('Resultado operativo — ' + sbuName, { x: 0.7, y: 1.4, w: 12, h: 0.8, fontSize: 28, bold: true, color: TEAL })
-      const rr = [[{ text: 'Concepto', options: { bold: true, color: 'FFFFFF', fill: TEAL } }, { text: '2028', options: { bold: true, color: 'FFFFFF', fill: TEAL, align: 'right' } }], [{ text: 'Contribución de la SBU' }, { text: M$f(tot.brand), options: { align: 'right' } }], [{ text: '(−) Gastos administrativos' }, { text: M$f(gadminAnual), options: { align: 'right' } }], [{ text: '= Resultado operativo', options: { bold: true } }, { text: M$f((tot.brand || 0) - gadminAnual), options: { align: 'right', bold: true } }]]
-      f2.addTable(rr, { x: 2.5, y: 2.6, w: 8, fontSize: 16, border: { type: 'solid', pt: 0.5, color: 'D7DDE3' }, valign: 'middle', rowH: 0.5 })
-      await pptx.writeFile({ fileName: `ABP_2028_${empresa}_${sbuName}.pptx`.replace(/\s+/g, '_') })
-    } catch (e) { alert('No se pudo generar la presentación: ' + e.message) }
-    setPpt(false)
+      const out = []
+      const filasP = [['Unidades', (v) => n0(v.unidades), ''], ['Venta Neta', (v) => n0(v.ventaNeta), 'strong'], ['(−) Costo', (v) => n0(v.costo), ''], ['(−) Logística', (v) => n0(v.logistica), ''], ['= Margen Bruto', (v) => n0(v.margenBruto), 'strong'], ['(−) Marketing', (v) => n0(v.marketing), ''], ['(−) Viajes', (v) => n0(v.viajes), ''], ['= Contribución', (v) => n0(v.brand), 'tot']]
+      out.push(sec('Contribución de la SBU — ' + sbuName, 'marcas lado a lado · 2028'))
+      out.push(tbl(['Concepto', ...cols.map((c) => c.m), 'TOTAL'], filasP.map(([lbl, f, cls]) => ({ cls, cells: [C(lbl), ...cols.map((c) => C(f(c.v))), C(f(tot))] }))))
+      out.push(sec('Unidades · Venta · Costo · Margen', 'por marca'))
+      const ur = cols.map(({ m, v }) => { const mg = v.ventaNeta - v.costo; return { cells: [C(m), C(n0(v.unidades)), C(n0(v.ventaNeta)), C(n0(v.costo)), C(n0(mg)), C(v.ventaNeta > 0 ? (mg / v.ventaNeta * 100).toFixed(1) + '%' : '—')] } })
+      const mgT = tot.ventaNeta - tot.costo; ur.push({ cls: 'tot', cells: [C('TOTAL'), C(n0(tot.unidades)), C(n0(tot.ventaNeta)), C(n0(tot.costo)), C(n0(mgT)), C(tot.ventaNeta > 0 ? (mgT / tot.ventaNeta * 100).toFixed(1) + '%' : '—')] })
+      out.push(tbl(['Marca', 'Unidades', 'Venta', 'Costo', 'Margen', 'Margen %'], ur))
+      out.push(sec('Resultado operativo', '2028'))
+      out.push(tbl(['Concepto', '2028'], [
+        { cells: [C('Contribución de la SBU'), C(n0(tot.brand))] },
+        { cells: [C('(−) Gastos administrativos'), C(n0(gadminAnual))] },
+        { cls: 'tot', cells: [C('= Resultado operativo'), C(n0((tot.brand || 0) - gadminAnual))] },
+      ]))
+      abpOpenReport('ABP 2028 — ' + sbuName + ' · ' + empresa, 'Resultados de la SBU · ' + sbuName + ' · ' + empresa, out.join(''), win)
+    }
   }
-  return <button className="btn primary" disabled={ppt || !P} onClick={descargar} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }} title="Descarga los resultados de la SBU (contribución, margen, resultado operativo). No incluye las capturas/insumos.">{ppt ? 'Generando…' : (<><svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flex: '0 0 auto' }}><rect x="2" y="4" width="20" height="14" rx="2" fill="#D24726"/><rect x="6.5" y="8" width="7" height="6" rx="1" fill="#fff"/><path d="M6.5 8h4a2 2 0 0 1 0 4h-4z" fill="#fff"/><path d="M9 20h6" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 18v2" stroke="#D24726" strokeWidth="1.6" strokeLinecap="round"/></svg>Descargar resultados</>)}</button>
+  return <button className="btn primary" disabled={ppt || !P} onClick={descargar} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#0e7490' }} title="Genera el reporte de resultados de la SBU (contribución, margen, resultado operativo) en HTML/PDF.">{ppt ? 'Generando…' : '📄 Reporte SBU (PDF)'}</button>
 }
 
 /* ===== CONTRIBUCIÓN DE LA SBU por SBU: todas las marcas lado a lado + comparación FY2026/FY2025 ===== */
