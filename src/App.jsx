@@ -5378,6 +5378,21 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       { cls: 'tot', cells: [C('= Resultado operativo'), ...aggs.map(() => C('')), C(n0((tot.brand || 0) - gadminAnual)), C('—', 'ref'), C('—'), C('—')] },
     ]
     P('resumen', sec('Resultado Operativo consolidado — ' + empresa, 'SBU lado a lado · 2028'), tbl(headR, rowsR))
+    // ---- PSI consolidado (Inventario Inicial / Compras / Ventas Netas / Inventario Final) ----
+    try {
+      const tmpP = JSON.parse(localStorage.getItem('temp_' + empresa) || '{}')
+      const aucP = (mca) => { const a = Array(12).fill(0); producto.forEach((r) => { if (upper(r[0]) === upper(empresa) && upper(r[3]) === upper(mca) && upper(r[1]) === 'AUC') { for (let j = 0; j < 12; j++) a[j] = num(r[4 + j]) } }); return a }
+      const comprasUd = (mca) => MH.map((_, m) => SEASONS.reduce((a, s) => a + num(tmpP[`CP|${mca}|${s}|${m}`]), 0))
+      const transit = (mca) => Math.max(0, Math.round(num(tmpP[`TR|${mca}`])))
+      const comprasDispUsd = (mca) => { const x = comprasUd(mca), t = transit(mca), c = aucP(mca); return MH.map((_, m) => (m - t >= 0 ? x[m - t] : 0) * c[m]) }
+      const ventaNetaM = (mca) => realAupAuc(empresa, mca, ventas, producto, (cats[mca] || []).map((c) => c.cat)).ventaMes
+      const invUsd = (mca) => { let su = []; try { su = (inventarioCalc(tmpP, mca, ventaMarcaMes(ventas, empresa, mca)) || {}).saldoUnits || [] } catch { } const c = aucP(mca); const opening = SEASONS.reduce((a, s) => a + num(tmpP[`II|${mca}|${s}`]), 0); return { ini: MH.map((_, m) => (m === 0 ? opening : (su[m - 1] || 0)) * (c[m] || 0)), fin: MH.map((_, m) => (su[m] || 0) * (c[m] || 0)) } }
+      const sumM = (fn) => { const a = Array(12).fill(0); allM.forEach((mca) => { const r = fn(mca); for (let m = 0; m < 12; m++) a[m] += r[m] }); return a }
+      const vIni = sumM((mca) => invUsd(mca).ini), vCom = sumM(comprasDispUsd), vVen = sumM(ventaNetaM), vFin = sumM((mca) => invUsd(mca).fin)
+      const tF = (a) => a.reduce((x, y) => x + y, 0)
+      const pr = (lbl, arr, cls) => ({ cls: cls || '', cells: [C(lbl), ...arr.map((v) => C(v ? n0(v) : '')), C(n0(tF(arr)))] })
+      if (tF(vVen) || tF(vIni) || tF(vCom)) P('resumen', sec('PSI — Compras · Ventas · Inventario', 'consolidado · USD · 2028'), tbl(['Concepto', ...MH, 'Total'], [pr('Inventario Inicial', vIni, 'strong'), pr('Compras (Fecha disponible)', vCom), pr('Ventas Netas', vVen, 'strong'), pr('Inventario Final', vFin, 'strong')]))
+    } catch { }
     // ---- Cash Flow consolidado (cfsum) ----
     try {
       const cfs = JSON.parse(localStorage.getItem('cfsum_' + empresa) || 'null')
