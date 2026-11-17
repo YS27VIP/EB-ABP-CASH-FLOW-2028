@@ -551,7 +551,10 @@ export default function App() {
     apply(); label()
     btn.onclick = () => { mostrar = !mostrar; try { localStorage.setItem('abp_ayudas', mostrar ? '1' : '0') } catch { } apply(); label() }
     document.body.appendChild(btn)
-    return () => { try { btn.remove(); document.body.classList.remove('sin-ayudas') } catch { } }
+    // Clic en un chip ℹ️ despliega/oculta ese comentario puntual (solo cuando las ayudas están colapsadas).
+    const onClick = (e) => { if (!document.body.classList.contains('sin-ayudas')) return; const n = e.target.closest && e.target.closest('.note, .sub.ayuda'); if (n) n.classList.toggle('ayuda-abierta') }
+    document.addEventListener('click', onClick, true)
+    return () => { try { btn.remove(); document.body.classList.remove('sin-ayudas'); document.removeEventListener('click', onClick, true) } catch { } }
   }, [])
 
   // Baja el estado del modelo (Cap_Estado) del Sheet a localStorage antes de mostrar los tableros
