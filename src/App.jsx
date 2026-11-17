@@ -5880,7 +5880,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         {[['pl', '📊 Resultado / P&L'], ['cf', '💵 Cash Flow'], ...(!ES_TUMAR_LIKE(empresa) ? [['viajes', '🧳 Viajes']] : [])].map(([id, lbl]) => <button key={id} className={'seg' + (gtab === id ? ' active' : '')} onClick={() => setGtab(id)} style={gtab === id ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : {}}>{lbl}</button>)}
       </div>}
       {!soloSBU && !cargando && (espejo || gtab === 'pl') && <div className="panel">
-        <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
+        <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$}</h3>
         {!espejo && <div className="sub">Contribución de la SBU por SBU; luego se restan los <b>Gastos administrativos</b> (repartidos por peso de venta) para llegar al <b>Resultado Operativo</b>. Las columnas <b>FY2026/FY2025/ABP2027</b> comparan el total vs cada uno.</div>}
         {HOVERTIP}
         {!espejo && <div className="toolbar" style={{ marginBottom: 8, gap: 8 }}><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarReporte} style={{ background: '#0e7490', display: 'inline-flex', alignItems: 'center', gap: 8, opacity: ppt ? 0.6 : 1 }}>{ppt ? 'Generando…' : '📄 Reporte ABP (PDF)'}</button></div>}
