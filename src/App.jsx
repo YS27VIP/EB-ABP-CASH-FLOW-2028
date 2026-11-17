@@ -741,7 +741,7 @@ export default function App() {
             <button className="btn primary" style={{ fontSize: 15, padding: '12px 22px' }} onClick={() => signIn()}>Iniciar sesión con Google</button>
             <button className="btn" style={{ fontSize: 14, padding: '12px 18px' }} onClick={() => switchAccount()} title="Si tienes varias cuentas de Google abiertas, elige la de @energybrandsgroup.com">Elegir / cambiar cuenta</button>
           </div>
-          <div className="sub" style={{ marginTop: 10, color: 'var(--muted)' }}>¿Te sale "acceso bloqueado"? Entraste con una cuenta que no es @energybrandsgroup.com. Usa <b>Elegir / cambiar cuenta</b>.</div>
+          <div className="sub no-ayuda" style={{ marginTop: 10, color: 'var(--muted)' }}>¿Te sale "acceso bloqueado"? Entraste con una cuenta que no es @energybrandsgroup.com. Usa <b>Elegir / cambiar cuenta</b>.</div>
         </main>
       </>
     )
@@ -2310,7 +2310,7 @@ function TemporadaForm({ empresa, fixedMarca, sbus, mode, tempState, setTempStat
       })()}
       {empresa !== 'TAHO' && <div className="panel">
         <h3>Combinación de temporadas — {marca} <Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Producto" /></h3>
-        <div className="sub">El <b>vendedor asigna el total a vender por mes</b>. Aquí tú decides <b>cuántas unidades de cada temporada</b> cubren ese total: en cada mes escribe las <b>unidades a rotar</b> por temporada (p.ej. 500 de FW25). No puedes poner más de lo que hay en stock. La fila <b>«Por asignar»</b> te dice cuánto falta para llegar a la venta del mes, y <b>«Saldo por asignar»</b> debajo de cada temporada te muestra cuánto stock te queda de esa temporada. {iiAuto ? <>El <b>inventario inicial</b> viene de la matriz de arriba.</> : <>Pon también el <b>inventario inicial</b> y las <b>compras 2028</b>.</>}</div>
+        <div className="sub"><ul style={{ margin: '4px 0 0', paddingLeft: 18, lineHeight: 1.5 }}><li>En cada mes escribe las <b>unidades a rotar</b> por temporada (p.ej. 500 de FW25) hasta cubrir la venta del vendedor.</li><li>No puedes asignar más de lo que hay en stock.</li><li><b>«Por asignar»</b>: cuánto falta para la venta del mes.</li><li><b>«Saldo por asignar»</b>: stock que queda de cada temporada.</li><li><b>Inventario inicial</b>: {iiAuto ? 'viene de la matriz de arriba.' : 'ponlo tú, junto con las compras 2028.'}</li></ul></div>
         <div className="tablewrap"><table className="vfix"><colgroup><col style={{ width: '300px' }} /><col style={{ width: '70px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '80px' }} /></colgroup>
           <thead><tr><th className="l">Temporada / concepto</th><th>Inicial</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
           <tbody>
@@ -6065,6 +6065,7 @@ function HoldingCashFlow({ empresas }) {
 function HoldingScreen({ empresas, sbusFor }) {
   const [data, setData] = useState(null)
   const [detEmp, setDetEmp] = useState(empresas[0] || '')
+  const [ejec, setEjec] = useState(false)
   useEffect(() => {
     (async () => {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
@@ -6132,11 +6133,45 @@ function HoldingScreen({ empresas, sbusFor }) {
   ]
   const totHold = (g) => byEmp.reduce((a, { v }) => a + (g(v) || 0), 0)
   // SINERGY no tiene pantallas propias: su detalle es un P&L de solo lectura (sale del bloque SINERGY del Retail).
+  const descargarEjecutivo = () => {
+    setEjec(true)
+    let win = null
+    try { win = window.open('about:blank', '_blank') } catch { }
+    if (win) { try { win.document.write('<p style="font:16px -apple-system;padding:40px;color:#0e7490">Generando reporte ejecutivo…</p>') } catch { } }
+    setTimeout(() => {
+      try {
+        const n0 = (v) => Math.round(num(v)).toLocaleString('en-US')
+        const E = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+        const vTot = totHold((v) => v.ventaNeta), coTot = totHold((v) => v.costo), mbTot = totHold((v) => v.margenBruto)
+        const brTot = totHold((v) => v.brand), gaTot = totHold((v) => v.gadmin), resTot = totHold((v) => v.resultado)
+        const pct = (a, b) => (b ? (a / b * 100).toFixed(1) + '%' : '—')
+        const kpi = (k, v, s) => `<div style="flex:1;min-width:180px;background:#fff;border:1px solid #e1e7eb;border-radius:14px;padding:16px 20px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#64748b;font-weight:700">${E(k)}</div><div style="font-size:26px;font-weight:800;color:#0e7490;margin-top:4px">${v}</div>${s ? `<div style="font-size:12px;color:#64748b;margin-top:2px">${E(s)}</div>` : ''}</div>`
+        const sec = (t, tag) => `<div class="sec"><span class="bar" style="background:#0e7490"></span><h2 style="color:#0e7490">${E(t)}</h2>${tag ? `<span class="tag">${E(tag)}</span>` : ''}</div>`
+        const out = []
+        out.push(`<div style="display:flex;gap:14px;flex-wrap:wrap;margin:16px 0 4px">
+          ${kpi('Venta Neta', '$' + n0(vTot))}
+          ${kpi('Margen Bruto', '$' + n0(mbTot), pct(mbTot, vTot) + ' de la venta')}
+          ${kpi('Contribución BU', '$' + n0(brTot), pct(brTot, vTot) + ' de la venta')}
+          ${kpi('Resultado Operativo', '$' + n0(resTot), pct(resTot, vTot) + ' de la venta')}
+        </div>`)
+        // Resultado por empresa (resumen)
+        out.push(sec('Resultado por empresa', 'consolidado · 2028'))
+        const rows = byEmp.map(({ e, v }) => `<tr><td class="l">${E(e === 'SINERGY' ? 'SINERGY & DYNAMICS' : e)}</td><td>${n0(v.ventaNeta)}</td><td>${n0(v.costo)}</td><td>${n0(v.margenBruto)}</td><td>${pct(v.margenBruto, v.ventaNeta)}</td><td>${n0(v.brand)}</td><td>${n0(v.resultado)}</td></tr>`).join('')
+        out.push(`<div class="card"><div class="scroll"><table><thead><tr style="background:#0e7490"><th class="l">Empresa</th><th>Venta Neta</th><th>Costo</th><th>Margen Bruto</th><th>Margen %</th><th>Contribución</th><th>Resultado Op.</th></tr></thead><tbody>${rows}<tr class="tot" style="border-top:2px solid #0e7490"><td class="l">TOTAL HOLDING</td><td>${n0(vTot)}</td><td>${n0(coTot)}</td><td>${n0(mbTot)}</td><td>${pct(mbTot, vTot)}</td><td>${n0(brTot)}</td><td>${n0(resTot)}</td></tr></tbody></table></div></div>`)
+        // P&L consolidado del holding
+        out.push(sec('P&L consolidado del Holding', '2028'))
+        const pl = filas.map((f) => `<tr class="${f.strong ? 'strong' : ''}"><td class="l">${E(f.k)}</td><td>${n0(totHold(f.g))}</td></tr>`).join('')
+        out.push(`<div class="card"><div class="scroll"><table style="max-width:420px"><thead><tr style="background:#0e7490"><th class="l">Concepto</th><th>TOTAL HOLDING</th></tr></thead><tbody>${pl}</tbody></table></div></div>`)
+        abpOpenReport('ABP 2028 — Resumen Ejecutivo', 'Holding · consolidado de todas las empresas · alta gerencia', out.join(''), win)
+      } catch (err) { if (win && !win.closed) { try { win.close() } catch { } } alert('No se pudo generar el reporte: ' + (err && err.message)) }
+      setEjec(false)
+    }, 40)
+  }
   const sinPanel = (e) => { const v = calcEmp(e); return <><div className="panel"><h3 style={{ color: '#be185d' }}>🤝 {e} — P&L <span className="unit">(viene del bloque SINERGY del Retail · solo lectura)</span></h3><div className="sub">SINERGY no se edita aquí: su <b>venta y costo</b> salen de la tienda <b>SINERGY</b> en Retail, y su <b>marketing/viajes</b> de las capturas SINERGY. Para cambiarlo, ve a <b>Retail</b>.</div><div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 360 }}><thead><tr><th className="l">Concepto</th><th style={{ color: '#be185d' }}>{e}</th></tr></thead><tbody>{filas.map((f) => <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}</td><td className="tot" style={f.strong ? { fontWeight: 800 } : undefined}>{fmt(f.g(v))}</td></tr>)}</tbody></table></div></div><RetailEBCashFlowView which="SIN" accent="#be185d" /></> }
   return (
     <>
       <div className="panel">
-        <h3>🏛️ Total Holding — Resultado Operativo consolidado <span className="unit">(todas las empresas · 2028 · solo lectura)</span></h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>🏛️ Total Holding — Resultado Operativo consolidado <span className="unit">(todas las empresas · 2028 · solo lectura)</span></span><button className="btn" style={{ marginLeft: 'auto', fontSize: 13, padding: '7px 14px', background: '#0e7490', color: '#fff', borderColor: '#0e7490' }} disabled={ejec} onClick={descargarEjecutivo} title="Reporte de una página para alta gerencia: KPIs + resultado por empresa + P&L consolidado">{ejec ? 'Generando…' : '📄 Reporte Ejecutivo (PDF)'}</button></h3>
         <div className="sub">💡 Pasa el cursor sobre la columna <b>TOTAL HOLDING</b> para ver el <b>desglose por empresa</b>.</div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{byEmp.map(({ e }) => <th key={e}>{e}</th>)}<th style={{ color: '#7c3aed' }}>TOTAL HOLDING</th></tr></thead>
