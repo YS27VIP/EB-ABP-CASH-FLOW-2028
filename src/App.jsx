@@ -91,6 +91,10 @@ const SBU_NAMES = ['SBU 1', 'SBU 2', 'SBU 3']
 // TUMAR: empresa aparte, una sola unidad con sus 7 marcas (no usa SBU 1/2/3).
 const TUMAR_MARCAS = ['OSPREY', 'BLUNDSTONE', 'FJALLRAVEN', 'KEEN', 'ARIAT', 'HYDRO FLASK', 'VEJA']
 const TUMAR_SBUS = { 'SBU 1': TUMAR_MARCAS }
+// Empresas con el MODELO TUMAR: una sola unidad (sin SBU 1/2/3), logística por marca, viajes de una línea, sin categorías por defecto.
+// OJO: solo el modelo/estructura. Los DATOS propios de TUMAR (real 2026 del TUMAR Performance, sus 18 clientes) siguen siendo exclusivos de 'TUMAR'.
+const TUMAR_LIKE = new Set(['TUMAR', 'TUMAR AR', 'TUMAR CL', 'TUMAR PARAGUAY', 'JORS URU', 'MILHO URU'])
+const ES_TUMAR_LIKE = (e) => TUMAR_LIKE.has(String(e == null ? '' : e).trim().toUpperCase())
 // TAHO vende las marcas de Energy Brands (SBU 1/2/3) + las marcas de TUMAR que EB no tiene, agrupadas en SBU 4.
 const _EB_BRANDS = new Set(Object.values(DEFAULT_SBUS).flat().map((m) => m.toUpperCase()))
 const TAHO_SBU4 = TUMAR_MARCAS.filter((m) => !_EB_BRANDS.has(m.toUpperCase())) // OSPREY, FJALLRAVEN, HYDRO FLASK, VEJA
@@ -107,9 +111,9 @@ function catRowOk(row, empresa) {
 // Clientes semilla por empresa (TUMAR, del Excel de facturación · sin país).
 const SEED_CLIENTES = { 'TUMAR': ['LA LOMITA OUTDOORS SRL', 'HERNANDEZ ISMAEL MARIA', 'RIVAROLA MARIA ESTELA', 'MARTHA HEADWEAR SA S. A.', 'WILBERGER NOELIA MARILINA', 'GIGENA JUAN MANUEL', 'UNIAVENTURA S.A.', 'FOURCANS MARTIN OSCAR', 'MORIS CESAR OSVALDO', 'SCALZO OSVALDO NESTOR', 'ANGLER S AVENTURAS SOCIEDAD DE RESPONSABILIDAD LIMITADA', 'CRISTOBAL COLON S. R. L.', 'GROUP MOBILE S.A.', 'EL VIAJERO CAMPING S.R.L.', 'RANCHOCAVALIER S.R.L.', 'BASSI JUAN PABLO', 'PARALELO 42 S. CAP I SECC IV', 'PLACE IT S.A'] }
 /* Empresas del grupo (el nombre debe coincidir con la columna EMPRESA del Histórico). */
-const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO', 'GUBRANDS', 'SINERGY']
+const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO', 'GUBRANDS', 'SINERGY', 'TUMAR AR', 'TUMAR CL', 'TUMAR PARAGUAY', 'JORS URU', 'MILHO URU']
 // Orden fijo de columnas en el Total Holding (las demás empresas se agregan al final).
-const HOLDING_ORDER = ['ENERGY BRANDS', 'SINERGY', 'TAHO', 'TUMAR', 'GUBRANDS']
+const HOLDING_ORDER = ['ENERGY BRANDS', 'SINERGY', 'TAHO', 'TUMAR', 'TUMAR AR', 'TUMAR CL', 'TUMAR PARAGUAY', 'JORS URU', 'MILHO URU', 'GUBRANDS']
 
 /* Colores por SBU y por marca (identidad visual dinámica) */
 const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'SBU 4': '#be185d', 'RETAIL': '#4338ca', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
@@ -537,6 +541,19 @@ export default function App() {
     return off
   }, [])
 
+  // Botón flotante ℹ️ "Ayudas": oculta por defecto las instrucciones/comentarios (cajas .note y subtítulos .sub) para ganar espacio; se muestran al activarlo. Distinto del 💡 (origen del dato al pasar sobre un número).
+  useEffect(() => {
+    let mostrar = false; try { mostrar = localStorage.getItem('abp_ayudas') === '1' } catch { }
+    const apply = () => document.body.classList.toggle('sin-ayudas', !mostrar)
+    const btn = document.createElement('button')
+    btn.className = 'ayuda-toggle'
+    const label = () => { btn.textContent = mostrar ? 'ℹ️ Ocultar ayudas' : 'ℹ️ Ver ayudas' }
+    apply(); label()
+    btn.onclick = () => { mostrar = !mostrar; try { localStorage.setItem('abp_ayudas', mostrar ? '1' : '0') } catch { } apply(); label() }
+    document.body.appendChild(btn)
+    return () => { try { btn.remove(); document.body.classList.remove('sin-ayudas') } catch { } }
+  }, [])
+
   // Baja el estado del modelo (Cap_Estado) del Sheet a localStorage antes de mostrar los tableros
   useEffect(() => {
     if (!authed || !empresa) return
@@ -644,7 +661,8 @@ export default function App() {
   // Composición SBU↔marca: para TODAS las empresas (incl. ENERGY BRANDS) se usa lo configurado (combos) con DEFAULT_SBUS como base.
   // Si las combinaciones guardadas son viejas/incompletas (menos de 2 SBU con marcas), se ignoran y se usa DEFAULT_SBUS.
   const combosReales = (emp) => { const c = combos[emp]; return !!(c && SBU_NAMES.filter((s) => (c[s] || []).length).length >= 2) }
-  const sbusFor = (emp) => emp === 'TUMAR' ? TUMAR_SBUS : (emp === 'ENERGY BRANDS' ? (combosReales('ENERGY BRANDS') ? effSBUS(emp, combos) : DEFAULT_SBUS) : effSBUS(emp, combos))
+  // Modelo TUMAR: una sola unidad ('SBU 1') con TODAS sus marcas. TUMAR usa sus 7 marcas fijas; las demás TUMAR-like, las que configuró el director (combos), aplanadas en una unidad.
+  const sbusFor = (emp) => emp === 'TUMAR' ? TUMAR_SBUS : (ES_TUMAR_LIKE(emp) ? { 'SBU 1': [...new Set(Object.values(effSBUS(emp, combos)).flat())] } : (emp === 'ENERGY BRANDS' ? (combosReales('ENERGY BRANDS') ? effSBUS(emp, combos) : DEFAULT_SBUS) : effSBUS(emp, combos)))
   const sbus = sbusFor(empresa)
 
   function nuevaEmpresa() {
@@ -941,7 +959,7 @@ export default function App() {
 function RoleForm({ role, usuario, empresa, sbus, fixedMarca, rubrosOverride, onSaved, headerChip, capTitle, readOnly, initRubro, splitCfg, retailLean }) {
   const esTot = String(fixedMarca || '').startsWith('TOTAL::')
   // Los VIAJES ya no se llenan dentro de cada rol: se capturan en la pestaña "🧳 Viajes equipo". Por eso se quitan del selector VER del rol (salvo cuando se pide explícito con rubrosOverride, como en Gerencia/Finanzas/Viajes equipo).
-  const rubros = (rubrosOverride || role.rubros.filter((rb) => rb.k !== 'VIAJES')).filter((rb) => !rb.gadmin || esTot).filter((rb) => !(empresa === 'TUMAR' && rb.muestras)) // Gastos admin solo en TOTAL SBU · Muestras no aplica en TUMAR
+  const rubros = (rubrosOverride || role.rubros.filter((rb) => rb.k !== 'VIAJES')).filter((rb) => !rb.gadmin || esTot).filter((rb) => !(ES_TUMAR_LIKE(empresa) && rb.muestras)) // Gastos admin solo en TOTAL SBU · Muestras no aplica en modelo TUMAR
   const [tab, setTab] = useState(() => { if (initRubro) { const i = rubros.findIndex((r) => r.k === initRubro); if (i >= 0) return i } return 0 }) // VER inicial (deep-link desde la Guía)
   // Borrador local: lo tecleado se recuerda en el navegador aunque no se haya guardado, para no perderlo al cambiar de pestaña.
   const draftKey = `cap_draft_${role.tab || role.label}_${empresa}_${fixedMarca || ''}`
@@ -1161,7 +1179,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
   const isTotal = String(marca).startsWith('TOTAL::')
   const sbu = isTotal ? String(marca).slice(7) : sbuDe(sbus, marca)
   // TUMAR no usa el detalle de viajes de Energy Brands: una sola línea "VIAJES".
-  const groupsEff = ((empresa === 'TUMAR' || empresa === 'TAHO') && rubro.k === 'VIAJES') ? [{ g: 'VIAJES', items: [{ c: '201', n: 'VIAJES' }] }]
+  const groupsEff = ((ES_TUMAR_LIKE(empresa) || empresa === 'TAHO') && rubro.k === 'VIAJES') ? [{ g: 'VIAJES', items: [{ c: '201', n: 'VIAJES' }] }]
     : (empresa === 'TAHO' && rubro.k === 'MARKETING') ? [{ g: 'MARKETING', items: [{ c: '301', n: 'MARKETING' }] }] : groups
   const multi = groupsEff.length > 1
 
@@ -2433,7 +2451,7 @@ const TUMAR_LOG_LINES = [
 // Total logístico mensual de UNA marca (suma de las 3 líneas de esa marca).
 function tumarLogMarcaArr(logcost, mca) { return MESES.map((_, m) => TUMAR_LOG_LINES.reduce((a, l) => a + num(logcost[`T|${mca}|${l.k}|${m}`]), 0)) }
 // Empresas con el modelo logístico simple (3 líneas por marca), igual que TUMAR.
-const LOG_SIMPLE = (e) => e === 'TUMAR' || e === 'TAHO'
+const LOG_SIMPLE = (e) => ES_TUMAR_LIKE(e) || e === 'TAHO'
 // Total anual de UNA marca (lee localStorage) — para el P&L por marca.
 function tumarLogMarcaTotal(empresa, mca) { try { const d = JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}'); return tumarLogMarcaArr(d, mca).reduce((a, b) => a + b, 0) } catch { return 0 } }
 // Total logístico mensual de TODAS las marcas (gran total) — para el Cash Flow.
@@ -5859,7 +5877,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
   return (
     <>
       {!soloSBU && !cargando && !espejo && <div className="subtabs" style={{ marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {[['pl', '📊 Resultado / P&L'], ['cf', '💵 Cash Flow'], ...(empresa !== 'TUMAR' ? [['viajes', '🧳 Viajes']] : [])].map(([id, lbl]) => <button key={id} className={'seg' + (gtab === id ? ' active' : '')} onClick={() => setGtab(id)} style={gtab === id ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : {}}>{lbl}</button>)}
+        {[['pl', '📊 Resultado / P&L'], ['cf', '💵 Cash Flow'], ...(!ES_TUMAR_LIKE(empresa) ? [['viajes', '🧳 Viajes']] : [])].map(([id, lbl]) => <button key={id} className={'seg' + (gtab === id ? ' active' : '')} onClick={() => setGtab(id)} style={gtab === id ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : {}}>{lbl}</button>)}
       </div>}
       {!soloSBU && !cargando && (espejo || gtab === 'pl') && <div className="panel">
         <h3>Gerencia — Resultado Operativo consolidado · {empresa}{M$} <span className="unit">(SBU lado a lado · 2028 · solo lectura)</span></h3>
@@ -5894,7 +5912,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
 
       {!soloSBU && !cargando && (espejo || gtab === 'pl') && <TahoEspejo empresa={empresa} />}
 
-      {!soloSBU && !cargando && !espejo && gtab === 'viajes' && empresa !== 'TUMAR' && <div className="panel" style={{ marginTop: 10 }}>
+      {!soloSBU && !cargando && !espejo && gtab === 'viajes' && !ES_TUMAR_LIKE(empresa) && <div className="panel" style={{ marginTop: 10 }}>
         <h3>🧳 Viajes de Gerencia — {empresa} <span className="unit">(nivel empresa · impactan el Cash Flow ▣ TODAS)</span></h3>
         <div className="sub">Captura los <b>viajes admin</b> y <b>viajes de procesos</b> (misma vista que cada equipo). Los <b>viajes de Finanzas</b> se llenan en Finanzas y salen como <b>espejo</b> aquí. Todos restan en el P&L en <b>Otros gastos</b> e impactan el <b>Cash Flow ▣ TODAS</b>.</div>
         {(() => {
@@ -7565,7 +7583,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
   const [, setTick] = useState(0)
-  const usarCat = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] === undefined ? (empresa !== 'TUMAR') : (u[marca] !== false) } catch { return empresa !== 'TUMAR' } })()
+  const usarCat = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] === undefined ? (!ES_TUMAR_LIKE(empresa)) : (u[marca] !== false) } catch { return !ES_TUMAR_LIKE(empresa) } })()
   function setUsarCat(v) { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); u[marca] = v; saveEstado(empresa, 'usarcat', u) } catch { } setTick((t) => t + 1) }
   // Tipo de producto por categoría (ROPA / CALZADO / etc.) — clasifica cada categoría. Se guarda por marca+categoría.
   const TIPOS = ['ROPA', 'CALZADO / ZAPATILLAS', 'ACCESORIOS', 'MOCHILAS GRANDES', 'MOCHILAS PEQUEÑAS']
@@ -7763,7 +7781,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const g = (cli) => num(growth[cli + '|' + marca])
   const u26 = (cli, mi) => (u2026[cli + '|' + marca] || [])[mi] || 0
   const u25 = (cli, mi) => (u2025[cli + '|' + marca] || [])[mi] || 0
-  const showY25 = empresa !== 'TUMAR' // TUMAR no usa histórico 2025 (su referencia es el 2026 real del TP)
+  const showY25 = !ES_TUMAR_LIKE(empresa) // modelo TUMAR no usa histórico 2025
   const rsp = showY25 ? 3 : 2 // filas por cliente: 2025+2026+2028 (EB) o solo 2026+2028 (TUMAR)
   const mKey = (cli, mi) => marca + '|' + cli + '|' + mi
   // 2028 = el % de crecimiento define el TOTAL objetivo (sobre 2026). Los meses arrancan VACÍOS:
@@ -7831,7 +7849,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   }
   const catList = cats[marca] || []
   // ¿El Director activó categorías para esta marca? (lo define en su pestaña; por defecto sí)
-  const catsToggle = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] === undefined ? (empresa !== 'TUMAR') : (u[marca] !== false) } catch { return empresa !== 'TUMAR' } })()
+  const catsToggle = (() => { try { const u = JSON.parse(localStorage.getItem('usarcat_' + empresa) || '{}'); return u[marca] === undefined ? (!ES_TUMAR_LIKE(empresa)) : (u[marca] !== false) } catch { return !ES_TUMAR_LIKE(empresa) } })()
   const usarCat = catsToggle && catList.length > 0
   const catMsg = !catsLoaded ? '⏳ Cargando categorías…' : (catsToggle ? 'Aún no hay categorías definidas para ' + marca + ' (las define el Director en su pestaña Categorías y guarda). Mientras tanto, solo se ve el total por mes.' : 'Esta marca trabaja sin categorías: solo el total por mes.')
   // Participación de categorías por cliente (check). Sin marcar = participa en todas.
