@@ -86,8 +86,9 @@ tfoot td{font-weight:800;border-top:2px solid var(--odoo);background:#faf7f9}
 /* Ayudas/explicaciones: por defecto se colapsan a un chip ℹ️ para ganar espacio; al darle clic se despliega ese comentario (clic de nuevo lo esconde). Distinto del 💡 de origen del dato (ese es al pasar sobre un número). */
 body.sin-ayudas .note{font-size:0 !important;line-height:0 !important;cursor:pointer;display:inline-block;max-width:100%}
 body.sin-ayudas .note::before{content:"ℹ️ Ayuda";font-size:12px;line-height:1.3;color:var(--odoo);font-weight:600;white-space:nowrap}
-body.sin-ayudas .note.ayuda-abierta{font-size:13px !important;line-height:1.5 !important;display:block}
+body.sin-ayudas .note.ayuda-abierta{font-size:13px !important;line-height:1.5 !important;display:block;position:relative;padding-right:74px}
 body.sin-ayudas .note.ayuda-abierta::before{content:"";display:none}
+body.sin-ayudas .note.ayuda-abierta::after{content:"✕ cerrar";position:absolute;top:8px;right:12px;font-size:11px;font-weight:700;color:var(--odoo);cursor:pointer}
 body.sin-ayudas .sub.ayuda{font-size:0 !important;cursor:pointer}
 body.sin-ayudas .sub.ayuda::before{content:"ℹ️";font-size:13px}
 body.sin-ayudas .sub.ayuda.ayuda-abierta{font-size:12.5px !important}

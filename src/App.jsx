@@ -386,6 +386,57 @@ const BULB_CURSOR = 'url("data:image/svg+xml;utf8,' + encodeURIComponent("<svg x
 const Q = (t) => <span title={t} style={{ cursor: BULB_CURSOR, marginLeft: 5, fontSize: 12, display: 'inline-block', verticalAlign: 'middle', lineHeight: 1 }}>💡</span>
 // 🪞 para vistas ESPEJO (solo lectura, el dato se llena/edita en otro lado): tooltip dice de dónde viene
 const ESP = (t) => <span className="unit" title={t} style={{ cursor: BULB_CURSOR, marginLeft: 6, fontSize: 12 }}>🪞</span>
+
+/* ===== ABP 2027 (referencia): se carga de la pestaña Ref_2027 del Sheet. Columnas: EMPRESA | SBU | MARCA | SECCION | CATEGORIA | ENE..DIC.
+   SECCION ∈ VENTA / UNIDADES / COSTO / LOGISTICA / MARKETING. CATEGORIA opcional (vacío = total de la marca). ===== */
+let _ref2027 = null, _ref2027At = 0
+async function loadRef2027() {
+  if (_ref2027 && Date.now() - _ref2027At < 300000) return _ref2027
+  let rows = []
+  try { const j = await gReadTab('Ref_2027'); if (j && j.ok && Array.isArray(j.values)) rows = j.values } catch { }
+  const out = {}
+  if (rows.length > 1) {
+    const H = rows[0].map((x) => String(x == null ? '' : x).trim().toUpperCase())
+    const ci = (names) => { for (const n of names) { const k = H.indexOf(n); if (k >= 0) return k } return -1 }
+    const iE = ci(['EMPRESA']), iM = ci(['MARCA', 'BRAND']), iSe = ci(['SECCION', 'SECCIÓN']), iC = ci(['CATEGORIA', 'CATEGORÍA'])
+    let m0 = ci(['ENE', 'ENERO', 'JAN']); if (m0 < 0) m0 = H.length - 12
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r] || []
+      const emp = String(row[iE] || '').trim().toUpperCase(), mar = String(row[iM] || '').trim().toUpperCase(), sec = String(row[iSe] || '').trim().toUpperCase()
+      const cat = String(row[iC] || '').trim() || '—'
+      if (!emp || !mar || !sec) continue
+      const arr = Array.from({ length: 12 }, (_, i) => num(row[m0 + i]))
+      const E = out[emp] || (out[emp] = {}), M = E[mar] || (E[mar] = {}), S = M[sec] || (M[sec] = {})
+      S[cat] = arr
+    }
+  }
+  _ref2027 = out; _ref2027At = Date.now(); return out
+}
+// Botón 📅 2027: abre un modal con lo cargado en el ABP 2027 por mes y categoría, para esa marca y (opcional) el total SBU.
+function Ref2027Btn({ empresa, marca, marcasSBU, seccion, sbuName }) {
+  const [open, setOpen] = useState(false); const [data, setData] = useState(null); const [vista, setVista] = useState('marca')
+  const [SEC, setSEC] = useState(String(seccion || 'VENTA').toUpperCase())
+  useEffect(() => { if (open && !data) loadRef2027().then(setData).catch(() => setData({})) }, [open])
+  const SECCIONES = ['VENTA', 'UNIDADES', 'COSTO', 'LOGISTICA', 'MARKETING']
+  const MH = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  const forMarca = (mca) => (((data || {})[String(empresa).toUpperCase()] || {})[String(mca).toUpperCase()] || {})[SEC] || {}
+  const lista = vista === 'sbu' ? (marcasSBU || [marca]) : [marca]
+  const cats = {}; lista.forEach((mca) => { const o = forMarca(mca); Object.keys(o).forEach((cat) => { cats[cat] = cats[cat] || Array(12).fill(0); for (let i = 0; i < 12; i++) cats[cat][i] += o[cat][i] }) })
+  const catNames = Object.keys(cats); const tot = Array(12).fill(0); catNames.forEach((c) => { for (let i = 0; i < 12; i++) tot[i] += cats[c][i] })
+  return (<>
+    <button className="btn" title="Ver lo cargado en el ABP 2027 por mes y categoría" onClick={(e) => { e.stopPropagation(); setOpen(true) }} style={{ padding: '3px 8px', fontSize: 12 }}>📅 2027</button>
+    {open && <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.45)', zIndex: 200, display: 'grid', placeItems: 'center', padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, maxWidth: 1000, width: '100%', maxHeight: '85vh', overflow: 'auto', padding: 18, boxShadow: '0 10px 40px rgba(0,0,0,.25)' }}>
+        <div className="toolbar" style={{ marginBottom: 10 }}><h3 style={{ margin: 0 }}>ABP 2027 — {vista === 'sbu' ? ('Total ' + (sbuName || 'SBU')) : marca}</h3><div className="spacer"></div>{marcasSBU && marcasSBU.length > 1 && <><button className={'seg' + (vista === 'marca' ? ' active' : '')} onClick={() => setVista('marca')}>{marca}</button><button className={'seg' + (vista === 'sbu' ? ' active' : '')} onClick={() => setVista('sbu')}>Total SBU</button></>}<button className="btn" onClick={() => setOpen(false)}>✕ cerrar</button></div>
+        <div className="toolbar" style={{ marginBottom: 10, gap: 6 }}>{SECCIONES.map((s) => <button key={s} className={'seg' + (SEC === s ? ' active' : '')} onClick={() => setSEC(s)}>{s}</button>)}</div>
+        {!data ? <div className="sub">Cargando…</div> : !catNames.length ? <div className="note warn">Aún no hay datos del 2027 para esta selección. Llénalos en la pestaña <b>Ref_2027</b> del Google Sheet (columnas: EMPRESA · SBU · MARCA · SECCION · CATEGORIA · ENE…DIC).</div> : <div className="tablewrap"><table><thead><tr><th className="l">Categoría</th>{MH.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead><tbody>
+          {catNames.map((c) => <tr key={c}><td className="l">{c}</td>{cats[c].map((v, i) => <td key={i} className="tot">{v ? fmt(v) : ''}</td>)}<td className="tot">{fmt(cats[c].reduce((a, b) => a + b, 0))}</td></tr>)}
+          <tr className="grandrow"><td className="l">TOTAL</td>{tot.map((v, i) => <td key={i} className="tot">{v ? fmt(v) : ''}</td>)}<td className="tot">{fmt(tot.reduce((a, b) => a + b, 0))}</td></tr>
+        </tbody></table></div>}
+      </div>
+    </div>}
+  </>)
+}
 // Leyenda azul reutilizable: va en cada bloque cuyos números muestran el origen del cálculo al pasar el cursor.
 const HOVERTIP = <div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
 // Banner amable "¡Tu turno!": instrucción para que la persona complete lo amarillo. Reutilizable (Comercial, Finanzas…).
@@ -1067,7 +1118,7 @@ function SimpleForm({ role, rubro, usuario, empresa, sbus, data, setData, saving
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
       <div className="panel">
-        <h3>{role.label} — {rubro.k} <span className="unit">({rubro.u})</span><Responsable empresa={empresa} seccion={role.label} /></h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>{role.label} — {rubro.k} <span className="unit">({rubro.u})</span><Ref2027Btn empresa={empresa} marca={fixedMarca || [...new Set(Object.values(useSbus).flat())][0]} marcasSBU={[...new Set(Object.values(useSbus).flat())]} seccion={({ 'Ventas': 'VENTA', 'Marketing': 'MARKETING', 'Logística': 'LOGISTICA' }[role.label]) || 'VENTA'} /><Responsable empresa={empresa} seccion={role.label} /></h3>
         <div className="sub">Empresa <b>{empresa}</b>. Captura por marca y mes.</div>
         <div className="toolbar" style={{ marginBottom: 12 }}>
           <label>Aplicar a todos los meses{fixedMarca ? ` — ${fixedMarca}` : ''}</label>
@@ -3308,7 +3359,7 @@ function PreciosMargenForm({ empresa, usuario, sbus, fixedMarca, tempState, snap
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       {showMatriz && <div className="panel">
         <div className="toolbar"><span className="empchip" style={{ marginLeft: 0, background: marcaColor(marca) }}>{marca}</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar precios'}</button></div>
-        <h3>Inventario, costo y precio por temporada y categoría — {marca}{M$} <span className="empchip" style={{ background: '#d9822b', fontSize: 11 }} title="Las columnas Inv. inicial según SF / Proyección / Inv. inicial sugerido están en construcción (aún no alimentan los cálculos).">🚧 En construcción</span><Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Producto" /></h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>Inventario, costo y precio por temporada y categoría — {marca}{M$} <span className="empchip" style={{ background: '#d9822b', fontSize: 11 }} title="Las columnas Inv. inicial según SF / Proyección / Inv. inicial sugerido están en construcción (aún no alimentan los cálculos).">🚧 En construcción</span><Ref2027Btn empresa={empresa} marca={marca} marcasSBU={[...new Set(marcasDe(sbus || {}).map((x) => x.marca))]} sbuName={sbuDe(sbus, marca)} seccion="COSTO" /><Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Producto" /></h3>
         <div className="sub" style={{ marginBottom: 6 }}>Por cada <b>temporada</b> (añada) y <b>categoría</b>: cuántas <b>unidades</b>, su <b>AUC</b> (costo) y su <b>AUP</b> (precio). Para las temporadas <b>anteriores</b> las unidades son el <b>saldo on-hand</b> (se escriben aquí); para <b>SS28/FW28/SS29</b> las unidades son <b>solo lectura</b> — vienen de las compras que capturas en el <b>Paso 4</b>, repartidas por el peso de la categoría (aquí solo pones sus precios AUC/AUP). Las categorías vienen de lo que definió el Director.</div>
         <div className="tablewrap" style={{ overflowX: 'auto' }}><table style={{ width: 'auto' }}>
           <thead><tr><th className="l">Categoría / Temporada</th><th style={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Unidades<br /><span className="unit" style={{ fontWeight: 400 }}>saldo / compra proy.</span></th><th style={{ whiteSpace: 'normal', lineHeight: 1.15, background: '#fff7ed' }}>Inv. inicial<br /><span className="unit" style={{ fontWeight: 400 }}>según SF 🚧</span></th><th style={{ whiteSpace: 'normal', lineHeight: 1.15, background: '#fff7ed' }}>Proyección<br /><span className="unit" style={{ fontWeight: 400 }}>🚧</span></th><th style={{ whiteSpace: 'normal', lineHeight: 1.15, background: '#fff7ed' }}>Inv. inicial<br /><span className="unit" style={{ fontWeight: 400 }}>sugerido (SF − proy.) 🚧</span></th><th>AUC ($)</th><th>AUP ($)</th><th>Margen bruto ($)</th><th>Margen bruto %</th><th>Landed ($)</th><th>Margen landed ($)</th><th>Margen landed %</th></tr></thead>
