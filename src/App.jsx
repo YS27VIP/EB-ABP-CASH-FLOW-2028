@@ -429,7 +429,7 @@ function Ref2027Btn({ empresa, marca, marcasSBU, seccion, sbuName }) {
       <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, maxWidth: 1000, width: '100%', maxHeight: '85vh', overflow: 'auto', padding: 18, boxShadow: '0 10px 40px rgba(0,0,0,.25)' }}>
         <div className="toolbar" style={{ marginBottom: 10 }}><h3 style={{ margin: 0 }}>ABP 2027 — {vista === 'sbu' ? ('Total ' + (sbuName || 'SBU')) : marca}</h3><div className="spacer"></div>{marcasSBU && marcasSBU.length > 1 && <><button className={'seg' + (vista === 'marca' ? ' active' : '')} onClick={() => setVista('marca')}>{marca}</button><button className={'seg' + (vista === 'sbu' ? ' active' : '')} onClick={() => setVista('sbu')}>Total SBU</button></>}<button className="btn" onClick={() => setOpen(false)}>✕ cerrar</button></div>
         <div className="toolbar" style={{ marginBottom: 10, gap: 6 }}>{SECCIONES.map((s) => <button key={s} className={'seg' + (SEC === s ? ' active' : '')} onClick={() => setSEC(s)}>{s}</button>)}</div>
-        {!data ? <div className="sub">Cargando…</div> : !catNames.length ? <div className="note warn">Aún no hay datos del 2027 para esta selección. Llénalos en la pestaña <b>Ref_2027</b> del Google Sheet (columnas: EMPRESA · SBU · MARCA · SECCION · CATEGORIA · ENE…DIC).</div> : <div className="tablewrap"><table><thead><tr><th className="l">Categoría</th>{MH.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead><tbody>
+        {!data ? <div className="sub no-ayuda">Cargando…</div> : !catNames.length ? <div className="note warn">Aún no hay datos del 2027 para esta selección. Llénalos en la pestaña <b>Ref_2027</b> del Google Sheet (columnas: EMPRESA · SBU · MARCA · SECCION · CATEGORIA · ENE…DIC).</div> : <div className="tablewrap"><table><thead><tr><th className="l">Categoría</th>{MH.map((m) => <th key={m}>{m}</th>)}<th>Total</th></tr></thead><tbody>
           {catNames.map((c) => <tr key={c}><td className="l">{c}</td>{cats[c].map((v, i) => <td key={i} className="tot">{v ? fmt(v) : ''}</td>)}<td className="tot">{fmt(cats[c].reduce((a, b) => a + b, 0))}</td></tr>)}
           <tr className="grandrow"><td className="l">TOTAL</td>{tot.map((v, i) => <td key={i} className="tot">{v ? fmt(v) : ''}</td>)}<td className="tot">{fmt(tot.reduce((a, b) => a + b, 0))}</td></tr>
         </tbody></table></div>}
@@ -441,7 +441,7 @@ function Ref2027Btn({ empresa, marca, marcasSBU, seccion, sbuName }) {
 const HOVERTIP = <div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
 // Banner amable "¡Tu turno!": instrucción para que la persona complete lo amarillo. Reutilizable (Comercial, Finanzas…).
 const TurnoBanner = () => (
-  <div className="note" style={{ margin: 0, padding: '7px 12px', display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff8e1', border: '1px solid #f0e0a8' }}>
+  <div className="note no-ayuda" style={{ margin: 0, padding: '7px 12px', display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff8e1', border: '1px solid #f0e0a8' }}>
     <span style={{ fontSize: 18 }}>✍️</span><span><b style={{ color: '#8a6d1a' }}>¡Tu turno!</b> Completa las <b style={{ background: '#fff3bf', padding: '1px 6px', borderRadius: 4 }}>celdas amarillas</b>.</span>
   </div>
 )
@@ -603,7 +603,7 @@ export default function App() {
     btn.onclick = () => { mostrar = !mostrar; try { localStorage.setItem('abp_ayudas', mostrar ? '1' : '0') } catch { } apply(); label() }
     document.body.appendChild(btn)
     // Clic en un chip ℹ️ despliega/oculta ese comentario puntual (solo cuando las ayudas están colapsadas).
-    const onClick = (e) => { if (!document.body.classList.contains('sin-ayudas')) return; const n = e.target.closest && e.target.closest('.note, .sub.ayuda'); if (n) n.classList.toggle('ayuda-abierta') }
+    const onClick = (e) => { if (!document.body.classList.contains('sin-ayudas')) return; const n = e.target.closest && e.target.closest('.note:not(.no-ayuda), .sub:not(.no-ayuda)'); if (n) n.classList.toggle('ayuda-abierta') }
     document.addEventListener('click', onClick, true)
     return () => { try { btn.remove(); document.body.classList.remove('sin-ayudas'); document.removeEventListener('click', onClick, true) } catch { } }
   }, [])
@@ -2364,7 +2364,7 @@ function ReporteScreen({ empresa, sbus }) {
   const [fTerm, setFTerm] = useState('')
   const [buscar, setBuscar] = useState('')
   const visibles = rows.filter((r) => (!fTerm || (fTerm === 'Sin plazo' ? r.t === '—' : r.t === fTerm)) && (!buscar.trim() || upper(r.cli).indexOf(upper(buscar)) >= 0))
-  if (load) return <div className="panel"><div className="sub">⏳ Cargando el reporte…</div></div>
+  if (load) return <div className="panel"><div className="sub no-ayuda">⏳ Cargando el reporte…</div></div>
   return (
     <>
       <div className="panel">
@@ -2687,7 +2687,7 @@ function LogisticaHome({ empresa, sbus }) {
     return { pct, logVenta, ventaNetaTot, mue, total: logVenta + mue, abp26: ref.pct2026, abp27: ref.pct2027, real: r26.log, realpct: r26.vn ? (r26.log / r26.vn * 100) : 0 }
   }
   const money = (v) => '$' + Math.round(v).toLocaleString('en-US')
-  if (load) return <div className="panel"><div className="sub">⏳ Cargando el detalle logístico…</div></div>
+  if (load) return <div className="panel"><div className="sub no-ayuda">⏳ Cargando el detalle logístico…</div></div>
   if (detMarca) {
     return (<>
       <div className="toolbar" style={{ marginBottom: 10 }}>
@@ -6000,7 +6000,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
       {soloSBU && <div className="panel">
         <h3>Resumen {soloSBU} <span className="unit">(solo lectura · 2028)</span></h3>
         <div className="sub">Venta Neta = Unidades × AUP · Costo = Unidades × AUC · Margen = Venta − Costo · Inventario = compras del año. AUP/AUC son promedios ponderados.</div>
-        {cargando ? <div className="sub">Cargando…</div> : (
+        {cargando ? <div className="sub no-ayuda">Cargando…</div> : (
           <div className="tablewrap">
             <table>
               <thead><tr><th className="l">SBU / Marca</th><th>Unidades</th><th>AUP</th><th>AUC</th><th>Venta Neta</th><th>Costo</th><th>Margen</th><th>Margen %</th><th>Inventario</th></tr></thead>
@@ -6230,7 +6230,7 @@ function BrandContribution({ empresa, marca }) {
   return (
     <div className="panel">
       <h3 style={{ color: marcaColor(marca) }}>Contribución de la marca — {marca}{M$} <span className="unit">(2028 · solo lectura)</span></h3>
-      {load ? <div className="sub">Cargando…</div> : (<>
+      {load ? <div className="sub no-ayuda">Cargando…</div> : (<>
         <div className="tablewrap">
           <table style={{ width: 'auto' }}>
             <thead><tr><th className="l">Concepto</th><th>Monto</th><th>% VN</th><th className="yb">ABP 2027</th><th className="yb">Δ 28 vs 27</th><th className="ya">{lbl26(P.hist)}</th><th className="ya">Δ 28 vs 26</th><th className="ya">FY2025</th><th className="ya">Δ 28 vs 25</th></tr></thead>
@@ -6447,7 +6447,7 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
     })()
   }, [empresa])
 
-  if (!P) return <div className="panel"><h3>Contribución de la SBU — {sbuName}</h3><div className="sub">Cargando…</div></div>
+  if (!P) return <div className="panel"><h3>Contribución de la SBU — {sbuName}</h3><div className="sub no-ayuda">Cargando…</div></div>
 
   const inM = (r, mca) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(mca)
   const uniMes = (mca) => { const a = Array(12).fill(0); P.ven.forEach((r) => { if (!inM(r, mca)) return; if (String(r[1] || '').toUpperCase().startsWith('VIAJES')) return; for (let j = 0; j < 12; j++) a[j] += num(r[4 + j]) }); return a }
@@ -6575,7 +6575,7 @@ function ViajesEquipo({ empresa, marca, sbuName, marcasSBU, modo = 'marca', pued
   }
   const anual = (tab, mca) => viajesMes(tab, mca).reduce((s, v) => s + v, 0)
 
-  if (!tabs) return <div className="panel"><h3>Viajes del equipo</h3><div className="sub">Cargando…</div></div>
+  if (!tabs) return <div className="panel"><h3>Viajes del equipo</h3><div className="sub no-ayuda">Cargando…</div></div>
 
   // Panel: viajes por área (rol × mes) para una marca
   const teamPanel = (mca) => {
@@ -6682,7 +6682,7 @@ function AvanceSBU({ empresa, sbuName, marcasSBU }) {
     ['Marketing', '📣', (m) => mk.some((r) => inM(r, m) && !String(r[1] || '').toUpperCase().startsWith('VIAJES') && anyMes(r))],
     ['Pago prov.', '💵', (m) => !!cf[`PTERM|${m}`]],
   ]
-  if (load) return <div className="panel"><h3 style={{ color: col }}>✅ Progreso — {sbuName}</h3><div className="sub">⏳ Cargando el progreso…</div></div>
+  if (load) return <div className="panel"><h3 style={{ color: col }}>✅ Progreso — {sbuName}</h3><div className="sub no-ayuda">⏳ Cargando el progreso…</div></div>
   const pct = (m) => Math.round(SECTIONS.filter(([, , fn]) => fn(m)).length / SECTIONS.length * 100)
   return (
     <div className="panel">
@@ -6718,7 +6718,7 @@ function ComparadorMarcas({ empresa, sbuName, marcasSBU }) {
     })()
   }, [empresa])
   const col = sbuColor(sbuName)
-  if (!P) return <div className="panel"><h3 style={{ color: col }}>📊 Comparador de marcas — {sbuName}</h3><div className="sub">Cargando…</div></div>
+  if (!P) return <div className="panel"><h3 style={{ color: col }}>📊 Comparador de marcas — {sbuName}</h3><div className="sub no-ayuda">Cargando…</div></div>
   const marcas = marcasSBU || []
   const histAgg = (mca, y, kind) => { let s = 0; (P.hist || []).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca) || String(r[1]) !== String(y)) return; const rub = upper(r[3]); const ok = kind === 'UNID' ? rub.indexOf('UNIDAD') >= 0 : rub.indexOf('VENTA') >= 0; if (ok) s += num(r[7]) }); return s }
   const u26tot = (mca) => histAgg(mca, 2026, 'UNID')
@@ -6783,7 +6783,7 @@ function HighlightsView({ empresa, sbuName, marcasSBU }) {
     })()
   }, [empresa])
   const col = sbuColor(sbuName)
-  if (!P) return <div className="panel"><h3 style={{ color: col }}>✨ HIGHLIGHTS — {sbuName}</h3><div className="sub">Cargando…</div></div>
+  if (!P) return <div className="panel"><h3 style={{ color: col }}>✨ HIGHLIGHTS — {sbuName}</h3><div className="sub no-ayuda">Cargando…</div></div>
   const marcas = marcasSBU || [], marcasU = new Set(marcas.map((m) => upper(m)))
   const esT = empresa === 'TUMAR'
   // AUP por marca y mes (para valorizar las unidades 2028 del plan)
@@ -6983,7 +6983,7 @@ function ResumenMarcas({ empresa, sbuName, marcasSBU, vista }) {
       setP({ ven, prod, cats, mk, hist })
     })()
   }, [empresa])
-  if (!P) return <div className="panel"><h3 style={{ color: sbuColor(sbuName) }}>Resumen — {sbuName}</h3><div className="sub">Cargando…</div></div>
+  if (!P) return <div className="panel"><h3 style={{ color: sbuColor(sbuName) }}>Resumen — {sbuName}</h3><div className="sub no-ayuda">Cargando…</div></div>
   const inM = (r, mca) => upper(r[0]) === upper(empresa) && upper(r[3]) === upper(mca)
   const esViaje = (rub) => String(rub || '').toUpperCase().startsWith('VIAJES')
   const marcas = marcasSBU || []
