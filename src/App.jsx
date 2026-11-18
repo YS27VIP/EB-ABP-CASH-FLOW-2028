@@ -3976,12 +3976,12 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const col = sbuColor('Retail')
   const ver = useDataVersion()
   const [tab, setTab] = useState(() => (deep && deep.retailTab) ? deep.retailTab : 'comercial')
-  const [comTab, setComTab] = useState(() => { const d = deep && deep.retailComTab; return (d && d !== 'mapa') ? d : 'ventas' }) // sub-vista de Comercial (1 = compras · el mapa ahora va inline)
+  const [comTab, setComTab] = useState(() => { const d = deep && deep.retailComTab; return (d && d !== 'mapa') ? d : 'ucv' }) // sub-vista de Comercial (1 = ventas por tienda · el mapa ahora va inline)
   const TABS = [
     ['comercial', '🛍️ Comercial'], ['mk', '📣 Marketing'], ['viajes', '🧳 Viajes'],
     ['logistica', '🚚 Logística'], ['gastos', '💵 Gastos'], ['cf', '💰 Cash Flow'], ['pl', '📊 P&L'],
   ]
-  const COM_TABS = [['ventas', '1. 📦 Compras por tienda'], ['ucv', '2. 🏬 Ventas por tienda']]
+  const COM_TABS = [['ucv', '1. 🏬 Ventas por tienda'], ['ventas', '2. 📦 Compras por tienda']]
   // ---- Importaciones (captura mensual del COSTO de importación por marca, con referencia 2027) ----
   const [imp, setImp] = useState(() => { try { return JSON.parse(localStorage.getItem(`retail_imp_${empresa}`) || '{}') } catch { return {} } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
@@ -4066,6 +4066,8 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   // Unidades anuales por subcategoría (con migración: si aún no hay valor anual, suma lo que haya del modelo viejo por mes).
   const uAnual = (t, c) => { const a = vt[uaKey(t, c)]; if (a != null && String(a).trim() !== '') return num(a); return MESES.reduce((s, _, mi) => s + num(vt[cvk(t, c, mi)]), 0) }
   const setUA = (t, c, v) => setVt((d) => ({ ...d, [uaKey(t, c)]: v }))
+  const siKey = (t, c) => `${t}||${c}||SI`                    // stock inicial por subcategoría/tienda
+  const setSI = (t, c, v) => setVt((d) => ({ ...d, [siKey(t, c)]: v }))
   // Unidades/costo de la subcategoría c que surte la MARCA m, en el mes mi (split por el calendario de despacho de esa marca).
   const subUdMarcaMes = (t, c, m, mi) => { const p = pctOf(c, m); return p ? uAnual(t, c) * (p / 100) * calFracM(m, mi) : 0 }
   const subCostoMarcaMes = (t, c, m, mi) => { const u = subUdMarcaMes(t, c, m, mi); return u ? u * aucMC(m, catOf(c, m), mi) * factor() : 0 }
@@ -4542,15 +4544,16 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             {/* Captura de UNIDADES ANUALES A COMPRAR por subcategoría (el costo sale del mapa; el split mensual lo da el Paso 1) */}
             <div className="sub" style={{ fontWeight: 700, margin: '4px 0 4px' }}>Unidades a comprar <span className="unit" style={{ fontWeight: 400 }}>(cantidad ANUAL · el split por mes lo da el calendario global, abajo)</span></div>
             <div className="tablewrap" style={{ overflowX: 'auto' }}>
-              <table className="vfix"><colgroup><col style={{ width: '230px' }} /><col style={{ width: '112px' }} />{mcs.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /><col style={{ width: '72px' }} /></colgroup>
+              <table className="vfix"><colgroup><col style={{ width: '230px' }} /><col style={{ width: '96px' }} /><col style={{ width: '112px' }} />{mcs.map((_, i) => <col key={i} style={{ width: '116px' }} />)}<col style={{ width: '58px' }} /><col style={{ width: '82px' }} /><col style={{ width: '92px' }} /><col style={{ width: '72px' }} /></colgroup>
                 <thead>
-                  <tr><th className="l">Subcategoría Retail</th><th>Unidades (año)</th>{mcs.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th><th>% Peso</th></tr>
+                  <tr><th className="l">Subcategoría Retail</th><th title="Stock con el que arranca el año (unidades)">Stock inicial</th><th>Unidades (año)</th>{mcs.map((m) => <th key={m} title={m}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: marcaColor(m), marginRight: 3 }}></span>{m.length > 9 ? m.slice(0, 9) + '…' : m}</th>)}<th>Suma</th><th className="ya">Costo/ud</th><th>Costo</th><th>% Peso</th></tr>
                 </thead>
                 <tbody>
                   {cs.map((c) => { const sum = rowSum(c); const okSum = Math.round(sum) === 100 || sum === 0; const esNuevoSub = !((RETAIL_SUBS_PRESET[t] || RETAIL_CATS_DEF).includes(c)); return <tr key={c}>
                     <td className="l sub2">{c}{esNuevoSub && <span className="newbadge">NUEVO</span>}
                       <button title="Quitar subcategoría" onClick={() => delCat(t, c)} style={{ marginLeft: 6, border: 'none', background: 'transparent', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}>×</button>
                     </td>
+                    <td className="cell"><input value={vt[siKey(t, c)] ?? ''} onChange={(e) => setSI(t, c, e.target.value)} inputMode="decimal" title={`${c} · stock inicial del año (unidades)`} style={{ width: '100%', textAlign: 'center' }} /></td>
                     <td className="cell"><input value={vt[uaKey(t, c)] ?? ''} onChange={(e) => setUA(t, c, e.target.value)} inputMode="decimal" title={`${c} · unidades a comprar (año)`} style={{ width: '100%', textAlign: 'center' }} /></td>
                     {mcs.map((m) => { const p = pctOf(c, m); const faltaCat = p > 0 && !catOf(c, m); return <td key={m} style={{ padding: 4, verticalAlign: 'top', background: faltaCat ? '#ffe4f1' : undefined }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -4565,7 +4568,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
                     <td className="tot" style={{ color: '#b91c1c' }}>{fmt(rowCompraCosto(t, c))}</td>
                     <td className="tot" style={{ fontWeight: 700 }}>{tCompras(t) > 0 ? (rowCompraCosto(t, c) / tCompras(t) * 100).toFixed(1) + '%' : '—'}</td>
                   </tr> })}
-                  <tr className="grandrow"><td className="l">Total {t}</td><td className="tot">{fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))}</td>{mcs.map((_, i) => <td key={i} className="tot"></td>)}<td className="tot"></td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCompras(t))}</td><td className="tot" style={{ fontWeight: 700 }}>{tCompras(t) > 0 ? '100%' : '—'}</td></tr>
+                  <tr className="grandrow"><td className="l">Total {t}</td><td className="tot">{fmt(cs.reduce((a, c) => a + num(vt[siKey(t, c)]), 0))}</td><td className="tot">{fmt(cs.reduce((a, c) => a + rowUnits(t, c), 0))}</td>{mcs.map((_, i) => <td key={i} className="tot"></td>)}<td className="tot"></td><td className="tot ya">—</td><td className="tot" style={{ color: '#b91c1c' }}>{fmt(tCompras(t))}</td><td className="tot" style={{ fontWeight: 700 }}>{tCompras(t) > 0 ? '100%' : '—'}</td></tr>
                 </tbody>
               </table>
             </div>
