@@ -416,6 +416,14 @@ async function loadRef2027() {
   }
   _ref2027 = out; _ref2027At = Date.now(); return out
 }
+// Mapa estilo PLAN {MARCA: {venta, costo, unidades, marketing, logistica}} construido desde Ref_2027 (la fuente correcta del ABP 2027).
+async function plan2027FromRef(empresa) {
+  try {
+    const R = await loadRef2027(); const emp = R[upper(empresa)] || {}; const out = {}
+    Object.keys(emp).forEach((mar) => { const secs = emp[mar] || {}; const s = (k) => { let x = 0; Object.values(secs[k] || {}).forEach((arr) => (arr || []).forEach((v) => x += num(v))); return x }; out[mar] = { venta: s('VENTA'), costo: s('COSTO'), unidades: s('UNIDADES'), marketing: s('MARKETING'), logistica: s('LOGISTICA') } })
+    return out
+  } catch { return {} }
+}
 // Botón 📅 2027: abre un modal con lo cargado en el ABP 2027 por mes y categoría, para esa marca y (opcional) el total SBU.
 function Ref2027Btn({ empresa, marca, marcasSBU, seccion, sbuName }) {
   const [open, setOpen] = useState(false); const [data, setData] = useState(null); const [vista, setVista] = useState('marca')
@@ -5437,7 +5445,7 @@ async function gerLoad(empresa) {
       const [ven, prod, capC, mkR, logR, dirR, finRR, histR, planR, tumarR] = await Promise.all([
         g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director'), g('Cap_Finanzas'),
         (async () => { try { const j = await gHistorico(); return j && j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } })(),
-        (async () => { try { const jp = await gPlan2027(); return jp && jp.map ? jp.map : {} } catch { return {} } })(),
+        (async () => { try { const jp = await gPlan2027(); const base = jp && jp.map ? jp.map : {}; const ref = await plan2027FromRef(empresa); return { ...base, ...ref } } catch { return {} } })(),
         (empresa === 'TUMAR' ? (async () => { try { return await gTumarReal() } catch { return null } })() : Promise.resolve(null)),
       ])
       const out = {}; capC.forEach((row) => { if (!catRowOk(row, empresa)) return; const cat = row[1], mar = row[3], peso = num(row[4]); if (!mar || !cat) return; (out[mar] = out[mar] || []).push({ cat, peso }) })
@@ -6375,6 +6383,7 @@ function BrandContribution({ empresa, marca }) {
       const [ven, prod, cap, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
       let hist = []; try { const jh = await gHistorico(); if (jh && jh.ok && jh.values) hist = jh.values.slice(1) } catch { }
       let plan = {}; try { const jp = await gPlan2027(); if (jp && jp.map) plan = jp.map } catch { }
+      let ref27 = {}; try { const R = await loadRef2027(); ref27 = (R[upper(empresa)] || {})[upper(marca)] || {} } catch { }
       let vjRef = null, mkRef = null, logRef26 = null, logExp = null, comisRef = null
       try { vjRef = await gViajesRef() } catch { }
       try { mkRef = await gMkRef() } catch { }
@@ -6382,7 +6391,7 @@ function BrandContribution({ empresa, marca }) {
       try { logExp = await gLogExpRef() } catch { }
       try { comisRef = await gComisRef() } catch { }
       const cats = {}; cap.forEach((row) => { if (!catRowOk(row, empresa)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
-      setP({ ven, prod, cats, mk, log, dir, hist, plan, vjRef, mkRef, logRef26, logExp, comisRef }); setLoad(false)
+      setP({ ven, prod, cats, mk, log, dir, hist, plan, ref27, vjRef, mkRef, logRef26, logExp, comisRef }); setLoad(false)
     })()
   }, [empresa])
 
@@ -6416,7 +6425,9 @@ function BrandContribution({ empresa, marca }) {
   const mkRefY = (y) => { const v = (((P.mkRef || {}).marca || {})[upper(marca)] || {})[y] || 0; return v || null }
   const logRef26M = (() => { const v = ((((P.logRef26 || {}).val || {}).marca || {})[upper(marca)] || {}).log || 0; return v || null })()
   const o27 = P.plan[upper(marca)] || {}
-  const abpVenta = o27.venta || 0, abpCosto = o27.costo || 0, abpMargen = abpVenta - abpCosto
+  // ABP 2027 por marca: se toma de la hoja Ref_2027 (misma fuente del panel 📅). Si falta, cae al PLAN.
+  const refSec = (sec) => { const S = (P.ref27 || {})[sec] || {}; let s = 0; Object.values(S).forEach((arr) => (arr || []).forEach((v) => s += num(v))); return s }
+  const abpVenta = refSec('VENTA') || o27.venta || 0, abpCosto = refSec('COSTO') || o27.costo || 0, abpMargen = abpVenta - abpCosto
   const dpct = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
   const dCell = (cur, ref, cls) => { const d = dpct(cur, ref); return <td className={'tot ' + (cls || '') + ' ' + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700, cursor: BULB_CURSOR }} title={d == null ? 'Sin referencia para comparar' : `Variación % = (2028 − referencia) ÷ referencia\n2028 = ${fmt(cur)} vs referencia = ${fmt(ref)} → ${(d >= 0 ? '+' : '') + d.toFixed(0)}% (el 2028 está ${d >= 0 ? 'por encima' : 'por debajo'} de ese año)`}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
 
@@ -6442,9 +6453,9 @@ function BrandContribution({ empresa, marca }) {
               {fila('Venta Neta', ventaNeta, true, { fy25: fyVenta(2025), fy26: fyVenta(2026), abp27: abpVenta })}
               {fila('(−) Costo', costo, false, { fy25: fyCosto(2025), fy26: fyCosto(2026), abp27: abpCosto })}
               {fila('(−) Comisiones', comisiones)}
-              {fila('(−) Logística', logistica, false, { fy25: null, fy26: logRef26M, abp27: null })}
+              {fila('(−) Logística', logistica, false, { fy25: null, fy26: logRef26M, abp27: refSec('LOGISTICA') || null })}
               {fila('= Margen Bruto', margenBruto, true, { fy25: fyMargen(2025), fy26: fyMargen(2026), abp27: abpMargen })}
-              {fila('(−) Marketing', marketing, false, { fy25: mkRefY(2025), fy26: mkRefY(2026), abp27: null })}
+              {fila('(−) Marketing', marketing, false, { fy25: mkRefY(2025), fy26: mkRefY(2026), abp27: refSec('MARKETING') || null })}
               {fila('(−) Viajes', viajes, false, { fy25: vjRefY(2025), fy26: vjRefY(2026), abp27: null })}
               {fila('= CONTRIBUCIÓN DE LA MARCA', brand, true)}
             </tbody>
@@ -6637,6 +6648,7 @@ function BrandContribSBU({ empresa, sbuName, marcasSBU }) {
       const [ven, prod, cap, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
       let hist = []; try { const j = await gHistorico(); if (j && j.ok && j.values) hist = j.values.slice(1) } catch { }
       let plan = {}; try { const jp = await gPlan2027(); if (jp && jp.map) plan = jp.map } catch { }
+      try { const ref = await plan2027FromRef(empresa); plan = { ...plan, ...ref } } catch { }
       let vjRef = null, mkRef = null, logRef26 = null, logExp = null, comisRef = null
       try { vjRef = await gViajesRef() } catch { }
       try { mkRef = await gMkRef() } catch { }
