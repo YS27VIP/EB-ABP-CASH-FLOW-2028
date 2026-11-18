@@ -1393,7 +1393,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
             {acciones}
           </div>
         </div>
-        <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : retailLean ? null : <>Captura por rubro y mes. Los rubros son iguales para todas las marcas. Un rubro que agregues aquí se suma para <b>toda la empresa</b> y lo verán <b>todos los roles</b> que capturan {rubro.k.toLowerCase()}. </>}Total: <b>${fmt(totalGeneral)}</b></div>
+        {retailLean ? null : <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : <>Captura por rubro y mes. Los rubros son iguales para todas las marcas. Un rubro que agregues aquí se suma para <b>toda la empresa</b> y lo verán <b>todos los roles</b> que capturan {rubro.k.toLowerCase()}. </>}Total: <b>${fmt(totalGeneral)}</b></div>}
         <div className="tablewrap">
           <table>
             <thead><tr><th className="cod">Cód.</th><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th>{splitCfg && <><th style={{ color: spColors[0] }}>% {spLabels[0]}</th><th style={{ color: spColors[1] }}>% {spLabels[1]}</th></>}</tr></thead>
