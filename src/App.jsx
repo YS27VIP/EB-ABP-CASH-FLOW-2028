@@ -1765,7 +1765,7 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoH
         </> })()}
       </div>
       <div className="panel">
-        <h3>{role.label} — CASH FLOW{M$} <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer ? ESP('Espejo (solo lectura): estos valores los llena Finanzas en su Cash Flow. Aquí solo se ven.') : !finEdit && ESP('Otros ingresos/gastos, Cash Inicial y Costos Financieros son espejo (los llena Finanzas en su Cash Flow).')}</h3>
+        <h3>PSI & Cash Flow{M$} <span className="unit">(USD · {isTotal ? `TOTAL ${sbuLbl}` : marca})</span>{soloVer ? ESP('Espejo (solo lectura): estos valores los llena Finanzas en su Cash Flow. Aquí solo se ven.') : !finEdit && ESP('Otros ingresos/gastos, Cash Inicial y Costos Financieros son espejo (los llena Finanzas en su Cash Flow).')}</h3>
         <div className="sub">Proyección 2028 (enero a diciembre). <b>Cash Final = Cash Inicial + <span style={{ color: '#15803d' }}>Cobros</span> − <span style={{ color: '#b91c1c' }}>Pagos</span> − <span style={{ color: '#b91c1c' }}>Costos operativos</span> − <span style={{ color: '#b91c1c' }}>Costos financieros</span> + <span style={{ color: '#15803d' }}>Otros ingresos</span> − <span style={{ color: '#b91c1c' }}>Otros gastos</span></b>.</div>
         {HOVERTIP}
         <div className="tablewrap">
@@ -6206,6 +6206,64 @@ function HoldingScreen({ empresas, sbusFor }) {
     { k: '🎯 = Resultado Operativo', g: (v) => v.resultado, strong: true },
   ]
   const totHold = (g) => byEmp.reduce((a, { v }) => a + (g(v) || 0), 0)
+  // Exportar a Excel: hoja TOTAL HOLDING (P&L + Cash Flow consolidados) + una hoja por empresa con su P&L y Cash Flow.
+  const descargarHoldingXlsx = () => {
+    try {
+      const nR = (v) => Math.round(num(v))
+      const nm = (e) => e === 'SINERGY' ? 'SINERGY & DYNAMICS' : e
+      const S = (a) => a.reduce((x, y) => x + (Number(y) || 0), 0)
+      const cfEmp = (e) => { let p = null; try { p = JSON.parse(localStorage.getItem(`cfsum_${e}`) || 'null') } catch { } if (!p) return null; const arr = (k) => (p[k] || []).map((x) => Number(x) || 0); return { cobros: arr('cobros'), pagos: arr('pagos'), oper: arr('oper'), fin: arr('fin'), oIng: arr('oIng'), oGas: arr('oGas'), flujo: arr('flujo'), ini0: Number(p.ini0) || 0 } }
+      const cfRows = (cf) => {
+        if (!cf) return [['(sin cash flow guardado para esta empresa)']]
+        const ini = [], final = []; let prev = 0
+        for (let i = 0; i < 12; i++) { ini[i] = i === 0 ? cf.ini0 : prev; final[i] = ini[i] + cf.flujo[i]; prev = final[i] }
+        const row = (lbl, arr, tot) => [lbl, ...arr.map(nR), tot]
+        return [
+          ['Concepto', ...MESES.map((m) => m.toUpperCase()), 'Total 2028'],
+          row('Cash Inicial', ini, ''),
+          row('Cash In (Cobros)', cf.cobros, nR(S(cf.cobros))),
+          row('Cash Out (Pagos)', cf.pagos, nR(S(cf.pagos))),
+          row('Costos Operativos', cf.oper, nR(S(cf.oper))),
+          row('Costos Financieros', cf.fin, nR(S(cf.fin))),
+          row('Otros ingresos', cf.oIng, nR(S(cf.oIng))),
+          row('Otros gastos', cf.oGas, nR(S(cf.oGas))),
+          row('= Flujo neto del mes', cf.flujo, nR(S(cf.flujo))),
+          row('Cash Final', final, ''),
+        ]
+      }
+      const wb = XLSX.utils.book_new()
+      const used = {}
+      const addSheet = (name, aoa) => { let n = String(name).replace(/[\[\]:*?/\\]/g, '').slice(0, 28) || 'Hoja'; let base = n, i = 2; while (used[n]) { n = (base.slice(0, 26) + ' ' + i); i++ } used[n] = 1; XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), n) }
+      // --- Hoja TOTAL HOLDING ---
+      const totAoa = []
+      totAoa.push(['TOTAL HOLDING — ABP 2028'])
+      totAoa.push([])
+      totAoa.push(['P&L por empresa (2028)'])
+      totAoa.push(['Concepto', ...byEmp.map(({ e }) => nm(e)), 'TOTAL HOLDING'])
+      filas.forEach((f) => totAoa.push([f.k, ...byEmp.map(({ v }) => nR(f.g(v))), nR(totHold(f.g))]))
+      totAoa.push([])
+      totAoa.push(['Cash Flow consolidado (suma de todas las empresas)'])
+      const cfs = byEmp.map(({ e }) => cfEmp(e)).filter(Boolean)
+      const sumArr = (k) => Array.from({ length: 12 }, (_, i) => cfs.reduce((a, c) => a + (c[k][i] || 0), 0))
+      const totCf = cfs.length ? { cobros: sumArr('cobros'), pagos: sumArr('pagos'), oper: sumArr('oper'), fin: sumArr('fin'), oIng: sumArr('oIng'), oGas: sumArr('oGas'), flujo: sumArr('flujo'), ini0: cfs.reduce((a, c) => a + c.ini0, 0) } : null
+      cfRows(totCf).forEach((r) => totAoa.push(r))
+      addSheet('TOTAL HOLDING', totAoa)
+      // --- Una hoja por empresa ---
+      byEmp.forEach(({ e, v }) => {
+        const aoa = []
+        aoa.push([nm(e) + ' — ABP 2028'])
+        aoa.push([])
+        aoa.push(['P&L (2028)'])
+        aoa.push(['Concepto', '2028'])
+        filas.forEach((f) => aoa.push([f.k, nR(f.g(v))]))
+        aoa.push([])
+        aoa.push(['Cash Flow (2028)'])
+        cfRows(cfEmp(e)).forEach((r) => aoa.push(r))
+        addSheet(nm(e), aoa)
+      })
+      XLSX.writeFile(wb, 'ABP_2028_Holding.xlsx')
+    } catch (err) { alert('No se pudo generar el Excel: ' + (err && err.message)) }
+  }
   // SINERGY no tiene pantallas propias: su detalle es un P&L de solo lectura (sale del bloque SINERGY del Retail).
   // Compras intercompañía de TAHO: cuánto le compra a Energy Brands (EB) y a TUMAR (TU), en unidades y $ (ud × AUC).
   const tahoCompras = () => {
@@ -6281,7 +6339,7 @@ function HoldingScreen({ empresas, sbusFor }) {
   return (
     <>
       <div className="panel">
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>🏛️ Total Holding — Resultado Operativo consolidado <span className="unit">(todas las empresas · 2028 · solo lectura)</span></span><button className="btn" style={{ marginLeft: 'auto', fontSize: 13, padding: '7px 14px', background: '#0e7490', color: '#fff', borderColor: '#0e7490' }} disabled={ejec} onClick={descargarEjecutivo} title="Reporte de una página para alta gerencia: KPIs + resultado por empresa + P&L consolidado">{ejec ? 'Generando…' : '📄 Reporte Ejecutivo (PDF)'}</button></h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>🏛️ Total Holding — Resultado Operativo consolidado <span className="unit">(todas las empresas · 2028 · solo lectura)</span></span><span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}><button className="btn" style={{ fontSize: 13, padding: '7px 14px', background: '#1d6f42', color: '#fff', borderColor: '#1d6f42' }} onClick={descargarHoldingXlsx} title="Excel con una hoja TOTAL HOLDING (P&L + Cash Flow consolidados) y una hoja por empresa con su P&L y Cash Flow">⬇ Exportar Excel</button><button className="btn" style={{ fontSize: 13, padding: '7px 14px', background: '#0e7490', color: '#fff', borderColor: '#0e7490' }} disabled={ejec} onClick={descargarEjecutivo} title="Reporte de una página para alta gerencia: KPIs + resultado por empresa + P&L consolidado">{ejec ? 'Generando…' : '📄 Reporte Ejecutivo (PDF)'}</button></span></h3>
         <div className="sub">💡 Pasa el cursor sobre la columna <b>TOTAL HOLDING</b> para ver el <b>desglose por empresa</b>.</div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{byEmp.map(({ e }) => <th key={e}>{e}</th>)}<th style={{ color: '#7c3aed' }}>TOTAL HOLDING</th></tr></thead>
