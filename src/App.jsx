@@ -117,7 +117,7 @@ const SEED_CLIENTES = { 'TUMAR': ['LA LOMITA OUTDOORS SRL', 'HERNANDEZ ISMAEL MA
 /* Empresas del grupo (el nombre debe coincidir con la columna EMPRESA del Histórico). */
 const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO', 'GUBRANDS', 'SINERGY', 'TUMAR AR', 'TUMAR CL', 'TUMAR PY', 'JORS URU', 'MILHO URU']
 // Orden fijo de columnas en el Total Holding (las demás empresas se agregan al final).
-const HOLDING_ORDER = ['ENERGY BRANDS', 'SINERGY', 'TAHO', 'TUMAR', 'TUMAR AR', 'TUMAR CL', 'TUMAR PARAGUAY', 'JORS URU', 'MILHO URU', 'GUBRANDS']
+const HOLDING_ORDER = ['ENERGY BRANDS', 'SINERGY', 'TAHO', 'TUMAR', 'TUMAR AR', 'TUMAR CL', 'TUMAR PY', 'JORS URU', 'MILHO URU', 'GUBRANDS']
 
 /* Colores por SBU y por marca (identidad visual dinámica) */
 const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'SBU 4': '#be185d', 'ÁREA COMERCIAL': '#0e7490', 'RETAIL': '#4338ca', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
@@ -6016,7 +6016,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
         {HOVERTIP}
         {!espejo && <div className="toolbar" style={{ marginBottom: 8, gap: 8 }}><div className="spacer"></div><button className="btn primary" disabled={ppt} onClick={descargarReporte} style={{ background: '#0e7490', display: 'inline-flex', alignItems: 'center', gap: 8, opacity: ppt ? 0.6 : 1 }}>{ppt ? 'Generando…' : '📄 Reporte ABP (PDF)'}</button></div>}
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
-          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}{multiSBU && <th>TOTAL {empresa}{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th>}<th className="yb">ABP2027</th><th className="yb">Δ 28·27</th><th className="ya">{T ? (T.decDone ? 'FY2026' : 'YTD 2026') : lbl26(hist)}</th><th className="ya">Δ 28·26</th><th className="ya">FY2025</th><th className="ya">Δ 28·25</th></tr></thead>
+          <thead><tr><th className="l">Concepto</th>{sbuList.map(({ s, pend }) => <th key={s} style={{ color: sbuColor(s) }}>{s}{pend && Q('Retail (tiendas propias · venta intercompañía). Pendiente de definir el precio de transferencia; por ahora va en cero.')}</th>)}{multiSBU && <th>TOTAL ABP 2028{Q('Consolidado: cada fila de esta columna es la suma de las SBU (las columnas de la izquierda). Párate sobre cada celda para ver el detalle por SBU.')}</th>}<th className="yb">ABP2027</th><th className="yb">Δ 28·27</th><th className="ya">{T ? (T.decDone ? 'FY2026' : 'YTD 2026') : lbl26(hist)}</th><th className="ya">Δ 28·26</th><th className="ya">FY2025</th><th className="ya">Δ 28·25</th></tr></thead>
           <tbody>
             {filasG.map((f) => { const cur = f.g(totAgg); return <tr key={f.k} className={f.strong ? 'grandrow' : undefined}><td className="l">{f.k}{f.help && Q(f.help)}</td>{sbuList.map(({ s, a }) => <td key={s} className={'tot' + (f.tip ? ' help-bulb' : '')} style={cellStyle} title={f.tip ? f.tip : brkSBU(f, sbus[s])}>{fmt(f.g(a))}</td>)}{multiSBU && <td className="tot help-bulb" title={f.tip ? f.tip : ('Consolidado = suma de las SBU:\n' + sbuList.map(({ s, a }) => `${s}: ${fmt(f.g(a))}`).join('\n'))}>{fmt(cur)}</td>}
               <td className="tot yb">{f.abp27 != null ? fmt(f.abp27) : '—'}</td>{f.abp27 != null ? dCellG(cur, f.abp27, 'yb') : <td className="tot yb">—</td>}
@@ -6088,7 +6088,7 @@ function GerenciaScreen({ empresa, sbus, soloSBU, espejo }) {
                     {filas}
                   </Fragment2>
                 })}
-                {!soloSBU && <tr className="grandrow"><td className="l">TOTAL {empresa}</td>{cols(fin(grand))}</tr>}
+                {!soloSBU && <tr className="grandrow"><td className="l">TOTAL ABP 2028</td>{cols(fin(grand))}</tr>}
               </tbody>
             </table>
           </div>
