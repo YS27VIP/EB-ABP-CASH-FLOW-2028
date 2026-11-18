@@ -102,7 +102,7 @@ const TAHO_SBUS = { ...DEFAULT_SBUS, 'SBU 4': TAHO_SBU4 }
 const sbuNamesFor = (empresa) => empresa === 'TAHO' ? ['SBU 1', 'SBU 2', 'SBU 3', 'SBU 4'] : SBU_NAMES
 // Empresas sin estructura de SBU: navegan con una sola unidad "ÁREA COMERCIAL" (todas sus marcas juntas).
 // Son todas menos ENERGY BRANDS (que sí usa SBU 1/2/3) y SINERGY (que no tiene pantallas propias).
-const ES_COMERCIAL_UNICA = (e) => { const u = String(e == null ? '' : e).trim().toUpperCase(); return ES_TUMAR_LIKE(u) || u === 'TAHO' || u === 'GUBRANDS' }
+const ES_COMERCIAL_UNICA = (e) => { const u = String(e == null ? '' : e).trim().toUpperCase(); return ES_TUMAR_LIKE(u) || u === 'TAHO' || u === 'GUBRANDS' || u === 'OTROS' }
 const UNIDAD_COMERCIAL = 'ÁREA COMERCIAL'
 // TAHO hereda las CATEGORÍAS de Energy Brands (sus marcas) y de TUMAR (las marcas de SBU 4). Para las demás empresas, usa las propias.
 function catRowOk(row, empresa) {
@@ -115,9 +115,9 @@ function catRowOk(row, empresa) {
 // Clientes semilla por empresa (TUMAR, del Excel de facturación · sin país).
 const SEED_CLIENTES = { 'TUMAR': ['LA LOMITA OUTDOORS SRL', 'HERNANDEZ ISMAEL MARIA', 'RIVAROLA MARIA ESTELA', 'MARTHA HEADWEAR SA S. A.', 'WILBERGER NOELIA MARILINA', 'GIGENA JUAN MANUEL', 'UNIAVENTURA S.A.', 'FOURCANS MARTIN OSCAR', 'MORIS CESAR OSVALDO', 'SCALZO OSVALDO NESTOR', 'ANGLER S AVENTURAS SOCIEDAD DE RESPONSABILIDAD LIMITADA', 'CRISTOBAL COLON S. R. L.', 'GROUP MOBILE S.A.', 'EL VIAJERO CAMPING S.R.L.', 'RANCHOCAVALIER S.R.L.', 'BASSI JUAN PABLO', 'PARALELO 42 S. CAP I SECC IV', 'PLACE IT S.A'] }
 /* Empresas del grupo (el nombre debe coincidir con la columna EMPRESA del Histórico). */
-const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO', 'GUBRANDS', 'SINERGY', 'TUMAR AR', 'TUMAR CL', 'TUMAR PY', 'JORS URU', 'MILHO URU']
+const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO', 'GUBRANDS', 'SINERGY', 'TUMAR AR', 'TUMAR CL', 'TUMAR PY', 'JORS URU', 'MILHO URU', 'OTROS']
 // Orden fijo de columnas en el Total Holding (las demás empresas se agregan al final).
-const HOLDING_ORDER = ['ENERGY BRANDS', 'SINERGY', 'TAHO', 'TUMAR', 'TUMAR AR', 'TUMAR CL', 'TUMAR PY', 'JORS URU', 'MILHO URU', 'GUBRANDS']
+const HOLDING_ORDER = ['ENERGY BRANDS', 'SINERGY', 'TAHO', 'TUMAR', 'TUMAR AR', 'TUMAR CL', 'TUMAR PY', 'JORS URU', 'MILHO URU', 'GUBRANDS', 'OTROS']
 
 /* Colores por SBU y por marca (identidad visual dinámica) */
 const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'SBU 4': '#be185d', 'ÁREA COMERCIAL': '#0e7490', 'RETAIL': '#4338ca', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
@@ -469,7 +469,7 @@ const PasoH = ({ n, children }) => (
 function effSBUS(empresa, combos) {
   const c = combos[empresa]
   const names = sbuNamesFor(empresa)
-  const baseDef = empresa === 'TAHO' ? TAHO_SBUS : empresa === 'SINERGY' ? {} : DEFAULT_SBUS
+  const baseDef = empresa === 'TAHO' ? TAHO_SBUS : (empresa === 'SINERGY' || empresa === 'OTROS') ? {} : DEFAULT_SBUS
   const universe = (empresa === 'TAHO' || empresa === 'SINERGY') ? [...new Set([...ALL_MARCAS, ...TAHO_SBU4])] : ALL_MARCAS
   const excl = new Set((c && c['NO VENDE']) || [])
   if (empresa === 'ENERGY BRANDS') EB_RETIRADAS.forEach((m) => excl.add(m)) // marcas retiradas: nunca aparecen
@@ -8402,7 +8402,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         <div ref={topScRef} onScroll={() => { if (botScRef.current) botScRef.current.scrollLeft = topScRef.current.scrollLeft }} className="tablewrap" style={{ maxHeight: 'none', overflowY: 'hidden', border: 'none', borderRadius: 0, marginBottom: 2 }}><div style={{ width: 1228, height: 1 }} /></div>
         <div className="tablewrap" ref={botScRef} onScroll={() => { if (topScRef.current) topScRef.current.scrollLeft = botScRef.current.scrollLeft }}>
           <table className="vfix" style={{ width: 1228 }}>
-            <colgroup><col style={{ width: '220px' }} /><col style={{ width: '55px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /><col style={{ width: '60px' }} /></colgroup>
+            <colgroup><col style={{ width: '220px' }} /><col style={{ width: '88px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /><col style={{ width: '60px' }} /></colgroup>
             <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Total</th><th>% Peso</th></tr></thead>
             <tbody>
               {clientes.length === 0 && <tr><td className="l" colSpan={17}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico, o agrega un cliente con el buscador de arriba.</td></tr>}
