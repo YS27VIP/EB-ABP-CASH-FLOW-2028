@@ -4138,7 +4138,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   function delCat(t, c) { const cur = catsOf(t).filter((x) => x !== c); setCats((d) => ({ ...d, [t]: cur })) }
   // ---- Marketing y Viajes de Retail (espejo) + Producto (AUC wholesale) + categorías wholesale por marca ----
   const [capRows, setCapRows] = useState({ mk: [], vj: [] })
-  const [capVj, setCapVj] = useState({ ventas: [], producto: [], marketing: [], director: [] })
+  const [capVj, setCapVj] = useState({ ventas: [], producto: [], marketing: [], director: [], mkSin: [] })
   const [producto, setProducto] = useState([])
   const [prodCats, setProdCats] = useState({}) // { marca: [categorías wholesale] }
   const reloadCaps = async () => {
@@ -4153,13 +4153,14 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
     const esMkRetail = (r) => upper(r[0]) === upper(empresa) && !esVj(r) && (upper(r[3]) === '(RETAIL)' || tiendas.some((t) => upper(t) === upper(r[3]))) // marketing Retail: legado '(RETAIL)' + por tienda
     const nmk = (out['Cap_Marketing'] || []).filter((r) => esMkRetail(r))
     const nvj = tabs.flatMap((tb) => (out[tb] || []).filter((r) => isRetail(r) && esVj(r)))
-    const nVjArea = { ventas: vjF('Cap_Ventas'), producto: vjF('Cap_Producto'), marketing: vjF('Cap_Marketing'), director: vjF('Cap_Director') }
+    const mkSinVj = (out['Cap_Marketing'] || []).filter((r) => upper(r[0]) === upper(empresa) && upper(r[3]) === '(RETAIL-SIN)' && esVj(r))
+    const nVjArea = { ventas: vjF('Cap_Ventas'), producto: vjF('Cap_Producto'), marketing: vjF('Cap_Marketing'), director: vjF('Cap_Director'), mkSin: mkSinVj }
     const nprod = (out['Cap_Producto'] || []).filter((r) => upper(r[0]) === upper(empresa))
     const pc = {}; (out['Cap_Categorias'] || []).forEach((r) => { if (!catRowOk(r, empresa)) return; const cat = r[1], mar = r[3]; if (!mar || !cat) return; (pc[mar] = pc[mar] || []); if (!pc[mar].includes(cat)) pc[mar].push(cat) })
     // Cada campo: si lo nuevo viene vacío pero ya teníamos datos, se conserva lo anterior (no se borra la pantalla).
     const keep = (nv, pv) => (nv.length || !(pv || []).length) ? nv : pv
     setCapRows((p) => ({ mk: keep(nmk, p.mk), vj: keep(nvj, p.vj) }))
-    setCapVj((p) => ({ ventas: keep(nVjArea.ventas, p.ventas), producto: keep(nVjArea.producto, p.producto), marketing: keep(nVjArea.marketing, p.marketing), director: keep(nVjArea.director, p.director) }))
+    setCapVj((p) => ({ ventas: keep(nVjArea.ventas, p.ventas), producto: keep(nVjArea.producto, p.producto), marketing: keep(nVjArea.marketing, p.marketing), director: keep(nVjArea.director, p.director), mkSin: keep(nVjArea.mkSin, p.mkSin) }))
     setProducto((p) => keep(nprod, p))
     setProdCats((p) => (Object.keys(pc).length || !Object.keys(p).length) ? pc : p)
   }
@@ -4405,7 +4406,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
         {(() => {
           const areas = [['Producto EB', 'producto', '📦'], ['Director EB', 'director', '🧑‍💼'], ['Marketing EB', 'marketing', '📣'], ['Controler EB', 'ventas', '🧮']]
           const vjAreaMes = (k, mi) => (capVj[k] || []).reduce((a, r) => a + num(r[4 + mi]), 0)
-          const mkSinVjMes = (mi) => sg('VJMK', mi)   // Marketing SINERGY (lo paga Retail EB)
+          const mkSinVjMes = (mi) => (capVj.mkSin || []).reduce((a, r) => a + num(r[4 + mi]), 0)   // Marketing SINERGY (captura por rubro)
           const totVjMes = (mi) => areas.reduce((a, [, k]) => a + vjAreaMes(k, mi), 0) + mkSinVjMes(mi)
           const vnMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
           const pctC = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
@@ -4433,7 +4434,11 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} headerChip={<span style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 13, padding: '6px 12px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 15 }}>{r.icon}</span> Viajes de {r.label} EB — Retail</span>} />
           </div>
         ))}
-        {/* ---- Viajes SINERGY & DYNAMICS (manual): Director SINERGY & DYNAMICS + Marketing SINERGY & DYNAMICS ---- */}
+        {/* ---- Marketing SINERGY: captura por rubro (igual que los EB), guardada aparte como marca "(Retail-SIN)" ---- */}
+        <div style={{ marginTop: 14 }}>
+          <RoleForm role={ROLES.find((r) => r.id === 'marketing')} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail-SIN)" onSaved={reloadCaps} headerChip={<span style={{ background: '#be185d', color: '#fff', fontWeight: 800, fontSize: 13, padding: '6px 12px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 15 }}>📣</span> Viajes de Marketing SINERGY — Retail</span>} />
+        </div>
+        {/* ---- Viajes SINERGY & DYNAMICS (manual): Director SINERGY & DYNAMICS + Otros ---- */}
         <div className="panel" style={{ marginTop: 18, borderLeftColor: '#be185d' }}>
           <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
             <span className="empchip" style={{ background: '#be185d', marginLeft: 0 }}>🤝 Viajes SINERGY & DYNAMICS</span>
