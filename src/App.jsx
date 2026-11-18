@@ -47,7 +47,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal, gTumarClientes, gTumarGastos, gTahoCompras } from './google'
+import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal, gTumarClientes, gTumarGastos, gTahoCompras, gWriteReport } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -6148,6 +6148,7 @@ function HoldingScreen({ empresas, sbusFor }) {
   const [data, setData] = useState(null)
   const [detEmp, setDetEmp] = useState(empresas[0] || '')
   const [ejec, setEjec] = useState(false)
+  const [resp, setResp] = useState(false)
   useEffect(() => {
     (async () => {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
@@ -6195,6 +6196,18 @@ function HoldingScreen({ empresas, sbusFor }) {
       if (e) { tot.ventaNeta = (tot.ventaNeta || 0) + e.ventaNeta; tot.costo = (tot.costo || 0) + e.costo; tot.logistica = (tot.logistica || 0) + (e.logistica || 0); tot.marketing = (tot.marketing || 0) + e.marketing; tot.viajes = (tot.viajes || 0) + e.viajes; tot.margenBruto = (tot.margenBruto || 0) + e.margenBruto; tot.brand = (tot.brand || 0) + e.brand; gadmin += e.gastos }
     }
     return { ...tot, gadmin, resultado: (tot.brand || 0) - gadmin }
+  }
+  // Detalle por marca (para el respaldo de Contribución): devuelve [{sbu, marca, unidades, ventaNeta, ...}]
+  const calcEmpMarcas = (emp) => {
+    if (upper(emp) === 'SINERGY') return []
+    const { ventas, producto, capCat, mk, log, dir } = data
+    const cats = {}; capCat.forEach((row) => { if (!catRowOk(row, emp)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+    const esVi = (rub) => rub.toUpperCase().startsWith('VIAJES')
+    const sumTabG = (rows, mca, filt) => { let s = 0; rows.forEach((r) => { if (upper(r[0]) !== upper(emp) || upper(r[3]) !== upper(mca)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
+    const fullCalc = (mca) => { const catNames = (cats[mca] || []).map((c) => c.cat); const r = realAupAuc(emp, mca, ventas, producto, catNames); const unidades = r.totalUnits.reduce((a, b) => a + b, 0), ventaNeta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0); const logistica = sumTabG(log, mca), marketing = sumTabG(mk, mca); const viajes = [ventas, producto, mk, log, dir].reduce((t, rows) => t + sumTabG(rows, mca, esVi), 0); const margenBruto = ventaNeta - costo - logistica, brand = margenBruto - marketing - viajes; return { unidades, ventaNeta, costo, logistica, marketing, viajes, margenBruto, brand } }
+    const sbus = sbusFor(emp) || {}; const out = []
+    Object.entries(sbus).forEach(([sbu, ms]) => (ms || []).forEach((m) => out.push({ sbu, marca: m, ...fullCalc(m) })))
+    return out
   }
   const empsOrden = [...empresas].sort((a, b) => {
     const ia = HOLDING_ORDER.indexOf(upper(a)), ib = HOLDING_ORDER.indexOf(upper(b))
@@ -6272,6 +6285,39 @@ function HoldingScreen({ empresas, sbusFor }) {
       XLSX.writeFile(wb, 'ABP_2028_Holding.xlsx')
     } catch (err) { alert('No se pudo generar el Excel: ' + (err && err.message)) }
   }
+  // Respaldar reportes calculados en el Google Sheet (pestañas Rep_PL, Rep_CashFlow, Rep_Contribucion).
+  const respaldarEnSheet = async () => {
+    setResp(true)
+    try {
+      const nR = (v) => Math.round(num(v))
+      const nm = (e) => e === 'SINERGY' ? 'SINERGY & DYNAMICS' : e
+      const S = (a) => a.reduce((x, y) => x + (Number(y) || 0), 0)
+      const cfEmp = (e) => { let p = null; try { p = JSON.parse(localStorage.getItem(`cfsum_${e}`) || 'null') } catch { } if (!p) return null; const arr = (k) => (p[k] || []).map((x) => Number(x) || 0); return { cobros: arr('cobros'), pagos: arr('pagos'), oper: arr('oper'), fin: arr('fin'), oIng: arr('oIng'), oGas: arr('oGas'), flujo: arr('flujo'), ini0: Number(p.ini0) || 0 } }
+      const stamp = new Date().toLocaleString('es')
+      // Rep_PL
+      const pl = [['EMPRESA', 'CONCEPTO', '2028']]
+      byEmp.forEach(({ e, v }) => filas.forEach((f) => pl.push([nm(e), f.k, nR(f.g(v))])))
+      filas.forEach((f) => pl.push(['TOTAL HOLDING', f.k, nR(totHold(f.g))]))
+      pl.push([], ['Respaldado:', stamp])
+      // Rep_CashFlow
+      const cf = [['EMPRESA', 'CONCEPTO', ...MESES.map((m) => m.toUpperCase()), 'TOTAL 2028']]
+      const cfBlock = (label, c) => { if (!c) { cf.push([label, '(sin cash flow guardado)']); return } const ini = [], final = []; let prev = 0; for (let i = 0; i < 12; i++) { ini[i] = i === 0 ? c.ini0 : prev; final[i] = ini[i] + c.flujo[i]; prev = final[i] } const row = (lbl, arr, tot) => cf.push([label, lbl, ...arr.map(nR), tot]); row('Cash Inicial', ini, ''); row('Cash In (Cobros)', c.cobros, nR(S(c.cobros))); row('Cash Out (Pagos)', c.pagos, nR(S(c.pagos))); row('Costos Operativos', c.oper, nR(S(c.oper))); row('Costos Financieros', c.fin, nR(S(c.fin))); row('Otros ingresos', c.oIng, nR(S(c.oIng))); row('Otros gastos', c.oGas, nR(S(c.oGas))); row('Flujo neto', c.flujo, nR(S(c.flujo))); row('Cash Final', final, '') }
+      const cfs = byEmp.map(({ e }) => cfEmp(e)).filter(Boolean)
+      const sumArr = (k) => Array.from({ length: 12 }, (_, i) => cfs.reduce((a, c) => a + (c[k][i] || 0), 0))
+      byEmp.forEach(({ e }) => cfBlock(nm(e), cfEmp(e)))
+      if (cfs.length) cfBlock('TOTAL HOLDING', { cobros: sumArr('cobros'), pagos: sumArr('pagos'), oper: sumArr('oper'), fin: sumArr('fin'), oIng: sumArr('oIng'), oGas: sumArr('oGas'), flujo: sumArr('flujo'), ini0: cfs.reduce((a, c) => a + c.ini0, 0) })
+      cf.push([], ['Respaldado:', stamp])
+      // Rep_Contribucion (por marca/SBU)
+      const co = [['EMPRESA', 'SBU', 'MARCA', 'Unidades', 'Venta Neta', 'Costo', 'Logística', 'Margen Bruto', 'Marketing', 'Viajes', 'Contribución']]
+      byEmp.forEach(({ e }) => calcEmpMarcas(e).forEach((r) => co.push([nm(e), r.sbu, r.marca, nR(r.unidades), nR(r.ventaNeta), nR(r.costo), nR(r.logistica), nR(r.margenBruto), nR(r.marketing), nR(r.viajes), nR(r.brand)])))
+      co.push([], ['Respaldado:', stamp])
+      await gWriteReport('Rep_PL', pl)
+      await gWriteReport('Rep_CashFlow', cf)
+      await gWriteReport('Rep_Contribucion', co)
+      alert('✅ Reportes respaldados en el Google Sheet:\n• Rep_PL (P&L por empresa + Holding)\n• Rep_CashFlow (Cash Flow por empresa + Holding)\n• Rep_Contribucion (P&L por marca/SBU)')
+    } catch (err) { alert('No se pudo respaldar en el Sheet: ' + (err && err.message)) }
+    setResp(false)
+  }
   // SINERGY no tiene pantallas propias: su detalle es un P&L de solo lectura (sale del bloque SINERGY del Retail).
   // Compras intercompañía de TAHO: cuánto le compra a Energy Brands (EB) y a TUMAR (TU), en unidades y $ (ud × AUC).
   const tahoCompras = () => {
@@ -6347,7 +6393,7 @@ function HoldingScreen({ empresas, sbusFor }) {
   return (
     <>
       <div className="panel">
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>🏛️ Total Holding — Resultado Operativo consolidado <span className="unit">(todas las empresas · 2028 · solo lectura)</span></span><span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}><button className="btn" style={{ fontSize: 13, padding: '7px 14px', background: '#1d6f42', color: '#fff', borderColor: '#1d6f42' }} onClick={descargarHoldingXlsx} title="Excel con una hoja TOTAL HOLDING (P&L + Cash Flow consolidados) y una hoja por empresa con su P&L y Cash Flow">⬇ Exportar Excel</button><button className="btn" style={{ fontSize: 13, padding: '7px 14px', background: '#0e7490', color: '#fff', borderColor: '#0e7490' }} disabled={ejec} onClick={descargarEjecutivo} title="Reporte de una página para alta gerencia: KPIs + resultado por empresa + P&L consolidado">{ejec ? 'Generando…' : '📄 Reporte Ejecutivo (PDF)'}</button></span></h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>🏛️ Total Holding — Resultado Operativo consolidado <span className="unit">(todas las empresas · 2028 · solo lectura)</span></span><span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}><button className="btn" style={{ fontSize: 13, padding: '7px 14px', background: '#15803d', color: '#fff', borderColor: '#15803d' }} disabled={resp} onClick={respaldarEnSheet} title="Guarda los reportes calculados (P&L, Cash Flow y Contribución por marca) en el Google Sheet, en las pestañas Rep_PL, Rep_CashFlow y Rep_Contribucion">{resp ? 'Respaldando…' : '🗄 Respaldar en Sheet'}</button><button className="btn" style={{ fontSize: 13, padding: '7px 14px', background: '#1d6f42', color: '#fff', borderColor: '#1d6f42' }} onClick={descargarHoldingXlsx} title="Excel con una hoja TOTAL HOLDING (P&L + Cash Flow consolidados) y una hoja por empresa con su P&L y Cash Flow">⬇ Exportar Excel</button><button className="btn" style={{ fontSize: 13, padding: '7px 14px', background: '#0e7490', color: '#fff', borderColor: '#0e7490' }} disabled={ejec} onClick={descargarEjecutivo} title="Reporte de una página para alta gerencia: KPIs + resultado por empresa + P&L consolidado">{ejec ? 'Generando…' : '📄 Reporte Ejecutivo (PDF)'}</button></span></h3>
         <div className="sub">💡 Pasa el cursor sobre la columna <b>TOTAL HOLDING</b> para ver el <b>desglose por empresa</b>.</div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{byEmp.map(({ e }) => <th key={e}>{e}</th>)}<th style={{ color: '#7c3aed' }}>TOTAL HOLDING</th></tr></thead>

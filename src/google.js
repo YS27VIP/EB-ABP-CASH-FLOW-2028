@@ -542,6 +542,14 @@ export async function gSaveEstado(empresa, clave, valor) {
   return { ok: true }
 }
 
+// Respaldo de reportes: escribe (reemplazando) una matriz de filas en una pestaña del Sheet.
+export async function gWriteReport(tab, aoa) {
+  await ensureTab(tab, (aoa && aoa[0]) || ['Reporte'])
+  await clearValues(tab)
+  await writeValues(tab, 'A1', aoa && aoa.length ? aoa : [['(sin datos)']], true)
+  return { ok: true, filas: (aoa || []).length }
+}
+
 /* Bitácora y Colaboradores usan gSaveRows con esquema genérico (ya definido en la app). */
 async function registrar(usuario, rol, tab, empresa, detalle) {
   try {
