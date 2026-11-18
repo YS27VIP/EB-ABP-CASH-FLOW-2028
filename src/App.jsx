@@ -93,7 +93,7 @@ const TUMAR_MARCAS = ['OSPREY', 'BLUNDSTONE', 'FJALLRAVEN', 'KEEN', 'ARIAT', 'HY
 const TUMAR_SBUS = { 'SBU 1': TUMAR_MARCAS }
 // Empresas con el MODELO TUMAR: una sola unidad (sin SBU 1/2/3), logística por marca, viajes de una línea, sin categorías por defecto.
 // OJO: solo el modelo/estructura. Los DATOS propios de TUMAR (real 2026 del TUMAR Performance, sus 18 clientes) siguen siendo exclusivos de 'TUMAR'.
-const TUMAR_LIKE = new Set(['TUMAR', 'TUMAR AR', 'TUMAR CL', 'TUMAR PARAGUAY', 'JORS URU', 'MILHO URU'])
+const TUMAR_LIKE = new Set(['TUMAR', 'TUMAR AR', 'TUMAR CL', 'TUMAR PY', 'JORS URU', 'MILHO URU'])
 const ES_TUMAR_LIKE = (e) => TUMAR_LIKE.has(String(e == null ? '' : e).trim().toUpperCase())
 // TAHO vende las marcas de Energy Brands (SBU 1/2/3) + las marcas de TUMAR que EB no tiene, agrupadas en SBU 4.
 const _EB_BRANDS = new Set(Object.values(DEFAULT_SBUS).flat().map((m) => m.toUpperCase()))
@@ -115,7 +115,7 @@ function catRowOk(row, empresa) {
 // Clientes semilla por empresa (TUMAR, del Excel de facturación · sin país).
 const SEED_CLIENTES = { 'TUMAR': ['LA LOMITA OUTDOORS SRL', 'HERNANDEZ ISMAEL MARIA', 'RIVAROLA MARIA ESTELA', 'MARTHA HEADWEAR SA S. A.', 'WILBERGER NOELIA MARILINA', 'GIGENA JUAN MANUEL', 'UNIAVENTURA S.A.', 'FOURCANS MARTIN OSCAR', 'MORIS CESAR OSVALDO', 'SCALZO OSVALDO NESTOR', 'ANGLER S AVENTURAS SOCIEDAD DE RESPONSABILIDAD LIMITADA', 'CRISTOBAL COLON S. R. L.', 'GROUP MOBILE S.A.', 'EL VIAJERO CAMPING S.R.L.', 'RANCHOCAVALIER S.R.L.', 'BASSI JUAN PABLO', 'PARALELO 42 S. CAP I SECC IV', 'PLACE IT S.A'] }
 /* Empresas del grupo (el nombre debe coincidir con la columna EMPRESA del Histórico). */
-const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO', 'GUBRANDS', 'SINERGY', 'TUMAR AR', 'TUMAR CL', 'TUMAR PARAGUAY', 'JORS URU', 'MILHO URU']
+const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO', 'GUBRANDS', 'SINERGY', 'TUMAR AR', 'TUMAR CL', 'TUMAR PY', 'JORS URU', 'MILHO URU']
 // Orden fijo de columnas en el Total Holding (las demás empresas se agregan al final).
 const HOLDING_ORDER = ['ENERGY BRANDS', 'SINERGY', 'TAHO', 'TUMAR', 'TUMAR AR', 'TUMAR CL', 'TUMAR PARAGUAY', 'JORS URU', 'MILHO URU', 'GUBRANDS']
 
