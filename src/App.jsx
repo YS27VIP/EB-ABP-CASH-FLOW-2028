@@ -4405,7 +4405,8 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
         {(() => {
           const areas = [['Producto EB', 'producto', '📦'], ['Director EB', 'director', '🧑‍💼'], ['Marketing EB', 'marketing', '📣'], ['Controler EB', 'ventas', '🧮']]
           const vjAreaMes = (k, mi) => (capVj[k] || []).reduce((a, r) => a + num(r[4 + mi]), 0)
-          const totVjMes = (mi) => areas.reduce((a, [, k]) => a + vjAreaMes(k, mi), 0)
+          const mkSinVjMes = (mi) => sg('VJMK', mi)   // Marketing SINERGY (lo paga Retail EB)
+          const totVjMes = (mi) => areas.reduce((a, [, k]) => a + vjAreaMes(k, mi), 0) + mkSinVjMes(mi)
           const vnMes = (mi) => tiendas.reduce((a, t) => a + storeVentaM(t, mi), 0)
           const pctC = (a, b) => b > 0 ? (a / b * 100).toFixed(1) + '%' : '—'
           const totVjAnual = MESES.reduce((a, _, mi) => a + totVjMes(mi), 0), vnAnual = MESES.reduce((a, _, mi) => a + vnMes(mi), 0)
@@ -4417,6 +4418,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
                 <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
                 <tbody>
                   {areas.map(([lbl, k, ic]) => <tr key={k}><td className="l sub2">{ic} {lbl}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(vjAreaMes(k, mi))}</td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + vjAreaMes(k, mi), 0))}</td></tr>)}
+                  <tr><td className="l sub2" style={{ color: '#be185d' }}>📣 Marketing SINERGY</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#be185d' }}>{fmt(mkSinVjMes(mi))}</td>)}<td className="tot" style={{ color: '#be185d' }}>{fmt(MESES.reduce((a, _, mi) => a + mkSinVjMes(mi), 0))}</td></tr>
                   <tr className="grandrow"><td className="l">Total Retail</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(totVjMes(mi))}</td>)}<td className="tot">{fmt(totVjAnual)}</td></tr>
                   <tr><td className="l sub2" style={{ color: col }}>Venta Neta 2028</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: col }}>{fmt(vnMes(mi))}</td>)}<td className="tot" style={{ color: col }}>{fmt(vnAnual)}</td></tr>
                   <tr className="grandrow"><td className="l" style={{ color: col }}>% viajes / venta</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: col }}>{pctC(totVjMes(mi), vnMes(mi))}</td>)}<td className="tot" style={{ color: col }}>{pctC(totVjAnual, vnAnual)}</td></tr>
@@ -4425,7 +4427,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             </div>
           </div>
         })()}
-        <div className="sub" style={{ marginBottom: 8 }}>Viajes <b>EB</b>: Producto, Director, Marketing y Controler (cada bloque con su captura). Abajo, los viajes <b>SINERGY</b>: <b>Director SINERGY & DYNAMICS</b> alimenta solo el P&L SINERGY & DYNAMICS, y <b>Marketing SINERGY & DYNAMICS</b> (conserva su nombre) lo paga <b>Retail EB</b>.</div>
+        <div className="sub" style={{ marginBottom: 8 }}>Viajes <b>EB</b>: Producto, Director, Marketing y Controler (cada bloque con su captura). Abajo, los viajes <b>SINERGY</b>: <b>Director SINERGY & DYNAMICS</b> alimenta solo el P&L SINERGY & DYNAMICS, y <b>Otros</b> lo paga <b>Retail EB</b>.</div>
         {vjRoles.map((r) => (
           <div key={r.id} style={{ marginTop: 14 }}>
             <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} headerChip={<span style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 13, padding: '6px 12px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 15 }}>{r.icon}</span> Viajes de {r.label} EB — Retail</span>} />
