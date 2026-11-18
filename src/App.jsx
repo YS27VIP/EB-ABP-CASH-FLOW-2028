@@ -100,6 +100,10 @@ const _EB_BRANDS = new Set(Object.values(DEFAULT_SBUS).flat().map((m) => m.toUpp
 const TAHO_SBU4 = TUMAR_MARCAS.filter((m) => !_EB_BRANDS.has(m.toUpperCase())) // OSPREY, FJALLRAVEN, HYDRO FLASK, VEJA
 const TAHO_SBUS = { ...DEFAULT_SBUS, 'SBU 4': TAHO_SBU4 }
 const sbuNamesFor = (empresa) => empresa === 'TAHO' ? ['SBU 1', 'SBU 2', 'SBU 3', 'SBU 4'] : SBU_NAMES
+// Empresas sin estructura de SBU: navegan con una sola unidad "ÁREA COMERCIAL" (todas sus marcas juntas).
+// Son todas menos ENERGY BRANDS (que sí usa SBU 1/2/3) y SINERGY (que no tiene pantallas propias).
+const ES_COMERCIAL_UNICA = (e) => { const u = String(e == null ? '' : e).trim().toUpperCase(); return ES_TUMAR_LIKE(u) || u === 'TAHO' || u === 'GUBRANDS' }
+const UNIDAD_COMERCIAL = 'ÁREA COMERCIAL'
 // TAHO hereda las CATEGORÍAS de Energy Brands (sus marcas) y de TUMAR (las marcas de SBU 4). Para las demás empresas, usa las propias.
 function catRowOk(row, empresa) {
   const e = String(empresa || '').toUpperCase()
@@ -116,7 +120,7 @@ const SEED_EMPRESAS = ['TUMAR', 'ENERGY BRANDS', 'TAHO', 'GUBRANDS', 'SINERGY', 
 const HOLDING_ORDER = ['ENERGY BRANDS', 'SINERGY', 'TAHO', 'TUMAR', 'TUMAR AR', 'TUMAR CL', 'TUMAR PARAGUAY', 'JORS URU', 'MILHO URU', 'GUBRANDS']
 
 /* Colores por SBU y por marca (identidad visual dinámica) */
-const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'SBU 4': '#be185d', 'RETAIL': '#4338ca', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
+const SBU_COLORS = { 'SBU 1': '#0e7490', 'SBU 2': '#7c3aed', 'SBU 3': '#b45309', 'SBU 4': '#be185d', 'ÁREA COMERCIAL': '#0e7490', 'RETAIL': '#4338ca', 'GERENCIA': '#1f2d3d', 'SIN ASIGNAR': '#64748b' }
 const sbuColor = (s) => SBU_COLORS[String(s || '').toUpperCase()] || '#0e7490'
 // Paleta sin verde ni amarillo, tonos bien separados (para marcas no fijadas)
 const MARCA_PALETTE = ['#2563eb', '#dc2626', '#9333ea', '#ea580c', '#db2777', '#b45309', '#4f46e5', '#e11d48', '#7c3aed', '#c026d3', '#475569', '#be123c']
@@ -438,7 +442,7 @@ function Ref2027Btn({ empresa, marca, marcasSBU, seccion, sbuName }) {
   </>)
 }
 // Leyenda azul reutilizable: va en cada bloque cuyos números muestran el origen del cálculo al pasar el cursor.
-const HOVERTIP = <div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
+const HOVERTIP = <div className="sub no-ayuda" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
 // Banner amable "¡Tu turno!": instrucción para que la persona complete lo amarillo. Reutilizable (Comercial, Finanzas…).
 const TurnoBanner = () => (
   <div className="note no-ayuda" style={{ margin: 0, padding: '7px 12px', display: 'inline-flex', alignItems: 'center', gap: 8, background: '#fff8e1', border: '1px solid #f0e0a8' }}>
@@ -715,8 +719,11 @@ export default function App() {
   // Composición SBU↔marca: para TODAS las empresas (incl. ENERGY BRANDS) se usa lo configurado (combos) con DEFAULT_SBUS como base.
   // Si las combinaciones guardadas son viejas/incompletas (menos de 2 SBU con marcas), se ignoran y se usa DEFAULT_SBUS.
   const combosReales = (emp) => { const c = combos[emp]; return !!(c && SBU_NAMES.filter((s) => (c[s] || []).length).length >= 2) }
-  // Modelo TUMAR: una sola unidad ('SBU 1') con TODAS sus marcas. TUMAR usa sus 7 marcas fijas; las demás TUMAR-like, las que configuró el director (combos), aplanadas en una unidad.
-  const sbusFor = (emp) => emp === 'TUMAR' ? TUMAR_SBUS : (ES_TUMAR_LIKE(emp) ? { 'SBU 1': [...new Set(Object.values(effSBUS(emp, combos)).flat())] } : (emp === 'ENERGY BRANDS' ? (combosReales('ENERGY BRANDS') ? effSBUS(emp, combos) : DEFAULT_SBUS) : effSBUS(emp, combos)))
+  // Una sola unidad "ÁREA COMERCIAL" (sin SBU) para TUMAR y las TUMAR-like, y también para TAHO y GUBRANDS: todas sus marcas juntas.
+  // TUMAR usa sus 7 marcas fijas; las demás, las que tengan configuradas (combos/preconfig), aplanadas en una unidad.
+  const sbusFor = (emp) => emp === 'TUMAR' ? { [UNIDAD_COMERCIAL]: TUMAR_MARCAS }
+    : (ES_COMERCIAL_UNICA(emp) ? { [UNIDAD_COMERCIAL]: [...new Set(Object.values(effSBUS(emp, combos)).flat())] }
+      : (emp === 'ENERGY BRANDS' ? (combosReales('ENERGY BRANDS') ? effSBUS(emp, combos) : DEFAULT_SBUS) : effSBUS(emp, combos)))
   const sbus = sbusFor(empresa)
 
   function nuevaEmpresa() {
@@ -6133,6 +6140,27 @@ function HoldingScreen({ empresas, sbusFor }) {
   ]
   const totHold = (g) => byEmp.reduce((a, { v }) => a + (g(v) || 0), 0)
   // SINERGY no tiene pantallas propias: su detalle es un P&L de solo lectura (sale del bloque SINERGY del Retail).
+  // Compras intercompañía de TAHO: cuánto le compra a Energy Brands (EB) y a TUMAR (TU), en unidades y $ (ud × AUC).
+  const tahoCompras = () => {
+    try {
+      if (!empsOrden.some((e) => upper(e) === 'TAHO')) return null
+      const temp = JSON.parse(localStorage.getItem('temp_TAHO') || '{}')
+      const prod = (data && data.producto) || []
+      const seasonOf = (m) => m < 6 ? 'SS28' : m < 10 ? 'FW28' : 'SS29'
+      const marcas = Object.values(sbusFor('TAHO') || {}).flat()
+      const aucOf = (marca, m) => { let v = 0; prod.forEach((r) => { if (upper(r[0]) === 'TAHO' && upper(r[3]) === upper(marca) && upper(r[1]) === 'AUC') v = num(r[4 + m]) }); return v }
+      const res = { EB: 0, TU: 0, EBu: 0, TUu: 0 }
+      marcas.forEach((marca) => {['EB', 'TU'].forEach((pk) => {
+        let u = 0, d = 0
+        for (let m = 0; m < 12; m++) { const uu = num(temp[`CPP|${marca}|${pk}|${seasonOf(m)}|${m}`]); u += uu; d += uu * aucOf(marca, m) }
+        const n27 = num(temp[`CP2027P|${marca}|${pk}|N`]), d27 = num(temp[`CP2027P|${marca}|${pk}|D`])
+        u += n27 + d27; d += (n27 + d27) * aucOf(marca, 0)
+        if (pk === 'EB') { res.EB += d; res.EBu += u } else { res.TU += d; res.TUu += u }
+      }) })
+      return res
+    } catch { return null }
+  }
+  const taho$ = tahoCompras()
   const descargarEjecutivo = () => {
     setEjec(true)
     let win = null
@@ -6154,14 +6182,29 @@ function HoldingScreen({ empresas, sbusFor }) {
           ${kpi('Contribución BU', '$' + n0(brTot), pct(brTot, vTot) + ' de la venta')}
           ${kpi('Resultado Operativo', '$' + n0(resTot), pct(resTot, vTot) + ' de la venta')}
         </div>`)
-        // Resultado por empresa (resumen)
-        out.push(sec('Resultado por empresa', 'consolidado · 2028'))
-        const rows = byEmp.map(({ e, v }) => `<tr><td class="l">${E(e === 'SINERGY' ? 'SINERGY & DYNAMICS' : e)}</td><td>${n0(v.ventaNeta)}</td><td>${n0(v.costo)}</td><td>${n0(v.margenBruto)}</td><td>${pct(v.margenBruto, v.ventaNeta)}</td><td>${n0(v.brand)}</td><td>${n0(v.resultado)}</td></tr>`).join('')
-        out.push(`<div class="card"><div class="scroll"><table><thead><tr style="background:#0e7490"><th class="l">Empresa</th><th>Venta Neta</th><th>Costo</th><th>Margen Bruto</th><th>Margen %</th><th>Contribución</th><th>Resultado Op.</th></tr></thead><tbody>${rows}<tr class="tot" style="border-top:2px solid #0e7490"><td class="l">TOTAL HOLDING</td><td>${n0(vTot)}</td><td>${n0(coTot)}</td><td>${n0(mbTot)}</td><td>${pct(mbTot, vTot)}</td><td>${n0(brTot)}</td><td>${n0(resTot)}</td></tr></tbody></table></div></div>`)
-        // P&L consolidado del holding
-        out.push(sec('P&L consolidado del Holding', '2028'))
-        const pl = filas.map((f) => `<tr class="${f.strong ? 'strong' : ''}"><td class="l">${E(f.k)}</td><td>${n0(totHold(f.g))}</td></tr>`).join('')
-        out.push(`<div class="card"><div class="scroll"><table style="max-width:420px"><thead><tr style="background:#0e7490"><th class="l">Concepto</th><th>TOTAL HOLDING</th></tr></thead><tbody>${pl}</tbody></table></div></div>`)
+        const nm = (e) => e === 'SINERGY' ? 'SINERGY & DYNAMICS' : e
+        // P&L por empresa + TOTAL (matriz completa)
+        out.push(sec('P&L por empresa', 'todas las empresas + TOTAL · 2028'))
+        const plHead = `<tr style="background:#0e7490"><th class="l">Concepto</th>${byEmp.map(({ e }) => `<th>${E(nm(e))}</th>`).join('')}<th>TOTAL HOLDING</th></tr>`
+        const plRows = filas.map((f) => `<tr class="${f.strong ? 'strong' : ''}"><td class="l">${E(f.k)}</td>${byEmp.map(({ v }) => `<td>${n0(f.g(v))}</td>`).join('')}<td style="font-weight:800;color:#0e7490">${n0(totHold(f.g))}</td></tr>`).join('')
+        out.push(`<div class="card"><div class="scroll"><table><thead>${plHead}</thead><tbody>${plRows}</tbody></table></div></div>`)
+        // Cash Flow por empresa + TOTAL (resumen anual)
+        const cfEmp = (e) => { let p = null; try { p = JSON.parse(localStorage.getItem(`cfsum_${e}`) || 'null') } catch { } if (!p) return null; const S = (k) => (p[k] || []).reduce((a, b) => a + (Number(b) || 0), 0); const cIn = S('cobros') + S('oIng'); const cOut = S('pagos') + S('oper') + S('fin') + S('oGas'); const fl = S('flujo'); return { cIn, cOut, fl, ini0: Number(p.ini0) || 0, fin: (Number(p.ini0) || 0) + fl } }
+        const cfs = byEmp.map(({ e }) => ({ e, c: cfEmp(e) }))
+        const anyCf = cfs.some((x) => x.c)
+        out.push(sec('Cash Flow por empresa', anyCf ? 'resumen anual · 2028' : 'sin datos guardados aún'))
+        if (anyCf) {
+          const t = { cIn: 0, cOut: 0, fl: 0, ini0: 0, fin: 0 }; cfs.forEach(({ c }) => { if (c) { t.cIn += c.cIn; t.cOut += c.cOut; t.fl += c.fl; t.ini0 += c.ini0; t.fin += c.fin } })
+          const cfRows = cfs.map(({ e, c }) => c ? `<tr><td class="l">${E(nm(e))}</td><td>${n0(c.ini0)}</td><td style="color:#15803d">${n0(c.cIn)}</td><td style="color:#b91c1c">${n0(c.cOut)}</td><td style="font-weight:700;color:${c.fl < 0 ? '#b91c1c' : '#15803d'}">${n0(c.fl)}</td><td style="font-weight:700">${n0(c.fin)}</td></tr>` : `<tr><td class="l">${E(nm(e))}</td><td colspan="5" style="text-align:left;color:#94a3b8">— sin cash flow guardado —</td></tr>`).join('')
+          out.push(`<div class="card"><div class="scroll"><table><thead><tr style="background:#0e7490"><th class="l">Empresa</th><th>Cash Inicial</th><th>Cash In</th><th>Cash Out</th><th>Flujo neto</th><th>Cash Final</th></tr></thead><tbody>${cfRows}<tr class="tot" style="border-top:2px solid #0e7490"><td class="l">TOTAL HOLDING</td><td>${n0(t.ini0)}</td><td>${n0(t.cIn)}</td><td>${n0(t.cOut)}</td><td>${n0(t.fl)}</td><td>${n0(t.fin)}</td></tr></tbody></table></div></div>`)
+        } else {
+          out.push(`<div class="card"><div style="padding:14px 18px;color:#64748b">Aún no hay cash flow guardado por empresa. En cada empresa entra a <b>Gerencia → Cash Flow (▣ TODAS)</b> y guarda; aquí se consolidará.</div></div>`)
+        }
+        // Compras intercompañía de TAHO
+        if (taho$) {
+          out.push(sec('Compras intercompañía · TAHO', '2028'))
+          out.push(`<div class="card"><div class="scroll"><table style="max-width:520px"><thead><tr style="background:#0e7490"><th class="l">TAHO le compra a</th><th>Unidades</th><th>Valor ($)</th></tr></thead><tbody><tr><td class="l">ENERGY BRANDS</td><td>${n0(taho$.EBu)}</td><td>${n0(taho$.EB)}</td></tr><tr><td class="l">TUMAR</td><td>${n0(taho$.TUu)}</td><td>${n0(taho$.TU)}</td></tr><tr class="tot" style="border-top:2px solid #0e7490"><td class="l">TOTAL compras TAHO</td><td>${n0(taho$.EBu + taho$.TUu)}</td><td>${n0(taho$.EB + taho$.TU)}</td></tr></tbody></table></div></div>`)
+        }
         abpOpenReport('ABP 2028 — Resumen Ejecutivo', 'Holding · consolidado de todas las empresas · alta gerencia', out.join(''), win)
       } catch (err) { if (win && !win.closed) { try { win.close() } catch { } } alert('No se pudo generar el reporte: ' + (err && err.message)) }
       setEjec(false)
@@ -8090,7 +8133,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           {/* MARGEN $ */}
           <div className="panel tight">
             <h3>Margen 2028 por categoría y mes — {marca}{M$} <span className="unit">($ dinero)</span></h3>
-            <div className="sub"><b>Margen del mes = Venta Neta − Costo</b> (por categoría).</div><div className="sub" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
+            <div className="sub"><b>Margen del mes = Venta Neta − Costo</b> (por categoría).</div><div className="sub no-ayuda" style={{ marginTop: 2, color: '#1d4ed8', fontWeight: 600 }}>💡 Pasa el cursor sobre el número que deseas para ver el origen del cálculo.</div>
             <div className="tablewrap">
               <table className="vfix">
                 <colgroup><col style={{ width: '336px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /></colgroup>
