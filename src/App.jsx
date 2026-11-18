@@ -798,7 +798,7 @@ export default function App() {
               <label className="who">Empresa:
                 <span className="inline">
                   {veTodasEff
-                    ? <select value={holdingMode ? '__HOLDING__' : empresa} onChange={(e) => { const v = e.target.value; if (v === '__HOLDING__') setHoldingMode(true); else { setHoldingMode(false); setEmpresa(v) } }}>{empresas.filter((e) => e !== 'SINERGY').map((e) => <option key={e}>{e}</option>)}{esAdmin && empresas.length > 1 && <option value="__HOLDING__">🏛️ TOTAL HOLDING FINANZAS</option>}</select>
+                    ? <select value={holdingMode ? '__HOLDING__' : empresa} onChange={(e) => { const v = e.target.value; if (v === '__HOLDING__') setHoldingMode(true); else { setHoldingMode(false); setEmpresa(v) } }}>{empresas.filter((e) => e !== 'SINERGY').map((e) => <option key={e}>{e}</option>)}{esAdmin && empresas.length > 1 && <option value="__HOLDING__">🏛️ TOTAL HOLDING</option>}</select>
                     : <span className="empchip" style={{ marginLeft: 0, background: 'var(--odoo)' }}>{empresa}</span>}
                 </span>
               </label>
@@ -807,7 +807,7 @@ export default function App() {
           <div className="apps">
             {holdingMode ? <button className="app" onClick={() => setRoleId('holding')}>
               <span className="appicon" style={{ background: '#7c3aed' }}>🏛️</span>
-              <span className="applabel">Total Holding</span>
+              <span className="applabel">Finanzas</span>
             </button> : <>
             {Object.keys(sbus).map((s) => (
               <button key={s} className="app" onClick={() => goTo('sbu:' + s)}>
