@@ -3794,6 +3794,7 @@ function GastosAdminForm({ empresa, tipo = 'dir', sbus }) {
         {edit && !esInd && <button className="btn" onClick={agregar}>➕ Agregar rubro</button>}
         <button className="btn" onClick={plantilla}>📄 Descargar plantilla</button>
         <label className="btn" style={{ cursor: 'pointer' }}>📥 Importar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={importar} style={{ display: 'none' }} /></label>
+        <button className="btn" onClick={() => { const aoa = [['CÓD', 'SUB RUBRO', ...MESES.map((m) => m.toUpperCase())]]; lista.forEach((it) => aoa.push([it.cod, it.sub, ...MESES.map((_, mi) => num(data[key(it.cod, mi)]))])); exportXlsx(aoa, `Gastos_Admin_${empresa}.xlsx`) }}>⬇ Exportar Excel</button>
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
@@ -4026,6 +4027,36 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const gGran = gRubros.reduce((a, r) => a + gRow(r.n), 0)          // SINERGY
   const gGranEB = EB_CENTROS.reduce((a, it) => a + gRowEB(it.cod), 0)      // EB directos (por código)
   const guardarGastos = () => guardarKeys([['retail_gastos', gastos], ['retail_gastos_eb', gastosEB], ['retail_gastos_x', gRubrosX], ['retail_pl', plSummary()]], 'Gastos guardados en el Sheet ✓')
+  // Plantilla / Importar / Exportar (Excel) para las tablas de gastos de Retail. rows: [{key, cod, sub}]
+  const gastosPlantilla = (rows, fname) => { const aoa = [['CÓD', 'SUB RUBRO', ...MESES.map((m) => m.toUpperCase())]]; rows.forEach((r) => aoa.push([r.cod, r.sub, ...MESES.map(() => '')])); exportXlsx(aoa, fname) }
+  const gastosExport = (rows, obj, fname) => { const aoa = [['CÓD', 'SUB RUBRO', ...MESES.map((m) => m.toUpperCase())]]; rows.forEach((r) => aoa.push([r.cod, r.sub, ...MESES.map((_, mi) => num(obj[gk(r.key, mi)]))])); exportXlsx(aoa, fname) }
+  const gastosImport = (ev, rows, setCell, addRubro) => {
+    const file = ev.target.files[0]; ev.target.value = ''; if (!file) return
+    const norm = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase()
+    importXlsx(file, (aoa) => {
+      if (!aoa || aoa.length < 2) { setMsg({ t: 'bad', x: 'El Excel no tiene filas para importar.' }); return }
+      const hdr = (aoa[0] || []).map(norm)
+      const iCod = hdr.findIndex((h) => h.indexOf('COD') >= 0)
+      const iSub = hdr.findIndex((h) => h.indexOf('RUBRO') >= 0 || h.indexOf('SUB') >= 0)
+      const base = Math.max(iCod, iSub, -1) + 1
+      const monthCol = MESES.map((m, mi) => { const mm = norm(m).slice(0, 3); const i = hdr.findIndex((h) => h.indexOf(mm) >= 0); return i >= 0 ? i : base + mi })
+      const byCod = {}, bySub = {}; rows.forEach((r) => { if (r.cod) byCod[norm(r.cod)] = r.key; bySub[norm(r.sub)] = r.key })
+      let filas = 0
+      aoa.slice(1).forEach((r) => {
+        if (!r || r.every((c) => c === '' || c == null)) return
+        const cod = norm(iCod >= 0 ? r[iCod] : r[0]); const sub = norm(iSub >= 0 ? r[iSub] : r[1])
+        let key = byCod[cod] || bySub[sub]
+        if (!key && addRubro) { const nm = String((iSub >= 0 ? r[iSub] : r[1]) || (iCod >= 0 ? r[iCod] : r[0]) || '').trim(); if (nm) { addRubro(nm); key = nm } }
+        if (!key) return
+        MESES.forEach((_, mi) => { const v = r[monthCol[mi]]; if (v !== '' && v != null) setCell(key, mi, String(v).replace(/[^0-9.\-]/g, '')) })
+        filas++
+      })
+      setMsg({ t: 'ok', x: `Importados ${filas} rubro(s) desde Excel. Revisa y pulsa 💾 Guardar.` })
+    })
+  }
+  const EB_ROWS = () => EB_CENTROS.map((it) => ({ key: it.cod, cod: it.cod, sub: it.sub }))
+  const SIN_ROWS = () => gRubros.map((r) => ({ key: r.n, cod: '', sub: r.n }))
+  const addRubroImport = (nm) => setGRubrosX((x) => (x.includes(nm) || RETAIL_GASTOS.some(([n]) => n.toLowerCase() === nm.toLowerCase())) ? x : [...x, nm])
   function addRubroG() { const n = window.prompt('Nombre del nuevo rubro de gasto:'); if (!n) return; const nm = n.trim(); if (!nm || gRubros.some((r) => r.n.toLowerCase() === nm.toLowerCase())) { setMsg({ t: 'warn', x: 'Ese rubro ya existe.' }); return } const next = [...gRubrosX, nm]; setGRubrosX(next); saveEstado(empresa, 'retail_gastos_x', next) }
   function delRubroG(nm) { const next = gRubrosX.filter((x) => x !== nm); setGRubrosX(next); saveEstado(empresa, 'retail_gastos_x', next) }
   // ---- Ventas por tienda: se ESCOGE una tienda y se llena por categoría/subcategoría ----
@@ -4068,6 +4099,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const setUA = (t, c, v) => setVt((d) => ({ ...d, [uaKey(t, c)]: v }))
   const siKey = (t, c) => `${t}||${c}||SI`                    // stock inicial por subcategoría/tienda
   const setSI = (t, c, v) => setVt((d) => ({ ...d, [siKey(t, c)]: v }))
+  const setTRF = (t, v) => setVt((d) => ({ ...d, [`${t}||TRF`]: v }))   // % de transferencia a Outlet por tienda
   // Unidades/costo de la subcategoría c que surte la MARCA m, en el mes mi (split por el calendario de despacho de esa marca).
   const subUdMarcaMes = (t, c, m, mi) => { const p = pctOf(c, m); return p ? uAnual(t, c) * (p / 100) * calFracM(m, mi) : 0 }
   const subCostoMarcaMes = (t, c, m, mi) => { const u = subUdMarcaMes(t, c, m, mi); return u ? u * aucMC(m, catOf(c, m), mi) * factor() : 0 }
@@ -4406,12 +4438,12 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             <div className="spacer"></div>
             <SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarSin}>{saving ? 'Guardando…' : '💾 Guardar SINERGY & DYNAMICS'}</button>
           </div>
-          <div className="sub" style={{ marginBottom: 6 }}>Captura manual de los viajes de <b>SINERGY</b> (por mes). <b>Director SINERGY & DYNAMICS</b> alimenta el P&L y Cash Flow <b>SINERGY</b>. <b>Marketing SINERGY & DYNAMICS</b> conserva su nombre pero lo paga <b>Retail EB</b> (va al P&L y Cash Flow de Retail EB, no a SINERGY).</div>
+          <div className="sub" style={{ marginBottom: 6 }}>Captura manual de los viajes de <b>SINERGY</b> (por mes). <b>Director SINERGY & DYNAMICS</b> alimenta el P&L y Cash Flow <b>SINERGY</b>. <b>Otros</b> lo paga <b>Retail EB</b> (va al P&L y Cash Flow de Retail EB, no a SINERGY).</div>
           <div className="tablewrap" style={{ overflowX: 'auto' }}>
             <table className="vfix"><colgroup><col style={{ width: '200px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '85px' }} /></colgroup>
               <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
               <tbody>
-                {[['🧑‍💼 Director SINERGY & DYNAMICS', 'VJDIR', '→ SINERGY'], ['📣 Marketing SINERGY & DYNAMICS', 'VJMK', '→ Retail EB']].map(([lbl, k, dest]) => (
+                {[['🧑‍💼 Director SINERGY & DYNAMICS', 'VJDIR', '→ SINERGY'], ['🏷 Otros', 'VJMK', '→ Retail EB']].map(([lbl, k, dest]) => (
                   <tr key={k}><td className="l sub2">{lbl} <span className="unit" style={{ color: k === 'VJMK' ? col : '#be185d' }}>{dest}</span></td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={sin[`${k}|${mi}`] ?? ''} onChange={(e) => setSIN(k, mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + sg(k, mi), 0))}</td></tr>
                 ))}
                 <tr className="grandrow"><td className="l">Total viajes SINERGY <span className="unit">(solo Director → SINERGY)</span></td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(sg('VJDIR', mi))}</td>)}<td className="tot">{fmt(sinVjDirAnual)}</td></tr>
@@ -4448,7 +4480,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
         {(() => {
           const gBlock = (title, accent, data, setFn, rowFn, colFn, gran, editable) => (
             <div className="panel" style={{ borderLeftColor: accent, marginBottom: 12 }}>
-              <div className="toolbar"><span className="empchip" style={{ background: accent, marginLeft: 0 }}>{title}</span><div className="spacer"></div>{editable ? <><button className="btn" onClick={addRubroG}>➕ Agregar rubro</button><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar'}</button></> : <span className="empchip" style={{ background: '#64748b' }}>solo lectura</span>}</div>
+              <div className="toolbar"><span className="empchip" style={{ background: accent, marginLeft: 0 }}>{title}</span><div className="spacer"></div>{editable ? <><button className="btn" onClick={addRubroG}>➕ Agregar rubro</button><button className="btn" onClick={() => gastosPlantilla(SIN_ROWS(), `Plantilla_Gastos_Sinergy_${empresa}.xlsx`)}>📄 Plantilla</button><label className="btn" style={{ cursor: 'pointer' }}>⬆ Importar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => gastosImport(e, SIN_ROWS(), setG, addRubroImport)} style={{ display: 'none' }} /></label><button className="btn" onClick={() => gastosExport(SIN_ROWS(), gastos, `Gastos_Sinergy_${empresa}.xlsx`)}>⬇ Exportar Excel</button><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar'}</button></> : <span className="empchip" style={{ background: '#64748b' }}>solo lectura</span>}</div>
               <div className="tablewrap" style={{ overflowX: 'auto' }}>
                 <table className="vfix"><colgroup><col style={{ width: '320px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
                   <thead><tr><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
@@ -4462,7 +4494,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           )
           return <>
             <div className="panel" style={{ borderLeftColor: col, marginBottom: 12 }}>
-              <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>🏬 Gastos EB Directos</span><div className="spacer"></div><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+              <div className="toolbar"><span className="empchip" style={{ background: col, marginLeft: 0 }}>🏬 Gastos EB Directos</span><div className="spacer"></div><button className="btn" onClick={() => gastosPlantilla(EB_ROWS(), `Plantilla_Gastos_EB_${empresa}.xlsx`)}>📄 Plantilla</button><label className="btn" style={{ cursor: 'pointer' }}>⬆ Importar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => gastosImport(e, EB_ROWS(), setGEB, null)} style={{ display: 'none' }} /></label><button className="btn" onClick={() => gastosExport(EB_ROWS(), gastosEB, `Gastos_EB_${empresa}.xlsx`)}>⬇ Exportar Excel</button><SavedBadge /><button className="btn primary" disabled={saving} onClick={guardarGastos}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
               <div className="tablewrap" style={{ overflowX: 'auto' }}>
                 <table className="vfix"><colgroup><col style={{ width: '60px' }} /><col style={{ width: '260px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '62px' }} />)}<col style={{ width: '90px' }} /></colgroup>
                   <thead><tr><th>Cód</th><th className="l">Sub rubro</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total 2028</th></tr></thead>
@@ -4639,6 +4671,31 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
               </tbody>
             </table>
           </div>
+          {/* ---- Paso 7: Inventario por tienda ---- */}
+          <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12, marginTop: 18 }}><PasoH n={7}>Inventario por tienda <span className="unit" style={{ fontWeight: 400 }}>(Inv. inicial + Compras − Venta − Transferencia a Sales Factory = Inv. final)</span></PasoH></div>
+          <div className="sub">Coloca el <b>% de transferencia a Sales Factory</b> por tienda. La <b>transferencia</b> se calcula sobre lo que queda tras la venta (Inv. inicial + Compras − Venta). El <b>Inventario final</b> es lo que sobra después de vender y transferir.</div>
+          {(() => {
+            const invRow = (t) => { const ini = catsOf(t).reduce((a, c) => a + num(vt[siKey(t, c)]), 0); const comp = comprasUnidT(t); const vta = MESES.reduce((a, _, mi) => a + sellU(t, mi), 0); const pct = num(vt[`${t}||TRF`]); const trf = Math.round(Math.max(0, ini + comp - vta) * pct / 100); return { t, ini, comp, vta, trf, fin: ini + comp - vta - trf } }
+            const rows = tiendas.map(invRow)
+            const tot = rows.reduce((a, r) => ({ ini: a.ini + r.ini, comp: a.comp + r.comp, vta: a.vta + r.vta, trf: a.trf + r.trf, fin: a.fin + r.fin }), { ini: 0, comp: 0, vta: 0, trf: 0, fin: 0 })
+            return <div className="tablewrap" style={{ overflowX: 'auto' }}>
+              <table className="vfix"><colgroup><col style={{ width: '200px' }} /><col style={{ width: '110px' }} /><col style={{ width: '110px' }} /><col style={{ width: '110px' }} /><col style={{ width: '130px' }} /><col style={{ width: '120px' }} /><col style={{ width: '120px' }} /></colgroup>
+                <thead><tr><th className="l">Tienda</th><th>Inv. inicial</th><th>Compras</th><th>Venta</th><th className="ya">% Transf. Sales Factory</th><th>Transferencia</th><th>Inv. final</th></tr></thead>
+                <tbody>
+                  {rows.map((r) => <tr key={r.t}>
+                    <td className="l">🏬 {r.t}</td>
+                    <td className="tot">{fmt(r.ini)}</td>
+                    <td className="tot">{fmt(r.comp)}</td>
+                    <td className="tot">{fmt(r.vta)}</td>
+                    <td className="cell ya"><input value={vt[`${r.t}||TRF`] ?? ''} onChange={(e) => setTRF(r.t, e.target.value)} inputMode="decimal" placeholder="0%" title={`${r.t} · % que se transfiere a Sales Factory (sobre lo que queda tras la venta)`} style={{ width: '100%', textAlign: 'center' }} /></td>
+                    <td className="tot" style={{ color: '#b45309' }}>{fmt(r.trf)}</td>
+                    <td className="tot" style={{ fontWeight: 800, color: r.fin < 0 ? '#b91c1c' : '#15803d' }}>{fmt(r.fin)}</td>
+                  </tr>)}
+                  <tr className="grandrow"><td className="l">TOTAL Retail</td><td className="tot">{fmt(tot.ini)}</td><td className="tot">{fmt(tot.comp)}</td><td className="tot">{fmt(tot.vta)}</td><td className="tot ya">—</td><td className="tot" style={{ color: '#b45309' }}>{fmt(tot.trf)}</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(tot.fin)}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          })()}
         </div>
       </>}
 
