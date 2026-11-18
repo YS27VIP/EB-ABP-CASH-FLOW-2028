@@ -4217,7 +4217,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
   const setSIN = (line, mi, v) => setSin((d) => ({ ...d, [`${line}|${mi}`]: v }))
   const guardarSin = () => guardarKeys([['retail_sin', sin], ['retail_pl', plSummary()]], 'Captura SINERGY & DYNAMICS guardada en el Sheet ✓')
   const sinVjAnual = MESES.reduce((a, _, mi) => a + sg('VJDIR', mi) + sg('VJMK', mi), 0)
-  // "Viajes Marketing SINERGY & DYNAMICS" (VJMK): se captura en el bloque SINERGY pero lo PAGA Retail EB (P&L y Cash Flow Retail EB). Solo "Director SINERGY & DYNAMICS" (VJDIR) queda en SINERGY.
+  // "Otros SINERGY & DYNAMICS" (VJMK) y "Director SINERGY & DYNAMICS" (VJDIR): ambos se capturan en el bloque SINERGY y alimentan el P&L y Cash Flow SINERGY & DYNAMICS.
   const sinVjDirAnual = MESES.reduce((a, _, mi) => a + sg('VJDIR', mi), 0)
   const sinVjMkAnual = MESES.reduce((a, _, mi) => a + sg('VJMK', mi), 0)
   const sinMkAnual = MESES.reduce((a, _, mi) => a + sg('MK', mi), 0)
@@ -4268,7 +4268,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
       const gasto = bucket === 'EB' ? gastoEBMes(mi) : bucket === 'SIN' ? gastoMes(mi) : gastoEBMes(mi) + gastoMes(mi)
       const logi = bucket === 'EB' ? 0 : sg('LOG', mi)
       const mk = bucket === 'EB' ? mkEBMes(mi) : bucket === 'SIN' ? mkSinMes(mi) : mkEBMes(mi) + mkSinMes(mi)
-      const vj = bucket === 'EB' ? (vjMes(mi) + sg('VJMK', mi)) : bucket === 'SIN' ? sg('VJDIR', mi) : vjMes(mi) + sg('VJDIR', mi) + sg('VJMK', mi)
+      const vj = bucket === 'EB' ? vjMes(mi) : bucket === 'SIN' ? (sg('VJDIR', mi) + sg('VJMK', mi)) : vjMes(mi) + sg('VJDIR', mi) + sg('VJMK', mi)
       const oper = gasto + logi + mk + vj
       const fin = cfFin(bucket, 'FIN', mi), oIng = cfFin(bucket, 'OING', mi), oGas = cfFin(bucket, 'OGAS', mi)
       const flujo = cobros + oIng - pagos - oper - fin - oGas
@@ -4288,9 +4288,9 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
     MESES.forEach((_, mi) => {
       tiendas.forEach((t) => { const v = storeVentaM(t, mi), c = storeCostoM(t, mi); const B = esTiendaSinergy(t) ? SIN : EB; B.venta[mi] += v; B.costo[mi] += c })
       EB.pagos[mi] = comprasCalMes(tEB, mi); SIN.pagos[mi] = comprasCalMes(tSIN, mi)
-      EB.gastos[mi] = gastoEBMes(mi); EB.mk[mi] = mkEBMes(mi); EB.vj[mi] = vjMes(mi) + sg('VJMK', mi)
+      EB.gastos[mi] = gastoEBMes(mi); EB.mk[mi] = mkEBMes(mi); EB.vj[mi] = vjMes(mi)
       EB.fin[mi] = num(cf[fk('FIN', mi)]); EB.oIng[mi] = num(cf[fk('OING', mi)]); EB.oGas[mi] = num(cf[fk('OGAS', mi)])
-      SIN.gastos[mi] = gastoMes(mi); SIN.mk[mi] = mkSinMes(mi); SIN.vj[mi] = sg('VJDIR', mi); SIN.logistica[mi] = sg('LOG', mi)
+      SIN.gastos[mi] = gastoMes(mi); SIN.mk[mi] = mkSinMes(mi); SIN.vj[mi] = sg('VJDIR', mi) + sg('VJMK', mi); SIN.logistica[mi] = sg('LOG', mi)
       SIN.fin[mi] = num(sin[`CFFIN|${mi}`]); SIN.oIng[mi] = num(sin[`CFOING|${mi}`]); SIN.oGas[mi] = num(sin[`CFOGAS|${mi}`])
     })
     return { EB, SIN }
@@ -4428,7 +4428,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             </div>
           </div>
         })()}
-        <div className="sub" style={{ marginBottom: 8 }}>Viajes <b>EB</b>: Producto, Director, Marketing y Controler (cada bloque con su captura). Abajo, los viajes <b>SINERGY</b>: <b>Director SINERGY & DYNAMICS</b> alimenta solo el P&L SINERGY & DYNAMICS, y <b>Otros</b> lo paga <b>Retail EB</b>.</div>
+        <div className="sub" style={{ marginBottom: 8 }}>Viajes <b>EB</b>: Producto, Director, Marketing y Controler (cada bloque con su captura). Abajo, los viajes <b>SINERGY</b>: <b>Director SINERGY & DYNAMICS</b> y <b>Otros SINERGY & DYNAMICS</b> alimentan el P&L SINERGY & DYNAMICS.</div>
         {vjRoles.map((r) => (
           <div key={r.id} style={{ marginTop: 14 }}>
             <RoleForm role={r} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Retail)" onSaved={reloadCaps} headerChip={<span style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 13, padding: '6px 12px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ fontSize: 15 }}>{r.icon}</span> Viajes de {r.label} EB — Retail</span>} />
@@ -4450,10 +4450,10 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
             <table className="vfix"><colgroup><col style={{ width: '200px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '85px' }} /></colgroup>
               <thead><tr><th className="l">Área</th>{MESES.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Total</th></tr></thead>
               <tbody>
-                {[['🧑‍💼 Director SINERGY & DYNAMICS', 'VJDIR', '→ SINERGY'], ['🏷 Otros', 'VJMK', '→ Retail EB']].map(([lbl, k, dest]) => (
-                  <tr key={k}><td className="l sub2">{lbl} <span className="unit" style={{ color: k === 'VJMK' ? col : '#be185d' }}>{dest}</span></td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={sin[`${k}|${mi}`] ?? ''} onChange={(e) => setSIN(k, mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + sg(k, mi), 0))}</td></tr>
+                {[['🧑‍💼 Director SINERGY & DYNAMICS', 'VJDIR', '→ SINERGY'], ['🏷 Otros SINERGY & DYNAMICS', 'VJMK', '→ SINERGY']].map(([lbl, k, dest]) => (
+                  <tr key={k}><td className="l sub2">{lbl} <span className="unit" style={{ color: '#be185d' }}>{dest}</span></td>{MESES.map((_, mi) => <td key={mi} className="cell"><input className="fillin" value={sin[`${k}|${mi}`] ?? ''} onChange={(e) => setSIN(k, mi, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%' }} /></td>)}<td className="tot">{fmt(MESES.reduce((a, _, mi) => a + sg(k, mi), 0))}</td></tr>
                 ))}
-                <tr className="grandrow"><td className="l">Total viajes SINERGY <span className="unit">(solo Director → SINERGY)</span></td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(sg('VJDIR', mi))}</td>)}<td className="tot">{fmt(sinVjDirAnual)}</td></tr>
+                <tr className="grandrow"><td className="l">Total viajes SINERGY <span className="unit">(Director + Otros → SINERGY)</span></td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(sg('VJDIR', mi) + sg('VJMK', mi))}</td>)}<td className="tot">{fmt(sinVjDirAnual + sinVjMkAnual)}</td></tr>
               </tbody>
             </table>
           </div>
@@ -4874,7 +4874,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           const sum = (arr, f) => arr.reduce((a, t) => a + f(t), 0)
           const ventaEB = sum(vEB, tVenta), costoEB = sum(vEB, tCosto)
           const ventaSIN = sum(vSIN, tVenta), costoSIN = sum(vSIN, tCosto)
-          const mkSinAnual = mkSinSplitAnual, vjSinAnual = sinVjDirAnual, vjEBAnual = vjAnual + sinVjMkAnual
+          const mkSinAnual = mkSinSplitAnual, vjSinAnual = sinVjDirAnual + sinVjMkAnual, vjEBAnual = vjAnual
           const R27 = { venta: 2363461, costo: 1360521, margen: 1002941, gastos: 2193944, resultado: -1191004 }
           const r27 = (v) => v == null ? '—' : fmt(v)
           const dCell = (v28, v27) => v27 == null ? <td className="tot ya">—</td> : <td className="tot ya" style={{ color: (v28 - v27) >= 0 ? '#15803d' : '#b91c1c' }}>{(v28 - v27) >= 0 ? '+' : ''}{fmt(v28 - v27)}</td>
