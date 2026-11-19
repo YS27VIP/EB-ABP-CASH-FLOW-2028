@@ -8440,6 +8440,91 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
       {msg && <div className={'note ' + msg.t}>{msg.x}</div>}
       {usarCat && <div className="note ok" style={{ marginBottom: 14 }}>Las <b>categorías por cliente</b> las llena el <b>Director</b> en su pestaña <b>Categorías</b>.</div>}
 
+      <div className="panel" style={{ marginTop: 28 }}>
+        <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
+          <h3 style={{ margin: 0 }}>Ventas · Unidades 2028 — {marca}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Ventas" /></h3>
+          {useVend && <div style={{ display: 'flex', gap: 6, marginLeft: 10, flexWrap: 'wrap' }}>{[[0, vName(0)], [1, vName(1)], ['inter', '🔄 Intercompañía'], ['T', '▣ Total']].map(([k, lbl]) => <button key={k} className={'seg' + (vendView === k ? ' active' : '')} onClick={() => setVendView(k)} style={vendView === k ? (k === 'inter' ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : undefined) : undefined}>{lbl}</button>)}</div>}
+          <div className="spacer"></div>
+          <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+        </div>
+        {vendView !== 'inter' && <div className="sub"><ol style={{ margin: '4px 0 0', paddingLeft: 20, lineHeight: 1.6 }}>
+          <li>Escribe <b>un % de crecimiento por cliente</b>: al lado verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)).</li>
+          <li>En las <b>celdas amarillas de 2028</b> reparte esas unidades: tú decides <b>en qué meses</b> se venden.</li>
+          <li>La <b>suma</b> debe cuadrar con el objetivo: <b style={{ color: '#15803d' }}>✓</b> cuando cuadra, <b style={{ color: '#b45309' }}>ámbar ⚠</b> cuando falta ajustar.</li>
+          <li>Las filas grises <b>2025</b> y <b>2026</b> son el histórico (referencia).</li>
+          <li><b>Cliente nuevo</b>: escribe sus unidades 2028 directamente (sin %).</li>
+        </ol></div>}
+        {vendView === 'inter' && <div className="sub">🔄 <b>Intercompañía (Retail)</b>: estas unidades salen automáticamente de lo que <b>Retail</b> le compra a {marca} (vía el mapa de abastecimiento). Son de <b>solo lectura</b> e <b>incobrables</b>; se editan en <b>Retail → Compras por tienda</b>.</div>}
+        <div className="sub no-ayuda" style={{ marginTop: 4, fontWeight: 700, color: vendView === 'inter' ? '#7c3aed' : '#5b9bd5' }}>{useVend && vendView === 'inter' ? <>🔄 Intercompañía (Retail) — {fmt(interTot)} ud en 2028 <span className="unit" style={{ fontWeight: 400 }}>(solo lectura · incobrable)</span></> : useVend && vendView !== 'T' ? <>{vName(vendView)} — {fmt(vendUnits(vendView))} ud en 2028</> : <>Total 2028 de {marca}: {fmt(totMarcaSel + interTot)} ud{hayInter && <span className="unit" style={{ fontWeight: 400 }}> (incl. {fmt(interTot)} intercompañía)</span>}</>}</div>
+        {vendView !== 'inter' && <div style={{ display: 'flex', gap: 28, margin: '4px 0 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ order: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />
+            {buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}
+          </div>
+          <div style={{ order: 1, display: 'flex', flexDirection: 'column', gap: 8, flex: '1 1 560px', maxWidth: 620 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <label style={{ width: 210, flex: '0 0 210px', fontWeight: 700, color: 'var(--muted)', fontSize: 12 }}>AGREGAR CLIENTE EXISTENTE</label>
+              <select value="" onChange={(e) => { if (e.target.value) agregarCliente(e.target.value) }} style={{ flex: 1, minWidth: 200 }}>
+                <option value="">Elegir de la base…</option>
+                {baseCli.filter((c) => !clientes.some((x) => upper(x) === upper(c))).map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <label style={{ width: 210, flex: '0 0 210px', fontWeight: 700, color: 'var(--muted)', fontSize: 12 }}>AGREGAR CLIENTE NUEVO</label>
+              <input className="fillin" value={nuevoCli} onChange={(e) => setNuevoCli(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') agregarCliente(nuevoCli) }} placeholder="Escribe el nombre…" style={{ flex: 1, minWidth: 170, background: '#fff' }} />
+              <button className="btn primary" onClick={() => agregarCliente(nuevoCli)}>➕ Agregar</button>
+            </div>
+          </div>
+        </div>}
+        <div ref={topScRef} onScroll={() => { if (botScRef.current) botScRef.current.scrollLeft = topScRef.current.scrollLeft }} className="tablewrap" style={{ maxHeight: 'none', overflowY: 'hidden', border: 'none', borderRadius: 0, marginBottom: 2 }}><div style={{ width: 1228, height: 1 }} /></div>
+        <div className="tablewrap" ref={botScRef} onScroll={() => { if (topScRef.current) topScRef.current.scrollLeft = botScRef.current.scrollLeft }}>
+          <table className="vfix" style={{ width: 1228 }}>
+            <colgroup><col style={{ width: '220px' }} /><col style={{ width: '88px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /><col style={{ width: '60px' }} /></colgroup>
+            <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Total</th><th>% Peso</th></tr></thead>
+            <tbody>
+              {clientes.length === 0 && <tr><td className="l" colSpan={17}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico, o agrega un cliente con el buscador de arriba.</td></tr>}
+              {clientes.filter((cli) => (!buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0) && (!useVend || vendView === 'T' || vendOf(cli) === vendView)).map((cli, _idx, _arr) => { const nuevo = esNuevo(cli); const obj = objetivo28(cli); const desc = !nuevo && obj != null && t28(cli) !== obj; return (
+                <Fragment2 key={cli}>
+                  {useVend && vendView === 'T' && (_idx === 0 || vendOf(_arr[_idx - 1]) !== vendOf(cli)) && (() => { const vi = vendOf(cli); const grp = _arr.filter((c) => vendOf(c) === vi); const uSub = grp.reduce((a, c) => a + t28(c), 0); return <tr className="secrow"><td className="l" colSpan={17}>🧑‍💼 {vName(vi)} <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>· {grp.length} cliente(s) · {fmt(uSub)} ud en 2028</span></td></tr> })()}
+                  <tr>
+                    <td className="l" rowSpan={rsp}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}{paisByCli[cli] && <div style={{ marginTop: 2, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }} title="País del cliente (Base Clientes SF)">📍 {paisByCli[cli]}</div>}{useVend && <div style={{ marginTop: 5 }}><span className="unit" style={{ marginRight: 4 }}>Vendedor:</span><select value={vendOf(cli)} onChange={(e) => setVendOf(cli, Number(e.target.value))} style={{ fontSize: 11, padding: '2px 4px', borderRadius: 5, border: '1px solid var(--line)' }}><option value={0}>{vName(0)}</option><option value={1}>{vName(1)}</option></select></div>}</td>
+                    <td className="cell" rowSpan={rsp} style={{ verticalAlign: 'top' }}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}
+                      <div style={{ marginTop: 7, fontSize: 11, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
+                        {!nuevo && <div style={{ color: 'var(--muted)' }} title="Total objetivo = total 2026 × (1 + % crecimiento). Reparte este total en los meses de 2028.">🎯 obj <b>{fmt(obj)}</b></div>}
+                        <div style={{ color: desc ? '#b45309' : (t28(cli) > 0 ? '#15803d' : 'var(--muted)'), fontWeight: 700 }} title={nuevo ? 'Total 2028 que llevas repartido por mes.' : (desc ? 'Lo repartido por mes NO cuadra con el objetivo del %. Ajusta los meses.' : 'El reparto por mes cuadra con el objetivo ✓')}><span style={{ fontWeight: 600, color: 'var(--muted)' }}>suma </span><b>{fmt(t28(cli))}</b>{!nuevo && (desc ? ' ⚠' : (t28(cli) > 0 ? ' ✓' : ''))}</div>
+                      </div>
+                    </td>
+                    {showY25
+                      ? <><td className="yl">2025</td>{MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u25(cli, mi))}</td>)}<td className="ref"><b>{nuevo ? '—' : fmt(t25(cli))}</b></td><td className="ref">{nuevo ? '—' : (tot25Marca ? (t25(cli) / tot25Marca * 100).toFixed(1) + '%' : '—')}</td></>
+                      : <><td className="yl">2026</td>{MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u26(cli, mi))}</td>)}<td className="ref"><b>{nuevo ? '—' : fmt(t26(cli))}</b></td><td className="ref">{nuevo ? '—' : (tot26Marca ? (t26(cli) / tot26Marca * 100).toFixed(1) + '%' : '—')}</td></>}
+                  </tr>
+                  {showY25 && <tr>
+                    <td className="yl">2026</td>
+                    {MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u26(cli, mi))}</td>)}
+                    <td className="ref"><b>{nuevo ? '—' : fmt(t26(cli))}</b></td>
+                    <td className="ref">{nuevo ? '—' : (tot26Marca ? (t26(cli) / tot26Marca * 100).toFixed(1) + '%' : '—')}</td>
+                  </tr>}
+                  <tr className="proy2028">
+                    <td className="yl proyl">2028</td>
+                    {MESES.map((_, mi) => { const raw = manual[mKey(cli, mi)]; const show = (raw == null || raw === '' || num(raw) < 0) ? '' : raw; return <td key={mi} className="cell"><input value={show} onChange={(e) => setMan(cli, mi, e.target.value)} inputMode="decimal" placeholder="0" /></td> })}
+                    <td className="tot" style={desc ? { background: '#fdf1e0', color: '#b45309' } : undefined} title={desc ? `El % de crecimiento da un objetivo de ${fmt(obj)} ud, pero tu reparto por mes suma ${fmt(t28(cli))} (diferencia ${(t28(cli) - obj) >= 0 ? '+' : ''}${fmt(t28(cli) - obj)}). Ajusta los meses para cuadrar.` : `Objetivo por %: ${fmt(obj == null ? t28(cli) : obj)} ud`}>{fmt(t28(cli))}{desc ? ' ⚠' : ''}</td>
+                    <td className="tot">{totMarcaSel ? (t28(cli) / totMarcaSel * 100).toFixed(1) + '%' : '—'}</td>
+                  </tr>
+                </Fragment2>
+              ) })}
+              {(vendView === 'inter' || (hayInter && (!useVend || vendView === 'T'))) && <tr style={{ background: '#f6eef9' }}><td className="l" colSpan={2} style={{ color: '#7c3aed', fontWeight: 700 }}>🔄 {INTER_CLI} <span className="unit" style={{ fontWeight: 400 }}>(solo lectura · desde Retail · ⛔ incobrable)</span></td><td className="yl proyl">2028</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#7c3aed' }}>{fmt(interU(mi))}</td>)}<td className="tot" style={{ color: '#7c3aed', fontWeight: 800 }}>{fmt(interTot)}</td><td className="tot">{(totMarcaSel + interTot) ? (interTot / (totMarcaSel + interTot) * 100).toFixed(1) + '%' : '—'}</td></tr>}
+              {vendView === 'inter' && !hayInter && <tr><td className="l" colSpan={17} style={{ color: 'var(--muted)', fontStyle: 'italic', padding: '10px 9px' }}>Aún no hay compras de <b>{marca}</b> en Retail. Entra a <b>Retail → Compras por tienda</b>, carga unidades y el mapa de abastecimiento (que incluya {marca}) y guarda; aquí aparecerán las unidades intercompañía automáticamente.</td></tr>}
+              {clientes.length > 0 && <tr className="grandrow" style={{ background: '#eef4fb' }}><td className="l" style={{ color: '#1d4ed8', whiteSpace: 'normal', overflow: 'visible', lineHeight: 1.2 }}>💰 Venta neta{useVend && vendView !== 'T' && <div style={{ fontWeight: 600, fontSize: 11 }}>{vName(vendView)}</div>}</td><td></td><td></td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#1d4ed8' }}>{fmt(ventaNetaMes(mi))}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(MESES.reduce((a, _, mi) => a + ventaNetaMes(mi), 0))}</td><td></td></tr>}
+              {clientes.length > 0 && (!useVend || vendView === 'T') && <>
+                <tr className="grandrow"><td className="l" rowSpan={rsp} style={{ verticalAlign: 'top' }}>TOTAL {marca}</td><td rowSpan={rsp} style={{ verticalAlign: 'top', fontSize: 10, lineHeight: 1.3, whiteSpace: 'normal', overflow: 'hidden' }} title="Crecimiento del total 2028 frente a cada año histórico">{(tot26Marca || tot25Marca) ? <div style={{ color: 'var(--muted)', fontWeight: 600, marginBottom: 3 }}>Crec. 2028:</div> : null}{tot26Marca ? <div>vs 2026 <b style={{ color: crecMarca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1)}%</b></div> : null}{tot25Marca && showY25 ? <div>vs 2025 <b style={{ color: crec25Marca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crec25Marca >= 0 ? '+' : '') + crec25Marca.toFixed(1)}%</b></div> : null}{!(tot26Marca || tot25Marca) ? '—' : null}</td>{showY25 ? <><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></> : <><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></>}</tr>
+                {showY25 && <tr className="grandrow"><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>}
+                <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v + interU(i))}</td>)}<td className="tot">{fmt(totMarcaSel + interTot)}</td><td className="tot">100%</td></tr>
+              </>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="panel">
         <h3>Unidades 2028 por categoría y mes — {marca}{UD} <span className="unit">(unidades)</span></h3>
         <div className="sub">{usarCat ? 'Las unidades de cada cliente se distribuyen entre las categorías usando el % que el Director definió para ese cliente. La columna Peso % muestra cuánto pesa cada categoría en la marca: unidades de la categoría ÷ unidades totales de la marca.' : catMsg}</div>
@@ -8624,90 +8709,6 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
         )
       })()}
 
-      <div className="panel" style={{ marginTop: 28 }}>
-        <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
-          <h3 style={{ margin: 0 }}>Ventas · Unidades 2028 — {marca}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Ventas" /></h3>
-          {useVend && <div style={{ display: 'flex', gap: 6, marginLeft: 10, flexWrap: 'wrap' }}>{[[0, vName(0)], [1, vName(1)], ['inter', '🔄 Intercompañía'], ['T', '▣ Total']].map(([k, lbl]) => <button key={k} className={'seg' + (vendView === k ? ' active' : '')} onClick={() => setVendView(k)} style={vendView === k ? (k === 'inter' ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : undefined) : undefined}>{lbl}</button>)}</div>}
-          <div className="spacer"></div>
-          <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
-        </div>
-        {vendView !== 'inter' && <div className="sub"><ol style={{ margin: '4px 0 0', paddingLeft: 20, lineHeight: 1.6 }}>
-          <li>Escribe <b>un % de crecimiento por cliente</b>: al lado verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)).</li>
-          <li>En las <b>celdas amarillas de 2028</b> reparte esas unidades: tú decides <b>en qué meses</b> se venden.</li>
-          <li>La <b>suma</b> debe cuadrar con el objetivo: <b style={{ color: '#15803d' }}>✓</b> cuando cuadra, <b style={{ color: '#b45309' }}>ámbar ⚠</b> cuando falta ajustar.</li>
-          <li>Las filas grises <b>2025</b> y <b>2026</b> son el histórico (referencia).</li>
-          <li><b>Cliente nuevo</b>: escribe sus unidades 2028 directamente (sin %).</li>
-        </ol></div>}
-        {vendView === 'inter' && <div className="sub">🔄 <b>Intercompañía (Retail)</b>: estas unidades salen automáticamente de lo que <b>Retail</b> le compra a {marca} (vía el mapa de abastecimiento). Son de <b>solo lectura</b> e <b>incobrables</b>; se editan en <b>Retail → Compras por tienda</b>.</div>}
-        <div className="sub no-ayuda" style={{ marginTop: 4, fontWeight: 700, color: vendView === 'inter' ? '#7c3aed' : '#5b9bd5' }}>{useVend && vendView === 'inter' ? <>🔄 Intercompañía (Retail) — {fmt(interTot)} ud en 2028 <span className="unit" style={{ fontWeight: 400 }}>(solo lectura · incobrable)</span></> : useVend && vendView !== 'T' ? <>{vName(vendView)} — {fmt(vendUnits(vendView))} ud en 2028</> : <>Total 2028 de {marca}: {fmt(totMarcaSel + interTot)} ud{hayInter && <span className="unit" style={{ fontWeight: 400 }}> (incl. {fmt(interTot)} intercompañía)</span>}</>}</div>
-        {vendView !== 'inter' && <div style={{ display: 'flex', gap: 28, margin: '4px 0 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          <div style={{ order: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 Buscar cliente…" style={{ border: '1px solid var(--line)', borderRadius: 7, padding: '7px 11px', font: 'inherit', minWidth: 220 }} />
-            {buscar && <button className="btn" onClick={() => setBuscar('')}>✕ limpiar</button>}
-          </div>
-          <div style={{ order: 1, display: 'flex', flexDirection: 'column', gap: 8, flex: '1 1 560px', maxWidth: 620 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <label style={{ width: 210, flex: '0 0 210px', fontWeight: 700, color: 'var(--muted)', fontSize: 12 }}>AGREGAR CLIENTE EXISTENTE</label>
-              <select value="" onChange={(e) => { if (e.target.value) agregarCliente(e.target.value) }} style={{ flex: 1, minWidth: 200 }}>
-                <option value="">Elegir de la base…</option>
-                {baseCli.filter((c) => !clientes.some((x) => upper(x) === upper(c))).map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <label style={{ width: 210, flex: '0 0 210px', fontWeight: 700, color: 'var(--muted)', fontSize: 12 }}>AGREGAR CLIENTE NUEVO</label>
-              <input className="fillin" value={nuevoCli} onChange={(e) => setNuevoCli(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') agregarCliente(nuevoCli) }} placeholder="Escribe el nombre…" style={{ flex: 1, minWidth: 170, background: '#fff' }} />
-              <button className="btn primary" onClick={() => agregarCliente(nuevoCli)}>➕ Agregar</button>
-            </div>
-          </div>
-        </div>}
-        <div ref={topScRef} onScroll={() => { if (botScRef.current) botScRef.current.scrollLeft = topScRef.current.scrollLeft }} className="tablewrap" style={{ maxHeight: 'none', overflowY: 'hidden', border: 'none', borderRadius: 0, marginBottom: 2 }}><div style={{ width: 1228, height: 1 }} /></div>
-        <div className="tablewrap" ref={botScRef} onScroll={() => { if (topScRef.current) topScRef.current.scrollLeft = botScRef.current.scrollLeft }}>
-          <table className="vfix" style={{ width: 1228 }}>
-            <colgroup><col style={{ width: '220px' }} /><col style={{ width: '88px' }} /><col style={{ width: '55px' }} />{MESES.map((_, i) => <col key={i} style={{ width: '64px' }} />)}<col style={{ width: '70px' }} /><col style={{ width: '60px' }} /></colgroup>
-            <thead><tr><th className="l">Cliente</th><th>% Crec</th><th>Año</th>{MESES.map((m) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Total</th><th>% Peso</th></tr></thead>
-            <tbody>
-              {clientes.length === 0 && <tr><td className="l" colSpan={17}>No hay clientes con histórico 2026 para {marca}. Carga el Histórico, o agrega un cliente con el buscador de arriba.</td></tr>}
-              {clientes.filter((cli) => (!buscar.trim() || upper(cli).indexOf(upper(buscar)) >= 0) && (!useVend || vendView === 'T' || vendOf(cli) === vendView)).map((cli, _idx, _arr) => { const nuevo = esNuevo(cli); const obj = objetivo28(cli); const desc = !nuevo && obj != null && t28(cli) !== obj; return (
-                <Fragment2 key={cli}>
-                  {useVend && vendView === 'T' && (_idx === 0 || vendOf(_arr[_idx - 1]) !== vendOf(cli)) && (() => { const vi = vendOf(cli); const grp = _arr.filter((c) => vendOf(c) === vi); const uSub = grp.reduce((a, c) => a + t28(c), 0); return <tr className="secrow"><td className="l" colSpan={17}>🧑‍💼 {vName(vi)} <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>· {grp.length} cliente(s) · {fmt(uSub)} ud en 2028</span></td></tr> })()}
-                  <tr>
-                    <td className="l" rowSpan={rsp}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}{paisByCli[cli] && <div style={{ marginTop: 2, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }} title="País del cliente (Base Clientes SF)">📍 {paisByCli[cli]}</div>}{useVend && <div style={{ marginTop: 5 }}><span className="unit" style={{ marginRight: 4 }}>Vendedor:</span><select value={vendOf(cli)} onChange={(e) => setVendOf(cli, Number(e.target.value))} style={{ fontSize: 11, padding: '2px 4px', borderRadius: 5, border: '1px solid var(--line)' }}><option value={0}>{vName(0)}</option><option value={1}>{vName(1)}</option></select></div>}</td>
-                    <td className="cell" rowSpan={rsp} style={{ verticalAlign: 'top' }}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}
-                      <div style={{ marginTop: 7, fontSize: 11, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
-                        {!nuevo && <div style={{ color: 'var(--muted)' }} title="Total objetivo = total 2026 × (1 + % crecimiento). Reparte este total en los meses de 2028.">🎯 obj <b>{fmt(obj)}</b></div>}
-                        <div style={{ color: desc ? '#b45309' : (t28(cli) > 0 ? '#15803d' : 'var(--muted)'), fontWeight: 700 }} title={nuevo ? 'Total 2028 que llevas repartido por mes.' : (desc ? 'Lo repartido por mes NO cuadra con el objetivo del %. Ajusta los meses.' : 'El reparto por mes cuadra con el objetivo ✓')}><span style={{ fontWeight: 600, color: 'var(--muted)' }}>suma </span><b>{fmt(t28(cli))}</b>{!nuevo && (desc ? ' ⚠' : (t28(cli) > 0 ? ' ✓' : ''))}</div>
-                      </div>
-                    </td>
-                    {showY25
-                      ? <><td className="yl">2025</td>{MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u25(cli, mi))}</td>)}<td className="ref"><b>{nuevo ? '—' : fmt(t25(cli))}</b></td><td className="ref">{nuevo ? '—' : (tot25Marca ? (t25(cli) / tot25Marca * 100).toFixed(1) + '%' : '—')}</td></>
-                      : <><td className="yl">2026</td>{MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u26(cli, mi))}</td>)}<td className="ref"><b>{nuevo ? '—' : fmt(t26(cli))}</b></td><td className="ref">{nuevo ? '—' : (tot26Marca ? (t26(cli) / tot26Marca * 100).toFixed(1) + '%' : '—')}</td></>}
-                  </tr>
-                  {showY25 && <tr>
-                    <td className="yl">2026</td>
-                    {MESES.map((_, mi) => <td key={mi} className="ref">{nuevo ? '—' : fmt(u26(cli, mi))}</td>)}
-                    <td className="ref"><b>{nuevo ? '—' : fmt(t26(cli))}</b></td>
-                    <td className="ref">{nuevo ? '—' : (tot26Marca ? (t26(cli) / tot26Marca * 100).toFixed(1) + '%' : '—')}</td>
-                  </tr>}
-                  <tr className="proy2028">
-                    <td className="yl proyl">2028</td>
-                    {MESES.map((_, mi) => { const raw = manual[mKey(cli, mi)]; const show = (raw == null || raw === '' || num(raw) < 0) ? '' : raw; return <td key={mi} className="cell"><input value={show} onChange={(e) => setMan(cli, mi, e.target.value)} inputMode="decimal" placeholder="0" /></td> })}
-                    <td className="tot" style={desc ? { background: '#fdf1e0', color: '#b45309' } : undefined} title={desc ? `El % de crecimiento da un objetivo de ${fmt(obj)} ud, pero tu reparto por mes suma ${fmt(t28(cli))} (diferencia ${(t28(cli) - obj) >= 0 ? '+' : ''}${fmt(t28(cli) - obj)}). Ajusta los meses para cuadrar.` : `Objetivo por %: ${fmt(obj == null ? t28(cli) : obj)} ud`}>{fmt(t28(cli))}{desc ? ' ⚠' : ''}</td>
-                    <td className="tot">{totMarcaSel ? (t28(cli) / totMarcaSel * 100).toFixed(1) + '%' : '—'}</td>
-                  </tr>
-                </Fragment2>
-              ) })}
-              {(vendView === 'inter' || (hayInter && (!useVend || vendView === 'T'))) && <tr style={{ background: '#f6eef9' }}><td className="l" colSpan={2} style={{ color: '#7c3aed', fontWeight: 700 }}>🔄 {INTER_CLI} <span className="unit" style={{ fontWeight: 400 }}>(solo lectura · desde Retail · ⛔ incobrable)</span></td><td className="yl proyl">2028</td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#7c3aed' }}>{fmt(interU(mi))}</td>)}<td className="tot" style={{ color: '#7c3aed', fontWeight: 800 }}>{fmt(interTot)}</td><td className="tot">{(totMarcaSel + interTot) ? (interTot / (totMarcaSel + interTot) * 100).toFixed(1) + '%' : '—'}</td></tr>}
-              {vendView === 'inter' && !hayInter && <tr><td className="l" colSpan={17} style={{ color: 'var(--muted)', fontStyle: 'italic', padding: '10px 9px' }}>Aún no hay compras de <b>{marca}</b> en Retail. Entra a <b>Retail → Compras por tienda</b>, carga unidades y el mapa de abastecimiento (que incluya {marca}) y guarda; aquí aparecerán las unidades intercompañía automáticamente.</td></tr>}
-              {clientes.length > 0 && <tr className="grandrow" style={{ background: '#eef4fb' }}><td className="l" style={{ color: '#1d4ed8', whiteSpace: 'normal', overflow: 'visible', lineHeight: 1.2 }}>💰 Venta neta{useVend && vendView !== 'T' && <div style={{ fontWeight: 600, fontSize: 11 }}>{vName(vendView)}</div>}</td><td></td><td></td>{MESES.map((_, mi) => <td key={mi} className="tot" style={{ color: '#1d4ed8' }}>{fmt(ventaNetaMes(mi))}</td>)}<td className="tot" style={{ color: '#1d4ed8', fontWeight: 800 }}>{fmt(MESES.reduce((a, _, mi) => a + ventaNetaMes(mi), 0))}</td><td></td></tr>}
-              {clientes.length > 0 && (!useVend || vendView === 'T') && <>
-                <tr className="grandrow"><td className="l" rowSpan={rsp} style={{ verticalAlign: 'top' }}>TOTAL {marca}</td><td rowSpan={rsp} style={{ verticalAlign: 'top', fontSize: 10, lineHeight: 1.3, whiteSpace: 'normal', overflow: 'hidden' }} title="Crecimiento del total 2028 frente a cada año histórico">{(tot26Marca || tot25Marca) ? <div style={{ color: 'var(--muted)', fontWeight: 600, marginBottom: 3 }}>Crec. 2028:</div> : null}{tot26Marca ? <div>vs 2026 <b style={{ color: crecMarca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crecMarca >= 0 ? '+' : '') + crecMarca.toFixed(1)}%</b></div> : null}{tot25Marca && showY25 ? <div>vs 2025 <b style={{ color: crec25Marca >= 0 ? 'var(--ok)' : 'var(--bad)' }}>{(crec25Marca >= 0 ? '+' : '') + crec25Marca.toFixed(1)}%</b></div> : null}{!(tot26Marca || tot25Marca) ? '—' : null}</td>{showY25 ? <><td>2025</td>{mes25.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot25Marca)}</td><td className="tot">100%</td></> : <><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></>}</tr>
-                {showY25 && <tr className="grandrow"><td>2026</td>{mes26.map((v, i) => <td key={i} className="tot">{fmt(v)}</td>)}<td className="tot">{fmt(tot26Marca)}</td><td className="tot">100%</td></tr>}
-                <tr className="grandrow"><td>2028</td>{mes28.map((v, i) => <td key={i} className="tot">{fmt(v + interU(i))}</td>)}<td className="tot">{fmt(totMarcaSel + interTot)}</td><td className="tot">100%</td></tr>
-              </>}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </>
   )
 }
