@@ -8631,7 +8631,13 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
           <div className="spacer"></div>
           <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
         </div>
-        {vendView !== 'inter' && <div className="sub">Escribe <b>un % de crecimiento por cliente</b>: junto al % verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)) y la <b>suma</b> de lo que llevas repartido. Luego, en las <b>celdas amarillas de 2028</b>, tú decides <b>en qué meses</b> vender esas unidades. Cuando la suma cuadra con el objetivo aparece <b style={{ color: '#15803d' }}>✓</b>; si no, sale en <b style={{ color: '#b45309' }}>ámbar ⚠</b> para que ajustes. Las filas grises 2025 y 2026 son el histórico (referencia). Para un <b>cliente nuevo</b> escribe sus unidades 2028 directamente.</div>}
+        {vendView !== 'inter' && <div className="sub"><ol style={{ margin: '4px 0 0', paddingLeft: 20, lineHeight: 1.6 }}>
+          <li>Escribe <b>un % de crecimiento por cliente</b>: al lado verás el <b>🎯 objetivo</b> de unidades 2028 (= total 2026 × (1 + %)).</li>
+          <li>En las <b>celdas amarillas de 2028</b> reparte esas unidades: tú decides <b>en qué meses</b> se venden.</li>
+          <li>La <b>suma</b> debe cuadrar con el objetivo: <b style={{ color: '#15803d' }}>✓</b> cuando cuadra, <b style={{ color: '#b45309' }}>ámbar ⚠</b> cuando falta ajustar.</li>
+          <li>Las filas grises <b>2025</b> y <b>2026</b> son el histórico (referencia).</li>
+          <li><b>Cliente nuevo</b>: escribe sus unidades 2028 directamente (sin %).</li>
+        </ol></div>}
         {vendView === 'inter' && <div className="sub">🔄 <b>Intercompañía (Retail)</b>: estas unidades salen automáticamente de lo que <b>Retail</b> le compra a {marca} (vía el mapa de abastecimiento). Son de <b>solo lectura</b> e <b>incobrables</b>; se editan en <b>Retail → Compras por tienda</b>.</div>}
         <div className="sub no-ayuda" style={{ marginTop: 4, fontWeight: 700, color: vendView === 'inter' ? '#7c3aed' : '#5b9bd5' }}>{useVend && vendView === 'inter' ? <>🔄 Intercompañía (Retail) — {fmt(interTot)} ud en 2028 <span className="unit" style={{ fontWeight: 400 }}>(solo lectura · incobrable)</span></> : useVend && vendView !== 'T' ? <>{vName(vendView)} — {fmt(vendUnits(vendView))} ud en 2028</> : <>Total 2028 de {marca}: {fmt(totMarcaSel + interTot)} ud{hayInter && <span className="unit" style={{ fontWeight: 400 }}> (incl. {fmt(interTot)} intercompañía)</span>}</>}</div>
         {vendView !== 'inter' && <div style={{ display: 'flex', gap: 28, margin: '4px 0 12px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
