@@ -3190,16 +3190,20 @@ function SaldosForm({ empresa, marca }) {
   }, [empresa, marca])
   const SEAS = ['SS27', 'FW27']
   const [season, setSeason] = useState('SS27')
-  const gd = (cat) => num((st.disp || {})[cat])
-  const setDisp = (cat, v) => setSt((s) => ({ ...s, disp: { ...(s.disp || {}), [cat]: v } }))
-  const gv = (cat) => SEAS.reduce((a, s) => a + num(((st.vpS || {})[s] || {})[cat]), 0)   // ventas pendientes (suma de las 2 temporadas)
-  const gc = (cat) => SEAS.reduce((a, s) => a + num(((st.cllS || {})[s] || {})[cat]), 0)   // compras por llegar (suma de las 2 temporadas)
-  const invIni = (cat) => gd(cat) - gv(cat) + gc(cat)
+  const setVal = (grp, cat, v) => setSt((s) => ({ ...s, [grp]: { ...(s[grp] || {}), [cat]: v } }))
+  const gd = (cat) => num((st.disp || {})[cat])                    // inv disponible (de SF)
+  const gReal = (cat) => num((st.real || {})[cat])                 // venta real
+  const gMaster = (cat, s) => num(((st.masterS || {})[s] || {})[cat])   // venta proyectada por temporada (Master)
+  const gMasterTot = (cat) => SEAS.reduce((a, s) => a + gMaster(cat, s), 0)
+  const gComMes = (cat, mi) => SEAS.reduce((a, s) => a + num((((st.cllM || {})[s] || {})[cat] || [])[mi]), 0)  // compras por llegar en el mes mi (ambas temporadas)
+  const gComTot = (cat) => MESES.reduce((a, _, mi) => a + gComMes(cat, mi), 0)
+  const invIni = (cat) => gd(cat) - (gMasterTot(cat) - gReal(cat)) + gComTot(cat)
   const catsFrom = (obj) => { const o = {}; SEAS.forEach((s) => Object.keys((obj || {})[s] || {}).forEach((c) => { o[c] = 1 })); return o }
-  const allCats = [...new Set([...cats, ...Object.keys(st.disp || {}), ...Object.keys(catsFrom(st.vpS)), ...Object.keys(catsFrom(st.cllS))])].filter(Boolean)
-  const Tdisp = allCats.reduce((a, c) => a + gd(c), 0), Tvp = allCats.reduce((a, c) => a + gv(c), 0), Tcll = allCats.reduce((a, c) => a + gc(c), 0)
+  const allCats = [...new Set([...cats, ...Object.keys(st.disp || {}), ...Object.keys(st.real || {}), ...Object.keys(catsFrom(st.masterS)), ...Object.keys(catsFrom(st.cllM))])].filter(Boolean)
+  const seasonDone = (s) => Object.keys((st.masterS || {})[s] || {}).length > 0
+  const comMesT = (mi) => allCats.reduce((a, c) => a + gComMes(c, mi), 0)
+  const Td = allCats.reduce((a, c) => a + gd(c), 0), Tss = allCats.reduce((a, c) => a + gMaster(c, 'SS27'), 0), Tfw = allCats.reduce((a, c) => a + gMaster(c, 'FW27'), 0), Treal = allCats.reduce((a, c) => a + gReal(c), 0), Tcom = allCats.reduce((a, c) => a + gComTot(c), 0)
   const totIni = allCats.reduce((a, c) => a + invIni(c), 0)
-  const seasonDone = (s) => Object.keys((st.vpS || {})[s] || {}).length > 0 || Object.keys((st.cllS || {})[s] || {}).length > 0
   function guardar() {
     setSaving(true)
     try {
@@ -3226,36 +3230,36 @@ function SaldosForm({ empresa, marca }) {
           const rows = XLSX.utils.sheet_to_json(wb.Sheets[consoName], { header: 1, defval: '' })
           let hr = 0; for (let i = 0; i < Math.min(rows.length, 8); i++) { if (idxOf(rows[i], 'CATEGORY ABP') >= 0) { hr = i; break } }
           const H = rows[hr] || []
-          const iCat = idxOf(H, 'CATEGORY ABP'), iStyle = idxOf(H, 'STYLE'), iSku = idxOf(H, 'SKU'), iQty = idxOf(H, 'QTY'), iFp = idxOf(H, 'FECHA EN PA')
-          const cll = {}; const today = new Date()
+          const iCat = idxOf(H, 'CATEGORY ABP'), iStyle = idxOf(H, 'STYLE'), iSku = idxOf(H, 'SKU'), iQty = idxOf(H, 'QTY'), iFp = idxOf(H, 'FECHA EN PA'), iAcct = idxOf(H, 'ACCOUNT'), iPv = idxOf(H, 'PV TOTAL')
+          const master = {}; const cllMonth = {}; const masterCli = {}; const today = new Date()
           for (let r = hr + 1; r < rows.length; r++) {
             const row = rows[r] || []; const cat = String(row[iCat] || '').trim(); if (!cat) continue
             const stKey = String(row[iStyle] || '').trim(); if (stKey) styleToCat[stKey.toUpperCase()] = cat
             const sku = String(row[iSku] || '').trim(); if (sku) styleToCat[sku.toUpperCase()] = cat
             const q = num(row[iQty]); const fp = row[iFp]
-            if (q && fp instanceof Date && fp > today) cll[cat] = (cll[cat] || 0) + q
+            if (q) master[cat] = (master[cat] || 0) + q    // venta proyectada (Master) por categoría
+            if (q && fp instanceof Date && fp > today) { const mi = fp.getMonth(); (cllMonth[cat] = cllMonth[cat] || Array(12).fill(0))[mi] += q }  // compras por llegar por mes (XFD futuro)
+            const acct = String(row[iAcct] || '').trim(); const pv = num(row[iPv]); if (acct && pv) masterCli[acct] = (masterCli[acct] || 0) + pv  // venta proyectada $ por cliente (para Finanzas)
           }
-          const cllObj = Object.fromEntries(Object.entries(cll).map(([k, v]) => [k, Math.round(v)]))
-          setSt((s) => ({ ...s, cllS: { ...(s.cllS || {}), [season]: cllObj } }))
+          const masterObj = Object.fromEntries(Object.entries(master).map(([k, v]) => [k, Math.round(v)]))
+          const cllMObj = Object.fromEntries(Object.entries(cllMonth).map(([k, v]) => [k, v.map((x) => Math.round(x))]))
+          const masterCliObj = Object.fromEntries(Object.entries(masterCli).map(([k, v]) => [k, Math.round(v)]))
+          setSt((s) => ({ ...s, masterS: { ...(s.masterS || {}), [season]: masterObj }, cllM: { ...(s.cllM || {}), [season]: cllMObj }, masterCliS: { ...(s.masterCliS || {}), [season]: masterCliObj } }))
         }
         if (oorName) {
           const rows = XLSX.utils.sheet_to_json(wb.Sheets[oorName], { header: 1, defval: '' })
           const H = rows[0] || []
-          const iOpen = idxOf(H, 'OPEN QUANTITY'), iStyle = idxOf(H, 'STYLE'), iSku = idxOf(H, 'SKU'), iCust = idxOf(H, 'CUSTOMER NAME'), iUsd = idxOf(H, 'USD OPEN')
-          const vp = {}; const perCli = {}
+          const iCust = idxOf(H, 'CUSTOMER NAME'), iUsd = idxOf(H, 'USD OPEN')
+          const perCli = {}
           for (let r = 1; r < rows.length; r++) {
-            const row = rows[r] || []; const q = num(row[iOpen]); const usd = num(row[iUsd])
-            const stKey = String(row[iStyle] || '').trim().toUpperCase(); const sku = String(row[iSku] || '').trim().toUpperCase()
-            const cat = styleToCat[stKey] || styleToCat[sku] || styleToCat[sku.split('-')[0]] || 'Sin categoría'
-            if (q) vp[cat] = (vp[cat] || 0) + q
+            const row = rows[r] || []; const usd = num(row[iUsd])
             const cli = String(row[iCust] || '').trim(); if (cli && usd) perCli[cli] = (perCli[cli] || 0) + usd
           }
           // La cartera (cuentas por cobrar) se guarda por temporada para Finanzas (no se muestra en Producto).
           const cxcArr = Object.entries(perCli).sort((a, b) => b[1] - a[1]).map(([cliente, open]) => ({ cliente, open: Math.round(open), term: termMap[upper(cliente)] || '' }))
-          const vpObj = Object.fromEntries(Object.entries(vp).map(([k, v]) => [k, Math.round(v)]))
-          setSt((s) => ({ ...s, vpS: { ...(s.vpS || {}), [season]: vpObj }, cxcS: { ...(s.cxcS || {}), [season]: cxcArr } }))
+          setSt((s) => ({ ...s, cxcS: { ...(s.cxcS || {}), [season]: cxcArr } }))
         }
-        setMsg({ t: 'ok', x: `Importado para la temporada ${season}. Se sumó a lo que ya tenías de la otra temporada. Revisa y pulsa 💾 Guardar.` })
+        setMsg({ t: 'ok', x: `Master ${season} importado (proyección + compras por llegar por mes). La otra temporada queda intacta. Revisa y pulsa 💾 Guardar.` })
       } catch (err) { setMsg({ t: 'bad', x: 'No se pudo leer el Excel: ' + (err && err.message) }) }
     }
     reader.readAsArrayBuffer(file)
@@ -3270,78 +3274,79 @@ function SaldosForm({ empresa, marca }) {
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
-      <div className="sub">Importa <b>las dos temporadas</b> (SS27 y FW27), una por una: elige la temporada, sube su Excel, y los valores se <b>suman</b>. <b>Inventario inicial 2028</b> por categoría = <b>Inv. disponible</b> (lo escribes tú) − <b>Ventas pendientes</b> + <b>Compras por llegar</b> (XFD futuro). Ventas pendientes y compras son la <b>suma de SS27 + FW27</b> importadas.</div>
+      <div className="sub"><b>Inv. inicial 2028</b> = <b>Inv. disponible</b> (de SF) − (<b>Master SS27</b> + <b>Master FW27</b> − <b>Venta Real</b>) + <b>Compras por llegar</b>. El Master (proyección) y las compras por llegar (por mes de XFD) salen del Excel de cada temporada; <b>Inv. disponible</b> y <b>Venta Real</b> los pones tú (o se importan de SF / archivo de venta real).</div>
       <div className="tablewrap" style={{ marginTop: 6 }}>
-        <table className="vfix" style={{ width: 'auto', minWidth: 620 }}>
-          <thead><tr><th className="l">Categoría</th><th>Inv. disponible</th><th>(−) Ventas pendientes</th><th>(+) Compras por llegar</th><th>= Inv. inicial 2028</th></tr></thead>
+        <table className="vfix stickcol" style={{ width: 'auto', minWidth: 1100 }}>
+          <thead><tr>
+            <th className="l">Categoría</th><th className="cod">Inv. disp.</th>
+            <th>Master SS27</th><th>Master FW27</th><th>(−) Venta Real</th>
+            {MESES.map((m) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}
+            <th>Compras tot.</th><th>= Inv. inicial 2028</th>
+          </tr></thead>
           <tbody>
-            {allCats.length === 0 && <tr><td className="l" colSpan={5} style={{ color: 'var(--muted)' }}>No hay categorías aún. Importa el Excel de cada temporada.</td></tr>}
+            {allCats.length === 0 && <tr><td className="l" colSpan={6 + MESES.length} style={{ color: 'var(--muted)' }}>No hay categorías aún. Importa el Excel Master de cada temporada.</td></tr>}
             {allCats.map((c) => <tr key={c}>
               <td className="l sub2">{c}</td>
-              <td className="cell"><input value={(st.disp || {})[c] ?? ''} onChange={(e) => setDisp(c, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>
-              <td className="tot" title="Suma de las ventas pendientes de SS27 + FW27 importadas">{fmt(gv(c))}</td>
-              <td className="tot" title="Suma de las compras por llegar (XFD futuro) de SS27 + FW27">{fmt(gc(c))}</td>
+              <td className="cell cod"><input value={(st.disp || {})[c] ?? ''} onChange={(e) => setVal('disp', c, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>
+              <td className="tot" title="Venta proyectada SS27 (Master)">{fmt(gMaster(c, 'SS27'))}</td>
+              <td className="tot" title="Venta proyectada FW27 (Master)">{fmt(gMaster(c, 'FW27'))}</td>
+              <td className="cell"><input value={(st.real || {})[c] ?? ''} onChange={(e) => setVal('real', c, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>
+              {MESES.map((_, mi) => { const v = gComMes(c, mi); return <td key={mi} className="tot" style={v ? undefined : { color: '#cbd5e1' }}>{v ? fmt(v) : '—'}</td> })}
+              <td className="tot" style={{ fontWeight: 700 }}>{fmt(gComTot(c))}</td>
               <td className="tot" style={{ fontWeight: 800, color: invIni(c) < 0 ? '#b91c1c' : '#15803d' }}>{fmt(invIni(c))}</td>
             </tr>)}
-            <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(Tdisp)}</td><td className="tot">{fmt(Tvp)}</td><td className="tot">{fmt(Tcll)}</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(totIni)}</td></tr>
+            <tr className="grandrow"><td className="l">TOTAL</td><td className="tot cod">{fmt(Td)}</td><td className="tot">{fmt(Tss)}</td><td className="tot">{fmt(Tfw)}</td><td className="tot">{fmt(Treal)}</td>{MESES.map((_, mi) => <td key={mi} className="tot">{fmt(comMesT(mi))}</td>)}<td className="tot" style={{ fontWeight: 800 }}>{fmt(Tcom)}</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(totIni)}</td></tr>
           </tbody>
         </table>
       </div>
-      <div className="sub" style={{ marginTop: 8, fontSize: 11.5 }}>Aquí calculas el <b>inventario con el que arranca 2028</b> por categoría.</div>
+      <div className="sub" style={{ marginTop: 8, fontSize: 11.5 }}>Aquí calculas el <b>inventario con el que arranca 2028</b> por categoría. Las columnas de meses son las <b>compras por llegar</b> según su <b>XFD</b>. 🚧 Los importadores de <b>Inv. disponible (SF)</b> y <b>Venta Real</b> se agregan cuando me pases un ejemplo de cada archivo; por ahora esas dos columnas se escriben a mano.</div>
     </div>
   )
 }
 
-/* ===== Saldo inicial de FINANZAS: con cuánta plata se arranca el Cash Flow 2028 = plata en bancos. Más la cartera (cuentas por cobrar) que viene de los saldos de Producto. ===== */
+/* ===== Saldo inicial de FINANZAS: Cuentas por cobrar por cliente (proyección Master SS27/FW27 + deuda al corte + término → saldo). Viene de los saldos importados en Producto. ===== */
 function SaldoCajaForm({ empresa }) {
-  const [bancos, setBancos] = useState(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); return (s && Array.isArray(s.bancos) && s.bancos.length) ? s.bancos : [{ banco: '', monto: '' }] } catch { return [{ banco: '', monto: '' }] } })
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
-  useEffect(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); if (s && Array.isArray(s.bancos) && s.bancos.length) setBancos(s.bancos) } catch { } }, [empresa])
-  // Cartera (cuentas por cobrar) agregada desde los saldos de Producto: por marca · ambas temporadas.
-  let cartera = []
+  const [termOv, setTermOv] = useState(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); return (s && s.term) || {} } catch { return {} } })
+  useEffect(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); setTermOv((s && s.term) || {}) } catch { setTermOv({}) } }, [empresa])
+  // Agregar por cliente desde los saldos de Producto (todas las marcas · SS27 + FW27).
+  let rows = []
   try {
     const all = JSON.parse(localStorage.getItem(`saldos_${empresa}`) || '{}'); const per = {}
-    Object.values(all).forEach((mk) => { ['SS27', 'FW27'].forEach((s) => { (((mk || {}).cxcS || {})[s] || []).forEach((r) => { const k = upper(r.cliente); if (!per[k]) per[k] = { cliente: r.cliente, open: 0, term: r.term || '' }; per[k].open += num(r.open); if (!per[k].term && r.term) per[k].term = r.term }) }) })
-    cartera = Object.values(per).sort((a, b) => b.open - a.open)
+    const ensure = (cli) => { const k = upper(cli); if (!per[k]) per[k] = { cliente: cli, ss: 0, fw: 0, deuda: 0, term: '' }; return per[k] }
+    Object.values(all).forEach((mk) => {
+      ['SS27', 'FW27'].forEach((s) => { Object.entries((((mk || {}).masterCliS || {})[s]) || {}).forEach(([cli, v]) => { const o = ensure(cli); o[s === 'SS27' ? 'ss' : 'fw'] += num(v) }) })
+      ['SS27', 'FW27'].forEach((s) => { (((mk || {}).cxcS || {})[s] || []).forEach((r) => { const o = ensure(r.cliente); o.deuda += num(r.open); if (!o.term && r.term) o.term = r.term }) })
+    })
+    rows = Object.values(per)
   } catch { }
-  const totBancos = bancos.reduce((a, b) => a + num(b.monto), 0)
-  const totCart = cartera.reduce((a, c) => a + num(c.open), 0)
-  const setB = (i, k, v) => setBancos((bs) => bs.map((b, j) => j === i ? { ...b, [k]: v } : b))
-  const addB = () => setBancos((bs) => [...bs, { banco: '', monto: '' }])
-  const delB = (i) => setBancos((bs) => bs.filter((_, j) => j !== i))
-  function guardar() { setSaving(true); try { const v = { bancos }; localStorage.setItem(`saldocaja_${empresa}`, JSON.stringify(v)); try { saveEstado(empresa, 'saldocaja', v) } catch { } setMsg({ t: 'ok', x: 'Saldo de caja guardado.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  const termOf = (r) => (termOv[upper(r.cliente)] != null && termOv[upper(r.cliente)] !== '') ? termOv[upper(r.cliente)] : (r.term || '')
+  const saldo = (r) => num(r.deuda) + num(r.ss) + num(r.fw)   // saldo inicial por cliente = deuda al corte + proyección pendiente (SS27 + FW27)
+  rows.sort((a, b) => saldo(b) - saldo(a))
+  const T = (f) => rows.reduce((a, r) => a + f(r), 0)
+  const setTerm = (cli, v) => setTermOv((o) => ({ ...o, [upper(cli)]: v }))
+  function guardar() { setSaving(true); try { const v = { term: termOv }; localStorage.setItem(`saldocaja_${empresa}`, JSON.stringify(v)); try { saveEstado(empresa, 'saldocaja', v) } catch { } setMsg({ t: 'ok', x: 'Guardado.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   return (
     <div>
-      <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#0f766e', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>🏦 Saldo inicial de caja 2028</span><span className="unit" style={{ alignSelf: 'center' }}>Con cuánta plata se arranca el Cash Flow (plata en los bancos).</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+      <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#b45309', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>🏦 Saldo inicial — Cuentas por cobrar 2028</span><span className="unit" style={{ alignSelf: 'center' }}>Cartera con la que arranca el año (por cliente).</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
       {msg && <div className={'note no-ayuda ' + msg.t} style={{ marginBottom: 8 }}>{msg.x}</div>}
-      <div className="panel" style={{ borderLeftColor: '#0f766e' }}>
-        <h3 style={{ color: '#0f766e' }}>💵 Plata en bancos <span className="unit">(saldo al cierre 2027 = Cash Inicial de arranque 2028)</span></h3>
-        <div className="sub">Lista tus <b>cuentas de banco</b> con el saldo al cierre de 2027. El <b>total</b> es la plata con la que arranca el Cash Flow (el <b>Cash Inicial</b> de enero-28).</div>
-        <div className="tablewrap" style={{ marginTop: 6 }}>
-          <table className="vfix" style={{ width: 'auto', minWidth: 460 }}>
-            <thead><tr><th className="l">Banco / Cuenta</th><th>Saldo ($)</th><th></th></tr></thead>
-            <tbody>
-              {bancos.map((b, i) => <tr key={i}>
-                <td className="cell"><input value={b.banco} onChange={(e) => setB(i, 'banco', e.target.value)} placeholder="Nombre del banco / cuenta" style={{ width: '100%' }} /></td>
-                <td className="cell"><input value={b.monto} onChange={(e) => setB(i, 'monto', e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>
-                <td className="tot"><button className="btn" onClick={() => delB(i)} style={{ color: '#b91c1c', padding: '2px 8px' }}>✕</button></td>
-              </tr>)}
-              <tr><td colSpan={3} style={{ padding: '6px 0' }}><button className="btn" onClick={addB}>➕ Agregar banco</button></td></tr>
-              <tr className="grandrow"><td className="l">TOTAL en bancos</td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(totBancos)}</td><td></td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
       <div className="panel" style={{ borderLeftColor: '#b45309' }}>
-        <h3 style={{ color: '#b45309' }}>📥 Cuentas por cobrar <span className="unit">(cartera inicial 2028 · viene de los saldos de Producto por marca · SS27 + FW27)</span></h3>
-        <div className="sub">Lo que los clientes deben al arrancar 2028 (del OOR de cada marca). Según el <b>término</b> se cobra en los meses de 2028 (entra como Cash In). Se llena al importar el Excel en <b>Producto → Saldos</b>.</div>
+        <h3 style={{ color: '#b45309' }}>📥 Cuentas por cobrar por cliente <span className="unit">(viene de los saldos importados en Producto · todas las marcas · SS27 + FW27)</span></h3>
+        <div className="sub"><b>Saldo por cliente</b> = <b>Deuda al corte</b> + <b>Master SS27</b> + <b>Master FW27</b> (proyección de venta pendiente). El <b>término</b> (de Base_Clientes, ajustable) define en qué meses de 2028 se cobra. Se llena al importar el Excel Master de cada marca en <b>Producto → 🧮 Saldos</b>.</div>
         <div className="tablewrap" style={{ marginTop: 6 }}>
-          <table className="vfix" style={{ width: 'auto', minWidth: 460 }}>
-            <thead><tr><th className="l">Cliente</th><th>Pendiente ($)</th><th className="l">Término</th></tr></thead>
+          <table className="vfix" style={{ width: 'auto', minWidth: 720 }}>
+            <thead><tr><th className="l">Cliente</th><th>Master SS27 ($)</th><th>Master FW27 ($)</th><th>Deuda al corte ($)</th><th className="l">Término</th><th>= Saldo ($)</th></tr></thead>
             <tbody>
-              {cartera.length === 0 && <tr><td className="l" colSpan={3} style={{ color: 'var(--muted)' }}>Aún no hay cartera. Importa el Excel de cada marca en <b>Producto → Saldos 2028</b> y guarda.</td></tr>}
-              {cartera.map((c, i) => <tr key={i}><td className="l sub2">{c.cliente}</td><td className="tot" style={{ color: '#b45309' }}>{fmt(num(c.open))}</td><td className="l sub2">{c.term || '—'}</td></tr>)}
-              {cartera.length > 0 && <tr className="grandrow"><td className="l">TOTAL cartera</td><td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(totCart)}</td><td></td></tr>}
+              {rows.length === 0 && <tr><td className="l" colSpan={6} style={{ color: 'var(--muted)' }}>Aún no hay datos. Importa el Excel Master de cada marca en <b>Producto → 🧮 Saldos 2028</b> y guarda.</td></tr>}
+              {rows.map((r, i) => <tr key={i}>
+                <td className="l sub2">{r.cliente}</td>
+                <td className="tot">{fmt(num(r.ss))}</td>
+                <td className="tot">{fmt(num(r.fw))}</td>
+                <td className="tot" style={{ color: '#b45309' }}>{fmt(num(r.deuda))}</td>
+                <td className="l"><select value={termOf(r)} onChange={(e) => setTerm(r.cliente, e.target.value)} style={{ fontSize: 12, padding: '3px 6px' }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select></td>
+                <td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(saldo(r))}</td>
+              </tr>)}
+              {rows.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(T((r) => num(r.ss)))}</td><td className="tot">{fmt(T((r) => num(r.fw)))}</td><td className="tot" style={{ color: '#b45309' }}>{fmt(T((r) => num(r.deuda)))}</td><td></td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(T(saldo))}</td></tr>}
             </tbody>
           </table>
         </div>
