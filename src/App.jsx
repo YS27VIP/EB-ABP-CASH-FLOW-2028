@@ -288,7 +288,7 @@ const RETAIL_GASTOS = [
   ['Mantenimiento y aseo', 22690], ['Gastos bancarios', 118173], ['Gastos apertura o cierre de tiendas', 135885], ['Otros gastos', 23635],
 ]
 // Retail: tiendas físicas por defecto (del P&L). Se pueden agregar nuevas en la pestaña Ventas por tienda.
-const RETAIL_TIENDAS = ['Birkenstock Andino', 'Hoka Andino', 'MUH Atlantis', 'MUH Arkadia', 'Sale Factory', 'E-Commerce', 'Mayoristas', 'SINERGY']
+const RETAIL_TIENDAS = ['Birkenstock Andino', 'Hoka Andino', 'MUH Atlantis', 'MUH Arkadia', 'Sale Factory', 'Mayoristas', 'SINERGY']
 // Preconfiguración por tienda (del ABP 2026_2027 RETAIL): qué marcas·categorías wholesale vende cada tienda. La subcategoría Retail = "MARCA · CATEGORÍA". Editable por el usuario.
 const RETAIL_PRESET = {
   "Birkenstock Andino": [["BIRKENSTOCK","ACTIVE"],["BIRKENSTOCK","FTW LEATHER"],["BIRKENSTOCK","FTW CLOSE TOE"],["BIRKENSTOCK","FTW EVA"],["BIRKENSTOCK","FTW PAPILLIO"],["BIRKENSTOCK","FTW PROFESIONAL"],["BIRKENSTOCK","SOCKS"]],
@@ -304,10 +304,9 @@ const RETAIL_SUBS_PRESET = {
 }
 RETAIL_SUBS_PRESET['MUH Arkadia'] = RETAIL_SUBS_PRESET['MUH Atlantis']
 RETAIL_SUBS_PRESET['Sale Factory'] = RETAIL_SUBS_PRESET['MUH Atlantis']
-RETAIL_SUBS_PRESET['E-Commerce'] = RETAIL_SUBS_PRESET['MUH Atlantis']
 RETAIL_SUBS_PRESET['Mayoristas'] = RETAIL_SUBS_PRESET['MUH Atlantis']
 const _MUH_BRANDS = ["ALTRA", "BIRKENSTOCK", "HOKA", "INJINJI", "MAMMUT", "NORDA", "ARIAT", "BLUNDSTONE", "COTOPAXI", "ECCO", "FITFLOP", "FJALLRAVEN", "FLOWER MOUNTAIN", "FOAMERS", "GOORIN BROS", "KEEN", "UGG", "SMARTWOOL", "IZIPIZI"]
-const RETAIL_STORE_BRANDS = { "Birkenstock Andino": ["BIRKENSTOCK"], "Hoka Andino": ["HOKA"], "MUH Atlantis": _MUH_BRANDS, "MUH Arkadia": _MUH_BRANDS, "Sale Factory": _MUH_BRANDS, "E-Commerce": _MUH_BRANDS, "Mayoristas": _MUH_BRANDS }
+const RETAIL_STORE_BRANDS = { "Birkenstock Andino": ["BIRKENSTOCK"], "Hoka Andino": ["HOKA"], "MUH Atlantis": _MUH_BRANDS, "MUH Arkadia": _MUH_BRANDS, "Sale Factory": _MUH_BRANDS, "Mayoristas": _MUH_BRANDS }
 // Tiendas que pertenecen al bucket SINERGY (su P&L va a la columna SINERGY & DYNAMICS del Holding, NO a Energy Brands). El resto es P&L Retail EB.
 const SINERGY_TIENDAS = new Set(['SINERGY'])
 // SINERGY es el nombre del grupo de TODAS las tiendas del Retail: su venta, costo y compras van al
@@ -3192,12 +3191,9 @@ function SaldosForm({ empresa, marca }) {
   const g = (grp, cat) => num((st[grp] || {})[cat])
   const setV = (grp, cat, v) => setSt((s) => ({ ...s, [grp]: { ...(s[grp] || {}), [cat]: v } }))
   const invIni = (cat) => g('disp', cat) - g('vp', cat) + g('cll', cat)
-  const cxc = (st.cxc || []) // [{cliente, open, term}]
-  const setCxc = (arr) => setSt((s) => ({ ...s, cxc: arr }))
   const allCats = [...new Set([...cats, ...Object.keys(st.disp || {}), ...Object.keys(st.vp || {}), ...Object.keys(st.cll || {})])].filter(Boolean)
   const T = (grp) => allCats.reduce((a, c) => a + g(grp, c), 0)
   const totIni = allCats.reduce((a, c) => a + invIni(c), 0)
-  const totCxc = cxc.reduce((a, r) => a + num(r.open), 0)
   function guardar() {
     setSaving(true)
     try {
@@ -3238,17 +3234,15 @@ function SaldosForm({ empresa, marca }) {
         if (oorName) {
           const rows = XLSX.utils.sheet_to_json(wb.Sheets[oorName], { header: 1, defval: '' })
           const H = rows[0] || []
-          const iOpen = idxOf(H, 'OPEN QUANTITY'), iStyle = idxOf(H, 'STYLE'), iSku = idxOf(H, 'SKU'), iCust = idxOf(H, 'CUSTOMER NAME'), iUsd = idxOf(H, 'USD OPEN')
-          const vp = {}; const perCli = {}
+          const iOpen = idxOf(H, 'OPEN QUANTITY'), iStyle = idxOf(H, 'STYLE'), iSku = idxOf(H, 'SKU')
+          const vp = {}
           for (let r = 1; r < rows.length; r++) {
-            const row = rows[r] || []; const q = num(row[iOpen]); const usd = num(row[iUsd])
+            const row = rows[r] || []; const q = num(row[iOpen])
             const stKey = String(row[iStyle] || '').trim().toUpperCase(); const sku = String(row[iSku] || '').trim().toUpperCase()
             const cat = styleToCat[stKey] || styleToCat[sku] || styleToCat[sku.split('-')[0]] || 'Sin categoría'
             if (q) vp[cat] = (vp[cat] || 0) + q
-            const cli = String(row[iCust] || '').trim(); if (cli && usd) perCli[cli] = (perCli[cli] || 0) + usd
           }
-          const cxcArr = Object.entries(perCli).sort((a, b) => b[1] - a[1]).map(([cliente, open]) => ({ cliente, open: Math.round(open), term: termMap[upper(cliente)] || '' }))
-          setSt((s) => ({ ...s, vp: { ...(s.vp || {}), ...Object.fromEntries(Object.entries(vp).map(([k, v]) => [k, Math.round(v)])) }, cxc: cxcArr }))
+          setSt((s) => ({ ...s, vp: { ...(s.vp || {}), ...Object.fromEntries(Object.entries(vp).map(([k, v]) => [k, Math.round(v)])) } }))
         }
         setMsg({ t: 'ok', x: 'Importado. Revisa Ventas pendientes, Compras por llegar y la cartera; ajusta lo que haga falta y pulsa 💾 Guardar.' })
       } catch (err) { setMsg({ t: 'bad', x: 'No se pudo leer el Excel: ' + (err && err.message) }) }
@@ -3281,22 +3275,7 @@ function SaldosForm({ empresa, marca }) {
           </tbody>
         </table>
       </div>
-      <div className="sub" style={{ marginTop: 16 }}><b>Saldos iniciales — Cuentas por cobrar 2028</b> por cliente (cartera pendiente del Excel · término de Base_Clientes).</div>
-      <div className="tablewrap" style={{ marginTop: 6 }}>
-        <table className="vfix" style={{ width: 'auto', minWidth: 520 }}>
-          <thead><tr><th className="l">Cliente</th><th>Pendiente ($)</th><th className="l">Término</th></tr></thead>
-          <tbody>
-            {cxc.length === 0 && <tr><td className="l" colSpan={3} style={{ color: 'var(--muted)' }}>Importa el Excel para traer la cartera pendiente por cliente (OOR · Usd Open).</td></tr>}
-            {cxc.map((r, i) => <tr key={i}>
-              <td className="l sub2">{r.cliente}</td>
-              <td className="tot" style={{ color: '#b45309' }}>{fmt(num(r.open))}</td>
-              <td className="l"><select value={r.term || ''} onChange={(e) => { const a = cxc.slice(); a[i] = { ...a[i], term: e.target.value }; setCxc(a) }} style={{ fontSize: 12, padding: '3px 6px' }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select></td>
-            </tr>)}
-            {cxc.length > 0 && <tr className="grandrow"><td className="l">TOTAL cartera</td><td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(totCxc)}</td><td></td></tr>}
-          </tbody>
-        </table>
-      </div>
-      <div className="sub" style={{ marginTop: 8, fontSize: 11.5 }}>🚧 Versión inicial para validar: el inventario inicial alimenta el Paso 1 una vez confirmes los números; la cartera por término se afinará para repartir el cobro en los meses de 2028.</div>
+      <div className="sub" style={{ marginTop: 8, fontSize: 11.5 }}>🚧 Versión inicial para validar. Este es el <b>saldo inicial de Producto</b>: el inventario con el que se arranca 2028. (El saldo inicial de <b>Finanzas</b> —la plata en bancos del Cash Flow— se maneja aparte en Finanzas.)</div>
     </div>
   )
 }
