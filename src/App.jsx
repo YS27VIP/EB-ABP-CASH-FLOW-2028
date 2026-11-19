@@ -3168,13 +3168,9 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
         <PasoH n={4}>Evolución mensual del AUP/AUC (ponderado)</PasoH>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="evolucion" />
       </div>
-      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
+      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14 }}>
         <PasoH n={5}>Resumen de inventario</PasoH>
         <ResumenInventario marca={marca} tempState={temp} precios={precios} empresa={empresa} />
-      </div>
-      <div style={{ borderLeft: '4px solid #be6a17', paddingLeft: 14 }}>
-        <PasoH n={6}>Saldos iniciales 2028 <span className="unit" style={{ fontWeight: 400 }}>(inventario inicial + cuentas por cobrar · SS27 + FW27)</span></PasoH>
-        <SaldosForm empresa={empresa} marca={marca} />
       </div>
     </>
   )
@@ -5085,7 +5081,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede, deep }) {
     ...(pu('Marketing') ? [ROLES.find((r) => r.id === 'marketing')] : []),
     // Director se movió al dropdown de Comercial (1º del flujo), ya no es pestaña aparte.
   ]
-  const [secId, setSecId] = useState(() => { const okIds = [...SECS.map((s) => s.id), ...(canViajes ? ['viajes'] : []), ...(puedeDir ? ['brand'] : [])]; return (deep && deep.sec && okIds.includes(deep.sec)) ? deep.sec : (SECS[0] ? SECS[0].id : 'comercial') })
+  const [secId, setSecId] = useState(() => { const okIds = [...SECS.map((s) => s.id), ...(canViajes ? ['viajes'] : []), ...(puedeDir ? ['brand'] : []), 'saldos']; return (deep && deep.sec && okIds.includes(deep.sec)) ? deep.sec : (SECS[0] ? SECS[0].id : 'comercial') })
   const [comSub, setComSub] = useState(() => (deep && deep.comSub) ? deep.comSub : 'all') // sub-selector dentro de Comercial
   const [marca, setMarca] = useState(() => (deep && deep.marca === 'first') ? (_marcasInit[0] || '__TOTAL__') : '__TOTAL__')
   const [totTab, setTotTab] = useState('brand')
@@ -5203,9 +5199,12 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede, deep }) {
               {SECS.map((r) => { const on = r.id === secId; return <button key={r.id} className={'seg' + (on ? ' active' : '')} onClick={() => setSecId(r.id)} style={on ? { background: acc, borderColor: acc, color: '#fff' } : {}}>{r.icon} {r.label}</button> })}
               {canViajes && <button className={'seg' + (secId === 'viajes' ? ' active' : '')} onClick={() => setSecId('viajes')} style={secId === 'viajes' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>🧳 Viajes equipo</button>}
               {puedeDir && <button className={'seg' + (secId === 'brand' ? ' active' : '')} onClick={() => setSecId('brand')} style={secId === 'brand' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>📊 Contribución de la marca</button>}
+              {(pu('Producto') || puedeDir) && !isRetail && <button className={'seg' + (secId === 'saldos' ? ' active' : '')} onClick={() => setSecId('saldos')} style={secId === 'saldos' ? { background: acc, borderColor: acc, color: '#fff' } : {}}>🧮 Saldos 2028</button>}
             </div>
-            {SECS.length === 0 && secId !== 'viajes' && secId !== 'brand' && <div className="note warn">No tienes áreas asignadas en esta SBU. Pídele a un administrador que ajuste tu acceso en Configuración → Colaboradores.</div>}
-            {secId === 'brand'
+            {SECS.length === 0 && secId !== 'viajes' && secId !== 'brand' && secId !== 'saldos' && <div className="note warn">No tienes áreas asignadas en esta SBU. Pídele a un administrador que ajuste tu acceso en Configuración → Colaboradores.</div>}
+            {secId === 'saldos'
+              ? (String(marca).startsWith('__') ? <div className="note warn">Elige una <b>marca</b> arriba para ver sus saldos iniciales 2028.</div> : <SaldosForm empresa={empresa} marca={marca} />)
+              : secId === 'brand'
               ? <BrandContribution empresa={empresa} marca={marca} />
               : secId === 'viajes'
               ? <ViajesEquipo empresa={empresa} marca={marca} sbuName={sbuName} marcasSBU={marcasSBU} puede={pu} usuario={usuario} sbus={sbus} />
