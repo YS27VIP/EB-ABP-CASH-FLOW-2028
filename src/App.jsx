@@ -1421,7 +1421,7 @@ function DetalleForm({ role, rubro, usuario, empresa, sbus, groups, extrasKey, d
         </div>
         {retailLean ? null : <div className="sub">{isTotal ? 'Solo lectura: suma de todas las marcas de la SBU (según Combinaciones).' : <>Captura por rubro y mes. Los rubros son iguales para todas las marcas. Un rubro que agregues aquí se suma para <b>toda la empresa</b> y lo verán <b>todos los roles</b> que capturan {rubro.k.toLowerCase()}. </>}Total: <b>${fmt(totalGeneral)}</b></div>}
         <div className="tablewrap">
-          <table>
+          <table className="stickcol">
             <thead><tr><th className="cod">Cód.</th><th className="l">Rubro</th>{MESES.map((m) => <th key={m}>{m}</th>)}<th>Total</th>{splitCfg && <><th style={{ color: spColors[0] }}>% {spLabels[0]}</th><th style={{ color: spColors[1] }}>% {spLabels[1]}</th></>}</tr></thead>
             <tbody>
               {multi && <>
@@ -3251,7 +3251,7 @@ function SaldosForm({ empresa, marca }) {
   }
   return (
     <div>
-      {msg && <div className={'note ' + msg.t} style={{ marginBottom: 8 }}>{msg.x}</div>}
+      {msg && <div className={'note no-ayuda ' + msg.t} style={{ marginBottom: 8 }}>{msg.x}</div>}
       <div className="toolbar" style={{ marginBottom: 8, gap: 8, alignItems: 'center' }}>
         <label className="btn" style={{ cursor: 'pointer', background: '#be6a17', color: '#fff', borderColor: '#be6a17' }}>⬆ Importar Excel ({marca})<input type="file" accept=".xlsx,.xls" onChange={importar} style={{ display: 'none' }} /></label>
         <span className="unit">Lee el Excel SS/FW de la marca (OOR DATA + Consolidado) y pre-llena ventas pendientes y compras por llegar.</span>
@@ -4670,9 +4670,10 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
           <PasoH n={1}>Compras por tienda</PasoH>
           <ol className="sub" style={{ margin: '4px 0 8px', paddingLeft: 20, lineHeight: 1.7 }}>
             <li><b>Escoge una tienda</b> y coloca las <b>compras</b> por <b>subcategoría Retail</b>.</li>
-            <li>Coloca el <b>Factor wholesale→Retail (×)</b>: <input className="fillin" value={cf[fk('FACTOR', 0)] ?? ''} onChange={(e) => setCF('FACTOR', 0, e.target.value)} inputMode="decimal" placeholder="1.25" style={{ width: 70, textAlign: 'center', verticalAlign: 'middle' }} /> <span>Costo de la venta = costo wholesale × {factor().toFixed(2)}. Si lo dejas vacío usa 1.25.</span></li>
+            <li>Coloca el <b>Factor wholesale→Retail (×)</b> (aquí abajo): el costo de la venta = costo wholesale × ese factor. Si lo dejas vacío usa 1.25.</li>
             <li>Por cada subcategoría, en la <b>columna de la marca</b> que la surte pon el <b>%</b> que se le compra y elige su <b>categoría wholesale</b>. La suma de % de cada fila debe dar <b>100%</b>. El costo es ponderado en base al <b>% por categoría wholesale</b> asignado.</li>
           </ol>
+          <div className="sub no-ayuda" style={{ margin: '0 0 10px' }}>Coloca el <b>Factor wholesale→Retail (×)</b>: <input className="fillin" value={cf[fk('FACTOR', 0)] ?? ''} onChange={(e) => setCF('FACTOR', 0, e.target.value)} inputMode="decimal" placeholder="1.25" style={{ width: 70, textAlign: 'center', verticalAlign: 'middle' }} /> <span className="unit" style={{ fontWeight: 400 }}>Costo de la venta = costo wholesale × {factor().toFixed(2)}. Si lo dejas vacío usa 1.25.</span></div>
           {/* Selector de tienda */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 4px' }}>
             {tiendas.map((t) => <button key={t} className={'seg' + (selStore === t ? ' active' : '')} onClick={() => setSelT(t)} style={selStore === t ? { background: col, borderColor: col, color: '#fff' } : { border: `1.5px solid ${col}`, color: col, background: '#fff', fontWeight: 600 }}>{t}{esTiendaNueva(t) && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 800 }}>NUEVA</span>}</button>)}
@@ -4792,7 +4793,7 @@ function RetailWorkspace({ empresa, usuario, sbus, deep }) {
               </tbody>
             </table>
           </div>
-          <div className="sub" style={{ marginTop: 4 }}>Por cada <b>marca</b>, el % define en qué meses se despacha su mercancía. Las <b>unidades anuales</b> que surte esa marca se reparten por mes con su %. Cada fila debe sumar <b>100%</b>.</div>
+          <div className="sub" style={{ marginTop: 4 }}>Indica los <b>meses en que Wholesale despacha a Retail</b> cada marca: por cada marca pon el <b>% del año</b> que se despacha en cada mes (cada fila debe sumar <b>100%</b>). Las <b>unidades anuales</b> de la marca (última columna) se reparten por mes según ese %.</div>
 
           {/* ---- Paso 6: Despacho Wholesale → Retail (calculado del mapa) ---- */}
           <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12, marginTop: 18 }}><PasoH n={6}>Despacho Wholesale → Retail</PasoH></div>

@@ -99,3 +99,11 @@ body.sin-ayudas :is(.note,.sub).ayuda-abierta:not(.no-ayuda)::after{content:"✕
 .ayuda-pop-body ul,.ayuda-pop-body ol{margin:4px 0;padding-left:20px}
 .ayuda-pop-x{position:absolute;top:12px;right:14px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font:600 12px -apple-system,sans-serif;color:var(--odoo);cursor:pointer}
 .ayuda-pop-x:hover{background:#e2e8f0}
+/* Primera columna (Cód + Rubro) fija al desplazar horizontalmente */
+.stickcol th.cod,.stickcol td.cod{position:sticky;left:0;z-index:3;background:#faf7f9;width:48px;min-width:48px}
+.stickcol th.l,.stickcol td.l{position:sticky;left:48px;z-index:3;background:#fff;box-shadow:2px 0 0 #eef1f4}
+.stickcol thead th.cod,.stickcol thead th.l{z-index:5;background:#faf7f9}
+.stickcol tr.secrow td{position:sticky;left:0;z-index:3}
+.stickcol tr.grandrow td.l,.stickcol tr.grandrow td.cod{background:#faf7f9}
+.stickcol tr.catrow td.l,.stickcol tr.catrow td.cod{background:#fcfbfc}
+.stickcol tbody tr:hover td.l,.stickcol tbody tr:hover td.cod{background:#f7f4f6}
