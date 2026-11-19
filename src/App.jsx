@@ -3231,7 +3231,7 @@ function SaldosForm({ empresa, marca }) {
           let hr = 0; for (let i = 0; i < Math.min(rows.length, 8); i++) { if (idxOf(rows[i], 'CATEGORY ABP') >= 0) { hr = i; break } }
           const H = rows[hr] || []
           const iCat = idxOf(H, 'CATEGORY ABP'), iStyle = idxOf(H, 'STYLE'), iSku = idxOf(H, 'SKU'), iQty = idxOf(H, 'QTY'), iFp = idxOf(H, 'FECHA EN PA'), iAcct = idxOf(H, 'ACCOUNT'), iPv = idxOf(H, 'PV TOTAL')
-          const master = {}; const cllMonth = {}; const masterCli = {}; const today = new Date()
+          const master = {}; const cllMonth = {}; const masterCli = {}; const masterCliMes = {}; const today = new Date()
           for (let r = hr + 1; r < rows.length; r++) {
             const row = rows[r] || []; const cat = String(row[iCat] || '').trim(); if (!cat) continue
             const stKey = String(row[iStyle] || '').trim(); if (stKey) styleToCat[stKey.toUpperCase()] = cat
@@ -3239,12 +3239,17 @@ function SaldosForm({ empresa, marca }) {
             const q = num(row[iQty]); const fp = row[iFp]
             if (q) master[cat] = (master[cat] || 0) + q    // venta proyectada (Master) por categoría
             if (q && fp instanceof Date && fp > today) { const mi = fp.getMonth(); (cllMonth[cat] = cllMonth[cat] || Array(12).fill(0))[mi] += q }  // compras por llegar por mes (XFD futuro)
-            const acct = String(row[iAcct] || '').trim(); const pv = num(row[iPv]); if (acct && pv) masterCli[acct] = (masterCli[acct] || 0) + pv  // venta proyectada $ por cliente (para Finanzas)
+            const acct = String(row[iAcct] || '').trim(); const pv = num(row[iPv])
+            if (acct && pv) {
+              masterCli[acct] = (masterCli[acct] || 0) + pv  // venta proyectada $ por cliente (total)
+              if (fp instanceof Date && fp.getFullYear() === 2027) { (masterCliMes[acct] = masterCliMes[acct] || Array(12).fill(0))[fp.getMonth()] += pv }  // proyección $ por mes de venta 2027 (para la escalera de cobros)
+            }
           }
           const masterObj = Object.fromEntries(Object.entries(master).map(([k, v]) => [k, Math.round(v)]))
           const cllMObj = Object.fromEntries(Object.entries(cllMonth).map(([k, v]) => [k, v.map((x) => Math.round(x))]))
           const masterCliObj = Object.fromEntries(Object.entries(masterCli).map(([k, v]) => [k, Math.round(v)]))
-          setSt((s) => ({ ...s, masterS: { ...(s.masterS || {}), [season]: masterObj }, cllM: { ...(s.cllM || {}), [season]: cllMObj }, masterCliS: { ...(s.masterCliS || {}), [season]: masterCliObj } }))
+          const masterCliMesObj = Object.fromEntries(Object.entries(masterCliMes).map(([k, v]) => [k, v.map((x) => Math.round(x))]))
+          setSt((s) => ({ ...s, masterS: { ...(s.masterS || {}), [season]: masterObj }, cllM: { ...(s.cllM || {}), [season]: cllMObj }, masterCliS: { ...(s.masterCliS || {}), [season]: masterCliObj }, masterCliMesS: { ...(s.masterCliMesS || {}), [season]: masterCliMesObj } }))
         }
         if (oorName) {
           const rows = XLSX.utils.sheet_to_json(wb.Sheets[oorName], { header: 1, defval: '' })
@@ -3313,15 +3318,18 @@ function SaldoCajaForm({ empresa }) {
   let rows = []
   try {
     const all = JSON.parse(localStorage.getItem(`saldos_${empresa}`) || '{}'); const per = {}
-    const ensure = (cli) => { const k = upper(cli); if (!per[k]) per[k] = { cliente: cli, ss: 0, fw: 0, deuda: 0, term: '' }; return per[k] }
+    const ensure = (cli) => { const k = upper(cli); if (!per[k]) per[k] = { cliente: cli, ss: 0, fw: 0, deuda: 0, term: '', mes: Array(12).fill(0) }; return per[k] }
     Object.values(all).forEach((mk) => {
       ['SS27', 'FW27'].forEach((s) => { Object.entries((((mk || {}).masterCliS || {})[s]) || {}).forEach(([cli, v]) => { const o = ensure(cli); o[s === 'SS27' ? 'ss' : 'fw'] += num(v) }) })
+      ['SS27', 'FW27'].forEach((s) => { Object.entries((((mk || {}).masterCliMesS || {})[s]) || {}).forEach(([cli, arr]) => { const o = ensure(cli); (arr || []).forEach((v, m) => o.mes[m] += num(v)) }) })
       ['SS27', 'FW27'].forEach((s) => { (((mk || {}).cxcS || {})[s] || []).forEach((r) => { const o = ensure(r.cliente); o.deuda += num(r.open); if (!o.term && r.term) o.term = r.term }) })
     })
     rows = Object.values(per)
   } catch { }
   const termOf = (r) => (termOv[upper(r.cliente)] != null && termOv[upper(r.cliente)] !== '') ? termOv[upper(r.cliente)] : (r.term || '')
-  const saldo = (r) => num(r.deuda) + num(r.ss) + num(r.fw)   // saldo inicial por cliente = deuda al corte + proyección pendiente (SS27 + FW27)
+  // Escalera de cobros: una venta del mes m se cobra m + plazo(meses) después. Lo que se cobra DESPUÉS de dic-2027 (m+plazo>11) sigue pendiente al cierre.
+  const proyPend = (r) => { const tM = CF_PLAZO_MESES[termOf(r)] || 0; return (r.mes || []).reduce((a, v, m) => a + ((m + tM) > 11 ? num(v) : 0), 0) }
+  const saldo = (r) => num(r.deuda) + proyPend(r)   // saldo al cierre dic-2027 = deuda al corte + proyección aún no cobrada según el término
   rows.sort((a, b) => saldo(b) - saldo(a))
   const T = (f) => rows.reduce((a, r) => a + f(r), 0)
   const setTerm = (cli, v) => setTermOv((o) => ({ ...o, [upper(cli)]: v }))
@@ -3332,7 +3340,7 @@ function SaldoCajaForm({ empresa }) {
       {msg && <div className={'note no-ayuda ' + msg.t} style={{ marginBottom: 8 }}>{msg.x}</div>}
       <div className="panel" style={{ borderLeftColor: '#b45309' }}>
         <h3 style={{ color: '#b45309' }}>📥 Cuentas por cobrar por cliente <span className="unit">(viene de los saldos importados en Producto · todas las marcas · SS27 + FW27)</span></h3>
-        <div className="sub"><b>Saldo por cliente</b> = <b>Deuda al corte</b> + <b>Master SS27</b> + <b>Master FW27</b> (proyección de venta pendiente). El <b>término</b> (de Base_Clientes, ajustable) define en qué meses de 2028 se cobra. Se llena al importar el Excel Master de cada marca en <b>Producto → 🧮 Saldos</b>.</div>
+        <div className="sub"><b>Saldo al cierre de dic-2027</b> por cliente = <b>Deuda al corte</b> + la parte de la proyección (<b>Master SS27 + FW27</b>) que, según el <b>término de pago</b>, <b>aún no se habrá cobrado</b> a esa fecha (escalera de cobros: una venta del mes <i>m</i> se cobra <i>m + plazo</i>; lo que cae después de diciembre queda pendiente). El término sale de Base_Clientes y es ajustable. Se llena al importar el Excel Master de cada marca en <b>Producto → 🧮 Saldos</b>.</div>
         <div className="tablewrap" style={{ marginTop: 6 }}>
           <table className="vfix" style={{ width: 'auto', minWidth: 720 }}>
             <thead><tr><th className="l">Cliente</th><th>Master SS27 ($)</th><th>Master FW27 ($)</th><th>Deuda al corte ($)</th><th className="l">Término</th><th>= Saldo ($)</th></tr></thead>
