@@ -3263,26 +3263,27 @@ function SaldosForm({ empresa, marca }) {
   return (
     <div>
       {msg && <div className={'note no-ayuda ' + msg.t} style={{ marginBottom: 8 }}>{msg.x}</div>}
-      <div className="toolbar" style={{ marginBottom: 8, gap: 8, alignItems: 'center' }}>
-        <label className="btn" style={{ cursor: 'pointer', background: '#be6a17', color: '#fff', borderColor: '#be6a17' }}>⬆ Importar Excel ({marca})<input type="file" accept=".xlsx,.xls" onChange={importar} style={{ display: 'none' }} /></label>
-        <span className="unit">Lee el Excel SS/FW de la marca (OOR DATA + Consolidado) y pre-llena ventas pendientes y compras por llegar.</span>
+      <div className="toolbar" style={{ marginBottom: 8, gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--muted)' }}>TEMPORADA A IMPORTAR:</span>
+        {SEAS.map((s) => <button key={s} className={'seg' + (season === s ? ' active' : '')} onClick={() => setSeason(s)} style={season === s ? { background: '#be6a17', borderColor: '#be6a17', color: '#fff' } : {}}>{s}{seasonDone(s) ? ' ✓' : ''}</button>)}
+        <label className="btn" style={{ cursor: 'pointer', background: '#be6a17', color: '#fff', borderColor: '#be6a17' }}>⬆ Importar Excel {season} ({marca})<input type="file" accept=".xlsx,.xls" onChange={importar} style={{ display: 'none' }} /></label>
         <div className="spacer"></div>
         <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
       </div>
-      <div className="sub"><b>Inventario inicial 2028</b> por categoría = <b>Inv. disponible</b> (lo escribes tú) − <b>Ventas pendientes</b> por entregar + <b>Compras por llegar</b> (según XFD). Las dos últimas se pre-llenan al importar; puedes ajustarlas.</div>
+      <div className="sub">Importa <b>las dos temporadas</b> (SS27 y FW27), una por una: elige la temporada, sube su Excel, y los valores se <b>suman</b>. <b>Inventario inicial 2028</b> por categoría = <b>Inv. disponible</b> (lo escribes tú) − <b>Ventas pendientes</b> + <b>Compras por llegar</b> (XFD futuro). Ventas pendientes y compras son la <b>suma de SS27 + FW27</b> importadas.</div>
       <div className="tablewrap" style={{ marginTop: 6 }}>
         <table className="vfix" style={{ width: 'auto', minWidth: 620 }}>
           <thead><tr><th className="l">Categoría</th><th>Inv. disponible</th><th>(−) Ventas pendientes</th><th>(+) Compras por llegar</th><th>= Inv. inicial 2028</th></tr></thead>
           <tbody>
-            {allCats.length === 0 && <tr><td className="l" colSpan={5} style={{ color: 'var(--muted)' }}>No hay categorías aún. Define las categorías de {marca} o importa el Excel.</td></tr>}
+            {allCats.length === 0 && <tr><td className="l" colSpan={5} style={{ color: 'var(--muted)' }}>No hay categorías aún. Importa el Excel de cada temporada.</td></tr>}
             {allCats.map((c) => <tr key={c}>
               <td className="l sub2">{c}</td>
-              <td className="cell"><input value={(st.disp || {})[c] ?? ''} onChange={(e) => setV('disp', c, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>
-              <td className="cell"><input value={(st.vp || {})[c] ?? ''} onChange={(e) => setV('vp', c, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>
-              <td className="cell"><input value={(st.cll || {})[c] ?? ''} onChange={(e) => setV('cll', c, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>
+              <td className="cell"><input value={(st.disp || {})[c] ?? ''} onChange={(e) => setDisp(c, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>
+              <td className="tot" title="Suma de las ventas pendientes de SS27 + FW27 importadas">{fmt(gv(c))}</td>
+              <td className="tot" title="Suma de las compras por llegar (XFD futuro) de SS27 + FW27">{fmt(gc(c))}</td>
               <td className="tot" style={{ fontWeight: 800, color: invIni(c) < 0 ? '#b91c1c' : '#15803d' }}>{fmt(invIni(c))}</td>
             </tr>)}
-            <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(T('disp'))}</td><td className="tot">{fmt(T('vp'))}</td><td className="tot">{fmt(T('cll'))}</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(totIni)}</td></tr>
+            <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(Tdisp)}</td><td className="tot">{fmt(Tvp)}</td><td className="tot">{fmt(Tcll)}</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(totIni)}</td></tr>
           </tbody>
         </table>
       </div>
