@@ -3188,12 +3188,18 @@ function SaldosForm({ empresa, marca }) {
       try { const cl = await gLoadClientes(empresa); const tm = {}; (cl || []).forEach((c) => { const nombre = c.nombre || c.cliente || c[0]; const term = c.termino || c.term || ''; if (nombre) tm[upper(nombre)] = term }); setTermMap(tm) } catch { }
     })()
   }, [empresa, marca])
-  const g = (grp, cat) => num((st[grp] || {})[cat])
-  const setV = (grp, cat, v) => setSt((s) => ({ ...s, [grp]: { ...(s[grp] || {}), [cat]: v } }))
-  const invIni = (cat) => g('disp', cat) - g('vp', cat) + g('cll', cat)
-  const allCats = [...new Set([...cats, ...Object.keys(st.disp || {}), ...Object.keys(st.vp || {}), ...Object.keys(st.cll || {})])].filter(Boolean)
-  const T = (grp) => allCats.reduce((a, c) => a + g(grp, c), 0)
+  const SEAS = ['SS27', 'FW27']
+  const [season, setSeason] = useState('SS27')
+  const gd = (cat) => num((st.disp || {})[cat])
+  const setDisp = (cat, v) => setSt((s) => ({ ...s, disp: { ...(s.disp || {}), [cat]: v } }))
+  const gv = (cat) => SEAS.reduce((a, s) => a + num(((st.vpS || {})[s] || {})[cat]), 0)   // ventas pendientes (suma de las 2 temporadas)
+  const gc = (cat) => SEAS.reduce((a, s) => a + num(((st.cllS || {})[s] || {})[cat]), 0)   // compras por llegar (suma de las 2 temporadas)
+  const invIni = (cat) => gd(cat) - gv(cat) + gc(cat)
+  const catsFrom = (obj) => { const o = {}; SEAS.forEach((s) => Object.keys((obj || {})[s] || {}).forEach((c) => { o[c] = 1 })); return o }
+  const allCats = [...new Set([...cats, ...Object.keys(st.disp || {}), ...Object.keys(catsFrom(st.vpS)), ...Object.keys(catsFrom(st.cllS))])].filter(Boolean)
+  const Tdisp = allCats.reduce((a, c) => a + gd(c), 0), Tvp = allCats.reduce((a, c) => a + gv(c), 0), Tcll = allCats.reduce((a, c) => a + gc(c), 0)
   const totIni = allCats.reduce((a, c) => a + invIni(c), 0)
+  const seasonDone = (s) => Object.keys((st.vpS || {})[s] || {}).length > 0 || Object.keys((st.cllS || {})[s] || {}).length > 0
   function guardar() {
     setSaving(true)
     try {
@@ -3229,22 +3235,27 @@ function SaldosForm({ empresa, marca }) {
             const q = num(row[iQty]); const fp = row[iFp]
             if (q && fp instanceof Date && fp > today) cll[cat] = (cll[cat] || 0) + q
           }
-          setSt((s) => ({ ...s, cll: { ...(s.cll || {}), ...Object.fromEntries(Object.entries(cll).map(([k, v]) => [k, Math.round(v)])) } }))
+          const cllObj = Object.fromEntries(Object.entries(cll).map(([k, v]) => [k, Math.round(v)]))
+          setSt((s) => ({ ...s, cllS: { ...(s.cllS || {}), [season]: cllObj } }))
         }
         if (oorName) {
           const rows = XLSX.utils.sheet_to_json(wb.Sheets[oorName], { header: 1, defval: '' })
           const H = rows[0] || []
-          const iOpen = idxOf(H, 'OPEN QUANTITY'), iStyle = idxOf(H, 'STYLE'), iSku = idxOf(H, 'SKU')
-          const vp = {}
+          const iOpen = idxOf(H, 'OPEN QUANTITY'), iStyle = idxOf(H, 'STYLE'), iSku = idxOf(H, 'SKU'), iCust = idxOf(H, 'CUSTOMER NAME'), iUsd = idxOf(H, 'USD OPEN')
+          const vp = {}; const perCli = {}
           for (let r = 1; r < rows.length; r++) {
-            const row = rows[r] || []; const q = num(row[iOpen])
+            const row = rows[r] || []; const q = num(row[iOpen]); const usd = num(row[iUsd])
             const stKey = String(row[iStyle] || '').trim().toUpperCase(); const sku = String(row[iSku] || '').trim().toUpperCase()
             const cat = styleToCat[stKey] || styleToCat[sku] || styleToCat[sku.split('-')[0]] || 'Sin categoría'
             if (q) vp[cat] = (vp[cat] || 0) + q
+            const cli = String(row[iCust] || '').trim(); if (cli && usd) perCli[cli] = (perCli[cli] || 0) + usd
           }
-          setSt((s) => ({ ...s, vp: { ...(s.vp || {}), ...Object.fromEntries(Object.entries(vp).map(([k, v]) => [k, Math.round(v)])) } }))
+          // La cartera (cuentas por cobrar) se guarda por temporada para Finanzas (no se muestra en Producto).
+          const cxcArr = Object.entries(perCli).sort((a, b) => b[1] - a[1]).map(([cliente, open]) => ({ cliente, open: Math.round(open), term: termMap[upper(cliente)] || '' }))
+          const vpObj = Object.fromEntries(Object.entries(vp).map(([k, v]) => [k, Math.round(v)]))
+          setSt((s) => ({ ...s, vpS: { ...(s.vpS || {}), [season]: vpObj }, cxcS: { ...(s.cxcS || {}), [season]: cxcArr } }))
         }
-        setMsg({ t: 'ok', x: 'Importado. Revisa Ventas pendientes, Compras por llegar y la cartera; ajusta lo que haga falta y pulsa 💾 Guardar.' })
+        setMsg({ t: 'ok', x: `Importado para la temporada ${season}. Se sumó a lo que ya tenías de la otra temporada. Revisa y pulsa 💾 Guardar.` })
       } catch (err) { setMsg({ t: 'bad', x: 'No se pudo leer el Excel: ' + (err && err.message) }) }
     }
     reader.readAsArrayBuffer(file)
