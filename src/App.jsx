@@ -3353,8 +3353,10 @@ function SaldoCajaForm({ empresa }) {
       {demo && (() => {
         const proyOf = (r) => r[2].reduce((a, v) => a + v, 0)
         const tM = (term) => CF_PLAZO_MESES[term] || 0
-        const pendOf = (r) => r[2].reduce((a, v, m) => a + ((m + tM(r[1])) > 11 ? num(v) : 0), 0)
-        const cKey = (r) => 'DEMO:' + upper(r[0])
+        const dKey = (r) => 'DEMO:' + upper(r[0])
+        const termD = (r) => { const o = termOv[dKey(r)]; return (o != null && o !== '') ? o : r[1] }
+        const pendOf = (r) => r[2].reduce((a, v, m) => a + ((m + tM(termD(r))) > 11 ? num(v) : 0), 0)
+        const cKey = (r) => dKey(r)
         const corteDemo = (r) => { const o = deudaOv[cKey(r)]; return (o != null && o !== '') ? num(o) : num(r[3]) }
         const deudaOf = (r) => corteDemo(r) + pendOf(r)
         const TT = (f) => DEMO_HOKA.reduce((a, r) => a + f(r), 0)
@@ -3368,8 +3370,8 @@ function SaldoCajaForm({ empresa }) {
                 {DEMO_HOKA.map((r) => { const key = 'DEMO:' + r[0]; const open = expCli === key; return <Fragment2 key={r[0]}>
                   <tr className={'rowline' + (open ? ' open' : '')} style={{ cursor: 'pointer' }} onClick={() => setExpCli(open ? null : key)}>
                     <td className="l sub2"><span className="caret">▶</span> {r[0]}</td>
-                    <td className="l"><span className="empchip" style={{ background: '#eef2ff', color: '#3730a3', marginLeft: 0 }}>{r[1]}</span></td>
-                    <td className="cell" onClick={(e) => e.stopPropagation()}><input value={deudaOv[cKey(r)] ?? ''} onChange={(e) => setDeudaOv((o) => ({ ...o, [cKey(r)]: e.target.value }))} inputMode="decimal" placeholder={fmt(num(r[3]))} title="Escribe el saldo al corte (editable en el ejemplo)" style={{ width: '100%', textAlign: 'center' }} /></td>
+                    <td className="l" onClick={(e) => e.stopPropagation()}><select value={termD(r)} onChange={(e) => setTermOv((o) => ({ ...o, [dKey(r)]: e.target.value }))} style={{ fontSize: 12, padding: '3px 6px' }}>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select></td>
+                    <td className="cell" onClick={(e) => e.stopPropagation()}><input value={deudaOv[cKey(r)] ?? ''} onChange={(e) => setDeudaOv((o) => ({ ...o, [cKey(r)]: e.target.value }))} inputMode="decimal" placeholder={fmt(num(r[3]))} title="Escribe el saldo al corte (editable)" style={{ width: '100%', textAlign: 'center' }} /></td>
                     <td className="tot">{fmt(proyOf(r))}</td>
                     <td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(deudaOf(r))}</td>
                   </tr>
@@ -3381,7 +3383,7 @@ function SaldoCajaForm({ empresa }) {
                     </tbody></table></div>
                   </td></tr>}
                 </Fragment2> })}
-                <tr className="grandrow"><td className="l">TOTAL</td><td className="tot" style={{ color: '#b45309' }}>{fmt(TT((r) => num(r[3])))}</td><td className="tot">{fmt(TT(proyOf))}</td><td></td><td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(TT(deudaOf))}</td></tr>
+                <tr className="grandrow"><td className="l">TOTAL</td><td></td><td className="tot" style={{ color: '#b45309' }}>{fmt(TT(corteDemo))}</td><td className="tot">{fmt(TT(proyOf))}</td><td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(TT(deudaOf))}</td></tr>
               </tbody>
             </table>
           </div>
