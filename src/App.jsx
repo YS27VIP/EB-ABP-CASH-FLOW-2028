@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_ind', 'gadmin_cfg', 'gadmin_req', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'retail_mksplit', 'cfsum', 'vendedores', 'vendcli']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_ind', 'gadmin_cfg', 'gadmin_req', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'retail_mksplit', 'cfsum', 'vendedores', 'vendcli', 'saldos']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -429,7 +429,7 @@ function Ref2027Btn({ empresa, marca, marcasSBU, seccion, sbuName }) {
   const [open, setOpen] = useState(false); const [data, setData] = useState(null); const [vista, setVista] = useState('marca')
   const [SEC, setSEC] = useState(String(seccion || 'VENTA').toUpperCase())
   useEffect(() => { if (open && !data) loadRef2027().then(setData).catch(() => setData({})) }, [open])
-  const SECCIONES = ['VENTA', 'UNIDADES', 'COSTO', 'LOGISTICA', 'MARKETING']
+  const SECCIONES = ['VENTA', 'UNIDADES', 'COSTO', 'LOGISTICA', 'MARKETING', 'VIAJES']
   const MH = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
   const forMarca = (mca) => (((data || {})[String(empresa).toUpperCase()] || {})[String(mca).toUpperCase()] || {})[SEC] || {}
   const lista = vista === 'sbu' ? (marcasSBU || [marca]) : [marca]
@@ -614,10 +614,29 @@ export default function App() {
     apply(); label()
     btn.onclick = () => { mostrar = !mostrar; try { localStorage.setItem('abp_ayudas', mostrar ? '1' : '0') } catch { } apply(); label() }
     document.body.appendChild(btn)
-    // Clic en un chip ℹ️ despliega/oculta ese comentario puntual (solo cuando las ayudas están colapsadas).
-    const onClick = (e) => { if (!document.body.classList.contains('sin-ayudas')) return; const n = e.target.closest && e.target.closest('.note:not(.no-ayuda), .sub:not(.no-ayuda)'); if (n) n.classList.toggle('ayuda-abierta') }
+    // Clic en un chip ℹ️: muestra ese comentario en una tarjeta flotante (no empuja el contenido). Solo cuando las ayudas están colapsadas.
+    let pop = null
+    const closePop = () => { if (pop) { try { pop.remove() } catch { } pop = null } }
+    const onClick = (e) => {
+      if (!document.body.classList.contains('sin-ayudas')) return
+      const n = e.target.closest && e.target.closest('.note:not(.no-ayuda), .sub:not(.no-ayuda)')
+      if (!n) return
+      e.preventDefault(); e.stopPropagation()
+      closePop()
+      const back = document.createElement('div'); back.className = 'ayuda-pop-backdrop'
+      const card = document.createElement('div'); card.className = 'ayuda-pop'
+      const x = document.createElement('button'); x.className = 'ayuda-pop-x'; x.textContent = '✕ cerrar'
+      const body = document.createElement('div'); body.className = 'ayuda-pop-body'; body.innerHTML = n.innerHTML
+      const head = document.createElement('div'); head.className = 'ayuda-pop-head'; head.textContent = 'ℹ️ Ayuda'
+      card.appendChild(x); card.appendChild(head); card.appendChild(body); back.appendChild(card); document.body.appendChild(back)
+      pop = back
+      x.onclick = (ev) => { ev.stopPropagation(); closePop() }
+      back.onclick = (ev) => { if (ev.target === back) closePop() }
+    }
+    const onKey = (e) => { if (e.key === 'Escape') closePop() }
     document.addEventListener('click', onClick, true)
-    return () => { try { btn.remove(); document.body.classList.remove('sin-ayudas'); document.removeEventListener('click', onClick, true) } catch { } }
+    document.addEventListener('keydown', onKey)
+    return () => { try { btn.remove(); document.body.classList.remove('sin-ayudas'); document.removeEventListener('click', onClick, true); document.removeEventListener('keydown', onKey); closePop() } catch { } }
   }, [])
 
   // Baja el estado del modelo (Cap_Estado) del Sheet a localStorage antes de mostrar los tableros
@@ -801,7 +820,7 @@ export default function App() {
           </div>
           <div className="hello">
             <h2><span style={{ fontSize: 26 }}>{avatar}</span> Hola, {getName() || usuario || 'bienvenido'} 👋</h2>
-            <p className="sub">Estas son las áreas a las que tienes acceso según tu rol. {getEmail() ? <span className="who" style={{ display: 'inline', marginLeft: 0 }}>Sesión: {getEmail()}</span> : null} · <span style={{ cursor: 'pointer', color: 'var(--odoo)', fontWeight: 600 }} onClick={() => { setAvatar(''); try { localStorage.removeItem('abp_avatar') } catch { } }}>cambiar avatar</span></p>
+            <p className="sub no-ayuda">Estas son las áreas a las que tienes acceso según tu rol. {getEmail() ? <span className="who" style={{ display: 'inline', marginLeft: 0 }}>Sesión: {getEmail()}</span> : null} · <span style={{ cursor: 'pointer', color: 'var(--odoo)', fontWeight: 600 }} onClick={() => { setAvatar(''); try { localStorage.removeItem('abp_avatar') } catch { } }}>cambiar avatar</span></p>
             <div className="row2">
               <label className="who">Empresa:
                 <span className="inline">
@@ -3149,11 +3168,140 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
         <PasoH n={4}>Evolución mensual del AUP/AUC (ponderado)</PasoH>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="evolucion" />
       </div>
-      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14 }}>
+      <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
         <PasoH n={5}>Resumen de inventario</PasoH>
         <ResumenInventario marca={marca} tempState={temp} precios={precios} empresa={empresa} />
       </div>
+      <div style={{ borderLeft: '4px solid #be6a17', paddingLeft: 14 }}>
+        <PasoH n={6}>Saldos iniciales 2028 <span className="unit" style={{ fontWeight: 400 }}>(inventario inicial + cuentas por cobrar · SS27 + FW27)</span></PasoH>
+        <SaldosForm empresa={empresa} marca={marca} />
+      </div>
     </>
+  )
+}
+
+/* ===== Paso 6: Saldos iniciales 2028 — inventario inicial (disponible − ventas pendientes + compras por llegar según XFD) y cuentas por cobrar (según término). Importa el Excel SS/FW por marca. ===== */
+function SaldosForm({ empresa, marca }) {
+  const [cats, setCats] = useState([])
+  const [termMap, setTermMap] = useState({})
+  const [st, setSt] = useState(() => { try { return (JSON.parse(localStorage.getItem(`saldos_${empresa}`) || '{}'))[marca] || {} } catch { return {} } })
+  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  useEffect(() => {
+    try { setSt((JSON.parse(localStorage.getItem(`saldos_${empresa}`) || '{}'))[marca] || {}) } catch { setSt({}) }
+    ;(async () => {
+      try { const j = await gReadTab('Cap_Categorias'); const rows = j && j.ok && j.values ? j.values.slice(1) : []; const cs = []; rows.forEach((r) => { if (!catRowOk(r, empresa)) return; if (upper(r[3]) !== upper(marca)) return; const c = r[1]; if (c && !cs.includes(c)) cs.push(c) }); setCats(cs) } catch { }
+      try { const cl = await gLoadClientes(empresa); const tm = {}; (cl || []).forEach((c) => { const nombre = c.nombre || c.cliente || c[0]; const term = c.termino || c.term || ''; if (nombre) tm[upper(nombre)] = term }); setTermMap(tm) } catch { }
+    })()
+  }, [empresa, marca])
+  const g = (grp, cat) => num((st[grp] || {})[cat])
+  const setV = (grp, cat, v) => setSt((s) => ({ ...s, [grp]: { ...(s[grp] || {}), [cat]: v } }))
+  const invIni = (cat) => g('disp', cat) - g('vp', cat) + g('cll', cat)
+  const cxc = (st.cxc || []) // [{cliente, open, term}]
+  const setCxc = (arr) => setSt((s) => ({ ...s, cxc: arr }))
+  const allCats = [...new Set([...cats, ...Object.keys(st.disp || {}), ...Object.keys(st.vp || {}), ...Object.keys(st.cll || {})])].filter(Boolean)
+  const T = (grp) => allCats.reduce((a, c) => a + g(grp, c), 0)
+  const totIni = allCats.reduce((a, c) => a + invIni(c), 0)
+  const totCxc = cxc.reduce((a, r) => a + num(r.open), 0)
+  function guardar() {
+    setSaving(true)
+    try {
+      const all = JSON.parse(localStorage.getItem(`saldos_${empresa}`) || '{}'); all[marca] = st
+      localStorage.setItem(`saldos_${empresa}`, JSON.stringify(all))
+      try { saveEstado(empresa, 'saldos', all) } catch { }
+      setMsg({ t: 'ok', x: 'Saldos iniciales guardados.' })
+    } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) }
+    setSaving(false)
+  }
+  function importar(ev) {
+    const file = ev.target.files[0]; ev.target.value = ''; if (!file) return
+    setMsg({ t: 'ok', x: 'Leyendo Excel…' })
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true })
+        const find = (re) => wb.SheetNames.find((n) => re.test(n))
+        const consoName = find(/CONSOLIDADO.*USE THIS/i) || find(/CONSOLIDADO/i)
+        const oorName = find(/OOR DATA/i)
+        const idxOf = (hdr, name) => (hdr || []).findIndex((h) => String(h == null ? '' : h).trim().toUpperCase().indexOf(name.toUpperCase()) >= 0)
+        const styleToCat = {}
+        if (consoName) {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[consoName], { header: 1, defval: '' })
+          let hr = 0; for (let i = 0; i < Math.min(rows.length, 8); i++) { if (idxOf(rows[i], 'CATEGORY ABP') >= 0) { hr = i; break } }
+          const H = rows[hr] || []
+          const iCat = idxOf(H, 'CATEGORY ABP'), iStyle = idxOf(H, 'STYLE'), iSku = idxOf(H, 'SKU'), iQty = idxOf(H, 'QTY'), iFp = idxOf(H, 'FECHA EN PA')
+          const cll = {}; const today = new Date()
+          for (let r = hr + 1; r < rows.length; r++) {
+            const row = rows[r] || []; const cat = String(row[iCat] || '').trim(); if (!cat) continue
+            const stKey = String(row[iStyle] || '').trim(); if (stKey) styleToCat[stKey.toUpperCase()] = cat
+            const sku = String(row[iSku] || '').trim(); if (sku) styleToCat[sku.toUpperCase()] = cat
+            const q = num(row[iQty]); const fp = row[iFp]
+            if (q && fp instanceof Date && fp > today) cll[cat] = (cll[cat] || 0) + q
+          }
+          setSt((s) => ({ ...s, cll: { ...(s.cll || {}), ...Object.fromEntries(Object.entries(cll).map(([k, v]) => [k, Math.round(v)])) } }))
+        }
+        if (oorName) {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[oorName], { header: 1, defval: '' })
+          const H = rows[0] || []
+          const iOpen = idxOf(H, 'OPEN QUANTITY'), iStyle = idxOf(H, 'STYLE'), iSku = idxOf(H, 'SKU'), iCust = idxOf(H, 'CUSTOMER NAME'), iUsd = idxOf(H, 'USD OPEN')
+          const vp = {}; const perCli = {}
+          for (let r = 1; r < rows.length; r++) {
+            const row = rows[r] || []; const q = num(row[iOpen]); const usd = num(row[iUsd])
+            const stKey = String(row[iStyle] || '').trim().toUpperCase(); const sku = String(row[iSku] || '').trim().toUpperCase()
+            const cat = styleToCat[stKey] || styleToCat[sku] || styleToCat[sku.split('-')[0]] || 'Sin categoría'
+            if (q) vp[cat] = (vp[cat] || 0) + q
+            const cli = String(row[iCust] || '').trim(); if (cli && usd) perCli[cli] = (perCli[cli] || 0) + usd
+          }
+          const cxcArr = Object.entries(perCli).sort((a, b) => b[1] - a[1]).map(([cliente, open]) => ({ cliente, open: Math.round(open), term: termMap[upper(cliente)] || '' }))
+          setSt((s) => ({ ...s, vp: { ...(s.vp || {}), ...Object.fromEntries(Object.entries(vp).map(([k, v]) => [k, Math.round(v)])) }, cxc: cxcArr }))
+        }
+        setMsg({ t: 'ok', x: 'Importado. Revisa Ventas pendientes, Compras por llegar y la cartera; ajusta lo que haga falta y pulsa 💾 Guardar.' })
+      } catch (err) { setMsg({ t: 'bad', x: 'No se pudo leer el Excel: ' + (err && err.message) }) }
+    }
+    reader.readAsArrayBuffer(file)
+  }
+  return (
+    <div>
+      {msg && <div className={'note ' + msg.t} style={{ marginBottom: 8 }}>{msg.x}</div>}
+      <div className="toolbar" style={{ marginBottom: 8, gap: 8, alignItems: 'center' }}>
+        <label className="btn" style={{ cursor: 'pointer', background: '#be6a17', color: '#fff', borderColor: '#be6a17' }}>⬆ Importar Excel ({marca})<input type="file" accept=".xlsx,.xls" onChange={importar} style={{ display: 'none' }} /></label>
+        <span className="unit">Lee el Excel SS/FW de la marca (OOR DATA + Consolidado) y pre-llena ventas pendientes y compras por llegar.</span>
+        <div className="spacer"></div>
+        <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
+      </div>
+      <div className="sub"><b>Inventario inicial 2028</b> por categoría = <b>Inv. disponible</b> (lo escribes tú) − <b>Ventas pendientes</b> por entregar + <b>Compras por llegar</b> (según XFD). Las dos últimas se pre-llenan al importar; puedes ajustarlas.</div>
+      <div className="tablewrap" style={{ marginTop: 6 }}>
+        <table className="vfix" style={{ width: 'auto', minWidth: 620 }}>
+          <thead><tr><th className="l">Categoría</th><th>Inv. disponible</th><th>(−) Ventas pendientes</th><th>(+) Compras por llegar</th><th>= Inv. inicial 2028</th></tr></thead>
+          <tbody>
+            {allCats.length === 0 && <tr><td className="l" colSpan={5} style={{ color: 'var(--muted)' }}>No hay categorías aún. Define las categorías de {marca} o importa el Excel.</td></tr>}
+            {allCats.map((c) => <tr key={c}>
+              <td className="l sub2">{c}</td>
+              <td className="cell"><input value={(st.disp || {})[c] ?? ''} onChange={(e) => setV('disp', c, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>
+              <td className="cell"><input value={(st.vp || {})[c] ?? ''} onChange={(e) => setV('vp', c, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>
+              <td className="cell"><input value={(st.cll || {})[c] ?? ''} onChange={(e) => setV('cll', c, e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>
+              <td className="tot" style={{ fontWeight: 800, color: invIni(c) < 0 ? '#b91c1c' : '#15803d' }}>{fmt(invIni(c))}</td>
+            </tr>)}
+            <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(T('disp'))}</td><td className="tot">{fmt(T('vp'))}</td><td className="tot">{fmt(T('cll'))}</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(totIni)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="sub" style={{ marginTop: 16 }}><b>Saldos iniciales — Cuentas por cobrar 2028</b> por cliente (cartera pendiente del Excel · término de Base_Clientes).</div>
+      <div className="tablewrap" style={{ marginTop: 6 }}>
+        <table className="vfix" style={{ width: 'auto', minWidth: 520 }}>
+          <thead><tr><th className="l">Cliente</th><th>Pendiente ($)</th><th className="l">Término</th></tr></thead>
+          <tbody>
+            {cxc.length === 0 && <tr><td className="l" colSpan={3} style={{ color: 'var(--muted)' }}>Importa el Excel para traer la cartera pendiente por cliente (OOR · Usd Open).</td></tr>}
+            {cxc.map((r, i) => <tr key={i}>
+              <td className="l sub2">{r.cliente}</td>
+              <td className="tot" style={{ color: '#b45309' }}>{fmt(num(r.open))}</td>
+              <td className="l"><select value={r.term || ''} onChange={(e) => { const a = cxc.slice(); a[i] = { ...a[i], term: e.target.value }; setCxc(a) }} style={{ fontSize: 12, padding: '3px 6px' }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select></td>
+            </tr>)}
+            {cxc.length > 0 && <tr className="grandrow"><td className="l">TOTAL cartera</td><td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(totCxc)}</td><td></td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className="sub" style={{ marginTop: 8, fontSize: 11.5 }}>🚧 Versión inicial para validar: el inventario inicial alimenta el Paso 1 una vez confirmes los números; la cartera por término se afinará para repartir el cobro en los meses de 2028.</div>
+    </div>
   )
 }
 
