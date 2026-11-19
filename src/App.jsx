@@ -1862,6 +1862,11 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoH
                       const retailEbRow = hayRetailEb ? <tr key="retaileb"><td className="l sub2" style={{ color: '#0e7490' }}>🏬 Retail EB <span className="unit">(flujo neto de tiendas EB · espejo del P&L Retail)</span></td>{CF_MESES.map((_, mi) => { const v = retailEbMes(mi); return <td key={mi} className="tot" style={{ color: v < -0.5 ? '#b91c1c' : v > 0.5 ? '#15803d' : undefined }}>{v > 0.5 ? '+ ' : v < -0.5 ? '− ' : ''}{fmt(Math.abs(v))}</td> })}{showEne29 && e29td('')}<td className="tot" style={{ color: '#0e7490' }}>{fmt(CF_MESES.reduce((a, _, mi) => a + retailEbMes(mi), 0))}</td></tr> : null
                       return <Fragment2 key={it}>{retailEbRow}{flujoRow}{fila}</Fragment2>
                     }
+                    if (it === CASHIN) {
+                      const interTotAnual = CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo('int', mi), 0)
+                      const interRow = interTotAnual > 0.5 ? <tr key="interinfo"><td className="l sub2" style={{ color: '#7c3aed' }}>🔄 Venta intercompañía <span className="unit">(informativa · incobrable · NO suma al Cash In)</span></td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color: '#7c3aed' }}>{fmt(ventaSplitMemo('int', mi))}</td>)}{showEne29 && e29td('')}<td className="tot" style={{ color: '#7c3aed' }}>{fmt(interTotAnual)}</td></tr> : null
+                      return <Fragment2 key={it}>{fila}{interRow}</Fragment2>
+                    }
                     if (esVentas) {
                       return <Fragment2 key={it}>{fila}{openVentas && [['Venta externa (base de cobros)', '#0b5566', 'ext'], ['Venta interna (incobrable · intercompañía)', '#b45309', 'int']].map(([lbl, color, pick]) => <tr key={pick}><td className="l sub2" style={{ color }}>{lbl}</td>{CF_MESES.map((_, mi) => <td key={mi} className="tot yb" style={{ color }}>{fmt(ventaSplitMemo(pick, mi))}</td>)}{showEne29 && e29td('')}<td className="tot" style={{ color }}>{fmt(CF_MESES.reduce((a, _, mi) => a + ventaSplitMemo(pick, mi), 0))}</td></tr>)}</Fragment2>
                     }
@@ -3309,9 +3314,11 @@ function SaldosForm({ empresa, marca }) {
   )
 }
 
+// Datos de ejemplo (prueba): Master HOKA SS27 real, por canal · [cliente, término, proyección por mes (12), deuda]. Para que el equipo vea la lógica de la escalera.
+const DEMO_HOKA = [["TAHO", "90 días", [0, 0, 0, 7411543, 0, 0, 2186237, 0, 0, 0, 0, 0], 0], ["RUN THE WORLD", "60 días", [0, 0, 0, 1480831, 0, 0, 345773, 0, 0, 0, 0, 0], 0], ["COMMERCIAL PARTNER 15%", "Cash", [0, 0, 0, 726117, 0, 0, 275172, 0, 0, 0, 0, 0], 0], ["STRATEGIC PARTNER 18%", "120 días", [0, 0, 0, 693924, 0, 0, 270849, 0, 0, 0, 0, 0], 0], ["STOCK", "60 días", [0, 0, 0, 321530, 0, 0, 144012, 0, 0, 0, 0, 0], 0], ["WHOLESALE 10%", "90 días", [0, 0, 0, 179871, 0, 0, 38373, 0, 0, 0, 0, 0], 0], ["RETAIL", "Cash", [0, 0, 0, 111700, 0, 0, 33840, 0, 0, 0, 0, 0], 0]]
 /* ===== Saldo inicial de FINANZAS: Cuentas por cobrar por cliente (proyección Master SS27/FW27 + deuda al corte + término → saldo). Viene de los saldos importados en Producto. ===== */
 function SaldoCajaForm({ empresa }) {
-  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null); const [demo, setDemo] = useState(false)
   const [termOv, setTermOv] = useState(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); return (s && s.term) || {} } catch { return {} } })
   useEffect(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); setTermOv((s && s.term) || {}) } catch { setTermOv({}) } }, [empresa])
   // Agregar por cliente desde los saldos de Producto (todas las marcas · SS27 + FW27).
@@ -3336,7 +3343,33 @@ function SaldoCajaForm({ empresa }) {
   function guardar() { setSaving(true); try { const v = { term: termOv }; localStorage.setItem(`saldocaja_${empresa}`, JSON.stringify(v)); try { saveEstado(empresa, 'saldocaja', v) } catch { } setMsg({ t: 'ok', x: 'Guardado.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   return (
     <div>
-      <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#b45309', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>🏦 Saldo inicial — Cuentas por cobrar 2028</span><span className="unit" style={{ alignSelf: 'center' }}>Cartera con la que arranca el año (por cliente).</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+      <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#b45309', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>🏦 Saldo inicial — Cuentas por cobrar 2028</span><span className="unit" style={{ alignSelf: 'center' }}>Cartera con la que arranca el año (por cliente).</span><div className="spacer"></div><button className={'btn' + (demo ? ' primary' : '')} onClick={() => setDemo((d) => !d)} style={demo ? { background: '#7c3aed', borderColor: '#7c3aed' } : {}}>🧪 {demo ? 'Ocultar ejemplo' : 'Ver ejemplo (HOKA · prueba)'}</button><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+      {demo && (() => {
+        const MH = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+        const pend = (arr, term) => { const tM = CF_PLAZO_MESES[term] || 0; return arr.reduce((a, v, m) => a + ((m + tM) > 11 ? num(v) : 0), 0) }
+        const TT = (f) => DEMO_HOKA.reduce((a, r) => a + f(r), 0)
+        return <div className="panel" style={{ borderLeftColor: '#7c3aed', background: '#faf7ff' }}>
+          <h3 style={{ color: '#7c3aed' }}>🧪 Ejemplo (prueba) — Saldo al cierre dic-2027 por escalera · HOKA (SS27)</h3>
+          <div className="sub">Datos reales del Master HOKA SS27 (por canal), con términos de ejemplo. Una venta del mes <i>m</i> se cobra <i>m + plazo</i>; lo que cae <b style={{ color: '#b45309' }}>después de diciembre</b> (celdas naranja) queda pendiente al cierre → suma al saldo. <b>Es una demostración de la lógica</b>, no afecta datos.</div>
+          <div className="tablewrap" style={{ marginTop: 6 }}>
+            <table className="vfix stickcol" style={{ width: 'auto', minWidth: 1100 }}>
+              <thead><tr><th className="l">Canal</th><th className="cod">Término</th>{MH.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Proy. pend.</th><th>Deuda</th><th>= Saldo</th></tr></thead>
+              <tbody>
+                {DEMO_HOKA.map(([cli, term, arr, de]) => { const tM = CF_PLAZO_MESES[term] || 0; const p = pend(arr, term); return <tr key={cli}>
+                  <td className="l sub2">{cli}</td>
+                  <td className="cell cod"><span className="empchip" style={{ background: '#eef2ff', color: '#3730a3', marginLeft: 0 }}>{term}</span></td>
+                  {arr.map((v, m) => { const late = (m + tM) > 11 && v; return <td key={m} className="tot" style={late ? { background: '#fde8cf', color: '#b45309', fontWeight: 700 } : (v ? undefined : { color: '#cbd5e1' })}>{v ? fmt(v) : '—'}</td> })}
+                  <td className="tot" style={{ color: '#b45309', fontWeight: 700 }}>{fmt(p)}</td>
+                  <td className="tot">{fmt(de)}</td>
+                  <td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(num(de) + p)}</td>
+                </tr> })}
+                <tr className="grandrow"><td className="l">TOTAL</td><td className="cod"></td>{MH.map((_, m) => <td key={m} className="tot">{fmt(TT((r) => r[2][m]))}</td>)}<td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(TT((r) => pend(r[2], r[1])))}</td><td className="tot">{fmt(TT((r) => r[3]))}</td><td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(TT((r) => num(r[3]) + pend(r[2], r[1])))}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="sub" style={{ fontSize: 11.5, marginTop: 6 }}>⚠️ Nota: en el Master el "canal" (TAHO, PARTNER…) no es el cliente final; el cliente real está en el OOR. Esta prueba es solo para ver la mecánica de la escalera.</div>
+        </div>
+      })()}
       {msg && <div className={'note no-ayuda ' + msg.t} style={{ marginBottom: 8 }}>{msg.x}</div>}
       <div className="panel" style={{ borderLeftColor: '#b45309' }}>
         <h3 style={{ color: '#b45309' }}>📥 Cuentas por cobrar por cliente <span className="unit">(viene de los saldos importados en Producto · todas las marcas · SS27 + FW27)</span></h3>
