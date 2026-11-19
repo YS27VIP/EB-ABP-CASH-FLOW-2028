@@ -3315,13 +3315,14 @@ function SaldosForm({ empresa, marca }) {
 }
 
 // Datos de ejemplo (prueba): Master HOKA SS27 real, por canal · [cliente, término, proyección por mes (12), deuda]. Para que el equipo vea la lógica de la escalera.
-// La venta se da al LLEGAR la mercancía (XFD). SS27 real de HOKA llega en ABR y JUL → aunque el término sea largo, se cobra dentro del año (≈0 pendiente al cierre). La fila FW27 es ilustrativa: llega OCT–DIC → se cobra en 2028 → queda pendiente.
-const DEMO_HOKA = [["TAHO", "90 días", [0, 0, 0, 7411543, 0, 0, 2186237, 0, 0, 0, 0, 0], 0], ["RUN THE WORLD", "60 días", [0, 0, 0, 1480831, 0, 0, 345773, 0, 0, 0, 0, 0], 0], ["COMMERCIAL PARTNER 15%", "Cash", [0, 0, 0, 726117, 0, 0, 275172, 0, 0, 0, 0, 0], 0], ["STRATEGIC PARTNER 18%", "120 días", [0, 0, 0, 693924, 0, 0, 270849, 0, 0, 0, 0, 0], 0], ["STOCK", "60 días", [0, 0, 0, 321530, 0, 0, 144012, 0, 0, 0, 0, 0], 0], ["WHOLESALE 10%", "90 días", [0, 0, 0, 179871, 0, 0, 38373, 0, 0, 0, 0, 0], 0], ["RETAIL", "Cash", [0, 0, 0, 111700, 0, 0, 33840, 0, 0, 0, 0, 0], 0], ["FW27 — ejemplo (llega oct–dic)", "90 días", [0, 0, 0, 0, 0, 0, 0, 0, 0, 2000000, 2500000, 1500000], 800000]]
+// Ejemplo real HOKA SS27 (los "clientes" aquí son canales del Master). Llega en ABR (m3) y JUL (m6). Con término ≥180 días, la venta de JUL se cobra en 2028 (jul+6=ene) → queda pendiente; con plazos cortos se cobra en el año. [cliente, término, venta por mes (12), saldo al corte]
+const DEMO_HOKA = [["TAHO", "180 días", [0, 0, 0, 7411543, 0, 0, 2186237, 0, 0, 0, 0, 0], 500000], ["RUN THE WORLD", "180 días", [0, 0, 0, 1480831, 0, 0, 345773, 0, 0, 0, 0, 0], 150000], ["COMMERCIAL PARTNER 15%", "Cash", [0, 0, 0, 726117, 0, 0, 275172, 0, 0, 0, 0, 0], 50000], ["STRATEGIC PARTNER 18%", "150 días", [0, 0, 0, 693924, 0, 0, 270849, 0, 0, 0, 0, 0], 100000], ["STOCK", "90 días", [0, 0, 0, 321530, 0, 0, 144012, 0, 0, 0, 0, 0], 0], ["WHOLESALE 10%", "180 días", [0, 0, 0, 179871, 0, 0, 38373, 0, 0, 0, 0, 0], 20000], ["RETAIL", "Cash", [0, 0, 0, 111700, 0, 0, 33840, 0, 0, 0, 0, 0], 0]]
 /* ===== Saldo inicial de FINANZAS: Cuentas por cobrar por cliente (proyección Master SS27/FW27 + deuda al corte + término → saldo). Viene de los saldos importados en Producto. ===== */
 function SaldoCajaForm({ empresa }) {
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null); const [demo, setDemo] = useState(false); const [expCli, setExpCli] = useState(null)
   const [termOv, setTermOv] = useState(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); return (s && s.term) || {} } catch { return {} } })
-  useEffect(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); setTermOv((s && s.term) || {}) } catch { setTermOv({}) } }, [empresa])
+  const [deudaOv, setDeudaOv] = useState(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); return (s && s.deuda) || {} } catch { return {} } })
+  useEffect(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); setTermOv((s && s.term) || {}); setDeudaOv((s && s.deuda) || {}) } catch { setTermOv({}); setDeudaOv({}) } }, [empresa])
   // Agregar por cliente desde los saldos de Producto (todas las marcas · SS27 + FW27).
   let rows = []
   try {
@@ -3339,11 +3340,13 @@ function SaldoCajaForm({ empresa }) {
   const termM = (r) => CF_PLAZO_MESES[termOf(r)] || 0
   // Escalera: una venta que LLEGA (XFD) el mes m se cobra m + plazo después. Lo que se cobra después de dic-2027 (m+plazo>11) sigue pendiente al cierre.
   const proyPend = (r) => (r.mes || []).reduce((a, v, m) => a + ((m + termM(r)) > 11 ? num(v) : 0), 0)
-  const saldo = (r) => num(r.deuda) + proyPend(r)   // = saldo al corte + proyección pendiente según la escalera
+  const corteOf = (r) => { const o = deudaOv[upper(r.cliente)]; return (o != null && o !== '') ? num(o) : num(r.deuda) }   // saldo al corte: lo que escribe el usuario, o lo que trajo el OOR
+  const saldo = (r) => corteOf(r) + proyPend(r)   // = saldo al corte + proyección pendiente según la escalera
+  const setCorte = (cli, v) => setDeudaOv((o) => ({ ...o, [upper(cli)]: v }))
   rows.sort((a, b) => saldo(b) - saldo(a))
   const T = (f) => rows.reduce((a, r) => a + f(r), 0)
   const setTerm = (cli, v) => setTermOv((o) => ({ ...o, [upper(cli)]: v }))
-  function guardar() { setSaving(true); try { const v = { term: termOv }; localStorage.setItem(`saldocaja_${empresa}`, JSON.stringify(v)); try { saveEstado(empresa, 'saldocaja', v) } catch { } setMsg({ t: 'ok', x: 'Guardado.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function guardar() { setSaving(true); try { const v = { term: termOv, deuda: deudaOv }; localStorage.setItem(`saldocaja_${empresa}`, JSON.stringify(v)); try { saveEstado(empresa, 'saldocaja', v) } catch { } setMsg({ t: 'ok', x: 'Guardado.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   return (
     <div>
       <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#b45309', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>🏦 Saldo inicial — Cuentas por cobrar 2028</span><span className="unit" style={{ alignSelf: 'center' }}>Cartera con la que arranca el año (por cliente).</span><div className="spacer"></div><button className={'btn' + (demo ? ' primary' : '')} onClick={() => setDemo((d) => !d)} style={demo ? { background: '#7c3aed', borderColor: '#7c3aed' } : {}}>🧪 {demo ? 'Ocultar ejemplo' : 'Ver ejemplo (HOKA · prueba)'}</button><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
@@ -3395,7 +3398,7 @@ function SaldoCajaForm({ empresa }) {
               {rows.map((r, i) => { const open = expCli === upper(r.cliente); return <Fragment2 key={i}>
                 <tr className={'rowline' + (open ? ' open' : '')} style={{ cursor: 'pointer' }} onClick={() => setExpCli(open ? null : upper(r.cliente))}>
                   <td className="l sub2"><span className="caret">▶</span> {r.cliente}</td>
-                  <td className="tot" style={{ color: '#b45309' }}>{fmt(num(r.deuda))}</td>
+                  <td className="cell" onClick={(e) => e.stopPropagation()}><input value={deudaOv[upper(r.cliente)] ?? ''} onChange={(e) => setCorte(r.cliente, e.target.value)} inputMode="decimal" placeholder={num(r.deuda) ? fmt(num(r.deuda)) : '0'} title="Lo que el cliente ya debe al corte (puedes escribirlo; si lo dejas vacío usa lo del OOR)" style={{ width: '100%', textAlign: 'center' }} /></td>
                   <td className="tot">{fmt(proyeccion(r))}</td>
                   <td className="l" onClick={(e) => e.stopPropagation()}><select value={termOf(r)} onChange={(e) => setTerm(r.cliente, e.target.value)} style={{ fontSize: 12, padding: '3px 6px' }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select></td>
                   <td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(saldo(r))}</td>
@@ -3408,7 +3411,7 @@ function SaldoCajaForm({ empresa }) {
                   </tbody></table></div>
                 </td></tr>}
               </Fragment2> })}
-              {rows.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td className="tot" style={{ color: '#b45309' }}>{fmt(T((r) => num(r.deuda)))}</td><td className="tot">{fmt(T(proyeccion))}</td><td></td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(T(saldo))}</td></tr>}
+              {rows.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td className="tot" style={{ color: '#b45309' }}>{fmt(T(corteOf))}</td><td className="tot">{fmt(T(proyeccion))}</td><td></td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(T(saldo))}</td></tr>}
             </tbody>
           </table>
         </div>
