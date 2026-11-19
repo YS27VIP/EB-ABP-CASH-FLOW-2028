@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_ind', 'gadmin_cfg', 'gadmin_req', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'retail_mksplit', 'cfsum', 'vendedores', 'vendcli', 'saldos']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_ind', 'gadmin_cfg', 'gadmin_req', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'retail_mksplit', 'cfsum', 'vendedores', 'vendcli', 'saldos', 'saldocaja']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -3287,7 +3287,65 @@ function SaldosForm({ empresa, marca }) {
           </tbody>
         </table>
       </div>
-      <div className="sub" style={{ marginTop: 8, fontSize: 11.5 }}>🚧 Versión inicial para validar. Este es el <b>saldo inicial de Producto</b>: el inventario con el que se arranca 2028. (El saldo inicial de <b>Finanzas</b> —la plata en bancos del Cash Flow— se maneja aparte en Finanzas.)</div>
+      <div className="sub" style={{ marginTop: 8, fontSize: 11.5 }}>Aquí calculas el <b>inventario con el que arranca 2028</b> por categoría.</div>
+    </div>
+  )
+}
+
+/* ===== Saldo inicial de FINANZAS: con cuánta plata se arranca el Cash Flow 2028 = plata en bancos. Más la cartera (cuentas por cobrar) que viene de los saldos de Producto. ===== */
+function SaldoCajaForm({ empresa }) {
+  const [bancos, setBancos] = useState(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); return (s && Array.isArray(s.bancos) && s.bancos.length) ? s.bancos : [{ banco: '', monto: '' }] } catch { return [{ banco: '', monto: '' }] } })
+  const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null)
+  useEffect(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); if (s && Array.isArray(s.bancos) && s.bancos.length) setBancos(s.bancos) } catch { } }, [empresa])
+  // Cartera (cuentas por cobrar) agregada desde los saldos de Producto: por marca · ambas temporadas.
+  let cartera = []
+  try {
+    const all = JSON.parse(localStorage.getItem(`saldos_${empresa}`) || '{}'); const per = {}
+    Object.values(all).forEach((mk) => { ['SS27', 'FW27'].forEach((s) => { (((mk || {}).cxcS || {})[s] || []).forEach((r) => { const k = upper(r.cliente); if (!per[k]) per[k] = { cliente: r.cliente, open: 0, term: r.term || '' }; per[k].open += num(r.open); if (!per[k].term && r.term) per[k].term = r.term }) }) })
+    cartera = Object.values(per).sort((a, b) => b.open - a.open)
+  } catch { }
+  const totBancos = bancos.reduce((a, b) => a + num(b.monto), 0)
+  const totCart = cartera.reduce((a, c) => a + num(c.open), 0)
+  const setB = (i, k, v) => setBancos((bs) => bs.map((b, j) => j === i ? { ...b, [k]: v } : b))
+  const addB = () => setBancos((bs) => [...bs, { banco: '', monto: '' }])
+  const delB = (i) => setBancos((bs) => bs.filter((_, j) => j !== i))
+  function guardar() { setSaving(true); try { const v = { bancos }; localStorage.setItem(`saldocaja_${empresa}`, JSON.stringify(v)); try { saveEstado(empresa, 'saldocaja', v) } catch { } setMsg({ t: 'ok', x: 'Saldo de caja guardado.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  return (
+    <div>
+      <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#0f766e', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>🏦 Saldo inicial de caja 2028</span><span className="unit" style={{ alignSelf: 'center' }}>Con cuánta plata se arranca el Cash Flow (plata en los bancos).</span><div className="spacer"></div><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
+      {msg && <div className={'note no-ayuda ' + msg.t} style={{ marginBottom: 8 }}>{msg.x}</div>}
+      <div className="panel" style={{ borderLeftColor: '#0f766e' }}>
+        <h3 style={{ color: '#0f766e' }}>💵 Plata en bancos <span className="unit">(saldo al cierre 2027 = Cash Inicial de arranque 2028)</span></h3>
+        <div className="sub">Lista tus <b>cuentas de banco</b> con el saldo al cierre de 2027. El <b>total</b> es la plata con la que arranca el Cash Flow (el <b>Cash Inicial</b> de enero-28).</div>
+        <div className="tablewrap" style={{ marginTop: 6 }}>
+          <table className="vfix" style={{ width: 'auto', minWidth: 460 }}>
+            <thead><tr><th className="l">Banco / Cuenta</th><th>Saldo ($)</th><th></th></tr></thead>
+            <tbody>
+              {bancos.map((b, i) => <tr key={i}>
+                <td className="cell"><input value={b.banco} onChange={(e) => setB(i, 'banco', e.target.value)} placeholder="Nombre del banco / cuenta" style={{ width: '100%' }} /></td>
+                <td className="cell"><input value={b.monto} onChange={(e) => setB(i, 'monto', e.target.value)} inputMode="decimal" placeholder="0" style={{ width: '100%', textAlign: 'center' }} /></td>
+                <td className="tot"><button className="btn" onClick={() => delB(i)} style={{ color: '#b91c1c', padding: '2px 8px' }}>✕</button></td>
+              </tr>)}
+              <tr><td colSpan={3} style={{ padding: '6px 0' }}><button className="btn" onClick={addB}>➕ Agregar banco</button></td></tr>
+              <tr className="grandrow"><td className="l">TOTAL en bancos</td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(totBancos)}</td><td></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="panel" style={{ borderLeftColor: '#b45309' }}>
+        <h3 style={{ color: '#b45309' }}>📥 Cuentas por cobrar <span className="unit">(cartera inicial 2028 · viene de los saldos de Producto por marca · SS27 + FW27)</span></h3>
+        <div className="sub">Lo que los clientes deben al arrancar 2028 (del OOR de cada marca). Según el <b>término</b> se cobra en los meses de 2028 (entra como Cash In). Se llena al importar el Excel en <b>Producto → Saldos</b>.</div>
+        <div className="tablewrap" style={{ marginTop: 6 }}>
+          <table className="vfix" style={{ width: 'auto', minWidth: 460 }}>
+            <thead><tr><th className="l">Cliente</th><th>Pendiente ($)</th><th className="l">Término</th></tr></thead>
+            <tbody>
+              {cartera.length === 0 && <tr><td className="l" colSpan={3} style={{ color: 'var(--muted)' }}>Aún no hay cartera. Importa el Excel de cada marca en <b>Producto → Saldos 2028</b> y guarda.</td></tr>}
+              {cartera.map((c, i) => <tr key={i}><td className="l sub2">{c.cliente}</td><td className="tot" style={{ color: '#b45309' }}>{fmt(num(c.open))}</td><td className="l sub2">{c.term || '—'}</td></tr>)}
+              {cartera.length > 0 && <tr className="grandrow"><td className="l">TOTAL cartera</td><td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(totCart)}</td><td></td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   )
 }
@@ -4017,6 +4075,7 @@ function FinanzasWorkspace({ empresa, usuario, sbus, deep }) {
         <div className="sub" style={{ fontSize: 11, margin: '0 0 6px', padding: '0 4px' }}>✅ completo · ⚠️ falta algo</div>
         <button className={'cmz-marca' + (marca === '__VIAJES__' ? ' active' : '')} onClick={() => setMarca('__VIAJES__')} style={{ marginBottom: 6, fontWeight: 800, ...(marca === '__VIAJES__' ? { background: '#6b21a8', color: '#fff' } : { color: '#6b21a8' }) }}>🧳 Viajes<span style={{ float: 'right' }} title={viajesFinOk ? 'Viajes de Finanzas lleno' : 'Falta llenar los Viajes de Finanzas'}>{viajesFinOk ? '✅' : '⚠️'}</span></button>
         <button className={'cmz-marca' + (marca === '__GADMIN__' ? ' active' : '')} onClick={() => setMarca('__GADMIN__')} style={{ marginBottom: 6, fontWeight: 800, ...(marca === '__GADMIN__' ? { background: '#be185d', color: '#fff' } : { color: '#be185d' }) }}>💰 Gastos Admin</button>
+        <button className={'cmz-marca' + (marca === '__SALDO__' ? ' active' : '')} onClick={() => setMarca('__SALDO__')} style={{ marginBottom: 6, fontWeight: 800, ...(marca === '__SALDO__' ? { background: '#0f766e', color: '#fff' } : { color: '#0f766e' }) }}>🏦 Saldo inicial</button>
         <button className={'cmz-marca' + (marca === '__REPORTE__' ? ' active' : '')} onClick={() => setMarca('__REPORTE__')} style={{ marginBottom: 8, fontWeight: 800, ...(marca === '__REPORTE__' ? { background: '#0e7490', color: '#fff' } : { color: '#0e7490' }) }}>📊 Reporte</button>
         {Object.entries(sbus).map(([s, ms]) => (
           <div className="cmz-sbu" key={s}>
@@ -4028,7 +4087,8 @@ function FinanzasWorkspace({ empresa, usuario, sbus, deep }) {
       </aside>
       <div className="cmz-main" style={{ '--accent': acc, borderTop: '5px solid ' + acc, paddingTop: 12, borderRadius: 4 }}>
         {marca !== '__REPORTE__' && <div style={{ marginBottom: 10 }}><TurnoBanner /></div>}
-        {marca === '__REPORTE__' ? <ReporteScreen empresa={empresa} sbus={sbus} />
+        {marca === '__SALDO__' ? <SaldoCajaForm empresa={empresa} />
+          : marca === '__REPORTE__' ? <ReporteScreen empresa={empresa} sbus={sbus} />
           : marca === '__VIAJES__' ? <>
             <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#6b21a8', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>🧳 Viajes de Finanzas</span><span className="unit" style={{ alignSelf: 'center' }}>Nivel empresa (no por marca).</span></div>
             <RoleForm key="finviajes" role={finRole} rubrosOverride={[VJ]} usuario={usuario} empresa={empresa} sbus={sbus} fixedMarca="(Finanzas)" />
