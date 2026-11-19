@@ -3335,9 +3335,11 @@ function SaldoCajaForm({ empresa }) {
     rows = Object.values(per)
   } catch { }
   const termOf = (r) => (termOv[upper(r.cliente)] != null && termOv[upper(r.cliente)] !== '') ? termOv[upper(r.cliente)] : (r.term || '')
-  // Escalera de cobros: una venta del mes m se cobra m + plazo(meses) después. Lo que se cobra DESPUÉS de dic-2027 (m+plazo>11) sigue pendiente al cierre.
-  const proyPend = (r) => { const tM = CF_PLAZO_MESES[termOf(r)] || 0; return (r.mes || []).reduce((a, v, m) => a + ((m + tM) > 11 ? num(v) : 0), 0) }
-  const saldo = (r) => num(r.deuda) + proyPend(r)   // saldo al cierre dic-2027 = deuda al corte + proyección aún no cobrada según el término
+  const proyeccion = (r) => num(r.ss) + num(r.fw)   // proyección de venta al cliente (Master SS27 + FW27)
+  const diasTerm = (r) => (CF_PLAZO_MESES[termOf(r)] || 0) * 30
+  // Deuda del cliente según su término: la parte de la venta que, por el plazo de pago, sigue sin cobrarse = Proyección × (días del término ÷ 365). Más el saldo que ya debe al corte.
+  const deudaTerm = (r) => proyeccion(r) * diasTerm(r) / 365
+  const saldo = (r) => num(r.deuda) + deudaTerm(r)
   rows.sort((a, b) => saldo(b) - saldo(a))
   const T = (f) => rows.reduce((a, r) => a + f(r), 0)
   const setTerm = (cli, v) => setTermOv((o) => ({ ...o, [upper(cli)]: v }))
@@ -3346,52 +3348,48 @@ function SaldoCajaForm({ empresa }) {
     <div>
       <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#b45309', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>🏦 Saldo inicial — Cuentas por cobrar 2028</span><span className="unit" style={{ alignSelf: 'center' }}>Cartera con la que arranca el año (por cliente).</span><div className="spacer"></div><button className={'btn' + (demo ? ' primary' : '')} onClick={() => setDemo((d) => !d)} style={demo ? { background: '#7c3aed', borderColor: '#7c3aed' } : {}}>🧪 {demo ? 'Ocultar ejemplo' : 'Ver ejemplo (HOKA · prueba)'}</button><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
       {demo && (() => {
-        const MH = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-        const pend = (arr, term) => { const tM = CF_PLAZO_MESES[term] || 0; return arr.reduce((a, v, m) => a + ((m + tM) > 11 ? num(v) : 0), 0) }
+        const proyOf = (r) => r[2].reduce((a, v) => a + v, 0)
+        const diasOf = (term) => (CF_PLAZO_MESES[term] || 0) * 30
+        const deudaOf = (r) => num(r[3]) + proyOf(r) * diasOf(r[1]) / 365
         const TT = (f) => DEMO_HOKA.reduce((a, r) => a + f(r), 0)
         return <div className="panel" style={{ borderLeftColor: '#7c3aed', background: '#faf7ff' }}>
-          <h3 style={{ color: '#7c3aed' }}>🧪 Ejemplo (prueba) — Saldo al cierre dic-2027 por escalera · HOKA (SS27)</h3>
-          <div className="sub">La <b>venta se da cuando llega la mercancía (XFD)</b>; el cobro = <b>mes de llegada + plazo del término</b>. Lo que se cobra <b style={{ color: '#b45309' }}>después de diciembre</b> (celdas naranja) queda pendiente al cierre. HOKA <b>SS27</b> real llega en <b>abr/jul</b> → se cobra dentro del año (≈0 pendiente, correcto). La fila <b>FW27 (ejemplo)</b> llega <b>oct–dic</b> → se cobra en 2028 → ahí sí queda saldo. <b>Prueba de la lógica</b>, no afecta datos.</div>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '10px 0' }}>
-            {[['Proyección total', TT((r) => r[2].reduce((a, v) => a + v, 0)), '#334155'], ['Proy. pendiente al cierre', TT((r) => pend(r[2], r[1])), '#b45309'], ['Deuda al corte', TT((r) => r[3]), '#64748b'], ['= Saldo al cierre dic-2027', TT((r) => num(r[3]) + pend(r[2], r[1])), '#0f766e']].map(([k, v, c]) => <div key={k} style={{ flex: 1, minWidth: 180, background: '#fff', border: '1px solid #e1e7eb', borderRadius: 12, padding: '12px 16px' }}><div style={{ fontSize: 11, textTransform: 'uppercase', color: '#64748b', fontWeight: 700 }}>{k}</div><div style={{ fontSize: 22, fontWeight: 800, color: c }}>{fmt(v)}</div></div>)}
-          </div>
+          <h3 style={{ color: '#7c3aed' }}>🧪 Ejemplo (prueba) — Deuda por cliente según término · HOKA</h3>
+          <div className="sub">Por cada cliente: <b>Saldo al corte</b> (lo que ya debe) + <b>Proyección de venta</b>; según el <b>término</b> se calcula la deuda = Saldo al corte + Proyección × (días del término ÷ 365). Ej.: 90 días ≈ 25% de la proyección sigue pendiente; Cash = 0. <b>Prueba de la lógica</b>, no afecta datos.</div>
           <div className="tablewrap" style={{ marginTop: 6 }}>
-            <table className="vfix stickcol" style={{ width: 'auto', minWidth: 1100 }}>
-              <thead><tr><th className="l">Canal</th><th className="cod">Término</th>{MH.map((m) => <th key={m}>{m.toUpperCase()}</th>)}<th>Proy. pend.</th><th>Deuda</th><th>= Saldo</th></tr></thead>
+            <table className="vfix" style={{ width: 'auto', minWidth: 640 }}>
+              <thead><tr><th className="l">Cliente (canal)</th><th>Saldo al corte ($)</th><th>Proyección de venta ($)</th><th className="l">Término</th><th>= Deuda cliente ($)</th></tr></thead>
               <tbody>
-                {DEMO_HOKA.map(([cli, term, arr, de]) => { const tM = CF_PLAZO_MESES[term] || 0; const p = pend(arr, term); return <tr key={cli}>
-                  <td className="l sub2">{cli}</td>
-                  <td className="cell cod"><span className="empchip" style={{ background: '#eef2ff', color: '#3730a3', marginLeft: 0 }}>{term}</span></td>
-                  {arr.map((v, m) => { const late = (m + tM) > 11 && v; return <td key={m} className="tot" style={late ? { background: '#fde8cf', color: '#b45309', fontWeight: 700 } : (v ? undefined : { color: '#cbd5e1' })}>{v ? fmt(v) : '—'}</td> })}
-                  <td className="tot" style={{ color: '#b45309', fontWeight: 700 }}>{fmt(p)}</td>
-                  <td className="tot">{fmt(de)}</td>
-                  <td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(num(de) + p)}</td>
-                </tr> })}
-                <tr className="grandrow"><td className="l">TOTAL</td><td className="cod"></td>{MH.map((_, m) => <td key={m} className="tot">{fmt(TT((r) => r[2][m]))}</td>)}<td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(TT((r) => pend(r[2], r[1])))}</td><td className="tot">{fmt(TT((r) => r[3]))}</td><td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(TT((r) => num(r[3]) + pend(r[2], r[1])))}</td></tr>
+                {DEMO_HOKA.map((r) => <tr key={r[0]}>
+                  <td className="l sub2">{r[0]}</td>
+                  <td className="tot" style={{ color: '#b45309' }}>{fmt(num(r[3]))}</td>
+                  <td className="tot">{fmt(proyOf(r))}</td>
+                  <td className="l"><span className="empchip" style={{ background: '#eef2ff', color: '#3730a3', marginLeft: 0 }}>{r[1]}</span></td>
+                  <td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(deudaOf(r))}</td>
+                </tr>)}
+                <tr className="grandrow"><td className="l">TOTAL</td><td className="tot" style={{ color: '#b45309' }}>{fmt(TT((r) => num(r[3])))}</td><td className="tot">{fmt(TT(proyOf))}</td><td></td><td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(TT(deudaOf))}</td></tr>
               </tbody>
             </table>
           </div>
-          <div className="sub" style={{ fontSize: 11.5, marginTop: 6 }}>⚠️ Nota: en el Master el "canal" (TAHO, PARTNER…) no es el cliente final; el cliente real está en el OOR. Esta prueba es solo para ver la mecánica de la escalera.</div>
+          <div className="sub" style={{ fontSize: 11.5, marginTop: 6 }}>⚠️ Nota: en el Master el "canal" (TAHO, PARTNER…) no es el cliente final; el cliente real está en el OOR. Esta prueba es solo para ver la mecánica.</div>
         </div>
       })()}
       {msg && <div className={'note no-ayuda ' + msg.t} style={{ marginBottom: 8 }}>{msg.x}</div>}
       <div className="panel" style={{ borderLeftColor: '#b45309' }}>
         <h3 style={{ color: '#b45309' }}>📥 Cuentas por cobrar por cliente <span className="unit">(viene de los saldos importados en Producto · todas las marcas · SS27 + FW27)</span></h3>
-        <div className="sub"><b>Saldo al cierre de dic-2027</b> por cliente = <b>Deuda al corte</b> + la parte de la proyección (<b>Master SS27 + FW27</b>) que, según el <b>término de pago</b>, <b>aún no se habrá cobrado</b> a esa fecha (escalera de cobros: una venta del mes <i>m</i> se cobra <i>m + plazo</i>; lo que cae después de diciembre queda pendiente). El término sale de Base_Clientes y es ajustable. Se llena al importar el Excel Master de cada marca en <b>Producto → 🧮 Saldos</b>.</div>
+        <div className="sub">Por cada cliente: su <b>saldo al corte</b> (lo que ya debe) + su <b>proyección de venta 2027</b> (Master SS27 + FW27); según el <b>término de pago</b> se calcula la <b>deuda</b> = Saldo al corte + Proyección × (días del término ÷ 365). El término sale de Base_Clientes y es ajustable. Se llena al importar el Excel Master en <b>Producto → 🧮 Saldos</b>.</div>
         <div className="tablewrap" style={{ marginTop: 6 }}>
-          <table className="vfix" style={{ width: 'auto', minWidth: 720 }}>
-            <thead><tr><th className="l">Cliente</th><th>Master SS27 ($)</th><th>Master FW27 ($)</th><th>Deuda al corte ($)</th><th className="l">Término</th><th>= Saldo ($)</th></tr></thead>
+          <table className="vfix" style={{ width: 'auto', minWidth: 640 }}>
+            <thead><tr><th className="l">Cliente</th><th>Saldo al corte ($)</th><th>Proyección de venta ($)</th><th className="l">Término</th><th>= Deuda cliente ($)</th></tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><td className="l" colSpan={6} style={{ color: 'var(--muted)' }}>Aún no hay datos. Importa el Excel Master de cada marca en <b>Producto → 🧮 Saldos 2028</b> y guarda.</td></tr>}
+              {rows.length === 0 && <tr><td className="l" colSpan={5} style={{ color: 'var(--muted)' }}>Aún no hay datos. Importa el Excel Master de cada marca en <b>Producto → 🧮 Saldos 2028</b> y guarda.</td></tr>}
               {rows.map((r, i) => <tr key={i}>
                 <td className="l sub2">{r.cliente}</td>
-                <td className="tot">{fmt(num(r.ss))}</td>
-                <td className="tot">{fmt(num(r.fw))}</td>
                 <td className="tot" style={{ color: '#b45309' }}>{fmt(num(r.deuda))}</td>
+                <td className="tot">{fmt(proyeccion(r))}</td>
                 <td className="l"><select value={termOf(r)} onChange={(e) => setTerm(r.cliente, e.target.value)} style={{ fontSize: 12, padding: '3px 6px' }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select></td>
                 <td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(saldo(r))}</td>
               </tr>)}
-              {rows.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td className="tot">{fmt(T((r) => num(r.ss)))}</td><td className="tot">{fmt(T((r) => num(r.fw)))}</td><td className="tot" style={{ color: '#b45309' }}>{fmt(T((r) => num(r.deuda)))}</td><td></td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(T(saldo))}</td></tr>}
+              {rows.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td className="tot" style={{ color: '#b45309' }}>{fmt(T((r) => num(r.deuda)))}</td><td className="tot">{fmt(T(proyeccion))}</td><td></td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(T(saldo))}</td></tr>}
             </tbody>
           </table>
         </div>
