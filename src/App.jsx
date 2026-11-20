@@ -5348,7 +5348,7 @@ function SBUWorkspace({ sbuName, empresa, usuario, sbus, puede, deep }) {
                   </select>
                 </div>}
                 {comercialRoles.filter((r) => comSub === 'all' || r.id === comSub).map((r) => (
-                  <div key={r.id} className="role-group" style={{ border: '1.5px solid ' + r.color + '33', borderLeft: '7px solid ' + r.color, borderRadius: 14, padding: '8px 16px 16px', marginBottom: 30, background: r.color + '0c', boxShadow: '0 1px 6px ' + r.color + '14' }}>
+                  <div key={r.id} className="role-group" style={{ border: '1.5px solid ' + r.color + '3a', borderLeft: '7px solid ' + r.color, borderRadius: 14, padding: '8px 16px 16px', marginBottom: 32, background: r.color + '12', boxShadow: '0 2px 10px ' + r.color + '1c' }}>
                     <div style={{ background: r.color, color: '#fff', fontWeight: 800, fontSize: 14, padding: '9px 14px', borderRadius: 9, margin: '4px 0 12px', display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ background: 'rgba(255,255,255,.25)', borderRadius: 20, width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>{comercialRoles.indexOf(r) + 1}</span><span style={{ fontSize: 18 }}>{r.icon}</span> {r.label}</div>
                     {r.id === 'logistica'
                       ? (LOG_SIMPLE(empresa)
