@@ -7992,17 +7992,18 @@ function ConfigScreen({ empresas, setEmpresas, combos, setCombos, nuevaEmpresa, 
       </div>
 
       <div className="panel">
-        <h3>Vendedores por marca — {empresa} <span className="unit">(2 por marca · sus nombres salen en Ventas)</span></h3>
-        <div className="sub">Asigna el nombre del <b>Vendedor 1</b> y <b>Vendedor 2</b> de cada marca. En Ventas, los clientes se reparten en esos dos bloques y la suma da el total de la marca. Si lo dejas vacío, sale "Vendedor 1 / Vendedor 2".</div>
-        <div className="tablewrap"><table style={{ width: 'auto', minWidth: 460 }}>
-          <thead><tr><th className="l">Marca</th><th className="l">Vendedor 1</th><th className="l">Vendedor 2</th></tr></thead>
+        <h3>Vendedores por marca — {empresa} <span className="unit">(2 por marca · 3 en SBU 2 · sus nombres salen en Ventas)</span></h3>
+        <div className="sub">Asigna el nombre de los vendedores de cada marca. En Ventas, los clientes se reparten en esos bloques y la suma da el total de la marca. Las marcas de <b>SBU 2</b> tienen un <b>Vendedor 3</b>; en las demás esa casilla no aplica. Si lo dejas vacío, sale "Vendedor 1 / 2 / 3".</div>
+        <div className="tablewrap"><table style={{ width: 'auto', minWidth: 560 }}>
+          <thead><tr><th className="l">Marca</th><th className="l">Vendedor 1</th><th className="l">Vendedor 2</th><th className="l">Vendedor 3 <span className="unit">(SBU 2)</span></th></tr></thead>
           <tbody>
-            {allMarcas.filter((mk) => SBU_NAMES.includes(asign[mk])).map((mk) => (
+            {allMarcas.filter((mk) => SBU_NAMES.includes(asign[mk])).map((mk) => { const esSbu2 = String(asign[mk] || '').replace(/\s/g, '').toUpperCase() === 'SBU2'; return (
               <tr key={mk}><td className="l"><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', background: marcaColor(mk), marginRight: 7 }}></span>{mk}</td>
                 <td><input className="fillin" value={(vend[mk] || [])[0] || ''} onChange={(e) => setVendName(mk, 0, e.target.value)} placeholder="Vendedor 1" style={{ minWidth: 160 }} /></td>
-                <td><input className="fillin" value={(vend[mk] || [])[1] || ''} onChange={(e) => setVendName(mk, 1, e.target.value)} placeholder="Vendedor 2" style={{ minWidth: 160 }} /></td></tr>
-            ))}
-            {allMarcas.filter((mk) => SBU_NAMES.includes(asign[mk])).length === 0 && <tr><td className="l" colSpan={3}>Primero asigna marcas a una SBU arriba.</td></tr>}
+                <td><input className="fillin" value={(vend[mk] || [])[1] || ''} onChange={(e) => setVendName(mk, 1, e.target.value)} placeholder="Vendedor 2" style={{ minWidth: 160 }} /></td>
+                <td>{esSbu2 ? <input className="fillin" value={(vend[mk] || [])[2] || ''} onChange={(e) => setVendName(mk, 2, e.target.value)} placeholder="Vendedor 3" style={{ minWidth: 160 }} /> : <span className="unit">—</span>}</td></tr>
+            ) })}
+            {allMarcas.filter((mk) => SBU_NAMES.includes(asign[mk])).length === 0 && <tr><td className="l" colSpan={4}>Primero asigna marcas a una SBU arriba.</td></tr>}
           </tbody>
         </table></div>
         <div className="toolbar" style={{ marginTop: 8 }}><div className="spacer"></div><button className="btn primary" disabled={savingV} onClick={guardarVend}>{savingV ? 'Guardando…' : '💾 Guardar vendedores'}</button></div>
@@ -8434,12 +8435,14 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const useVend = empresa === 'ENERGY BRANDS'
   const [vendcli, setVendcli] = useState(() => { try { return JSON.parse(localStorage.getItem('vendcli_' + empresa) || '{}') } catch { return {} } })
   const [vendNames, setVendNames] = useState([])
-  useEffect(() => { try { const v = JSON.parse(localStorage.getItem('vendedores_' + empresa) || '{}'); setVendNames(v[marca] || []) } catch { setVendNames([]) } }, [empresa, marca])
+  useEffect(() => { try { const v = JSON.parse(localStorage.getItem('vendedores_' + empresa) || '{}'); setVendNames(v[marca] || []) } catch { setVendNames([]) } setVendView(0) }, [empresa, marca])
   useEffect(() => { try { localStorage.setItem('vendcli_' + empresa, JSON.stringify(vendcli)) } catch { } }, [vendcli, empresa])
   const vName = (i) => (vendNames[i] && String(vendNames[i]).trim()) ? vendNames[i] : `Vendedor ${i + 1}`
-  const vendOf = (cli) => (vendcli[`${marca}|${cli}`] === 1 ? 1 : 0)
+  // Nº de vendedores por marca: SBU 2 tiene 3; el resto, 2.
+  const nVend = (() => { const s = String(sbuDe(sbus, marca) || '').replace(/\s/g, '').toUpperCase(); return s === 'SBU2' ? 3 : 2 })()
+  const vendOf = (cli) => { const v = Math.round(num(vendcli[`${marca}|${cli}`])); return (v >= 0 && v < nVend) ? v : 0 }
   const setVendOf = (cli, i) => { const next = { ...vendcli, [`${marca}|${cli}`]: i }; setVendcli(next); saveEstado(empresa, 'vendcli', next) }
-  const [vendView, setVendView] = useState(0) // 0 · 1 · 'T' (total)
+  const [vendView, setVendView] = useState(0) // 0 · 1 · 2 · 'inter' · 'T' (total)
   const [cvView, setCvView] = useState('ambos') // 'bruto' · 'landed' · 'ambos' (qué costo/margen mostrar)
   const [buscar, setBuscar] = useState('')
   const topScRef = useRef(null), botScRef = useRef(null) // barra de scroll horizontal (arriba) sincronizada con la tabla
@@ -8634,7 +8637,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
       <div className="panel" style={{ marginTop: 28 }}>
         <div className="toolbar" style={{ marginBottom: 6, alignItems: 'center' }}>
           <h3 style={{ margin: 0 }}>Ventas · Unidades 2028 — {marca}<Responsable empresa={empresa} sbuName={sbuDe(sbus, marca)} seccion="Ventas" /></h3>
-          {useVend && <div style={{ display: 'flex', gap: 6, marginLeft: 10, flexWrap: 'wrap' }}>{[[0, vName(0)], [1, vName(1)], ['inter', '🔄 Intercompañía'], ['T', '▣ Total']].map(([k, lbl]) => <button key={k} className={'seg' + (vendView === k ? ' active' : '')} onClick={() => setVendView(k)} style={vendView === k ? (k === 'inter' ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : undefined) : undefined}>{lbl}</button>)}</div>}
+          {useVend && <div style={{ display: 'flex', gap: 6, marginLeft: 10, flexWrap: 'wrap' }}>{[...Array.from({ length: nVend }, (_, i) => [i, vName(i)]), ['inter', '🔄 Intercompañía'], ['T', '▣ Total']].map(([k, lbl]) => <button key={k} className={'seg' + (vendView === k ? ' active' : '')} onClick={() => setVendView(k)} style={vendView === k ? (k === 'inter' ? { background: '#7c3aed', borderColor: '#7c3aed', color: '#fff' } : undefined) : undefined}>{lbl}</button>)}</div>}
           <div className="spacer"></div>
           <button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button>
         </div>
@@ -8678,7 +8681,7 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
                 <Fragment2 key={cli}>
                   {useVend && vendView === 'T' && (_idx === 0 || vendOf(_arr[_idx - 1]) !== vendOf(cli)) && (() => { const vi = vendOf(cli); const grp = _arr.filter((c) => vendOf(c) === vi); const uSub = grp.reduce((a, c) => a + t28(c), 0); return <tr className="secrow"><td className="l" colSpan={17}>🧑‍💼 {vName(vi)} <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>· {grp.length} cliente(s) · {fmt(uSub)} ud en 2028</span></td></tr> })()}
                   <tr>
-                    <td className="l" rowSpan={rsp}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}{paisByCli[cli] && <div style={{ marginTop: 2, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }} title="País del cliente (Base Clientes SF)">📍 {paisByCli[cli]}</div>}{useVend && <div style={{ marginTop: 5 }}><span className="unit" style={{ marginRight: 4 }}>Vendedor:</span><select value={vendOf(cli)} onChange={(e) => setVendOf(cli, Number(e.target.value))} style={{ fontSize: 11, padding: '2px 4px', borderRadius: 5, border: '1px solid var(--line)' }}><option value={0}>{vName(0)}</option><option value={1}>{vName(1)}</option></select></div>}</td>
+                    <td className="l" rowSpan={rsp}>{cli}{esInt(cli) && <span className="unit" style={{ marginLeft: 6, color: '#b45309', fontWeight: 700 }} title="Venta interna (intercompañía): incobrable, no entra al Cash In">⛔ interno</span>}{nuevo && <span className="unit" style={{ marginLeft: 6, color: 'var(--odoo)', fontWeight: 700 }}>🆕</span>}{nuevo && <button className="btn" title="Quitar cliente agregado" onClick={() => quitarCliente(cli)} style={{ marginLeft: 6, padding: '1px 7px', fontSize: 11 }}>✕</button>}{paisByCli[cli] && <div style={{ marginTop: 2, fontSize: 11, color: 'var(--muted)', fontWeight: 600 }} title="País del cliente (Base Clientes SF)">📍 {paisByCli[cli]}</div>}{useVend && <div style={{ marginTop: 5 }}><span className="unit" style={{ marginRight: 4 }}>Vendedor:</span><select value={vendOf(cli)} onChange={(e) => setVendOf(cli, Number(e.target.value))} style={{ fontSize: 11, padding: '2px 4px', borderRadius: 5, border: '1px solid var(--line)' }}>{Array.from({ length: nVend }, (_, i) => <option key={i} value={i}>{vName(i)}</option>)}</select></div>}</td>
                     <td className="cell" rowSpan={rsp} style={{ verticalAlign: 'top' }}>{nuevo ? <span className="unit">—</span> : <input value={growth[cli + '|' + marca] ?? ''} onChange={(e) => setG(cli, e.target.value)} inputMode="decimal" placeholder="%" />}
                       <div style={{ marginTop: 7, fontSize: 11, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
                         {!nuevo && <div style={{ color: 'var(--muted)' }} title="Total objetivo = total 2026 × (1 + % crecimiento). Reparte este total en los meses de 2028.">🎯 obj <b>{fmt(obj)}</b></div>}
