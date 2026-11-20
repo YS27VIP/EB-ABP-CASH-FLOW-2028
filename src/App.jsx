@@ -47,7 +47,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal, gTumarClientes, gTumarGastos, gTahoCompras, gWriteReport, gReadTabs } from './google'
+import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal, gTumarClientes, gTumarGastos, gTahoCompras, gWriteReport, gReadTabs, gClientesArmonizados, normCliente } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -5599,15 +5599,33 @@ function EbpEvolutionScreen({ empresa, sbus }) {
     } catch (e) { setErr(String(e && e.message || e)) }
     setLoad(false)
   }
-  useEffect(() => { cargar() }, [])
+  const [arm, setArm] = useState({ map: {}, pais: {} })
+  const [armOn, setArmOn] = useState(true)
+  useEffect(() => { cargar(); (async () => { try { const a = await gClientesArmonizados(); if (a && a.ok) setArm(a) } catch { } })() }, [])
+  // Cliente armonizado (mismo del EBP). Primero match exacto normalizado; si no, un cliente del mapa contenido en el nombre (o viceversa).
+  const armDe = (name) => {
+    const k = normCliente(name); if (!k) return { arm: name || '(sin cliente)', ok: false }
+    if (arm.map[k]) return { arm: arm.map[k], ok: true, pais: arm.pais[k] }
+    const keys = Object.keys(arm.map)
+    const hit = keys.find((mk) => mk.length >= 4 && (k.indexOf(mk) >= 0 || mk.indexOf(k) >= 0))
+    if (hit) return { arm: arm.map[hit], ok: true, pais: arm.pais[hit] }
+    return { arm: name, ok: false }
+  }
   const marcas = [...new Set(rows.map((r) => r.marca).filter(Boolean))].sort()
   const temps = [...new Set(rows.map((r) => r.tempC).filter(Boolean))].sort()
   const estados = [...new Set(rows.map((r) => r.status).filter(Boolean))].sort()
   // Cliente real: en Monday el cliente real está en la columna PO, SALVO para TAHO (donde PO es el nº de orden y el cliente es TAHO). Si PO viene vacío, se usa el canal (CLIENTE).
   const cliReal = (r) => (upper(r.cliente) === 'TAHO') ? 'TAHO' : (r.po && r.po.trim() ? r.po.trim() : (r.cliente || '(sin cliente)'))
   const fil = rows.filter((r) => (fMarca === '(todas)' || upper(r.marca) === upper(fMarca)) && (fTemp === '(todas)' || upper(r.tempC) === upper(fTemp)) && (fStatus === '(todos)' || r.status === fStatus) && (!buscar.trim() || upper(cliReal(r)).indexOf(upper(buscar)) >= 0 || upper(r.cliente).indexOf(upper(buscar)) >= 0))
-  // Agrupa por cliente real
-  const porCli = {}; fil.forEach((r) => { const k = cliReal(r); const canal = upper(r.cliente) === 'TAHO' ? '' : r.cliente; const o = porCli[k] || (porCli[k] = { cliente: k, canal, ordenes: 0, unidades: 0, pv: 0, terms: {} }); o.ordenes++; o.unidades += r.unidades; o.pv += r.pv; if (r.termino) o.terms[r.termino] = (o.terms[r.termino] || 0) + 1 })
+  // Agrupa por cliente armonizado (o por cliente real si se apaga la armonización)
+  const porCli = {}; fil.forEach((r) => {
+    const real = cliReal(r); const a = armOn ? armDe(real) : { arm: real, ok: true }
+    const k = a.arm || '(sin cliente)'; const canal = upper(r.cliente) === 'TAHO' ? '' : r.cliente
+    const o = porCli[k] || (porCli[k] = { cliente: k, canal, pais: a.pais || '', mapped: a.ok, ordenes: 0, unidades: 0, pv: 0, terms: {} })
+    if (!o.mapped && a.ok) o.mapped = true
+    o.ordenes++; o.unidades += r.unidades; o.pv += r.pv; if (r.termino) o.terms[r.termino] = (o.terms[r.termino] || 0) + 1
+  })
+  const sinArm = armOn ? Object.values(porCli).filter((o) => !o.mapped).length : 0
   const lista = Object.values(porCli).sort((a, b) => b.pv - a.pv || b.unidades - a.unidades)
   const termDe = (o) => { const e = Object.entries(o.terms).sort((a, b) => b[1] - a[1])[0]; return e ? e[0] : '—' }
   const totU = fil.reduce((a, r) => a + r.unidades, 0), totPV = fil.reduce((a, r) => a + r.pv, 0)
@@ -5641,7 +5659,9 @@ function EbpEvolutionScreen({ empresa, sbus }) {
               <select value={fStatus} onChange={(e) => setFStatus(e.target.value)}><option>(todos)</option>{estados.map((s) => <option key={s}>{s}</option>)}</select></label>
             <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>Buscar cliente
               <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 cliente…" style={{ minWidth: 180 }} /></label>
+            <label className="who" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} title="Agrupa por el CLIENTE ARMONIZADO del EBP (mismo nombre que usa el EBP)."><input type="checkbox" checked={armOn} onChange={(e) => setArmOn(e.target.checked)} /> Armonizar clientes (EBP)</label>
           </div>
+          {armOn && sinArm > 0 && <div className="sub no-ayuda" style={{ color: '#b45309', marginBottom: 2 }}>🔸 {sinArm} cliente(s) sin match en la base armonizada del EBP (se muestran con su nombre de Monday). Si alguno debería cuadrar, agrégalo en la hoja "BASE DE DATOS CLIENTE Y PAIS" del EBP.</div>}
           <div className="kpis" style={{ marginBottom: 6 }}>
             <div className="kpi"><div className="k">Órdenes</div><div className="v">{fmt(fil.length)}</div></div>
             <div className="kpi"><div className="k">Unidades (real)</div><div className="v">{fmt(totU)}</div></div>
@@ -5657,7 +5677,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
               <table className="vfix" style={{ width: 'auto', minWidth: 620 }}>
                 <thead><tr><th className="l">Cliente</th><th>Órdenes</th><th>Unidades</th><th>Venta PV ($)</th><th className="l">Término</th></tr></thead>
                 <tbody>
-                  {lista.map((o) => <tr key={o.cliente}><td className="l sub2">{o.cliente}{o.canal && upper(o.canal) !== upper(o.cliente) && <div className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>canal: {o.canal}</div>}</td><td className="tot">{fmt(o.ordenes)}</td><td className="tot">{fmt(o.unidades)}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(o.pv)}</td><td className="l">{termDe(o)}</td></tr>)}
+                  {lista.map((o) => <tr key={o.cliente}><td className="l sub2">{armOn && !o.mapped && <span title="Sin match en la base armonizada del EBP" style={{ marginRight: 4 }}>🔸</span>}{o.cliente}{o.pais && <span className="unit" style={{ fontWeight: 400, textTransform: 'none', marginLeft: 6 }}>📍 {o.pais}</span>}{o.canal && upper(o.canal) !== upper(o.cliente) && <div className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>canal: {o.canal}</div>}</td><td className="tot">{fmt(o.ordenes)}</td><td className="tot">{fmt(o.unidades)}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(o.pv)}</td><td className="l">{termDe(o)}</td></tr>)}
                   <tr className="grandrow"><td className="l">TOTAL ({lista.length} clientes)</td><td className="tot">{fmt(fil.length)}</td><td className="tot">{fmt(totU)}</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(totPV)}</td><td></td></tr>
                 </tbody>
               </table>

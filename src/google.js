@@ -477,6 +477,33 @@ export async function gSaveRows(tab, empresa, usuario, rol, rows) {
   return { ok: true, filas: rows.length }
 }
 
+// Normaliza un nombre de cliente para cruzar entre fuentes (Monday ↔ EBP): sin acentos, mayúsculas,
+// sin puntuación ni sufijos legales (S.A., SAS, C.A., INC, CORP, SRL, DE CV, NV, BV…).
+export function normCliente(s) {
+  let x = String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
+  x = x.replace(/[.,"'’`]/g, ' ')
+  x = x.replace(/\b(SOCIEDAD ANONIMA|S\s*A\s*S|S\s*A|C\s*A|LTDA|LTD|INC|CORP|CORPORATION|SRL|S\s*DE\s*R\s*L|SA DE CV|DE CV|NV|BV|S\s*R\s*L)\b/g, ' ')
+  return x.replace(/\s+/g, ' ').trim()
+}
+// Mapa de armonización de clientes desde el EBP (hoja "BASE DE DATOS CLIENTE Y PAIS"):
+// { map: {CLIENTE_NORMALIZADO: 'CLIENTE ARMONIZADO'}, pais: {CLIENTE_NORMALIZADO: 'PAIS'} }.
+let _armCache = null, _armAt = 0
+export async function gClientesArmonizados() {
+  if (_armCache && Date.now() - _armAt < 300000) return _armCache
+  const out = { ok: true, map: {}, pais: {}, armSet: {} }
+  try {
+    let rows = []
+    for (let i = 0; i < 3; i++) { rows = await readValuesFrom(EBP_SHEET_ID, 'BASE DE DATOS CLIENTE Y PAIS'); if (rows && rows.length) break; await new Promise((r) => setTimeout(r, 400 * (i + 1))) }
+    rows.slice(1).forEach((r) => {
+      const cli = String(r[0] || '').trim(), arm = String(r[1] || '').trim(), pa = String(r[2] || '').trim()
+      if (!cli || !arm) return
+      const k = normCliente(cli); if (k) { out.map[k] = arm; if (pa) out.pais[k] = pa }
+      const ka = normCliente(arm); if (ka) { if (!out.map[ka]) out.map[ka] = arm; if (pa && !out.pais[ka]) out.pais[ka] = pa; out.armSet[ka] = arm }
+    })
+  } catch { }
+  _armCache = out; _armAt = Date.now(); return out
+}
+
 export async function gSaveHistorico(values) {
   await ensureTab('Historico', HIST_HEAD)
   const W = HIST_HEAD.length
