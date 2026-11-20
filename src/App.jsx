@@ -3161,7 +3161,7 @@ function ProductoTab({ empresa, usuario, sbus, fixedMarca }) {
   }, [precios, marca])
   return (
     <>
-      <div className="note ok" style={{ marginBottom: 8 }}><b>Instrucciones:</b> <b>1)</b> Inventario + costo + precio por temporada y categoría · <b>2)</b> Compras 2028 y disponibilidad (SS28/FW28) · <b>3)</b> Combinación de temporadas (unidades por mes) — el saldo inicial se toma solo del paso 1 · <b>4)</b> Evolución mensual del AUP/AUC (ponderado) · <b>5)</b> Resumen. Recuerda hacer clic en guardar.</div>
+      <div className="note ok" style={{ marginBottom: 8 }}><b>Instrucciones:</b><ol style={{ margin: '6px 0 0', paddingLeft: 20 }}><li>Inventario + costo + precio por temporada y categoría</li><li>Compras 2028 y disponibilidad (SS28/FW28)</li><li>Combinación de temporadas (unidades por mes) — el saldo inicial se toma solo del paso 1</li><li>Evolución mensual del AUP/AUC (ponderado)</li><li>Resumen</li></ol><div style={{ marginTop: 4 }}>Recuerda hacer clic en <b>guardar</b>.</div></div>
       <div style={{ borderLeft: '4px solid #017e84', paddingLeft: 14, marginBottom: 26 }}>
         <PasoH n={1}>Inventario, costo y precio por temporada y categoría</PasoH>
         <PreciosMargenForm empresa={empresa} usuario={usuario} sbus={sbus} fixedMarca={fixedMarca} tempState={temp} snapState={precios} setSnapState={setPrecios} render="matriz" />
@@ -6618,7 +6618,38 @@ function HoldingScreen({ empresas, sbusFor }) {
       }
       const wb = XLSX.utils.book_new()
       const used = {}
-      const addSheet = (name, aoa) => { let n = String(name).replace(/[\[\]:*?/\\]/g, '').slice(0, 28) || 'Hoja'; let base = n, i = 2; while (used[n]) { n = (base.slice(0, 26) + ' ' + i); i++ } used[n] = 1; XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), n) }
+      // Da formato bonito a una hoja: encabezados con color, miles con comas, negativos en rojo, totales en negrita y anchos de columna.
+      const styleSheet = (ws, aoa) => {
+        if (!ws['!ref']) return
+        const range = XLSX.utils.decode_range(ws['!ref']); const ncol = range.e.c + 1
+        ws['!cols'] = Array.from({ length: ncol }, (_, c) => ({ wch: c === 0 ? 30 : 13 }))
+        ws['!merges'] = []
+        const TEAL = '0E7490', DARK = '0B5566'
+        for (let r = range.s.r; r <= range.e.r; r++) {
+          const rowArr = aoa[r] || []
+          const label = String(rowArr[0] || '')
+          const nonEmpty = rowArr.filter((x) => x !== '' && x != null).length
+          const isTitle = r === 0
+          const isSection = nonEmpty === 1 && !isTitle && label
+          const isHeader = label === 'Concepto'
+          const isBold = /^=|^TOTAL|Cash Inicial|Cash Final|Resultado|Margen|Contribuci/.test(label)
+          if ((isTitle || isSection) && label) ws['!merges'].push({ s: { r, c: 0 }, e: { r, c: ncol - 1 } })
+          for (let c = range.s.c; c <= range.e.c; c++) {
+            const addr = XLSX.utils.encode_cell({ r, c }); const cell = ws[addr]; if (!cell) continue
+            const s = {}
+            if (cell.t === 'n') { cell.z = '#,##0;[Red]-#,##0'; s.alignment = { horizontal: 'right' } }
+            if (isTitle) { s.font = { bold: true, sz: 14, color: { rgb: TEAL } } }
+            else if (isSection) { s.font = { bold: true, sz: 12, color: { rgb: DARK } } }
+            else if (isHeader) { s.font = { bold: true, color: { rgb: 'FFFFFF' } }; s.fill = { patternType: 'solid', fgColor: { rgb: TEAL } }; s.alignment = { horizontal: c === 0 ? 'left' : 'center' }; s.border = { bottom: { style: 'thin', color: { rgb: DARK } } } }
+            else { if (c === 0) s.alignment = { horizontal: 'left' }; if (isBold) s.font = { bold: true } }
+            // Última columna (TOTAL) en negrita para que resalte
+            if (!isTitle && !isSection && c === ncol - 1 && !isHeader) s.font = { ...(s.font || {}), bold: true }
+            cell.s = s
+          }
+        }
+        ws['!freeze'] = { xSplit: 1, ySplit: 0 }
+      }
+      const addSheet = (name, aoa) => { let n = String(name).replace(/[\[\]:*?/\\]/g, '').slice(0, 28) || 'Hoja'; let base = n, i = 2; while (used[n]) { n = (base.slice(0, 26) + ' ' + i); i++ } used[n] = 1; const ws = XLSX.utils.aoa_to_sheet(aoa); try { styleSheet(ws, aoa) } catch { } XLSX.utils.book_append_sheet(wb, ws, n) }
       // --- Hoja TOTAL HOLDING ---
       const totAoa = []
       totAoa.push(['TOTAL HOLDING — ABP 2028'])
