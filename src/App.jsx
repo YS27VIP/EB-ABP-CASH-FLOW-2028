@@ -54,7 +54,7 @@ import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth,
    caché síncrono para que los cálculos (realAupAuc, etc.) sigan siendo instantáneos.
    Al entrar a una empresa se baja el estado del Sheet a localStorage; al guardar
    cualquier bloque se escribe a los dos. */
-const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_ind', 'gadmin_cfg', 'gadmin_req', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'retail_mksplit', 'cfsum', 'vendedores', 'vendcli', 'saldos', 'saldocaja']
+const ESTADO_KEYS = ['catpct', 'catpart', 'cattipo', 'usarcat', 'ventas_growth', 'ventas_manual', 'addcli', 'interno', 'temp', 'precios', 'comis', 'muestras', 'gadmin', 'gadmin_ind', 'gadmin_cfg', 'gadmin_req', 'logcost', 'cf', 'calendario', 'aprob', 'viajes_extras', 'mk_extras', 'retail_imp', 'retail_gastos', 'retail_gastos_x', 'retail_tiendas', 'retail_ventas', 'retail_cats', 'retail_cf', 'retail_map', 'retail_mapcols', 'retail_sin', 'retail_pl', 'retail_gastos_eb', 'retail_inter', 'retail_mksplit', 'cfsum', 'vendedores', 'vendcli', 'saldos', 'saldocaja', 'saldoini']
 async function hydrateEstado(empresa) {
   try {
     const j = await gLoadEstado(empresa)
@@ -876,6 +876,11 @@ export default function App() {
             </button>}
             </>}
           </div>
+          {esAdmin && <div style={{ marginTop: 18, padding: '12px 14px', border: '1px dashed #c7d2cf', borderRadius: 12, background: '#f4faf6', maxWidth: 820 }}>
+            <div style={{ fontWeight: 800, fontSize: 12.5, color: '#15803d', marginBottom: 2 }}>🛠️ Administrador</div>
+            <div className="unit no-ayuda" style={{ marginBottom: 6 }}>Respaldo de seguridad: guarda en el Google Sheet el P&L, Cash Flow y Contribución de <b>todas las empresas</b>, en pestañas legibles (Rep_PL, Rep_CashFlow, Rep_Contribucion). Si la app falla, puedes abrir el Sheet y ver todo con sus títulos y números.</div>
+            <RespaldoAdminBtn empresas={empresas} sbusFor={sbusFor} />
+          </div>}
           {acceso && <p className="sub" style={{ marginTop: 14 }}>Ves solo las secciones asignadas a tu usuario. Si falta alguna, pídele a un administrador que ajuste tu acceso en Combinaciones → Colaboradores.</p>}
         </main>
       </>
@@ -3321,7 +3326,8 @@ function SaldosForm({ empresa, marca }) {
 
 // Datos de ejemplo (prueba): Master HOKA SS27 real, por canal · [cliente, término, proyección por mes (12), deuda]. Para que el equipo vea la lógica de la escalera.
 // Ejemplo real HOKA SS27 (los "clientes" aquí son canales del Master). Llega en ABR (m3) y JUL (m6). Con término ≥180 días, la venta de JUL se cobra en 2028 (jul+6=ene) → queda pendiente; con plazos cortos se cobra en el año. [cliente, término, venta por mes (12), saldo al corte]
-const DEMO_HOKA = [["TAHO", "180 días", [0, 0, 0, 7411543, 0, 0, 2186237, 0, 0, 0, 0, 0], 500000], ["RUN THE WORLD", "180 días", [0, 0, 0, 1480831, 0, 0, 345773, 0, 0, 0, 0, 0], 150000], ["COMMERCIAL PARTNER 15%", "Cash", [0, 0, 0, 726117, 0, 0, 275172, 0, 0, 0, 0, 0], 50000], ["STRATEGIC PARTNER 18%", "150 días", [0, 0, 0, 693924, 0, 0, 270849, 0, 0, 0, 0, 0], 100000], ["RETAIL", "Cash", [0, 0, 0, 111700, 0, 0, 33840, 0, 0, 0, 0, 0], 0]]
+// [cliente, término, venta XFD por mes, saldo al corte, SS27, FW27]
+const DEMO_HOKA = [["TAHO", "180 días", [0, 0, 0, 7411543, 0, 0, 2186237, 0, 0, 0, 0, 0], 500000, 7411543, 2186237], ["RUN THE WORLD", "180 días", [0, 0, 0, 1480831, 0, 0, 345773, 0, 0, 0, 0, 0], 150000, 1480831, 345773], ["COMMERCIAL PARTNER 15%", "Cash", [0, 0, 0, 726117, 0, 0, 275172, 0, 0, 0, 0, 0], 50000, 726117, 275172], ["STRATEGIC PARTNER 18%", "150 días", [0, 0, 0, 693924, 0, 0, 270849, 0, 0, 0, 0, 0], 100000, 693924, 270849], ["RETAIL", "Cash", [0, 0, 0, 111700, 0, 0, 33840, 0, 0, 0, 0, 0], 0, 111700, 33840]]
 /* ===== Saldo inicial de FINANZAS: Cuentas por cobrar por cliente (proyección Master SS27/FW27 + deuda al corte + término → saldo). Viene de los saldos importados en Producto. ===== */
 function SaldoCajaForm({ empresa }) {
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null); const [demo, setDemo] = useState(false); const [expCli, setExpCli] = useState(null)
@@ -3372,18 +3378,20 @@ function SaldoCajaForm({ empresa }) {
           <div className="sub">Por cada cliente: <b>Saldo al corte</b> + <b>Proyección</b>; según el <b>término</b> se calcula la deuda con la escalera (la venta que llega tarde y se cobra en 2028 queda pendiente). <b>Haz clic en una fila</b> para ver su escalera mes a mes. SS27 real llega abr/jul → se cobra en el año; la fila FW27 llega oct–dic → queda pendiente. Prueba, no afecta datos.</div>
           <div className="tablewrap" style={{ marginTop: 6 }}>
             <table className="vfix" style={{ width: 'auto', minWidth: 660 }}>
-              <thead><tr><th className="l">Cliente (canal)</th><th className="l">Término</th><th>Saldo al corte ($)</th><th>Proyección de venta ($)</th><th>= Deuda cliente ($)</th><th className="ya">Proyección ABP 2027 ($)</th></tr></thead>
+              <thead><tr><th className="l">Cliente (canal)</th><th className="l">Término</th><th>Saldo al corte ($)</th><th>SS27 ($)</th><th>FW27 ($)</th><th>Proy. venta total ($)</th><th>= Deuda cliente ($)</th><th className="ya">Proyección ABP 2027 ($)</th></tr></thead>
               <tbody>
                 {DEMO_HOKA.map((r) => { const key = 'DEMO:' + r[0]; const open = expCli === key; return <Fragment2 key={r[0]}>
                   <tr className={'rowline' + (open ? ' open' : '')} style={{ cursor: 'pointer' }} onClick={() => setExpCli(open ? null : key)}>
                     <td className="l sub2"><span className="caret">▶</span> {r[0]}</td>
                     <td className="l" onClick={(e) => e.stopPropagation()}><select value={termD(r)} onChange={(e) => setTermOv((o) => ({ ...o, [dKey(r)]: e.target.value }))} style={{ fontSize: 12, padding: '3px 6px' }}>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select></td>
                     <td className="cell" onClick={(e) => e.stopPropagation()}><input value={deudaOv[cKey(r)] ?? ''} onChange={(e) => setDeudaOv((o) => ({ ...o, [cKey(r)]: e.target.value }))} inputMode="decimal" placeholder={fmt(num(r[3]))} title="Escribe el saldo al corte (editable)" style={{ width: '100%', textAlign: 'center' }} /></td>
+                    <td className="tot">{fmt(num(r[4]))}</td>
+                    <td className="tot">{fmt(num(r[5]))}</td>
                     <td className="tot">{fmt(proyOf(r))}</td>
                     <td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(deudaOf(r))}</td>
                     <td className="tot ya">{fmt(proyOf(r))}</td>
                   </tr>
-                  {open && <tr className="subrow"><td colSpan={6} style={{ padding: '6px 10px 10px' }}>
+                  {open && <tr className="subrow"><td colSpan={8} style={{ padding: '6px 10px 10px' }}>
                     <div className="sub" style={{ margin: '0 0 4px' }}>Escalera · término <b>{termD(r)}</b> (+{tM(termD(r))} mes). Naranja = se cobra en 2028 (pendiente al cierre).</div>
                     <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 760 }}><thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Pendiente</th></tr></thead><tbody>
                       <tr><td className="l sub2">Venta proyectada (XFD)</td>{r[2].map((v, m) => { const late = (m + tM(termD(r))) > 11 && v; return <td key={m} className="tot" style={late ? { background: '#fde8cf', color: '#b45309', fontWeight: 700 } : (v ? undefined : { color: '#cbd5e1' })}>{v ? fmt(v) : '—'}</td> })}<td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(pendOf(r))}</td></tr>
@@ -3391,7 +3399,7 @@ function SaldoCajaForm({ empresa }) {
                     </tbody></table></div>
                   </td></tr>}
                 </Fragment2> })}
-                <tr className="grandrow"><td className="l">TOTAL</td><td></td><td className="tot" style={{ color: '#b45309' }}>{fmt(TT(corteDemo))}</td><td className="tot">{fmt(TT(proyOf))}</td><td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(TT(deudaOf))}</td><td className="tot ya">{fmt(TT(proyOf))}</td></tr>
+                <tr className="grandrow"><td className="l">TOTAL</td><td></td><td className="tot" style={{ color: '#b45309' }}>{fmt(TT(corteDemo))}</td><td className="tot">{fmt(TT((r) => num(r[4])))}</td><td className="tot">{fmt(TT((r) => num(r[5])))}</td><td className="tot">{fmt(TT(proyOf))}</td><td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(TT(deudaOf))}</td><td className="tot ya">{fmt(TT(proyOf))}</td></tr>
               </tbody>
             </table>
           </div>
@@ -3404,20 +3412,22 @@ function SaldoCajaForm({ empresa }) {
         <div className="sub">Por cada cliente: <b>Saldo al corte</b> + <b>Proyección de venta</b> (Master SS27 + FW27). Según el <b>término</b>, la <b>deuda</b> = saldo al corte + la venta que por su plazo aún no se cobra al cierre (escalera). <b>Haz clic en un cliente</b> para ver su escalera mes a mes. El término sale de Base_Clientes y es ajustable. Se llena al importar el Master en <b>Producto → 🧮 Saldos</b>.</div>
         <div className="tablewrap" style={{ marginTop: 6 }}>
           <table className="vfix" style={{ width: 'auto', minWidth: 660 }}>
-            <thead><tr><th className="l">Cliente</th><th className="l">Término</th><th>Saldo al corte ($)</th><th>Proyección de venta ($)</th><th>= Deuda cliente ($)</th><th className="ya">Proyección ABP 2027 ($)</th><th className="l">Nota · desviación vs ABP 2027</th></tr></thead>
+            <thead><tr><th className="l">Cliente</th><th className="l">Término</th><th>Saldo al corte ($)</th><th>SS27 ($)</th><th>FW27 ($)</th><th>Proy. venta total ($)</th><th>= Deuda cliente ($)</th><th className="ya">Proyección ABP 2027 ($)</th><th className="l">Nota · desviación vs ABP 2027</th></tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><td className="l" colSpan={7} style={{ color: 'var(--muted)' }}>Aún no hay datos. Importa el Excel Master de cada marca en <b>Producto → 🧮 Saldos 2028</b> y guarda.</td></tr>}
+              {rows.length === 0 && <tr><td className="l" colSpan={9} style={{ color: 'var(--muted)' }}>Aún no hay datos. Importa el Excel Master de cada marca en <b>Producto → 🧮 Saldos 2028</b> y guarda.</td></tr>}
               {rows.map((r, i) => { const open = expCli === upper(r.cliente); return <Fragment2 key={i}>
                 <tr className={'rowline' + (open ? ' open' : '')} style={{ cursor: 'pointer' }} onClick={() => setExpCli(open ? null : upper(r.cliente))}>
                   <td className="l sub2"><span className="caret">▶</span> {r.cliente}</td>
                   <td className="l" onClick={(e) => e.stopPropagation()}><select value={termOf(r)} onChange={(e) => setTerm(r.cliente, e.target.value)} style={{ fontSize: 12, padding: '3px 6px' }}><option value="">—</option>{CF_TERMINOS.map((t) => <option key={t}>{t}</option>)}</select></td>
                   <td className="cell" onClick={(e) => e.stopPropagation()}><input value={deudaOv[upper(r.cliente)] ?? ''} onChange={(e) => setCorte(r.cliente, e.target.value)} inputMode="decimal" placeholder={num(r.deuda) ? fmt(num(r.deuda)) : '0'} title="Lo que el cliente ya debe al corte (puedes escribirlo; si lo dejas vacío usa lo del OOR)" style={{ width: '100%', textAlign: 'center' }} /></td>
+                  <td className="tot">{fmt(num(r.ss))}</td>
+                  <td className="tot">{fmt(num(r.fw))}</td>
                   <td className="tot">{fmt(proyeccion(r))}</td>
                   <td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(saldo(r))}</td>
                   <td className="tot ya">{fmt(proyeccion(r))}</td>
                   <td className="cell" onClick={(e) => e.stopPropagation()} style={{ minWidth: 220 }}><input value={notas[upper(r.cliente)] ?? ''} onChange={(e) => setNota(r.cliente, e.target.value)} placeholder="¿Por qué se desvía vs ABP 2027?" title="Nota visible para todo el equipo (se guarda en el Sheet)" style={{ width: '100%' }} /></td>
                 </tr>
-                {open && <tr className="subrow"><td colSpan={7} style={{ padding: '6px 10px 10px' }}>
+                {open && <tr className="subrow"><td colSpan={9} style={{ padding: '6px 10px 10px' }}>
                   <div className="sub" style={{ margin: '0 0 4px' }}>Escalera de <b>{r.cliente}</b> · término <b>{termOf(r) || '—'}</b> (+{termM(r)} mes(es)). La venta que llega (XFD) se cobra <i>mes + plazo</i>; lo <b style={{ color: '#b45309' }}>naranja</b> se cobra en 2028 → pendiente al cierre.</div>
                   <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 760 }}><thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Pendiente</th></tr></thead><tbody>
                     <tr><td className="l sub2">Venta proyectada (XFD)</td>{(r.mes || Array(12).fill(0)).map((v, m) => { const late = (m + termM(r)) > 11 && v; return <td key={m} className="tot" style={late ? { background: '#fde8cf', color: '#b45309', fontWeight: 700 } : (v ? undefined : { color: '#cbd5e1' })}>{v ? fmt(v) : '—'}</td> })}<td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(proyPend(r))}</td></tr>
@@ -3425,7 +3435,7 @@ function SaldoCajaForm({ empresa }) {
                   </tbody></table></div>
                 </td></tr>}
               </Fragment2> })}
-              {rows.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td></td><td className="tot" style={{ color: '#b45309' }}>{fmt(T(corteOf))}</td><td className="tot">{fmt(T(proyeccion))}</td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(T(saldo))}</td><td className="tot ya">{fmt(T(proyeccion))}</td><td></td></tr>}
+              {rows.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td></td><td className="tot" style={{ color: '#b45309' }}>{fmt(T(corteOf))}</td><td className="tot">{fmt(T((r) => num(r.ss)))}</td><td className="tot">{fmt(T((r) => num(r.fw)))}</td><td className="tot">{fmt(T(proyeccion))}</td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(T(saldo))}</td><td className="tot ya">{fmt(T(proyeccion))}</td><td></td></tr>}
             </tbody>
           </table>
         </div>
@@ -6425,11 +6435,77 @@ function HoldingCashFlow({ empresas }) {
 }
 
 /* ===== TOTAL HOLDING: consolida las 3 empresas con la misma lógica de Gerencia ===== */
+// ===== Respaldo completo e independiente (no depende de la pantalla Holding): recalcula el P&L, Cash Flow y Contribución de TODAS las empresas y los escribe legibles en el Sheet. =====
+function calcEmpStd(emp, data, sbusFor) {
+  if (upper(emp) === 'SINERGY') { const pl = retailPLTotales(); const s = pl && pl.SIN; if (s) return { unidades: 0, ventaNeta: s.ventaNeta, costo: s.costo, comisiones: 0, logistica: s.logistica || 0, marketing: s.marketing, viajes: s.viajes, margenBruto: s.margenBruto, brand: s.brand, gadmin: s.gastos || 0, resultado: s.brand - (s.gastos || 0) }; return { unidades: 0, ventaNeta: 0, costo: 0, comisiones: 0, logistica: 0, marketing: 0, viajes: 0, margenBruto: 0, brand: 0, gadmin: 0, resultado: 0 } }
+  const { ventas, producto, capCat, mk, log, dir } = data
+  const cats = {}; capCat.forEach((row) => { if (!catRowOk(row, emp)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+  const esVi = (rub) => rub.toUpperCase().startsWith('VIAJES')
+  const sumTabG = (rows, mca, filt) => { let s = 0; rows.forEach((r) => { if (upper(r[0]) !== upper(emp) || upper(r[3]) !== upper(mca)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
+  const fullCalc = (mca) => { const catNames = (cats[mca] || []).map((c) => c.cat); const r = realAupAuc(emp, mca, ventas, producto, catNames); const unidades = r.totalUnits.reduce((a, b) => a + b, 0), ventaNeta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0); const logistica = sumTabG(log, mca), marketing = sumTabG(mk, mca); const viajes = [ventas, producto, mk, log, dir].reduce((t, rows) => t + sumTabG(rows, mca, esVi), 0); const margenBruto = ventaNeta - costo - logistica, brand = margenBruto - marketing - viajes; return { unidades, ventaNeta, costo, comisiones: 0, logistica, marketing, viajes, margenBruto, brand } }
+  const sbus = sbusFor(emp) || {}; const allM = Object.values(sbus).flat()
+  const tot = allM.reduce((a, m) => { const c = fullCalc(m); Object.keys(c).forEach((k) => a[k] = (a[k] || 0) + c[k]); return a }, {})
+  let gadmin = gadminAnualOf(emp)
+  if (upper(emp) === 'ENERGY BRANDS') { const pl = retailPLTotales(); const e = pl && pl.EB; if (e) { tot.ventaNeta = (tot.ventaNeta || 0) + e.ventaNeta; tot.costo = (tot.costo || 0) + e.costo; tot.logistica = (tot.logistica || 0) + (e.logistica || 0); tot.marketing = (tot.marketing || 0) + e.marketing; tot.viajes = (tot.viajes || 0) + e.viajes; tot.margenBruto = (tot.margenBruto || 0) + e.margenBruto; tot.brand = (tot.brand || 0) + e.brand; gadmin += e.gastos } }
+  return { ...tot, gadmin, resultado: (tot.brand || 0) - gadmin }
+}
+function calcEmpMarcasStd(emp, data, sbusFor) {
+  if (upper(emp) === 'SINERGY') return []
+  const { ventas, producto, capCat, mk, log, dir } = data
+  const cats = {}; capCat.forEach((row) => { if (!catRowOk(row, emp)) return; const c = row[1], mar = row[3], peso = num(row[4]); if (!mar || !c) return; (cats[mar] = cats[mar] || []).push({ cat: c, peso }) })
+  const esVi = (rub) => rub.toUpperCase().startsWith('VIAJES')
+  const sumTabG = (rows, mca, filt) => { let s = 0; rows.forEach((r) => { if (upper(r[0]) !== upper(emp) || upper(r[3]) !== upper(mca)) return; if (filt && !filt(String(r[1] || ''))) return; for (let j = 0; j < 12; j++) s += num(r[4 + j]) }); return s }
+  const fullCalc = (mca) => { const catNames = (cats[mca] || []).map((c) => c.cat); const r = realAupAuc(emp, mca, ventas, producto, catNames); const unidades = r.totalUnits.reduce((a, b) => a + b, 0), ventaNeta = r.ventaMes.reduce((a, b) => a + b, 0), costo = r.costoMes.reduce((a, b) => a + b, 0); const logistica = sumTabG(log, mca), marketing = sumTabG(mk, mca); const viajes = [ventas, producto, mk, log, dir].reduce((t, rows) => t + sumTabG(rows, mca, esVi), 0); const margenBruto = ventaNeta - costo - logistica, brand = margenBruto - marketing - viajes; return { unidades, ventaNeta, costo, logistica, marketing, viajes, margenBruto, brand } }
+  const sbus = sbusFor(emp) || {}; const out = []
+  Object.entries(sbus).forEach(([sbu, ms]) => (ms || []).forEach((m) => out.push({ sbu, marca: m, ...fullCalc(m) })))
+  return out
+}
+async function respaldarTodo(empresas, sbusFor) {
+  const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
+  const [ventas, producto, capCat, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
+  try { await Promise.all(empresas.map((e) => hydrateEstado(e))) } catch { }
+  const data = { ventas, producto, capCat, mk, log, dir }
+  const emps = [...empresas].sort((a, b) => { const ia = HOLDING_ORDER.indexOf(upper(a)), ib = HOLDING_ORDER.indexOf(upper(b)); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) })
+  const byEmp = emps.map((e) => ({ e, v: calcEmpStd(e, data, sbusFor) }))
+  const filas = [
+    { k: 'Unidades', g: (v) => v.unidades }, { k: 'Venta Neta', g: (v) => v.ventaNeta }, { k: '(-) Costo', g: (v) => v.costo }, { k: '(-) Logística', g: (v) => v.logistica },
+    { k: '= Margen Bruto', g: (v) => v.margenBruto }, { k: '(-) Marketing', g: (v) => v.marketing }, { k: '(-) Viajes', g: (v) => v.viajes }, { k: '= Contribución de las BU', g: (v) => v.brand },
+    { k: '(-) Gastos administrativos', g: (v) => v.gadmin }, { k: '= Resultado Operativo', g: (v) => v.resultado },
+  ]
+  const totHold = (gf) => byEmp.reduce((a, { v }) => a + (gf(v) || 0), 0)
+  const nR = (v) => Math.round(num(v)); const nm = (e) => e === 'SINERGY' ? 'SINERGY & DYNAMICS' : e; const S = (a) => a.reduce((x, y) => x + (Number(y) || 0), 0)
+  const cfEmp = (e) => { let p = null; try { p = JSON.parse(localStorage.getItem(`cfsum_${e}`) || 'null') } catch { } if (!p) return null; const arr = (k) => (p[k] || []).map((x) => Number(x) || 0); return { cobros: arr('cobros'), pagos: arr('pagos'), oper: arr('oper'), fin: arr('fin'), oIng: arr('oIng'), oGas: arr('oGas'), flujo: arr('flujo'), ini0: Number(p.ini0) || 0 } }
+  const stamp = new Date().toLocaleString('es')
+  const pl = [['EMPRESA', 'CONCEPTO', '2028']]
+  byEmp.forEach(({ e, v }) => filas.forEach((f) => pl.push([nm(e), f.k, nR(f.g(v))])))
+  filas.forEach((f) => pl.push(['TOTAL HOLDING', f.k, nR(totHold(f.g))])); pl.push([], ['Respaldado:', stamp])
+  const cf = [['EMPRESA', 'CONCEPTO', ...MESES.map((m) => m.toUpperCase()), 'TOTAL 2028']]
+  const cfBlock = (label, c) => { if (!c) { cf.push([label, '(sin cash flow guardado)']); return } const ini = [], final = []; let prev = 0; for (let i = 0; i < 12; i++) { ini[i] = i === 0 ? c.ini0 : prev; final[i] = ini[i] + c.flujo[i]; prev = final[i] } const row = (lbl, arr, tot) => cf.push([label, lbl, ...arr.map(nR), tot]); row('Cash Inicial', ini, ''); row('Cash In (Cobros)', c.cobros, nR(S(c.cobros))); row('Cash Out (Pagos)', c.pagos, nR(S(c.pagos))); row('Costos Operativos', c.oper, nR(S(c.oper))); row('Costos Financieros', c.fin, nR(S(c.fin))); row('Otros ingresos', c.oIng, nR(S(c.oIng))); row('Otros gastos', c.oGas, nR(S(c.oGas))); row('Flujo neto', c.flujo, nR(S(c.flujo))); row('Cash Final', final, '') }
+  const cfs = byEmp.map(({ e }) => cfEmp(e)).filter(Boolean)
+  const sumArr = (k) => Array.from({ length: 12 }, (_, i) => cfs.reduce((a, c) => a + (c[k][i] || 0), 0))
+  byEmp.forEach(({ e }) => cfBlock(nm(e), cfEmp(e)))
+  if (cfs.length) cfBlock('TOTAL HOLDING', { cobros: sumArr('cobros'), pagos: sumArr('pagos'), oper: sumArr('oper'), fin: sumArr('fin'), oIng: sumArr('oIng'), oGas: sumArr('oGas'), flujo: sumArr('flujo'), ini0: cfs.reduce((a, c) => a + c.ini0, 0) })
+  cf.push([], ['Respaldado:', stamp])
+  const co = [['EMPRESA', 'SBU', 'MARCA', 'Unidades', 'Venta Neta', 'Costo', 'Logística', 'Margen Bruto', 'Marketing', 'Viajes', 'Contribución']]
+  byEmp.forEach(({ e }) => calcEmpMarcasStd(e, data, sbusFor).forEach((r) => co.push([nm(e), r.sbu, r.marca, nR(r.unidades), nR(r.ventaNeta), nR(r.costo), nR(r.logistica), nR(r.margenBruto), nR(r.marketing), nR(r.viajes), nR(r.brand)])))
+  co.push([], ['Respaldado:', stamp])
+  await gWriteReport('Rep_PL', pl); await gWriteReport('Rep_CashFlow', cf); await gWriteReport('Rep_Contribucion', co)
+  return { ok: true, empresas: emps.length }
+}
+function RespaldoAdminBtn({ empresas, sbusFor }) {
+  const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(null)
+  const run = async () => { setBusy(true); setMsg(null); try { const r = await respaldarTodo(empresas, sbusFor); setMsg({ t: 'ok', x: `✅ Respaldo guardado en el Sheet (${r.empresas} empresas): pestañas Rep_PL, Rep_CashFlow y Rep_Contribucion.` }) } catch (e) { setMsg({ t: 'bad', x: 'No se pudo respaldar: ' + (e && e.message) }) } setBusy(false) }
+  return (<div style={{ margin: '4px 0 2px' }}>
+    <button className="btn" onClick={run} disabled={busy} style={{ background: '#15803d', color: '#fff', borderColor: '#15803d', fontWeight: 700 }}>{busy ? 'Respaldando todas las empresas…' : '🗄 Respaldar TODO en el Sheet'}</button>
+    <span className="unit" style={{ marginLeft: 8 }}>Guarda P&L, Cash Flow y Contribución de todas las empresas en pestañas legibles (Rep_*).</span>
+    {msg && <div className={'note no-ayuda ' + msg.t} style={{ marginTop: 6 }}>{msg.x}</div>}
+  </div>)
+}
+
 function HoldingScreen({ empresas, sbusFor }) {
   const [data, setData] = useState(null)
   const [detEmp, setDetEmp] = useState(empresas[0] || '')
   const [ejec, setEjec] = useState(false)
-  const [resp, setResp] = useState(false)
   useEffect(() => {
     (async () => {
       const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
@@ -6566,39 +6642,7 @@ function HoldingScreen({ empresas, sbusFor }) {
       XLSX.writeFile(wb, 'ABP_2028_Holding.xlsx')
     } catch (err) { alert('No se pudo generar el Excel: ' + (err && err.message)) }
   }
-  // Respaldar reportes calculados en el Google Sheet (pestañas Rep_PL, Rep_CashFlow, Rep_Contribucion).
-  const respaldarEnSheet = async () => {
-    setResp(true)
-    try {
-      const nR = (v) => Math.round(num(v))
-      const nm = (e) => e === 'SINERGY' ? 'SINERGY & DYNAMICS' : e
-      const S = (a) => a.reduce((x, y) => x + (Number(y) || 0), 0)
-      const cfEmp = (e) => { let p = null; try { p = JSON.parse(localStorage.getItem(`cfsum_${e}`) || 'null') } catch { } if (!p) return null; const arr = (k) => (p[k] || []).map((x) => Number(x) || 0); return { cobros: arr('cobros'), pagos: arr('pagos'), oper: arr('oper'), fin: arr('fin'), oIng: arr('oIng'), oGas: arr('oGas'), flujo: arr('flujo'), ini0: Number(p.ini0) || 0 } }
-      const stamp = new Date().toLocaleString('es')
-      // Rep_PL
-      const pl = [['EMPRESA', 'CONCEPTO', '2028']]
-      byEmp.forEach(({ e, v }) => filas.forEach((f) => pl.push([nm(e), f.k, nR(f.g(v))])))
-      filas.forEach((f) => pl.push(['TOTAL HOLDING', f.k, nR(totHold(f.g))]))
-      pl.push([], ['Respaldado:', stamp])
-      // Rep_CashFlow
-      const cf = [['EMPRESA', 'CONCEPTO', ...MESES.map((m) => m.toUpperCase()), 'TOTAL 2028']]
-      const cfBlock = (label, c) => { if (!c) { cf.push([label, '(sin cash flow guardado)']); return } const ini = [], final = []; let prev = 0; for (let i = 0; i < 12; i++) { ini[i] = i === 0 ? c.ini0 : prev; final[i] = ini[i] + c.flujo[i]; prev = final[i] } const row = (lbl, arr, tot) => cf.push([label, lbl, ...arr.map(nR), tot]); row('Cash Inicial', ini, ''); row('Cash In (Cobros)', c.cobros, nR(S(c.cobros))); row('Cash Out (Pagos)', c.pagos, nR(S(c.pagos))); row('Costos Operativos', c.oper, nR(S(c.oper))); row('Costos Financieros', c.fin, nR(S(c.fin))); row('Otros ingresos', c.oIng, nR(S(c.oIng))); row('Otros gastos', c.oGas, nR(S(c.oGas))); row('Flujo neto', c.flujo, nR(S(c.flujo))); row('Cash Final', final, '') }
-      const cfs = byEmp.map(({ e }) => cfEmp(e)).filter(Boolean)
-      const sumArr = (k) => Array.from({ length: 12 }, (_, i) => cfs.reduce((a, c) => a + (c[k][i] || 0), 0))
-      byEmp.forEach(({ e }) => cfBlock(nm(e), cfEmp(e)))
-      if (cfs.length) cfBlock('TOTAL HOLDING', { cobros: sumArr('cobros'), pagos: sumArr('pagos'), oper: sumArr('oper'), fin: sumArr('fin'), oIng: sumArr('oIng'), oGas: sumArr('oGas'), flujo: sumArr('flujo'), ini0: cfs.reduce((a, c) => a + c.ini0, 0) })
-      cf.push([], ['Respaldado:', stamp])
-      // Rep_Contribucion (por marca/SBU)
-      const co = [['EMPRESA', 'SBU', 'MARCA', 'Unidades', 'Venta Neta', 'Costo', 'Logística', 'Margen Bruto', 'Marketing', 'Viajes', 'Contribución']]
-      byEmp.forEach(({ e }) => calcEmpMarcas(e).forEach((r) => co.push([nm(e), r.sbu, r.marca, nR(r.unidades), nR(r.ventaNeta), nR(r.costo), nR(r.logistica), nR(r.margenBruto), nR(r.marketing), nR(r.viajes), nR(r.brand)])))
-      co.push([], ['Respaldado:', stamp])
-      await gWriteReport('Rep_PL', pl)
-      await gWriteReport('Rep_CashFlow', cf)
-      await gWriteReport('Rep_Contribucion', co)
-      alert('✅ Reportes respaldados en el Google Sheet:\n• Rep_PL (P&L por empresa + Holding)\n• Rep_CashFlow (Cash Flow por empresa + Holding)\n• Rep_Contribucion (P&L por marca/SBU)')
-    } catch (err) { alert('No se pudo respaldar en el Sheet: ' + (err && err.message)) }
-    setResp(false)
-  }
+  // (El respaldo al Google Sheet se movio a la pagina de bienvenida, solo para administradores.)
   // SINERGY no tiene pantallas propias: su detalle es un P&L de solo lectura (sale del bloque SINERGY del Retail).
   // Compras intercompañía de TAHO: cuánto le compra a Energy Brands (EB) y a TUMAR (TU), en unidades y $ (ud × AUC).
   const tahoCompras = () => {
@@ -6674,7 +6718,7 @@ function HoldingScreen({ empresas, sbusFor }) {
   return (
     <>
       <div className="panel">
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>🏛️ Total Holding — Resultado Operativo consolidado <span className="unit">(todas las empresas · 2028 · solo lectura)</span></span><span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}><button className="btn" style={{ fontSize: 13, padding: '7px 14px', background: '#15803d', color: '#fff', borderColor: '#15803d' }} disabled={resp} onClick={respaldarEnSheet} title="Guarda los reportes calculados (P&L, Cash Flow y Contribución por marca) en el Google Sheet, en las pestañas Rep_PL, Rep_CashFlow y Rep_Contribucion">{resp ? 'Respaldando…' : '🗄 Respaldar en Sheet'}</button><button className="btn" style={{ fontSize: 13, padding: '7px 14px', background: '#1d6f42', color: '#fff', borderColor: '#1d6f42' }} onClick={descargarHoldingXlsx} title="Excel con una hoja TOTAL HOLDING (P&L + Cash Flow consolidados) y una hoja por empresa con su P&L y Cash Flow">⬇ Exportar Excel</button><button className="btn" style={{ fontSize: 13, padding: '7px 14px', background: '#0e7490', color: '#fff', borderColor: '#0e7490' }} disabled={ejec} onClick={descargarEjecutivo} title="Reporte de una página para alta gerencia: KPIs + resultado por empresa + P&L consolidado">{ejec ? 'Generando…' : '📄 Reporte Ejecutivo (PDF)'}</button></span></h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>🏛️ Total Holding — Resultado Operativo consolidado <span className="unit">(todas las empresas · 2028 · solo lectura)</span></span><span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8, flexWrap: 'wrap' }}><button className="btn" style={{ fontSize: 13, padding: '7px 14px', background: '#1d6f42', color: '#fff', borderColor: '#1d6f42' }} onClick={descargarHoldingXlsx} title="Excel con una hoja TOTAL HOLDING (P&L + Cash Flow consolidados) y una hoja por empresa con su P&L y Cash Flow">⬇ Exportar Excel</button><button className="btn" style={{ fontSize: 13, padding: '7px 14px', background: '#0e7490', color: '#fff', borderColor: '#0e7490' }} disabled={ejec} onClick={descargarEjecutivo} title="Reporte de una página para alta gerencia: KPIs + resultado por empresa + P&L consolidado">{ejec ? 'Generando…' : '📄 Reporte Ejecutivo (PDF)'}</button></span></h3>
         <div className="sub">💡 Pasa el cursor sobre la columna <b>TOTAL HOLDING</b> para ver el <b>desglose por empresa</b>.</div>
         <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 480 }}>
           <thead><tr><th className="l">Concepto</th>{byEmp.map(({ e }) => <th key={e}>{e}</th>)}<th style={{ color: '#7c3aed' }}>TOTAL HOLDING</th></tr></thead>
@@ -6703,6 +6747,11 @@ function HoldingScreen({ empresas, sbusFor }) {
 function BrandContribution({ empresa, marca }) {
   const [P, setP] = useState({ ven: [], prod: [], cats: {}, mk: [], log: [], dir: [], hist: [], plan: {} })
   const [load, setLoad] = useState(true)
+  // Saldo inicial por marca (comentarios del director sobre la desviación SS27+FW27 vs ABP 2027). Se guarda en el Sheet.
+  const [siNotas, setSiNotas] = useState(() => { try { return ((JSON.parse(localStorage.getItem(`saldoini_${empresa}`) || '{}'))[marca]) || {} } catch { return {} } })
+  const [siSaving, setSiSaving] = useState(false); const [siMsg, setSiMsg] = useState(null)
+  useEffect(() => { try { setSiNotas(((JSON.parse(localStorage.getItem(`saldoini_${empresa}`) || '{}'))[marca]) || {}) } catch { setSiNotas({}) } }, [empresa, marca])
+  const siGuardar = () => { setSiSaving(true); try { const all = JSON.parse(localStorage.getItem(`saldoini_${empresa}`) || '{}'); all[marca] = siNotas; saveEstado(empresa, 'saldoini', all); setSiMsg({ t: 'ok', x: 'Comentarios guardados en el Sheet (los ve todo el equipo).' }) } catch { setSiMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSiSaving(false) }
   useEffect(() => {
     (async () => {
       setLoad(true)
@@ -6755,6 +6804,12 @@ function BrandContribution({ empresa, marca }) {
   // ABP 2027 por marca: se toma de la hoja Ref_2027 (misma fuente del panel 📅). Si falta, cae al PLAN.
   const refSec = (sec) => { const S = (P.ref27 || {})[sec] || {}; let s = 0; Object.values(S).forEach((arr) => (arr || []).forEach((v) => s += num(v))); return s }
   const abpVenta = refSec('VENTA') || o27.venta || 0, abpCosto = refSec('COSTO') || o27.costo || 0, abpMargen = abpVenta - abpCosto
+  // SS27 / FW27 por cliente (del Master importado en Producto → Saldos) para la tabla de Saldo inicial del director.
+  const _saldoM = (() => { try { return (JSON.parse(localStorage.getItem(`saldos_${empresa}`) || '{}'))[marca] || {} } catch { return {} } })()
+  const _cliSS = ((_saldoM.masterCliS || {}).SS27) || {}, _cliFW = ((_saldoM.masterCliS || {}).FW27) || {}
+  const siClientes = [...new Set([...Object.keys(_cliSS), ...Object.keys(_cliFW)])].map((c) => ({ cli: c, ss: num(_cliSS[c]), fw: num(_cliFW[c]) })).sort((a, b) => (b.ss + b.fw) - (a.ss + a.fw))
+  const siSStot = siClientes.reduce((a, r) => a + r.ss, 0), siFWtot = siClientes.reduce((a, r) => a + r.fw, 0), siProy = siSStot + siFWtot
+  const siDev = abpVenta ? ((siProy - abpVenta) / Math.abs(abpVenta) * 100) : null
   const dpct = (cur, ref) => (ref != null && Math.abs(ref) > 0.5) ? ((cur - ref) / Math.abs(ref) * 100) : null
   const dCell = (cur, ref, cls) => { const d = dpct(cur, ref); return <td className={'tot ' + (cls || '') + ' ' + (d == null ? '' : d >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700, cursor: BULB_CURSOR }} title={d == null ? 'Sin referencia para comparar' : `Variación % = (2028 − referencia) ÷ referencia\n2028 = ${fmt(cur)} vs referencia = ${fmt(ref)} → ${(d >= 0 ? '+' : '') + d.toFixed(0)}% (el 2028 está ${d >= 0 ? 'por encima' : 'por debajo'} de ese año)`}>{d == null ? '—' : (d >= 0 ? '+' : '') + d.toFixed(0) + '%'}</td> }
 
@@ -6787,6 +6842,36 @@ function BrandContribution({ empresa, marca }) {
               {fila('= CONTRIBUCIÓN DE LA MARCA', brand, true)}
             </tbody>
           </table>
+        </div>
+        <div className="panel" style={{ marginTop: 14, borderLeftColor: '#b45309', background: '#fffdf8' }}>
+          <h3 style={{ color: '#b45309', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>🏦 Saldo inicial — Proyección SS27 / FW27 vs ABP 2027 <span className="unit">(por cliente · del Master)</span></span><button className="btn primary" disabled={siSaving} onClick={siGuardar} style={{ marginLeft: 'auto' }}>{siSaving ? 'Guardando…' : '💾 Guardar comentarios'}</button></h3>
+          <div className="sub">SS27 y FW27 se <b>suben del Master</b> (Producto → 🧮 Saldos 2028). Compara la <b>proyección total (SS27 + FW27)</b> contra la <b>Proyección ABP 2027</b> de la marca y escribe en <b>Comentario</b> por qué se desvía. Se guarda en el Sheet y lo ve todo el equipo.</div>
+          {siMsg && <div className={'note no-ayuda ' + siMsg.t} style={{ margin: '6px 0' }}>{siMsg.x}</div>}
+          {siClientes.length === 0
+            ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>Aún no hay Master importado para <b>{marca}</b>. Impórtalo en <b>Producto → 🧮 Saldos 2028</b> y guarda; aquí aparecerán sus clientes con SS27 y FW27.</div>
+            : <div className="tablewrap" style={{ marginTop: 6 }}>
+              <table className="vfix" style={{ width: 'auto', minWidth: 720 }}>
+                <thead><tr><th className="l">Cliente</th><th>SS27 ($)</th><th>FW27 ($)</th><th>Proy. total ($)</th><th className="ya">Proyección ABP 2027 ($)</th><th className="l">Comentario · desviación vs ABP 2027</th></tr></thead>
+                <tbody>
+                  {siClientes.map((r) => <tr key={r.cli}>
+                    <td className="l sub2">{r.cli}</td>
+                    <td className="tot">{fmt(r.ss)}</td>
+                    <td className="tot">{fmt(r.fw)}</td>
+                    <td className="tot" style={{ fontWeight: 700 }}>{fmt(r.ss + r.fw)}</td>
+                    <td className="tot ya" style={{ color: 'var(--muted)' }}>—</td>
+                    <td className="cell" style={{ minWidth: 240 }}><input value={siNotas[upper(r.cli)] ?? ''} onChange={(e) => setSiNotas((o) => ({ ...o, [upper(r.cli)]: e.target.value }))} placeholder="¿Por qué se desvía vs ABP 2027?" title="Comentario visible para todo el equipo (se guarda en el Sheet)" style={{ width: '100%' }} /></td>
+                  </tr>)}
+                  <tr className="grandrow">
+                    <td className="l">TOTAL {marca}</td>
+                    <td className="tot">{fmt(siSStot)}</td>
+                    <td className="tot">{fmt(siFWtot)}</td>
+                    <td className="tot" style={{ fontWeight: 800 }}>{fmt(siProy)}</td>
+                    <td className="tot ya" style={{ fontWeight: 800 }}>{fmt(abpVenta)}{siDev != null && <span className={'unit ' + (siDev >= 0 ? 'pos' : 'neg')} style={{ display: 'block' }}>{(siDev >= 0 ? '+' : '') + siDev.toFixed(0)}% vs ABP 2027</span>}</td>
+                    <td className="cell"><input value={siNotas.__marca ?? ''} onChange={(e) => setSiNotas((o) => ({ ...o, __marca: e.target.value }))} placeholder="Comentario general de la desviación de la marca" style={{ width: '100%' }} /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>}
         </div>
         {catList.length > 0 && <div className="tablewrap" style={{ marginTop: 14 }}>
           <table>
