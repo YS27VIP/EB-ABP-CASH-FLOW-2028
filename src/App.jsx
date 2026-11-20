@@ -47,7 +47,7 @@ export function TipLayer() {
   }, [])
   return null
 }
-import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal, gTumarClientes, gTumarGastos, gTahoCompras, gWriteReport } from './google'
+import { initAuth, signIn, switchAccount, isSignedIn, getEmail, getName, onAuth, gReadTab, gLoadConfig, gSaveConfig, gDeleteEmpresa, gLoadAvatars, gSaveAvatar, gSaveRows, gSaveHistorico, gHistorico, gLoadAdmins, gSaveAdmins, gLoadMarcas, gSaveMarcas, gPlan2027, gViajesRef, gMkRef, gLogExpRef, gComisRef, gGAdminRef, gABP2027Ref, gLoadLogRef, gLogRef2026, gLoadEstado, gSaveEstado, gLoadClientes, gAddCliente, gTumarReal, gTumarClientes, gTumarGastos, gTahoCompras, gWriteReport, gReadTabs } from './google'
 
 /* ===== Estado del modelo por empresa: espejo Google Sheet ⇄ localStorage =====
    El Sheet (hoja Cap_Estado) es la fuente de verdad; localStorage es solo un
@@ -6461,9 +6461,16 @@ function calcEmpMarcasStd(emp, data, sbusFor) {
   return out
 }
 async function respaldarTodo(empresas, sbusFor) {
-  const g = async (t) => { try { const j = await gReadTab(t); return j.ok && j.values ? j.values.slice(1) : [] } catch { return [] } }
-  const [ventas, producto, capCat, mk, log, dir] = await Promise.all([g('Cap_Ventas'), g('Cap_Producto'), g('Cap_Categorias'), g('Cap_Marketing'), g('Cap_Logistica'), g('Cap_Director')])
-  try { await Promise.all(empresas.map((e) => hydrateEstado(e))) } catch { }
+  // UNA sola lectura agrupada para las 7 pestañas (en vez de ~20 lecturas sueltas) → evita el 429 de cuota.
+  const T = ['Cap_Ventas', 'Cap_Producto', 'Cap_Categorias', 'Cap_Marketing', 'Cap_Logistica', 'Cap_Director', 'Cap_Estado']
+  const jb = await gReadTabs(T)
+  const body = (t) => { const v = (jb.values && jb.values[t]) || []; return v.length ? v.slice(1) : [] }
+  const [ventas, producto, capCat, mk, log, dir] = [body('Cap_Ventas'), body('Cap_Producto'), body('Cap_Categorias'), body('Cap_Marketing'), body('Cap_Logistica'), body('Cap_Director')]
+  // Rehidrata TODAS las empresas desde ese mismo Cap_Estado (sin una lectura por empresa).
+  try {
+    const est = body('Cap_Estado')
+    empresas.forEach((e) => ESTADO_KEYS.forEach((k) => { const row = est.find((r) => upper(r[0]) === upper(e) && String(r[1] || '') === k); if (row && row[2] != null && row[2] !== '') { try { localStorage.setItem(`${k}_${e}`, String(row[2])) } catch { } } }))
+  } catch { }
   const data = { ventas, producto, capCat, mk, log, dir }
   const emps = [...empresas].sort((a, b) => { const ia = HOLDING_ORDER.indexOf(upper(a)), ib = HOLDING_ORDER.indexOf(upper(b)); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) })
   const byEmp = emps.map((e) => ({ e, v: calcEmpStd(e, data, sbusFor) }))

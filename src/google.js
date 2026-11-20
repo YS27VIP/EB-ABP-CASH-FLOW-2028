@@ -50,12 +50,22 @@ async function _fetchUser() {
   } catch { }
 }
 
-/* ---- Low-level Sheets API v4 ---- */
-async function _api(path, opts = {}) {
+/* ---- Low-level Sheets API v4 ----
+   Reintento automático con espera creciente ante 429 (cuota: demasiadas lecturas/escrituras por minuto)
+   y errores 5xx transitorios. Esto hace que, con muchos usuarios a la vez, la operación espere y
+   se complete sola en lugar de fallar. Respeta el encabezado Retry-After de Google si viene. */
+const _sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+async function _api(path, opts = {}, _try = 0) {
   const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + path, {
     ...opts, headers: { Authorization: 'Bearer ' + _token, 'Content-Type': 'application/json', ...(opts.headers || {}) },
   })
   if (r.status === 401) { signIn(); throw new Error('Sesión expirada, vuelve a intentar.') }
+  if ((r.status === 429 || r.status >= 500) && _try < 6) {
+    const ra = Number(r.headers.get('Retry-After'))
+    const wait = ra > 0 ? ra * 1000 : Math.min(20000, 600 * Math.pow(2, _try)) + Math.floor(Math.random() * 500)
+    await _sleep(wait)
+    return _api(path, opts, _try + 1)
+  }
   if (!r.ok) { let e = ''; try { e = (await r.json()).error?.message || '' } catch { } throw new Error('Sheets ' + r.status + ' ' + e) }
   return r.json()
 }
@@ -70,17 +80,38 @@ async function readValues(tab, force) {
   try { const j = await _api('/values/' + encodeURIComponent(A1(tab)) + '?valueRenderOption=UNFORMATTED_VALUE'); const v = j.values || []; _readCache.set(key, { ts: Date.now(), values: v }); return v }
   catch (e) { if (c) return c.values; throw e }
 }
+// Lee VARIAS pestañas en UNA sola petición (batchGet). Reduce drásticamente el número de lecturas
+// (p. ej. el respaldo pasa de ~20 lecturas a 2), evitando el error 429 de cuota. Cachea cada resultado.
+async function readValuesBatch(tabs) {
+  const qs = tabs.map((t) => 'ranges=' + encodeURIComponent(A1(t))).join('&')
+  const j = await _api('/values:batchGet?' + qs + '&valueRenderOption=UNFORMATTED_VALUE')
+  const vr = j.valueRanges || []
+  return tabs.map((t, i) => { const v = (vr[i] && vr[i].values) || []; _readCache.set(String(t), { ts: Date.now(), values: v }); return v })
+}
 async function writeValues(tab, a1, values, raw) { _invalidate(tab); return _api('/values/' + encodeURIComponent(A1(tab) + '!' + a1) + '?valueInputOption=' + (raw ? 'RAW' : 'USER_ENTERED'), { method: 'PUT', body: JSON.stringify({ values }) }) }
 async function appendValues(tab, values, raw) { _invalidate(tab); return _api('/values/' + encodeURIComponent(A1(tab) + '!A1') + ':append?valueInputOption=' + (raw ? 'RAW' : 'USER_ENTERED') + '&insertDataOption=INSERT_ROWS', { method: 'POST', body: JSON.stringify({ values }) }) }
 async function clearValues(tab) { _invalidate(tab); return _api('/values/' + encodeURIComponent(A1(tab)) + ':clear', { method: 'POST', body: '{}' }) }
 async function batchUpdateValues(data) { try { (data || []).forEach((d) => { const m = /^'?([^'!]+)'?!/.exec(d.range || ''); if (m) _invalidate(m[1].replace(/''/g, "'")) }) } catch { } return _api('/values:batchUpdate', { method: 'POST', body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }) }) }
-async function sheetTitles() { const j = await _api('?fields=sheets.properties.title'); return (j.sheets || []).map((s) => s.properties.title) }
+// Títulos de pestañas cacheados: ensureTab se llama muchas veces por operación; sin caché eran muchas lecturas.
+let _titlesCache = null, _titlesAt = 0
+async function sheetTitles(force) {
+  if (!force && _titlesCache && Date.now() - _titlesAt < 30000) return _titlesCache
+  const j = await _api('?fields=sheets.properties.title')
+  _titlesCache = (j.sheets || []).map((s) => s.properties.title); _titlesAt = Date.now()
+  return _titlesCache
+}
 async function ensureTab(title, header) {
   const titles = await sheetTitles()
   if (!titles.includes(title)) {
     await _api(':batchUpdate', { method: 'POST', body: JSON.stringify({ requests: [{ addSheet: { properties: { title } } }] }) })
+    if (_titlesCache) _titlesCache.push(title)
     if (header) await writeValues(title, 'A1', [header])
   }
+}
+// Lee varias pestañas de una vez (para respaldos/consolidados). Devuelve { ok, values: {tab: filas} }.
+export async function gReadTabs(tabs) {
+  try { const arr = await readValuesBatch(tabs); const out = {}; tabs.forEach((t, i) => { out[t] = arr[i] }); return { ok: true, values: out } }
+  catch (e) { return { ok: false, values: null, error: String(e && e.message || e) } }
 }
 
 /* ---- Helpers de dominio (equivalentes al backend) ---- */
