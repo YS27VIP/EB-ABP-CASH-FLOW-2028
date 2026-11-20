@@ -542,6 +542,15 @@ export async function gSaveEstado(empresa, clave, valor) {
   return { ok: true }
 }
 
+// Bitácora de Kai: registra cada pregunta del usuario (fecha, quién, empresa, rol, pregunta, si se resolvió) en la pestaña Kai_Log.
+export async function gLogKai(email, nombre, empresa, rol, pregunta, resuelta) {
+  try {
+    if (!_token) return
+    await ensureTab('Kai_Log', ['FECHA', 'EMAIL', 'NOMBRE', 'EMPRESA', 'ROL', 'PREGUNTA', 'RESUELTA'])
+    await appendValues('Kai_Log', [[new Date().toISOString().slice(0, 19).replace('T', ' '), email || '', nombre || '', empresa || '', rol || '', pregunta || '', resuelta ? 'Sí' : 'No']], true)
+  } catch { }
+}
+
 // Respaldo de reportes: escribe (reemplazando) una matriz de filas en una pestaña del Sheet.
 export async function gWriteReport(tab, aoa) {
   await ensureTab(tab, (aoa && aoa[0]) || ['Reporte'])

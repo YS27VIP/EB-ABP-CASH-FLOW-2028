@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import kai from './kai_head.png' // mascota de la empresa (fondo transparente)
+import { gLogKai, getEmail, getName } from './google'
 
 /* Kai: asistente jovial tipo chat (sin servidor). Busca por palabras clave y explica de dónde sale / cómo se calcula cada dato. */
 const KB = [
@@ -99,7 +100,11 @@ export default function HelpBot() {
     const q = (text != null ? text : inp).trim(); if (!q) return
     setInp('')
     setMsgs((m) => [...m, { from: 'user', text: q }])
-    setTimeout(() => setMsgs((m) => [...m, { from: 'bot', text: responder(q) }]), 350)
+    const ans = responder(q)
+    const resuelta = !ans.startsWith('Mmm, no tengo')
+    const p = miPerfil()
+    try { gLogKai(getEmail(), getName(), miEmp(), p && p.rol, q, resuelta) } catch { }
+    setTimeout(() => setMsgs((m) => [...m, { from: 'bot', text: ans }]), 350)
   }
   const G = 'linear-gradient(135deg,#0891b2,#10b981)'
   const S = {
