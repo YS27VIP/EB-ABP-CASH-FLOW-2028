@@ -807,7 +807,7 @@ export default function App() {
     )
   }
 
-  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'holding' && roleId !== 'calendario' && roleId !== 'aprobaciones' && roleId !== 'guia') {
+  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'holding' && roleId !== 'calendario' && roleId !== 'aprobaciones' && roleId !== 'guia' && roleId !== 'ebpevo') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
@@ -865,6 +865,10 @@ export default function App() {
             {empresa === 'ENERGY BRANDS' && <button className="app" onClick={() => setRoleId('guia')}>
               <span className="appicon" style={{ background: '#4f46e5' }}>🗺️</span>
               <span className="applabel">Guía por rol</span>
+            </button>}
+            {empresa === 'ENERGY BRANDS' && esAdmin && <button className="app" onClick={() => setRoleId('ebpevo')}>
+              <span className="appicon" style={{ background: '#0e7490' }}>📊</span>
+              <span className="applabel">EBP Evolution</span>
             </button>}
             {puede('Bitácora') && <button className="app" onClick={() => setRoleId('bitacora')}>
               <span className="appicon" style={{ background: '#455a64' }}>📝</span>
@@ -930,6 +934,17 @@ export default function App() {
           <span className="rolechip" style={{ background: '#4f46e5' }}>🗺️ Guía por rol</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
         <main><GuiaScreen go={goTo} sbuNames={Object.keys(sbus)} miPerfil={miPerfil} /></main>
+      </>
+    )
+  }
+
+  if (roleId === 'ebpevo') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#0e7490' }}>📊 EBP Evolution</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        <main><EbpEvolutionScreen empresa={empresa} sbus={sbus} /></main>
       </>
     )
   }
@@ -5562,6 +5577,95 @@ function FlujoPiramide() {
 }
 
 /* ===== GUÍA POR ROL: mapa de dónde llena cada quién (solo Energy Brands) ===== */
+// ===== EBP Evolution: compara el plan (Master) con la realidad de Monday (pestaña Monday_SS27). Solo Energy Brands. =====
+function EbpEvolutionScreen({ empresa, sbus }) {
+  const [rows, setRows] = useState([]); const [load, setLoad] = useState(true); const [err, setErr] = useState(null); const [stamp, setStamp] = useState('')
+  const [fMarca, setFMarca] = useState('(todas)'); const [fTemp, setFTemp] = useState('(todas)'); const [fStatus, setFStatus] = useState('OPEN'); const [buscar, setBuscar] = useState('')
+  const cargar = async () => {
+    setLoad(true); setErr(null)
+    try {
+      const j = await gReadTab('Monday_SS27')
+      if (j && j.ok && j.values && j.values.length > 1) {
+        const head = j.values[0].map((h) => String(h || '').toUpperCase()); const ix = (n) => head.indexOf(n)
+        const iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS'), iT = ix('TERMINO'), iTe = ix('TEMPORADA'), iTc = ix('TEMP_CORTA')
+        const out = []; let st = ''
+        j.values.slice(1).forEach((r) => {
+          if (String(r[0] || '').toLowerCase().indexOf('actualizado') === 0) { st = String(r[1] || ''); return }
+          if (!r[iC] && !r[iM]) return
+          out.push({ marca: String(r[iM] || ''), cliente: String(r[iC] || '').trim(), po: String(r[iPO] || ''), unidades: num(r[iU]), pv: num(r[iPV]), status: String(r[iS] || '').toUpperCase(), termino: String(r[iT] || ''), temp: String(r[iTe] || ''), tempC: String(r[iTc] || (iTe >= 0 ? r[iTe] : '')).toUpperCase() })
+        })
+        setRows(out); setStamp(st)
+      } else { setRows([]); setErr('La pestaña Monday_SS27 aún no tiene datos. Corre la tarea "Sync Monday" y vuelve.') }
+    } catch (e) { setErr(String(e && e.message || e)) }
+    setLoad(false)
+  }
+  useEffect(() => { cargar() }, [])
+  const marcas = [...new Set(rows.map((r) => r.marca).filter(Boolean))].sort()
+  const temps = [...new Set(rows.map((r) => r.tempC).filter(Boolean))].sort()
+  const estados = [...new Set(rows.map((r) => r.status).filter(Boolean))].sort()
+  const fil = rows.filter((r) => (fMarca === '(todas)' || upper(r.marca) === upper(fMarca)) && (fTemp === '(todas)' || upper(r.tempC) === upper(fTemp)) && (fStatus === '(todos)' || r.status === fStatus) && (!buscar.trim() || upper(r.cliente).indexOf(upper(buscar)) >= 0))
+  // Agrupa por cliente
+  const porCli = {}; fil.forEach((r) => { const k = r.cliente || '(sin cliente)'; const o = porCli[k] || (porCli[k] = { cliente: k, ordenes: 0, unidades: 0, pv: 0, terms: {} }); o.ordenes++; o.unidades += r.unidades; o.pv += r.pv; if (r.termino) o.terms[r.termino] = (o.terms[r.termino] || 0) + 1 })
+  const lista = Object.values(porCli).sort((a, b) => b.pv - a.pv || b.unidades - a.unidades)
+  const termDe = (o) => { const e = Object.entries(o.terms).sort((a, b) => b[1] - a[1])[0]; return e ? e[0] : '—' }
+  const totU = fil.reduce((a, r) => a + r.unidades, 0), totPV = fil.reduce((a, r) => a + r.pv, 0)
+  // Plan del Master (si hay una marca seleccionada y su Master está importado en Producto → Saldos)
+  const planMaster = (() => {
+    if (fMarca === '(todas)') return null
+    let saldo = {}; try { saldo = JSON.parse(localStorage.getItem('saldos_ENERGY BRANDS') || '{}') } catch { }
+    const key = Object.keys(saldo || {}).find((k) => upper(k) === upper(fMarca)); if (!key) return null
+    const mcs = (saldo[key].masterCliS) || {}; const seasons = fTemp === '(todas)' ? Object.keys(mcs) : [fTemp]
+    let total = 0, hay = false; seasons.forEach((s) => { const o = mcs[s] || {}; Object.values(o).forEach((v) => { total += num(v); hay = true }) })
+    return hay ? total : null
+  })()
+  const dev = (planMaster && Math.abs(planMaster) > 0.5) ? ((totPV - planMaster) / Math.abs(planMaster) * 100) : null
+  return (
+    <div>
+      <div className="toolbar" style={{ marginBottom: 8 }}>
+        <span className="empchip" style={{ background: '#0e7490', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>📊 EBP Evolution — Plan vs Real (Monday)</span>
+        <span className="unit" style={{ alignSelf: 'center' }}>Órdenes reales del tablero de Monday{stamp ? ` · actualizado ${stamp}` : ''}.</span>
+        <div className="spacer"></div>
+        <button className="btn" disabled={load} onClick={cargar}>{load ? 'Cargando…' : '🔄 Recargar'}</button>
+      </div>
+      {err && <div className="banner" style={{ marginBottom: 12 }}>⚠️ {err}</div>}
+      {!err && <>
+        <div className="panel">
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 10 }}>
+            <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>Marca
+              <select value={fMarca} onChange={(e) => setFMarca(e.target.value)}><option>(todas)</option>{marcas.map((m) => <option key={m}>{m}</option>)}</select></label>
+            <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>Temporada
+              <select value={fTemp} onChange={(e) => setFTemp(e.target.value)}><option>(todas)</option>{temps.map((t) => <option key={t}>{t}</option>)}</select></label>
+            <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>Estatus
+              <select value={fStatus} onChange={(e) => setFStatus(e.target.value)}><option>(todos)</option>{estados.map((s) => <option key={s}>{s}</option>)}</select></label>
+            <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>Buscar cliente
+              <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 cliente…" style={{ minWidth: 180 }} /></label>
+          </div>
+          <div className="kpis" style={{ marginBottom: 6 }}>
+            <div className="kpi"><div className="k">Órdenes</div><div className="v">{fmt(fil.length)}</div></div>
+            <div className="kpi"><div className="k">Unidades (real)</div><div className="v">{fmt(totU)}</div></div>
+            <div className="kpi"><div className="k">Venta PV (real)</div><div className="v">{fmt(totPV)}</div></div>
+            {planMaster != null && <div className="kpi"><div className="k">Plan Master</div><div className="v">{fmt(planMaster)}</div>{dev != null && <div className={'s ' + (dev >= 0 ? 'pos' : 'neg')}>{(dev >= 0 ? '+' : '') + dev.toFixed(0)}% vs plan</div>}</div>}
+          </div>
+          {planMaster == null && fMarca !== '(todas)' && <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay Master importado para <b>{fMarca}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
+        </div>
+        <div className="panel">
+          <h3 style={{ color: '#0e7490' }}>Realidad por cliente <span className="unit">(Monday · {fStatus === '(todos)' ? 'todos los estatus' : fStatus})</span></h3>
+          {load ? <div className="sub no-ayuda">Cargando…</div> : lista.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay órdenes para este filtro.</div> :
+            <div className="tablewrap" style={{ marginTop: 6 }}>
+              <table className="vfix" style={{ width: 'auto', minWidth: 620 }}>
+                <thead><tr><th className="l">Cliente</th><th>Órdenes</th><th>Unidades</th><th>Venta PV ($)</th><th className="l">Término</th></tr></thead>
+                <tbody>
+                  {lista.map((o) => <tr key={o.cliente}><td className="l sub2">{o.cliente}</td><td className="tot">{fmt(o.ordenes)}</td><td className="tot">{fmt(o.unidades)}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(o.pv)}</td><td className="l">{termDe(o)}</td></tr>)}
+                  <tr className="grandrow"><td className="l">TOTAL ({lista.length} clientes)</td><td className="tot">{fmt(fil.length)}</td><td className="tot">{fmt(totU)}</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(totPV)}</td><td></td></tr>
+                </tbody>
+              </table>
+            </div>}
+        </div>
+      </>}
+    </div>
+  )
+}
+
 function GuiaScreen({ go, sbuNames = [], miPerfil }) {
   const CARDS = [
     {
