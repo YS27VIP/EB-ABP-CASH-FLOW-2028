@@ -3365,7 +3365,7 @@ function SaldoCajaForm({ empresa }) {
           <div className="sub">Por cada cliente: <b>Saldo al corte</b> + <b>Proyección</b>; según el <b>término</b> se calcula la deuda con la escalera (la venta que llega tarde y se cobra en 2028 queda pendiente). <b>Haz clic en una fila</b> para ver su escalera mes a mes. SS27 real llega abr/jul → se cobra en el año; la fila FW27 llega oct–dic → queda pendiente. Prueba, no afecta datos.</div>
           <div className="tablewrap" style={{ marginTop: 6 }}>
             <table className="vfix" style={{ width: 'auto', minWidth: 660 }}>
-              <thead><tr><th className="l">Cliente (canal)</th><th className="l">Término</th><th>Saldo al corte ($)</th><th>Proyección de venta ($)</th><th>= Deuda cliente ($)</th></tr></thead>
+              <thead><tr><th className="l">Cliente (canal)</th><th className="l">Término</th><th>Saldo al corte ($)</th><th>Proyección de venta ($)</th><th>= Deuda cliente ($)</th><th className="ya">Proyección ABP 2027 ($)</th></tr></thead>
               <tbody>
                 {DEMO_HOKA.map((r) => { const key = 'DEMO:' + r[0]; const open = expCli === key; return <Fragment2 key={r[0]}>
                   <tr className={'rowline' + (open ? ' open' : '')} style={{ cursor: 'pointer' }} onClick={() => setExpCli(open ? null : key)}>
@@ -3374,6 +3374,7 @@ function SaldoCajaForm({ empresa }) {
                     <td className="cell" onClick={(e) => e.stopPropagation()}><input value={deudaOv[cKey(r)] ?? ''} onChange={(e) => setDeudaOv((o) => ({ ...o, [cKey(r)]: e.target.value }))} inputMode="decimal" placeholder={fmt(num(r[3]))} title="Escribe el saldo al corte (editable)" style={{ width: '100%', textAlign: 'center' }} /></td>
                     <td className="tot">{fmt(proyOf(r))}</td>
                     <td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(deudaOf(r))}</td>
+                    <td className="tot ya">{fmt(proyOf(r))}</td>
                   </tr>
                   {open && <tr className="subrow"><td colSpan={5} style={{ padding: '6px 10px 10px' }}>
                     <div className="sub" style={{ margin: '0 0 4px' }}>Escalera · término <b>{termD(r)}</b> (+{tM(termD(r))} mes). Naranja = se cobra en 2028 (pendiente al cierre).</div>
@@ -3383,7 +3384,7 @@ function SaldoCajaForm({ empresa }) {
                     </tbody></table></div>
                   </td></tr>}
                 </Fragment2> })}
-                <tr className="grandrow"><td className="l">TOTAL</td><td></td><td className="tot" style={{ color: '#b45309' }}>{fmt(TT(corteDemo))}</td><td className="tot">{fmt(TT(proyOf))}</td><td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(TT(deudaOf))}</td></tr>
+                <tr className="grandrow"><td className="l">TOTAL</td><td></td><td className="tot" style={{ color: '#b45309' }}>{fmt(TT(corteDemo))}</td><td className="tot">{fmt(TT(proyOf))}</td><td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(TT(deudaOf))}</td><td className="tot ya">{fmt(TT(proyOf))}</td></tr>
               </tbody>
             </table>
           </div>
@@ -3396,9 +3397,9 @@ function SaldoCajaForm({ empresa }) {
         <div className="sub">Por cada cliente: <b>Saldo al corte</b> + <b>Proyección de venta</b> (Master SS27 + FW27). Según el <b>término</b>, la <b>deuda</b> = saldo al corte + la venta que por su plazo aún no se cobra al cierre (escalera). <b>Haz clic en un cliente</b> para ver su escalera mes a mes. El término sale de Base_Clientes y es ajustable. Se llena al importar el Master en <b>Producto → 🧮 Saldos</b>.</div>
         <div className="tablewrap" style={{ marginTop: 6 }}>
           <table className="vfix" style={{ width: 'auto', minWidth: 660 }}>
-            <thead><tr><th className="l">Cliente</th><th className="l">Término</th><th>Saldo al corte ($)</th><th>Proyección de venta ($)</th><th>= Deuda cliente ($)</th></tr></thead>
+            <thead><tr><th className="l">Cliente</th><th className="l">Término</th><th>Saldo al corte ($)</th><th>Proyección de venta ($)</th><th>= Deuda cliente ($)</th><th className="ya">Proyección ABP 2027 ($)</th></tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><td className="l" colSpan={5} style={{ color: 'var(--muted)' }}>Aún no hay datos. Importa el Excel Master de cada marca en <b>Producto → 🧮 Saldos 2028</b> y guarda.</td></tr>}
+              {rows.length === 0 && <tr><td className="l" colSpan={6} style={{ color: 'var(--muted)' }}>Aún no hay datos. Importa el Excel Master de cada marca en <b>Producto → 🧮 Saldos 2028</b> y guarda.</td></tr>}
               {rows.map((r, i) => { const open = expCli === upper(r.cliente); return <Fragment2 key={i}>
                 <tr className={'rowline' + (open ? ' open' : '')} style={{ cursor: 'pointer' }} onClick={() => setExpCli(open ? null : upper(r.cliente))}>
                   <td className="l sub2"><span className="caret">▶</span> {r.cliente}</td>
@@ -3406,6 +3407,7 @@ function SaldoCajaForm({ empresa }) {
                   <td className="cell" onClick={(e) => e.stopPropagation()}><input value={deudaOv[upper(r.cliente)] ?? ''} onChange={(e) => setCorte(r.cliente, e.target.value)} inputMode="decimal" placeholder={num(r.deuda) ? fmt(num(r.deuda)) : '0'} title="Lo que el cliente ya debe al corte (puedes escribirlo; si lo dejas vacío usa lo del OOR)" style={{ width: '100%', textAlign: 'center' }} /></td>
                   <td className="tot">{fmt(proyeccion(r))}</td>
                   <td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(saldo(r))}</td>
+                  <td className="tot ya">{fmt(proyeccion(r))}</td>
                 </tr>
                 {open && <tr className="subrow"><td colSpan={5} style={{ padding: '6px 10px 10px' }}>
                   <div className="sub" style={{ margin: '0 0 4px' }}>Escalera de <b>{r.cliente}</b> · término <b>{termOf(r) || '—'}</b> (+{termM(r)} mes(es)). La venta que llega (XFD) se cobra <i>mes + plazo</i>; lo <b style={{ color: '#b45309' }}>naranja</b> se cobra en 2028 → pendiente al cierre.</div>
@@ -3415,7 +3417,7 @@ function SaldoCajaForm({ empresa }) {
                   </tbody></table></div>
                 </td></tr>}
               </Fragment2> })}
-              {rows.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td></td><td className="tot" style={{ color: '#b45309' }}>{fmt(T(corteOf))}</td><td className="tot">{fmt(T(proyeccion))}</td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(T(saldo))}</td></tr>}
+              {rows.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td></td><td className="tot" style={{ color: '#b45309' }}>{fmt(T(corteOf))}</td><td className="tot">{fmt(T(proyeccion))}</td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(T(saldo))}</td><td className="tot ya">{fmt(T(proyeccion))}</td></tr>}
             </tbody>
           </table>
         </div>
