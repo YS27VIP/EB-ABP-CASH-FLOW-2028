@@ -700,6 +700,7 @@ export default function App() {
         setAcceso(found ? [...set] : null)
         setVeTodas(found ? todas : true)
         setMiPerfil(found ? { rol: miRol, sbu: miSbu } : null)
+        try { localStorage.setItem('abp_mirol', JSON.stringify(found ? { rol: miRol, sbu: miSbu } : null)) } catch { }
         if (found && defEmp) setEmpresa(defEmp)
       } catch { if (!cancel) { setAcceso(null); setVeTodas(true) } }
     })()
@@ -3326,7 +3327,9 @@ function SaldoCajaForm({ empresa }) {
   const [saving, setSaving] = useState(false); const [msg, setMsg] = useState(null); const [demo, setDemo] = useState(false); const [expCli, setExpCli] = useState(null)
   const [termOv, setTermOv] = useState(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); return (s && s.term) || {} } catch { return {} } })
   const [deudaOv, setDeudaOv] = useState(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); return (s && s.deuda) || {} } catch { return {} } })
-  useEffect(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); setTermOv((s && s.term) || {}); setDeudaOv((s && s.deuda) || {}) } catch { setTermOv({}); setDeudaOv({}) } }, [empresa])
+  const [notas, setNotas] = useState(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); return (s && s.notas) || {} } catch { return {} } })
+  useEffect(() => { try { const s = JSON.parse(localStorage.getItem(`saldocaja_${empresa}`) || 'null'); setTermOv((s && s.term) || {}); setDeudaOv((s && s.deuda) || {}); setNotas((s && s.notas) || {}) } catch { setTermOv({}); setDeudaOv({}); setNotas({}) } }, [empresa])
+  const setNota = (cli, v) => setNotas((o) => ({ ...o, [upper(cli)]: v }))
   // Agregar por cliente desde los saldos de Producto (todas las marcas · SS27 + FW27).
   let rows = []
   try {
@@ -3350,7 +3353,7 @@ function SaldoCajaForm({ empresa }) {
   rows.sort((a, b) => saldo(b) - saldo(a))
   const T = (f) => rows.reduce((a, r) => a + f(r), 0)
   const setTerm = (cli, v) => setTermOv((o) => ({ ...o, [upper(cli)]: v }))
-  function guardar() { setSaving(true); try { const v = { term: termOv, deuda: deudaOv }; localStorage.setItem(`saldocaja_${empresa}`, JSON.stringify(v)); try { saveEstado(empresa, 'saldocaja', v) } catch { } setMsg({ t: 'ok', x: 'Guardado.' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
+  function guardar() { setSaving(true); try { const v = { term: termOv, deuda: deudaOv, notas }; localStorage.setItem(`saldocaja_${empresa}`, JSON.stringify(v)); try { saveEstado(empresa, 'saldocaja', v) } catch { } setMsg({ t: 'ok', x: 'Guardado en el Sheet (lo ve todo el equipo).' }) } catch { setMsg({ t: 'bad', x: 'No se pudo guardar.' }) } setSaving(false) }
   return (
     <div>
       <div className="toolbar" style={{ marginBottom: 8 }}><span className="empchip" style={{ background: '#b45309', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>🏦 Saldo inicial — Cuentas por cobrar 2028</span><span className="unit" style={{ alignSelf: 'center' }}>Cartera con la que arranca el año (por cliente).</span><div className="spacer"></div><button className={'btn' + (demo ? ' primary' : '')} onClick={() => setDemo((d) => !d)} style={demo ? { background: '#7c3aed', borderColor: '#7c3aed' } : {}}>🧪 {demo ? 'Ocultar ejemplo' : 'Ver ejemplo (HOKA · prueba)'}</button><button className="btn primary" disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar'}</button></div>
@@ -3380,7 +3383,7 @@ function SaldoCajaForm({ empresa }) {
                     <td className="tot" style={{ color: '#0f766e', fontWeight: 800 }}>{fmt(deudaOf(r))}</td>
                     <td className="tot ya">{fmt(proyOf(r))}</td>
                   </tr>
-                  {open && <tr className="subrow"><td colSpan={5} style={{ padding: '6px 10px 10px' }}>
+                  {open && <tr className="subrow"><td colSpan={6} style={{ padding: '6px 10px 10px' }}>
                     <div className="sub" style={{ margin: '0 0 4px' }}>Escalera · término <b>{termD(r)}</b> (+{tM(termD(r))} mes). Naranja = se cobra en 2028 (pendiente al cierre).</div>
                     <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 760 }}><thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Pendiente</th></tr></thead><tbody>
                       <tr><td className="l sub2">Venta proyectada (XFD)</td>{r[2].map((v, m) => { const late = (m + tM(termD(r))) > 11 && v; return <td key={m} className="tot" style={late ? { background: '#fde8cf', color: '#b45309', fontWeight: 700 } : (v ? undefined : { color: '#cbd5e1' })}>{v ? fmt(v) : '—'}</td> })}<td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(pendOf(r))}</td></tr>
@@ -3401,9 +3404,9 @@ function SaldoCajaForm({ empresa }) {
         <div className="sub">Por cada cliente: <b>Saldo al corte</b> + <b>Proyección de venta</b> (Master SS27 + FW27). Según el <b>término</b>, la <b>deuda</b> = saldo al corte + la venta que por su plazo aún no se cobra al cierre (escalera). <b>Haz clic en un cliente</b> para ver su escalera mes a mes. El término sale de Base_Clientes y es ajustable. Se llena al importar el Master en <b>Producto → 🧮 Saldos</b>.</div>
         <div className="tablewrap" style={{ marginTop: 6 }}>
           <table className="vfix" style={{ width: 'auto', minWidth: 660 }}>
-            <thead><tr><th className="l">Cliente</th><th className="l">Término</th><th>Saldo al corte ($)</th><th>Proyección de venta ($)</th><th>= Deuda cliente ($)</th><th className="ya">Proyección ABP 2027 ($)</th></tr></thead>
+            <thead><tr><th className="l">Cliente</th><th className="l">Término</th><th>Saldo al corte ($)</th><th>Proyección de venta ($)</th><th>= Deuda cliente ($)</th><th className="ya">Proyección ABP 2027 ($)</th><th className="l">Nota · desviación vs ABP 2027</th></tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><td className="l" colSpan={6} style={{ color: 'var(--muted)' }}>Aún no hay datos. Importa el Excel Master de cada marca en <b>Producto → 🧮 Saldos 2028</b> y guarda.</td></tr>}
+              {rows.length === 0 && <tr><td className="l" colSpan={7} style={{ color: 'var(--muted)' }}>Aún no hay datos. Importa el Excel Master de cada marca en <b>Producto → 🧮 Saldos 2028</b> y guarda.</td></tr>}
               {rows.map((r, i) => { const open = expCli === upper(r.cliente); return <Fragment2 key={i}>
                 <tr className={'rowline' + (open ? ' open' : '')} style={{ cursor: 'pointer' }} onClick={() => setExpCli(open ? null : upper(r.cliente))}>
                   <td className="l sub2"><span className="caret">▶</span> {r.cliente}</td>
@@ -3412,8 +3415,9 @@ function SaldoCajaForm({ empresa }) {
                   <td className="tot">{fmt(proyeccion(r))}</td>
                   <td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(saldo(r))}</td>
                   <td className="tot ya">{fmt(proyeccion(r))}</td>
+                  <td className="cell" onClick={(e) => e.stopPropagation()} style={{ minWidth: 220 }}><input value={notas[upper(r.cliente)] ?? ''} onChange={(e) => setNota(r.cliente, e.target.value)} placeholder="¿Por qué se desvía vs ABP 2027?" title="Nota visible para todo el equipo (se guarda en el Sheet)" style={{ width: '100%' }} /></td>
                 </tr>
-                {open && <tr className="subrow"><td colSpan={5} style={{ padding: '6px 10px 10px' }}>
+                {open && <tr className="subrow"><td colSpan={7} style={{ padding: '6px 10px 10px' }}>
                   <div className="sub" style={{ margin: '0 0 4px' }}>Escalera de <b>{r.cliente}</b> · término <b>{termOf(r) || '—'}</b> (+{termM(r)} mes(es)). La venta que llega (XFD) se cobra <i>mes + plazo</i>; lo <b style={{ color: '#b45309' }}>naranja</b> se cobra en 2028 → pendiente al cierre.</div>
                   <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 760 }}><thead><tr><th className="l">Concepto</th>{MESES.map((m) => <th key={m}>{m.slice(0, 3).toUpperCase()}</th>)}<th>Pendiente</th></tr></thead><tbody>
                     <tr><td className="l sub2">Venta proyectada (XFD)</td>{(r.mes || Array(12).fill(0)).map((v, m) => { const late = (m + termM(r)) > 11 && v; return <td key={m} className="tot" style={late ? { background: '#fde8cf', color: '#b45309', fontWeight: 700 } : (v ? undefined : { color: '#cbd5e1' })}>{v ? fmt(v) : '—'}</td> })}<td className="tot" style={{ color: '#b45309', fontWeight: 800 }}>{fmt(proyPend(r))}</td></tr>
@@ -3421,7 +3425,7 @@ function SaldoCajaForm({ empresa }) {
                   </tbody></table></div>
                 </td></tr>}
               </Fragment2> })}
-              {rows.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td></td><td className="tot" style={{ color: '#b45309' }}>{fmt(T(corteOf))}</td><td className="tot">{fmt(T(proyeccion))}</td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(T(saldo))}</td><td className="tot ya">{fmt(T(proyeccion))}</td></tr>}
+              {rows.length > 0 && <tr className="grandrow"><td className="l">TOTAL</td><td></td><td className="tot" style={{ color: '#b45309' }}>{fmt(T(corteOf))}</td><td className="tot">{fmt(T(proyeccion))}</td><td className="tot" style={{ fontWeight: 800, color: '#0f766e' }}>{fmt(T(saldo))}</td><td className="tot ya">{fmt(T(proyeccion))}</td><td></td></tr>}
             </tbody>
           </table>
         </div>
