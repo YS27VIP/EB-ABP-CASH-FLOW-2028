@@ -5691,25 +5691,37 @@ function MondayTracking() {
   )
 }
 
-// ===== Paso 3: Pagos a proveedores (marcas) + reporte. Órdenes de Monday (ref) + registro de pagos en varias cuotas (Pagos_Log). =====
+// ===== Cash Out (cuentas por pagar / compras) y Cash In (cuentas por cobrar / ventas). Órdenes de Monday + cuotas. =====
 const COBROS_HEAD = ['Name', 'Status', 'Order Type', 'Temporada', 'Marca', 'Término Marca', 'Cliente', 'Units', 'Costo Marca', 'Cost', 'COST EUR', 'Cost USD', 'Price', 'Customer XFD', 'ETA', 'Estimated Delivery']
-const PAGOS_HEAD = ['Fecha', 'Nivel', 'Marca', 'Orden', 'Monto', 'Semana', 'Comentario']
+const PAGOS_HEAD = ['Fecha', 'Nivel', 'Entidad', 'Orden', 'Monto', 'Semana', 'Comentario']
 function CobrosScreen() {
-  const [rows, setRows] = useState([]); const [pagos, setPagos] = useState([])
+  const [rows, setRows] = useState([]); const [logOut, setLogOut] = useState([]); const [logIn, setLogIn] = useState([])
   const [load, setLoad] = useState(true); const [err, setErr] = useState(''); const [saving, setSaving] = useState(false); const [upd, setUpd] = useState(false); const [msg, setMsg] = useState(null); const [busca, setBusca] = useState('')
   const [termMap, setTermMap] = useState({}); const [termEdits, setTermEdits] = useState({})
+  const [modo, setModo] = useState('out') // out = por pagar (Compra) | in = por cobrar (ventas)
   const [vista, setVista] = useState('planilla') // planilla | reporte
-  const [repNivel, setRepNivel] = useState('marca'); const [repFiltro, setRepFiltro] = useState('todas')
-  const [form, setForm] = useState({ fecha: new Date().toISOString().slice(0, 10), nivel: 'Orden', marca: '', orden: '', monto: '', semana: '', comentario: '' })
+  const [repNivel, setRepNivel] = useState('ent'); const [repFiltro, setRepFiltro] = useState('todas')
+  const [form, setForm] = useState({ fecha: new Date().toISOString().slice(0, 10), nivel: 'Orden', entidad: '', orden: '', monto: '', semana: '', comentario: '' })
   const [savingPago, setSavingPago] = useState(false)
   const bU = (b) => String(b || '').trim().toUpperCase()
   const termOf = (b) => { const k = bU(b); return termEdits[k] !== undefined ? termEdits[k] : (termMap[k] || '') }
   const setTerm = (b, v) => { const k = bU(b); setTermEdits((s) => ({ ...s, [k]: v })) }
+  const esOut = modo === 'out'
+  const amtField = esOut ? 'Cost' : 'Price'
+  const dimField = esOut ? 'Marca' : 'Cliente'
+  const curLog = esOut ? logOut : logIn
+  const setCurLog = esOut ? setLogOut : setLogIn
+  const curTab = esOut ? 'Pagos_Log' : 'Cobros_Log'
+  const entLbl = esOut ? 'Marca' : 'Cliente'
+  const amtLbl = esOut ? 'Costo' : 'Por cobrar'
+  const verbo = esOut ? 'Pagado' : 'Cobrado'
+  const okEst = esOut ? 'Pagada' : 'Cobrada'
   const cargar = async () => {
     setLoad(true); setErr('')
     try {
       try { const tj = await gReadTab('Config_TerminoMarca'); if (tj && tj.ok && tj.values && tj.values.length > 1) { const tm = {}; tj.values.slice(1).forEach((r) => { if (r && r[0]) tm[bU(r[0])] = String(r[1] || '') }); setTermMap(tm) } } catch { }
-      try { const pj = await gReadTab('Pagos_Log'); if (pj && pj.ok && pj.values && pj.values.length > 1) { const H = pj.values[0].map((h) => String(h || '')); const body = pj.values.slice(1).filter((r) => (r || []).some((x) => x !== '' && x != null)).map((r) => { const o = {}; H.forEach((h, i) => o[h] = (r[i] != null ? r[i] : '')); return o }); setPagos(body) } else setPagos([]) } catch { setPagos([]) }
+      const leeLog = async (tab) => { try { const pj = await gReadTab(tab); const arr = []; if (pj && pj.ok && pj.values && pj.values.length > 1) { const H = pj.values[0].map((h) => String(h || '')); pj.values.slice(1).forEach((r) => { if ((r || []).some((x) => x !== '' && x != null)) { const o = {}; H.forEach((h, i) => o[h] = (r[i] != null ? r[i] : '')); if (o.Marca && !o.Entidad) o.Entidad = o.Marca; arr.push(o) } }) } return arr } catch { return [] } }
+      setLogOut(await leeLog('Pagos_Log')); setLogIn(await leeLog('Cobros_Log'))
       const j = await gReadTab('Cobros_Finanzas')
       if (j && j.ok && j.values && j.values.length) {
         const head = j.values[0].map((h) => String(h || ''))
@@ -5721,30 +5733,33 @@ function CobrosScreen() {
   }
   useEffect(() => { cargar() }, [])
   const money = (v) => { const n = Number(v); return (v === '' || v == null || isNaN(n)) ? (v || '') : fmt(Math.round(n)) }
-  // Pagos computados (Pagos_Log). Nivel=Orden suma a esa orden; cualquier pago de la marca suma a la marca.
-  const pagosOrden = (name) => pagos.filter((p) => String(p.Nivel) === 'Orden' && bU(p.Orden) === bU(name)).reduce((a, p) => a + num(p.Monto), 0)
-  const pagosMarca = (mc) => pagos.filter((p) => bU(p.Marca) === bU(mc)).reduce((a, p) => a + num(p.Monto), 0)
-  const costoMarca = (mc) => rows.filter((o) => bU(o.Marca) === bU(mc)).reduce((a, o) => a + num(o.Cost), 0)
+  // Cuotas del modo activo. Nivel=Orden suma a la orden; cualquier movimiento de la entidad suma a la entidad.
+  const pagosOrden = (name) => curLog.filter((p) => String(p.Nivel) === 'Orden' && bU(p.Orden) === bU(name)).reduce((a, p) => a + num(p.Monto), 0)
+  const pagosEnt = (e) => curLog.filter((p) => bU(p.Entidad) === bU(e)).reduce((a, p) => a + num(p.Monto), 0)
+  const baseRows = esOut ? rows.filter((o) => bU(o['Order Type']) === 'COMPRA') : rows.filter((o) => bU(o['Order Type']) !== 'COMPRA' && num(o.Price) > 0)
+  const amtOf = (o) => num(o[amtField])
+  const amtEnt = (e) => baseRows.filter((o) => bU(o[dimField]) === bU(e)).reduce((a, o) => a + amtOf(o), 0)
+  const entidades = [...new Set(baseRows.map((o) => String(o[dimField] || '').trim()).filter(Boolean))].sort()
   const marcas = [...new Set(rows.map((o) => String(o.Marca || '').trim()).filter(Boolean))].sort()
   const hayTermEdits = Object.keys(termEdits).length > 0
   const guardarTerminos = async () => { const tm = { ...termMap }; Object.keys(termEdits).forEach((k) => tm[k] = termEdits[k]); const ms = [...new Set([...marcas.map(bU), ...Object.keys(tm)])].sort(); const mat = [['MARCA', 'TERMINO_PROVEEDOR'], ...ms.map((m) => [m, tm[m] || ''])]; await gWriteReport('Config_TerminoMarca', mat); setTermMap(tm); setTermEdits({}); return tm }
   const guardar = async () => { setSaving(true); setMsg(null); try { await guardarTerminos(); setMsg({ t: 'ok', x: 'Términos por marca guardados.' }) } catch (e) { setMsg({ t: 'bad', x: 'No se pudo guardar: ' + (e && e.message) }) } setSaving(false) }
-  // Registrar / borrar pagos (Pagos_Log)
-  const writePagos = async (arr) => { await gWriteReport('Pagos_Log', [PAGOS_HEAD, ...arr.map((p) => PAGOS_HEAD.map((c) => p[c] != null ? p[c] : ''))]) }
+  // Registrar / borrar movimientos (Pagos_Log = Cash Out, Cobros_Log = Cash In)
+  const writeLog = async (arr) => { await gWriteReport(curTab, [PAGOS_HEAD, ...arr.map((p) => PAGOS_HEAD.map((c) => p[c] != null ? p[c] : ''))]) }
   const registrarPago = async () => {
     const m = num(form.monto); if (!(m > 0)) { setMsg({ t: 'bad', x: 'Pon un monto mayor a 0.' }); return }
-    if (!form.marca) { setMsg({ t: 'bad', x: 'Elige la marca.' }); return }
-    if (form.nivel === 'Orden' && !form.orden) { setMsg({ t: 'bad', x: 'Elige la orden (o cambia el nivel a "Marca").' }); return }
+    if (!form.entidad) { setMsg({ t: 'bad', x: 'Elige ' + (esOut ? 'la marca.' : 'el cliente.') }); return }
+    if (form.nivel === 'Orden' && !form.orden) { setMsg({ t: 'bad', x: 'Elige la orden (o cambia el nivel a "' + entLbl + '").' }); return }
     setSavingPago(true); setMsg(null)
     try {
-      const nuevo = { Fecha: form.fecha, Nivel: form.nivel, Marca: form.marca, Orden: form.nivel === 'Orden' ? form.orden : '', Monto: m, Semana: form.semana, Comentario: form.comentario }
-      const arr = [...pagos, nuevo]; await writePagos(arr); setPagos(arr)
-      setForm((f) => ({ ...f, monto: '', semana: '', comentario: '' })); setMsg({ t: 'ok', x: 'Pago registrado.' })
+      const nuevo = { Fecha: form.fecha, Nivel: form.nivel, Entidad: form.entidad, Orden: form.nivel === 'Orden' ? form.orden : '', Monto: m, Semana: form.semana, Comentario: form.comentario }
+      const arr = [...curLog, nuevo]; await writeLog(arr); setCurLog(arr)
+      setForm((f) => ({ ...f, monto: '', semana: '', comentario: '' })); setMsg({ t: 'ok', x: (esOut ? 'Pago' : 'Cobro') + ' registrado.' })
     } catch (e) { setMsg({ t: 'bad', x: 'No se pudo registrar: ' + (e && e.message) }) }
     setSavingPago(false)
   }
-  const borrarPago = async (idx) => { const arr = pagos.filter((_, i) => i !== idx); try { await writePagos(arr); setPagos(arr); setMsg({ t: 'ok', x: 'Pago borrado.' }) } catch (e) { setMsg({ t: 'bad', x: 'No se pudo borrar: ' + (e && e.message) }) } }
-  const addPagoOrden = (o) => { setForm((f) => ({ ...f, nivel: 'Orden', marca: String(o.Marca || ''), orden: String(o.Name || '') })); setVista('planilla') }
+  const borrarPago = async (idx) => { const arr = curLog.filter((_, i) => i !== idx); try { await writeLog(arr); setCurLog(arr); setMsg({ t: 'ok', x: 'Movimiento borrado.' }) } catch (e) { setMsg({ t: 'bad', x: 'No se pudo borrar: ' + (e && e.message) }) } }
+  const addPagoOrden = (o) => { setForm((f) => ({ ...f, nivel: 'Orden', entidad: String(o[dimField] || ''), orden: String(o.Name || '') })); setVista('planilla') }
   // Actualizar desde Monday (órdenes de referencia). No toca los pagos registrados.
   const actualizar = async () => {
     setUpd(true); setMsg(null)
@@ -5764,80 +5779,83 @@ function CobrosScreen() {
     setUpd(false)
   }
   // Reporte
-  const repMarca = marcas.map((mc) => { const costo = costoMarca(mc); const pagado = pagosMarca(mc); const pend = costo - pagado; return { k: mc, marca: mc, termino: termOf(mc), ordenes: rows.filter((o) => bU(o.Marca) === bU(mc)).length, costo, pagado, pend, estado: pend <= 0.5 ? 'Pagada' : 'Pendiente' } })
-  const repOrden = rows.map((o) => { const costo = num(o.Cost); const pagado = pagosOrden(o.Name); const pend = costo - pagado; return { k: o.Name, name: o.Name, marca: o.Marca, cliente: o.Cliente, costo, pagado, pend, estado: pend <= 0.5 ? 'Pagada' : 'Pendiente' } })
-  const filEstado = (arr) => arr.filter((r) => repFiltro === 'todas' || (repFiltro === 'pendientes' ? r.estado === 'Pendiente' : r.estado === 'Pagada'))
-  const repData = filEstado(repNivel === 'marca' ? repMarca : repOrden)
+  const repEnt = entidades.map((e) => { const costo = amtEnt(e); const pagado = pagosEnt(e); const pend = costo - pagado; return { k: e, ent: e, termino: esOut ? termOf(e) : '', ordenes: baseRows.filter((o) => bU(o[dimField]) === bU(e)).length, costo, pagado, pend, estado: pend <= 0.5 ? okEst : 'Pendiente' } })
+  const repOrden = baseRows.map((o) => { const costo = amtOf(o); const pagado = pagosOrden(o.Name); const pend = costo - pagado; return { k: o.Name, name: o.Name, marca: o.Marca, cliente: o.Cliente, costo, pagado, pend, estado: pend <= 0.5 ? okEst : 'Pendiente' } })
+  const filEstado = (arr) => arr.filter((r) => repFiltro === 'todas' || (repFiltro === 'pendientes' ? r.estado === 'Pendiente' : r.estado !== 'Pendiente'))
+  const repData = filEstado(repNivel === 'ent' ? repEnt : repOrden)
   const tot = repData.reduce((a, r) => ({ costo: a.costo + r.costo, pagado: a.pagado + r.pagado, pend: a.pend + r.pend }), { costo: 0, pagado: 0, pend: 0 })
+  const pref = esOut ? 'CashOut' : 'CashIn'
   const exportarReporte = () => {
-    if (repNivel === 'marca') { const aoa = [['Marca', 'Término', 'Órdenes', 'Costo', 'Pagado', 'Pendiente', 'Estado'], ...filEstado(repMarca).map((r) => [r.marca, r.termino, r.ordenes, r.costo, r.pagado, r.pend, r.estado]), ['TOTAL', '', '', tot.costo, tot.pagado, tot.pend, '']]; exportXlsx(aoa, 'Reporte_Pagos_por_Marca.xlsx') }
-    else { const aoa = [['Orden', 'Marca', 'Cliente', 'Costo', 'Pagado', 'Pendiente', 'Estado'], ...filEstado(repOrden).map((r) => [r.name, r.marca, r.cliente, r.costo, r.pagado, r.pend, r.estado]), ['TOTAL', '', '', tot.costo, tot.pagado, tot.pend, '']]; exportXlsx(aoa, 'Reporte_Pagos_por_Orden.xlsx') }
+    if (repNivel === 'ent') { const aoa = [[entLbl, 'Término', 'Órdenes', amtLbl, verbo, 'Pendiente', 'Estado'], ...filEstado(repEnt).map((r) => [r.ent, r.termino, r.ordenes, r.costo, r.pagado, r.pend, r.estado]), ['TOTAL', '', '', tot.costo, tot.pagado, tot.pend, '']]; exportXlsx(aoa, pref + '_por_' + entLbl + '.xlsx') }
+    else { const aoa = [['Orden', 'Marca', 'Cliente', amtLbl, verbo, 'Pendiente', 'Estado'], ...filEstado(repOrden).map((r) => [r.name, r.marca, r.cliente, r.costo, r.pagado, r.pend, r.estado]), ['TOTAL', '', '', tot.costo, tot.pagado, tot.pend, '']]; exportXlsx(aoa, pref + '_por_orden.xlsx') }
   }
-  const exportarPlanilla = () => { const aoa = [[...COBROS_HEAD, 'Pagado', 'Pendiente', 'Estado'], ...rows.map((o) => { const pg = pagosOrden(o.Name); const co = num(o.Cost); return [...COBROS_HEAD.map((c) => c === 'Término Marca' ? termOf(o.Marca) : (o[c] != null ? o[c] : '')), pg, co - pg, (co - pg) <= 0.5 ? 'Pagada' : 'Pendiente'] })]; exportXlsx(aoa, 'Pagos_Proveedores.xlsx') }
-  const filtered = rows.filter((o) => !busca.trim() || (String(o['Cliente'] || '') + ' ' + String(o['Name'] || '') + ' ' + String(o['Marca'] || '')).toUpperCase().indexOf(busca.toUpperCase()) >= 0)
-  const ordenesDeMarca = rows.filter((o) => bU(o.Marca) === bU(form.marca)).map((o) => String(o.Name || ''))
-  const Pill = ({ estado }) => <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: estado === 'Pagada' ? '#e7f4ea' : '#fdecea', color: estado === 'Pagada' ? '#2e7d32' : '#c0392b' }}>{estado}</span>
+  const exportarPlanilla = () => { const aoa = [['Orden', 'Status', 'Order Type', 'Temp.', 'Marca', 'Cliente', amtLbl, ...(esOut ? ['Término Marca'] : []), verbo, 'Pendiente', 'Estado'], ...baseRows.map((o) => { const pg = pagosOrden(o.Name); const co = amtOf(o); return [o.Name, o.Status, o['Order Type'], o.Temporada, o.Marca, o.Cliente, co, ...(esOut ? [termOf(o.Marca)] : []), pg, co - pg, (co - pg) <= 0.5 ? okEst : 'Pendiente'] })]; exportXlsx(aoa, (esOut ? 'CashOut_PorPagar' : 'CashIn_PorCobrar') + '.xlsx') }
+  const filtered = baseRows.filter((o) => !busca.trim() || (String(o['Cliente'] || '') + ' ' + String(o['Name'] || '') + ' ' + String(o['Marca'] || '')).toUpperCase().indexOf(busca.toUpperCase()) >= 0)
+  const ordenesDeEnt = baseRows.filter((o) => bU(o[dimField]) === bU(form.entidad)).map((o) => String(o.Name || ''))
+  const Pill = ({ estado }) => <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: estado === 'Pendiente' ? '#fdecea' : '#e7f4ea', color: estado === 'Pendiente' ? '#c0392b' : '#2e7d32' }}>{estado}</span>
   return (
     <div>
       <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
-        <span className="empchip" style={{ background: '#2e7d32', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>💳 Pagos a proveedores (marcas)</span>
-        <button className="btn" onClick={() => setVista('planilla')} style={vista === 'planilla' ? { background: '#2e7d32', color: '#fff' } : {}}>Planilla</button>
-        <button className="btn" onClick={() => setVista('reporte')} style={vista === 'reporte' ? { background: '#2e7d32', color: '#fff' } : {}}>📊 Reporte pendiente/pagado</button>
+        <button className="btn" onClick={() => { setModo('out'); setForm((f) => ({ ...f, entidad: '', orden: '' })) }} style={{ fontWeight: 700, ...(esOut ? { background: '#c0392b', color: '#fff', borderColor: '#c0392b' } : {}) }} title="Cuentas por pagar: las compras a las marcas (proveedores).">🔻 Cash Out · por pagar</button>
+        <button className="btn" onClick={() => { setModo('in'); setForm((f) => ({ ...f, entidad: '', orden: '' })) }} style={{ fontWeight: 700, ...(!esOut ? { background: '#2e7d32', color: '#fff', borderColor: '#2e7d32' } : {}) }} title="Cuentas por cobrar: lo que los clientes van pagando por las ventas.">🔺 Cash In · por cobrar</button>
+        <span className="unit" style={{ alignSelf: 'center' }}>{esOut ? 'Compras a proveedores (lo que EB debe pagar a las marcas).' : 'Ventas a clientes (lo que los clientes deben pagar a EB).'}</span>
         <div className="spacer"></div>
-        <button className="btn" disabled={upd} onClick={actualizar} title="Trae de Monday las órdenes abiertas (referencia). No toca los pagos registrados.">{upd ? 'Actualizando…' : '🔄 Actualizar desde Monday'}</button>
-        <button className="btn primary" disabled={saving || !hayTermEdits} onClick={guardar} title="Guarda los términos de pago por marca">{saving ? 'Guardando…' : '💾 Guardar términos'}</button>
+        <button className="btn" onClick={() => setVista('planilla')} style={vista === 'planilla' ? { background: '#374151', color: '#fff' } : {}}>Planilla</button>
+        <button className="btn" onClick={() => setVista('reporte')} style={vista === 'reporte' ? { background: '#374151', color: '#fff' } : {}}>📊 Reporte</button>
+        <button className="btn" disabled={upd} onClick={actualizar} title="Trae de Monday las órdenes abiertas (referencia). No toca lo registrado.">{upd ? 'Actualizando…' : '🔄 Actualizar desde Monday'}</button>
+        {esOut && <button className="btn primary" disabled={saving || !hayTermEdits} onClick={guardar} title="Guarda los términos de pago por marca">{saving ? 'Guardando…' : '💾 Guardar términos'}</button>}
       </div>
       {msg && <div className={'note no-ayuda ' + msg.t} style={{ marginBottom: 8 }}>{msg.x}</div>}
       {err && <div className="banner">⚠️ {err}</div>}
 
       {vista === 'planilla' ? <>
         <div className="panel" style={{ marginBottom: 10 }}>
-          <div className="sub" style={{ fontWeight: 700, marginBottom: 6 }}>➕ Registrar pago a proveedor</div>
+          <div className="sub" style={{ fontWeight: 700, marginBottom: 6 }}>{esOut ? '➕ Registrar pago a proveedor' : '➕ Registrar cobro de cliente'}</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <label className="no-ayuda" style={{ fontSize: 11 }}>Fecha<br /><input type="date" value={form.fecha} onChange={(e) => setForm((f) => ({ ...f, fecha: e.target.value }))} /></label>
-            <label className="no-ayuda" style={{ fontSize: 11 }}>Nivel<br /><select value={form.nivel} onChange={(e) => setForm((f) => ({ ...f, nivel: e.target.value }))}><option value="Orden">Por orden</option><option value="Marca">Consolidado por marca</option></select></label>
-            <label className="no-ayuda" style={{ fontSize: 11 }}>Marca<br /><select value={form.marca} onChange={(e) => setForm((f) => ({ ...f, marca: e.target.value, orden: '' }))}><option value="">— elige —</option>{marcas.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
-            {form.nivel === 'Orden' && <label className="no-ayuda" style={{ fontSize: 11 }}>Orden<br /><select value={form.orden} onChange={(e) => setForm((f) => ({ ...f, orden: e.target.value }))} disabled={!form.marca}><option value="">— elige —</option>{ordenesDeMarca.map((n) => <option key={n} value={n}>{n}</option>)}</select></label>}
+            <label className="no-ayuda" style={{ fontSize: 11 }}>Nivel<br /><select value={form.nivel} onChange={(e) => setForm((f) => ({ ...f, nivel: e.target.value }))}><option value="Orden">Por orden</option><option value="Entidad">Consolidado por {entLbl.toLowerCase()}</option></select></label>
+            <label className="no-ayuda" style={{ fontSize: 11 }}>{entLbl}<br /><select value={form.entidad} onChange={(e) => setForm((f) => ({ ...f, entidad: e.target.value, orden: '' }))}><option value="">— elige —</option>{entidades.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+            {form.nivel === 'Orden' && <label className="no-ayuda" style={{ fontSize: 11 }}>Orden<br /><select value={form.orden} onChange={(e) => setForm((f) => ({ ...f, orden: e.target.value }))} disabled={!form.entidad}><option value="">— elige —</option>{ordenesDeEnt.map((n) => <option key={n} value={n}>{n}</option>)}</select></label>}
             <label className="no-ayuda" style={{ fontSize: 11 }}>Monto<br /><input type="number" value={form.monto} onChange={(e) => setForm((f) => ({ ...f, monto: e.target.value }))} placeholder="0" style={{ width: 100, textAlign: 'right' }} /></label>
             <label className="no-ayuda" style={{ fontSize: 11 }}>Semana<br /><input value={form.semana} onChange={(e) => setForm((f) => ({ ...f, semana: e.target.value }))} placeholder="ej. 04 Abril" style={{ width: 110 }} /></label>
             <label className="no-ayuda" style={{ fontSize: 11 }}>Comentario<br /><input value={form.comentario} onChange={(e) => setForm((f) => ({ ...f, comentario: e.target.value }))} style={{ width: 160 }} /></label>
-            <button className="btn primary" disabled={savingPago} onClick={registrarPago}>{savingPago ? 'Guardando…' : '➕ Registrar pago'}</button>
+            <button className="btn primary" disabled={savingPago} onClick={registrarPago}>{savingPago ? 'Guardando…' : (esOut ? '➕ Registrar pago' : '➕ Registrar cobro')}</button>
           </div>
-          <div className="sub no-ayuda" style={{ color: 'var(--muted)', fontSize: 11, marginTop: 6 }}>Puedes registrar varios pagos (cuotas) para la misma orden o marca. El pendiente se recalcula solo.</div>
+          <div className="sub no-ayuda" style={{ color: 'var(--muted)', fontSize: 11, marginTop: 6 }}>Puedes registrar varias cuotas para la misma orden o {entLbl.toLowerCase()}. El pendiente se recalcula solo.</div>
         </div>
 
-        {pagos.length > 0 && <div className="panel" style={{ marginBottom: 10 }}>
-          <div className="sub" style={{ fontWeight: 700, marginBottom: 6 }}>Pagos registrados ({pagos.length})</div>
+        {curLog.length > 0 && <div className="panel" style={{ marginBottom: 10 }}>
+          <div className="sub" style={{ fontWeight: 700, marginBottom: 6 }}>{esOut ? 'Pagos' : 'Cobros'} registrados ({curLog.length})</div>
           <div className="tablewrap" style={{ maxHeight: '28vh' }}>
             <table className="vfix gridcols" style={{ fontSize: 12, minWidth: 760 }}>
-              <thead><tr><th className="l">Fecha</th><th className="l">Nivel</th><th className="l">Marca</th><th className="l">Orden</th><th>Monto</th><th className="l">Semana</th><th className="l">Comentario</th><th></th></tr></thead>
-              <tbody>{pagos.map((p, i) => <tr key={i}><td className="l">{p.Fecha}</td><td className="l">{p.Nivel}</td><td className="l">{p.Marca}</td><td className="l">{p.Orden}</td><td className="tot" style={{ fontWeight: 700 }}>{money(p.Monto)}</td><td className="l">{p.Semana}</td><td className="l">{p.Comentario}</td><td><button className="btn" style={{ padding: '2px 8px' }} onClick={() => borrarPago(i)} title="Borrar pago">🗑</button></td></tr>)}</tbody>
+              <thead><tr><th className="l">Fecha</th><th className="l">Nivel</th><th className="l">{entLbl}</th><th className="l">Orden</th><th>Monto</th><th className="l">Semana</th><th className="l">Comentario</th><th></th></tr></thead>
+              <tbody>{curLog.map((p, i) => <tr key={i}><td className="l">{p.Fecha}</td><td className="l">{p.Nivel}</td><td className="l">{p.Entidad}</td><td className="l">{p.Orden}</td><td className="tot" style={{ fontWeight: 700 }}>{money(p.Monto)}</td><td className="l">{p.Semana}</td><td className="l">{p.Comentario}</td><td><button className="btn" style={{ padding: '2px 8px' }} onClick={() => borrarPago(i)} title="Borrar">🗑</button></td></tr>)}</tbody>
             </table>
           </div>
         </div>}
 
         <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
-          <span className="unit" style={{ alignSelf: 'center' }}>Órdenes abiertas (referencia de Monday). <b>Costo</b> = lo que se debe a la marca; <b>Pagado</b>/<b>Pendiente</b> salen de los pagos registrados.</span>
+          <span className="unit" style={{ alignSelf: 'center' }}>{esOut ? <>Compras abiertas (Monday). <b>Costo</b> = lo que se debe a la marca; <b>Pagado</b>/<b>Pendiente</b> salen de los pagos.</> : <>Ventas abiertas (Monday). <b>Por cobrar</b> = venta PV al cliente; <b>Cobrado</b>/<b>Pendiente</b> salen de los cobros.</>}</span>
           <div className="spacer"></div>
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔍 marca, cliente u orden…" style={{ minWidth: 180 }} />
           <button className="btn" onClick={exportarPlanilla}>⬇ Excel</button>
         </div>
         <div className="panel">
-          {load ? <div className="sub no-ayuda">Cargando…</div> : rows.length === 0 ?
-            <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay órdenes. Dale <b>🔄 Actualizar desde Monday</b>.</div> :
+          {load ? <div className="sub no-ayuda">Cargando…</div> : baseRows.length === 0 ?
+            <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay {esOut ? 'compras' : 'ventas'} abiertas. Dale <b>🔄 Actualizar desde Monday</b>.</div> :
             <div className="tablewrap" style={{ maxHeight: '60vh' }}>
-              <table className="vfix gridcols" style={{ width: 'auto', minWidth: 1200, fontSize: 12 }}>
+              <table className="vfix gridcols" style={{ width: 'auto', minWidth: 1100, fontSize: 12 }}>
                 <thead>
-                  <tr><th className="l" colSpan={7} style={{ background: '#eef2f7' }}>De Monday</th><th style={{ background: '#e8f0fe', color: '#1458b3' }}>Config</th><th colSpan={4} style={{ background: '#e7f4ea', color: '#2e7d32' }}>Pagos a proveedor</th></tr>
-                  <tr><th className="l">Orden</th><th className="l">Status</th><th className="l">Order Type</th><th className="l">Temp.</th><th className="l">Marca</th><th className="l">Cliente</th><th>Costo</th><th className="l">Término Marca</th><th>Pagado</th><th>Pendiente</th><th className="l">Estado</th><th></th></tr>
+                  <tr><th className="l" colSpan={esOut ? 7 : 6} style={{ background: '#eef2f7' }}>De Monday</th>{esOut && <th style={{ background: '#e8f0fe', color: '#1458b3' }}>Config</th>}<th colSpan={4} style={{ background: esOut ? '#fdecec' : '#e7f4ea', color: esOut ? '#c0392b' : '#2e7d32' }}>{esOut ? 'Cash Out (por pagar)' : 'Cash In (por cobrar)'}</th></tr>
+                  <tr><th className="l">Orden</th><th className="l">Status</th><th className="l">Order Type</th><th className="l">Temp.</th><th className="l">Marca</th><th className="l">Cliente</th><th>{amtLbl}</th>{esOut && <th className="l">Término Marca</th>}<th>{verbo}</th><th>Pendiente</th><th className="l">Estado</th><th></th></tr>
                 </thead>
                 <tbody>
-                  {filtered.slice(0, 2500).map((o, i) => { const pg = pagosOrden(o.Name); const co = num(o.Cost); const pend = co - pg; const est = pend <= 0.5 ? 'Pagada' : 'Pendiente'; return <tr key={o.Name + i}>
+                  {filtered.slice(0, 2500).map((o, i) => { const pg = pagosOrden(o.Name); const co = amtOf(o); const pend = co - pg; const est = pend <= 0.5 ? okEst : 'Pendiente'; return <tr key={o.Name + i}>
                     <td className="l">{o['Name']}</td><td className="l">{o['Status']}</td><td className="l">{o['Order Type']}</td><td className="l">{o['Temporada']}</td><td className="l">{o['Marca']}</td><td className="l sub2">{o['Cliente']}</td>
-                    <td className="tot" style={{ fontWeight: 700 }}>{money(o['Cost'])}</td>
-                    <td className="cell" style={{ background: '#eef4ff' }}><input value={termOf(o['Marca'])} onChange={(e) => setTerm(o['Marca'], e.target.value)} placeholder="ej. 60 días" style={{ width: 100, textAlign: 'left' }} /></td>
+                    <td className="tot" style={{ fontWeight: 700 }}>{money(co)}</td>
+                    {esOut && <td className="cell" style={{ background: '#eef4ff' }}><input value={termOf(o['Marca'])} onChange={(e) => setTerm(o['Marca'], e.target.value)} placeholder="ej. 60 días" style={{ width: 100, textAlign: 'left' }} /></td>}
                     <td className="tot" style={{ color: '#2e7d32' }}>{pg ? money(pg) : '—'}</td><td className="tot" style={{ fontWeight: 700, color: pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(pend)}</td><td className="l"><Pill estado={est} /></td>
-                    <td><button className="btn" style={{ padding: '2px 8px' }} onClick={() => addPagoOrden(o)} title="Registrar un pago para esta orden">➕ Pago</button></td>
+                    <td><button className="btn" style={{ padding: '2px 8px' }} onClick={() => addPagoOrden(o)} title={esOut ? 'Registrar un pago' : 'Registrar un cobro'}>{esOut ? '➕ Pago' : '➕ Cobro'}</button></td>
                   </tr> })}
                 </tbody>
               </table>
@@ -5846,22 +5864,23 @@ function CobrosScreen() {
         </div>
       </> : <>
         <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
+          <span className="empchip" style={{ background: esOut ? '#c0392b' : '#2e7d32', marginLeft: 0, fontSize: 13, padding: '4px 12px' }}>{esOut ? '🔻 Cash Out · por pagar' : '🔺 Cash In · por cobrar'}</span>
           <span className="unit" style={{ alignSelf: 'center' }}>Vista:</span>
-          <button className="btn" onClick={() => setRepNivel('marca')} style={repNivel === 'marca' ? { background: '#0e7490', color: '#fff' } : {}}>Por marca</button>
+          <button className="btn" onClick={() => setRepNivel('ent')} style={repNivel === 'ent' ? { background: '#0e7490', color: '#fff' } : {}}>Por {entLbl.toLowerCase()}</button>
           <button className="btn" onClick={() => setRepNivel('orden')} style={repNivel === 'orden' ? { background: '#0e7490', color: '#fff' } : {}}>Por orden</button>
           <span className="unit" style={{ alignSelf: 'center', marginLeft: 8 }}>Mostrar:</span>
-          <select value={repFiltro} onChange={(e) => setRepFiltro(e.target.value)}><option value="todas">Todas</option><option value="pendientes">Solo pendientes</option><option value="pagadas">Solo pagadas</option></select>
+          <select value={repFiltro} onChange={(e) => setRepFiltro(e.target.value)}><option value="todas">Todas</option><option value="pendientes">Solo pendientes</option><option value="pagadas">Solo {esOut ? 'pagadas' : 'cobradas'}</option></select>
           <div className="spacer"></div>
           <button className="btn" onClick={exportarReporte}>⬇ Excel</button>
         </div>
         <div className="panel">
           <div className="tablewrap" style={{ maxHeight: '68vh' }}>
             <table className="vfix gridcols" style={{ fontSize: 12.5, minWidth: 820 }}>
-              {repNivel === 'marca' ?
-                <><thead><tr><th className="l">Marca</th><th className="l">Término</th><th>Órdenes</th><th>Costo</th><th>Pagado</th><th>Pendiente</th><th className="l">Estado</th></tr></thead>
-                  <tbody>{repData.map((r) => <tr key={r.k}><td className="l" style={{ fontWeight: 600 }}>{r.marca}</td><td className="l">{r.termino || '—'}</td><td className="tot">{r.ordenes}</td><td className="tot">{money(r.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{money(r.pagado)}</td><td className="tot" style={{ fontWeight: 700, color: r.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(r.pend)}</td><td className="l"><Pill estado={r.estado} /></td></tr>)}
-                    <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l">TOTAL</td><td></td><td></td><td className="tot">{money(tot.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{money(tot.pagado)}</td><td className="tot" style={{ color: tot.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(tot.pend)}</td><td></td></tr></tbody></> :
-                <><thead><tr><th className="l">Orden</th><th className="l">Marca</th><th className="l">Cliente</th><th>Costo</th><th>Pagado</th><th>Pendiente</th><th className="l">Estado</th></tr></thead>
+              {repNivel === 'ent' ?
+                <><thead><tr><th className="l">{entLbl}</th>{esOut && <th className="l">Término</th>}<th>Órdenes</th><th>{amtLbl}</th><th>{verbo}</th><th>Pendiente</th><th className="l">Estado</th></tr></thead>
+                  <tbody>{repData.map((r) => <tr key={r.k}><td className="l" style={{ fontWeight: 600 }}>{r.ent}</td>{esOut && <td className="l">{r.termino || '—'}</td>}<td className="tot">{r.ordenes}</td><td className="tot">{money(r.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{money(r.pagado)}</td><td className="tot" style={{ fontWeight: 700, color: r.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(r.pend)}</td><td className="l"><Pill estado={r.estado} /></td></tr>)}
+                    <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l">TOTAL</td>{esOut && <td></td>}<td></td><td className="tot">{money(tot.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{money(tot.pagado)}</td><td className="tot" style={{ color: tot.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(tot.pend)}</td><td></td></tr></tbody></> :
+                <><thead><tr><th className="l">Orden</th><th className="l">Marca</th><th className="l">Cliente</th><th>{amtLbl}</th><th>{verbo}</th><th>Pendiente</th><th className="l">Estado</th></tr></thead>
                   <tbody>{repData.slice(0, 3000).map((r) => <tr key={r.k}><td className="l">{r.name}</td><td className="l">{r.marca}</td><td className="l sub2">{r.cliente}</td><td className="tot">{money(r.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{r.pagado ? money(r.pagado) : '—'}</td><td className="tot" style={{ fontWeight: 700, color: r.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(r.pend)}</td><td className="l"><Pill estado={r.estado} /></td></tr>)}
                     <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l">TOTAL</td><td></td><td></td><td className="tot">{money(tot.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{money(tot.pagado)}</td><td className="tot" style={{ color: tot.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(tot.pend)}</td><td></td></tr></tbody></>}
             </table>
