@@ -5611,8 +5611,8 @@ function FiltroGrupo({ titulo, items, sel, setSel, color = '#0e7490', cols = 150
 // ===== Tracking semanal: compara la foto más reciente de Monday contra la anterior (pestaña Monday_Hist). =====
 function MondayTracking() {
   const [hist, setHist] = useState(null); const [load, setLoad] = useState(true); const [err, setErr] = useState('')
-  const [selCambio, setSelCambio] = useState(() => new Set(['Nueva', 'Eliminada', 'Cambio']))
-  const catDe = (c) => c.tipo === 'Nueva' ? 'Nueva' : c.tipo === 'Eliminada' ? 'Eliminada' : 'Cambio'
+  const [selCambio, setSelCambio] = useState(() => new Set(['Nueva', 'Eliminada', 'Cambio', 'Status'])); const [busca, setBusca] = useState('')
+  const catDe = (c) => c.tipo === 'Nueva' ? 'Nueva' : c.tipo === 'Eliminada' ? 'Eliminada' : (String(c.tipo).indexOf('Status') === 0 ? 'Status' : 'Cambio')
   const togCambio = (v) => setSelCambio((s) => { const n = new Set(s); n.has(v) ? n.delete(v) : n.add(v); return n })
   const cargar = async () => {
     setLoad(true); setErr('')
@@ -5648,7 +5648,7 @@ function MondayTracking() {
   }
   cambios.sort((a, b) => Math.abs(b.dPV) - Math.abs(a.dPV))
   const sum = (arr, f) => arr.reduce((a, c) => a + f(c), 0)
-  const totNew = cambios.filter((c) => c.tipo === 'Nueva'), totDel = cambios.filter((c) => c.tipo === 'Eliminada'), totChg = cambios.filter((c) => c.tipo !== 'Nueva' && c.tipo !== 'Eliminada')
+  const totNew = cambios.filter((c) => catDe(c) === 'Nueva'), totDel = cambios.filter((c) => catDe(c) === 'Eliminada'), totChg = cambios.filter((c) => catDe(c) === 'Cambio'), totStatus = cambios.filter((c) => catDe(c) === 'Status')
   return (
     <div className="panel" style={{ borderLeftColor: '#be185d' }}>
       <h3 style={{ color: '#be185d', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>🔁 Cambios vs semana pasada <span className="unit">{fNew && fOld ? `(${fOld} → ${fNew})` : '(tracking semanal)'}</span></span><button className="btn" disabled={load} onClick={cargar} style={{ marginLeft: 'auto' }}>{load ? 'Cargando…' : '🔄'}</button></h3>
