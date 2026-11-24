@@ -5721,14 +5721,14 @@ function CobrosScreen() {
   const actualizar = async () => {
     setUpd(true); setMsg(null)
     try {
-      const j = await gReadTab('Monday_Hist')
-      if (!j || !j.ok || !j.values || j.values.length < 2) { setMsg({ t: 'bad', x: 'No hay foto de Monday (Monday_Hist) todavía.' }); setUpd(false); return }
+      const j = await gReadTab('Monday_SS27')
+      if (!j || !j.ok || !j.values || j.values.length < 2) { setMsg({ t: 'bad', x: 'No hay datos de Monday (Monday_SS27) todavía.' }); setUpd(false); return }
       const H = j.values[0].map((h) => String(h || '').toUpperCase()); const ix = (n) => H.indexOf(n)
-      const iF = ix('FECHA_SNAPSHOT'), iIt = ix('ITEM'), iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS'), iTc = ix('TEMP_CORTA'), iXF = ix('XF'), iETA = ix('ETA'), iCost = ix('COST'), iEDD = ix('EDD')
+      const iIt = ix('ITEM'), iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS'), iTc = ix('TEMP_CORTA'), iXF = ix('XF'), iETA = ix('ETA'), iCost = ix('COST'), iEDD = ix('EDD')
       const toF = (v) => { const s = String(v == null ? '' : v); const nn = Number(s); if (s && !isNaN(nn) && nn > 30000 && nn < 90000) { return new Date(Date.UTC(1899, 11, 30) + Math.round(nn) * 86400000).toISOString().slice(0, 10) } return s }
-      const body = j.values.slice(1).filter((r) => r[iF])
-      const fechas = [...new Set(body.map((r) => toF(r[iF])))].filter(Boolean).sort(); const ultima = fechas[fechas.length - 1]
-      const mon = {}; body.forEach((r) => { if (toF(r[iF]) !== ultima) return; const name = String((iIt >= 0 ? r[iIt] : '') || (iPO >= 0 ? r[iPO] : '') || '').trim(); if (!name) return; const o = mon[name] || (mon[name] = { Name: name, Status: iS >= 0 ? r[iS] : '', Temporada: iTc >= 0 ? r[iTc] : '', Marca: iM >= 0 ? r[iM] : '', Cliente: iC >= 0 ? r[iC] : '', Units: 0, Cost: 0, Price: 0, 'Customer XFD': iXF >= 0 ? toF(r[iXF]) : '', ETA: iETA >= 0 ? toF(r[iETA]) : '', 'Estimated Delivery': iEDD >= 0 ? toF(r[iEDD]) : '' }); o.Units += num(r[iU]); o.Price += num(r[iPV]); if (iCost >= 0) o.Cost += num(r[iCost]) })
+      const body = j.values.slice(1).filter((r) => (r[iC] || r[iM]) && String(r[0] || '').toLowerCase().indexOf('actualizado') !== 0)
+      const ultima = new Date().toISOString().slice(0, 10)
+      const mon = {}; body.forEach((r) => { if (String(iS >= 0 ? r[iS] : '').toUpperCase() !== 'OPEN') return; const name = String((iIt >= 0 ? r[iIt] : '') || (iPO >= 0 ? r[iPO] : '') || '').trim(); if (!name) return; const o = mon[name] || (mon[name] = { Name: name, Status: iS >= 0 ? r[iS] : '', Temporada: iTc >= 0 ? r[iTc] : '', Marca: iM >= 0 ? r[iM] : '', Cliente: iC >= 0 ? r[iC] : '', Units: 0, Cost: 0, Price: 0, 'Customer XFD': iXF >= 0 ? toF(r[iXF]) : '', ETA: iETA >= 0 ? toF(r[iETA]) : '', 'Estimated Delivery': iEDD >= 0 ? toF(r[iEDD]) : '' }); o.Units += num(r[iU]); o.Price += num(r[iPV]); if (iCost >= 0) o.Cost += num(r[iCost]) })
       // merge con lo existente: conserva Pagos
       const prev = {}; rows.forEach((o) => { prev[kOf(o)] = o })
       const names = [...new Set([...Object.keys(mon), ...Object.keys(prev)])]
