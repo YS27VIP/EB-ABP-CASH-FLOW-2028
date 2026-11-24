@@ -5659,11 +5659,12 @@ function MondayTracking() {
         <>
           <div className="sub">Comparando la foto del <b>{fNew}</b> contra la del <b>{fOld}</b>. Filtra por tipo de cambio:</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '6px 0 10px', alignItems: 'center' }}>
-            {[['Nueva', '🆕 Nuevas', totNew, '#15803d'], ['Eliminada', '❌ Eliminadas', totDel, '#b91c1c'], ['Cambio', '✏️ Con cambios', totChg, '#b45309']].map(([k, lbl, arr, col]) => { const on = selCambio.has(k); return (
+            {[['Nueva', '🆕 Nuevas', totNew, '#15803d'], ['Eliminada', '❌ Eliminadas', totDel, '#b91c1c'], ['Cambio', '✏️ Con cambios', totChg, '#b45309'], ['Status', '🔁 Cambio de status', totStatus, '#7c3aed']].map(([k, lbl, arr, col]) => { const on = selCambio.has(k); return (
               <button key={k} onClick={() => togCambio(k)} style={{ cursor: 'pointer', borderRadius: 8, padding: '5px 12px', fontWeight: 700, fontSize: 12.5, border: '1.5px solid ' + (on ? col : '#d7dce1'), background: on ? col + '14' : '#f6f7f8', color: on ? col : '#9aa0a6' }}>{lbl} ({fmt(arr.length)})</button>) })}
+            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔍 cliente o PO…" style={{ minWidth: 180 }} />
             <span className="unit" style={{ alignSelf: 'center', marginLeft: 'auto', fontWeight: 700 }}>Δ PV total: {fmt(sum(cambios.filter((c) => selCambio.has(catDe(c))), (c) => c.dPV))}</span>
           </div>
-          {(() => { const vis = cambios.filter((c) => selCambio.has(catDe(c))); return vis.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>Sin cambios para este filtro.</div> :
+          {(() => { const q = busca.trim().toUpperCase(); const vis = cambios.filter((c) => selCambio.has(catDe(c)) && (!q || String(c.r.cliente || '').toUpperCase().indexOf(q) >= 0 || String(c.r.po || c.id || '').toUpperCase().indexOf(q) >= 0)); return vis.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>Sin cambios para este filtro.</div> :
             <div className="tablewrap" style={{ marginTop: 6, maxHeight: '50vh' }}>
               <table className="vfix gridcols" style={{ width: 'auto', minWidth: 980, fontSize: 12 }}>
                 <thead>
