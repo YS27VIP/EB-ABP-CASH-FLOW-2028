@@ -5689,11 +5689,11 @@ function EbpEvolutionScreen({ empresa, sbus }) {
             <FiltroGrupo titulo="Marca" items={marcas} sel={selMarca} setSel={setSelMarca} color="#7c3aed" cols={120} />
             <FiltroGrupo titulo="Temporada" items={temps} sel={selTemp} setSel={setSelTemp} color="#b45309" cols={90} />
             <FiltroGrupo titulo="Estatus" items={estados} sel={selStat} setSel={setSelStat} color="#15803d" cols={100} />
-            <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 14, padding: '9px 13px', background: '#fafafa', display: 'flex', flexDirection: 'column', gap: 8, justifyContent: 'center', minWidth: 170 }}>
-              <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>Buscar cliente
-                <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 cliente…" style={{ minWidth: 150 }} /></label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5 }} title="Agrupa por el CLIENTE ARMONIZADO del EBP."><input type="checkbox" checked={armOn} onChange={(e) => setArmOn(e.target.checked)} style={{ accentColor: '#0e7490' }} /> Armonizar (EBP)</label>
-            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8, padding: '4px 2px' }}>
+            <label className="who" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>🔍 Buscar cliente
+              <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="cliente…" style={{ minWidth: 220 }} /></label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5 }} title="Agrupa por el CLIENTE ARMONIZADO del EBP."><input type="checkbox" checked={armOn} onChange={(e) => setArmOn(e.target.checked)} style={{ accentColor: '#0e7490' }} /> Armonizar clientes (EBP)</label>
           </div>
           {armOn && sinArm > 0 && <div className="sub no-ayuda" style={{ color: '#b45309', marginBottom: 2 }}>🔸 {sinArm} cliente(s) sin match en la base armonizada del EBP (se muestran con su nombre de Monday). Si alguno debería cuadrar, agrégalo en la hoja "BASE DE DATOS CLIENTE Y PAIS" del EBP.</div>}
           {planMaster != null && <div className="sub no-ayuda" style={{ marginBottom: 2 }}>🎯 <b>Plan Master:</b> {fmt(planMaster)} · Real Monday: {fmt(totPV)}{dev != null && <span className={dev >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}> · {(dev >= 0 ? '+' : '') + dev.toFixed(0)}% vs plan</span>}</div>}
