@@ -800,7 +800,7 @@ export default function App() {
     )
   }
 
-  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'holding' && roleId !== 'calendario' && roleId !== 'aprobaciones' && roleId !== 'guia' && roleId !== 'ebpevo' && roleId !== 'cobros') {
+  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'holding' && roleId !== 'calendario' && roleId !== 'aprobaciones' && roleId !== 'guia' && roleId !== 'ebpevo') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
@@ -862,10 +862,6 @@ export default function App() {
             {empresa === 'ENERGY BRANDS' && esAdmin && <button className="app" onClick={() => setRoleId('ebpevo')}>
               <span className="appicon" style={{ background: '#0e7490' }}>📊</span>
               <span className="applabel">EBP Evolution</span>
-            </button>}
-            {empresa === 'ENERGY BRANDS' && (esAdmin || puede('Finanzas')) && <button className="app" onClick={() => setRoleId('cobros')}>
-              <span className="appicon" style={{ background: '#2e7d32' }}>💰</span>
-              <span className="applabel">Cobros</span>
             </button>}
             {puede('Bitácora') && <button className="app" onClick={() => setRoleId('bitacora')}>
               <span className="appicon" style={{ background: '#455a64' }}>📝</span>
@@ -946,16 +942,6 @@ export default function App() {
     )
   }
 
-  if (roleId === 'cobros') {
-    return (
-      <>
-        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
-          <span className="rolechip" style={{ background: '#2e7d32' }}>💰 Cobros</span>
-          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
-        <main><CobrosScreen /></main>
-      </>
-    )
-  }
 
   if (roleId === 'holding') {
     return (
@@ -5588,6 +5574,17 @@ function FlujoPiramide() {
 // Todos los order type del tablero de Monday (para los filtros de EBP Evolution).
 const ALL_ORDER_TYPES = ['Pre-Venta', 'PROYECCION', 'Venta de Stock', 'SAMPLES', 'STOCK', 'Compra', 'COMPRA COMPLEMENTARIA', 'COMPRA SAMPLES', 'Freight', 'Consolidacion', 'DESPACHO', 'ALMACENAJE', 'CONSIGNACION', 'MARKETING', 'FALTANTE/ANOMALIA', 'SOBRANTES', 'Credit Note', 'Debit Note', 'Orden x Comisión', 'ZLVTAOFI', 'INVENT. OFICINA', 'DPR', 'DMC', 'X', 'CANCELLED']
 const CASH_PRESET = ['Pre-Venta', 'PROYECCION', 'Venta de Stock', 'SAMPLES']  // preselección para cash flow
+// Colores de Monday (de las etiquetas del tablero) para pintar Status / Order Type / Logística igual que allá.
+const MON_COL = {
+  status: { 'OPEN': '#fdab3d', 'CLOSED': '#00c875', 'CANCELLED': '#df2f4a' },
+  tipo: { 'VENTA DE STOCK': '#007eb5', 'PRE-VENTA': '#4eccc6', 'COMPRA': '#ff5ac4', 'STOCK': '#faa1f1', 'FREIGHT': '#9d50dd', 'CONSOLIDACION': '#9aa0a6', 'SAMPLES': '#ff7575', 'FALTANTE/ANOMALIA': '#9d99b9', 'MARKETING': '#5bc0de', 'CONSIGNACION': '#e0a800', 'CREDIT NOTE': '#bb3354', 'X': '#333333', 'CANCELLED': '#ff007f', 'DEBIT NOTE': '#ff6d3b', 'ZLVTAOFI': '#784bd1', 'INVENT. OFICINA': '#7cb518', 'COMPRA SAMPLES': '#4aa3df', 'DESPACHO': '#757575', 'ALMACENAJE': '#7f5347', 'DPR': '#df2f4a', 'DMC': '#037f4c', 'ORDEN X COMISIÓN': '#579bfc', 'SOBRANTES': '#e8937a', 'PROYECCION': '#fdab3d', 'COMPRA COMPLEMENTARIA': '#cab641' },
+  log: { 'WORKING ON IT': '#fdab3d', 'DONE': '#00c875', 'STUCK': '#df2f4a', 'PEND. INVOICE': '#ff6d3b', 'CANCELADO': '#bb3354', 'FACTURADO': '#e0a800', 'LOG CLOSED': '#ff5ac4' },
+}
+function monPill(val, kind) {
+  const v = String(val || '').trim(); if (!v) return <span style={{ color: 'var(--muted)' }}>—</span>
+  const col = (MON_COL[kind] || {})[v.toUpperCase()] || '#8a8f99'
+  return <span style={{ background: col, color: '#fff', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', display: 'inline-block' }}>{v}</span>
+}
 // Grupo de filtro colapsable con checkboxes (compacto): botón con conteo que despliega la lista al hacer clic.
 function FiltroGrupo({ titulo, items, sel, setSel, color = '#0e7490', cols = 150, extra = null, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen)
@@ -5899,34 +5896,6 @@ function EbpEvolutionScreen({ empresa, sbus }) {
           {planMaster != null && <div className="sub no-ayuda" style={{ marginBottom: 6 }}>🎯 <b>Plan Master:</b> {fmt(planMaster)} · Real Monday: {fmt(totPV)}{dev != null && <span className={dev >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}> · {(dev >= 0 ? '+' : '') + dev.toFixed(0)}% vs plan</span>}</div>}
           {planMaster == null && marcaUnica && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginBottom: 6 }}>No hay Master importado para <b>{marcaUnica}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
         <div className="panel">
-          <h3 style={{ color: '#0e7490' }}>Realidad por cliente <span className="unit">(Monday · {selStat.size ? [...selStat].join(', ') : 'todos los estatus'} · clic en una fila para ver sus órdenes)</span></h3>
-          {load ? <div className="sub no-ayuda">Cargando…</div> : lista.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay órdenes para este filtro.</div> :
-            <div className="tablewrap" style={{ marginTop: 6 }}>
-              <table className="vfix" style={{ width: 'auto', minWidth: 620 }}>
-                <thead><tr><th className="l">Término</th><th className="l">Cliente</th><th className="l">Marca</th><th>Órdenes</th><th>Unidades</th><th>Venta PV ($)</th></tr></thead>
-                <tbody>
-                  {lista.map((o) => { const open = expKey === o.key; return <Fragment2 key={o.key}>
-                    <tr className={'rowline' + (open ? ' open' : '')} style={{ cursor: 'pointer' }} onClick={() => setExpKey(open ? null : o.key)}>
-                      <td className="l">{termDe(o)}</td>
-                      <td className="l sub2"><span className="caret">▶</span> {armOn && !o.mapped && <span title="Sin match en la base armonizada del EBP" style={{ marginRight: 4 }}>🔸</span>}{o.cliente}{o.pais && <span className="unit" style={{ fontWeight: 400, textTransform: 'none', marginLeft: 6 }}>📍 {o.pais}</span>}{o.canal && upper(o.canal) !== upper(o.cliente) && <div className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>canal: {o.canal}</div>}</td>
-                      <td className="l">{o.marca}</td><td className="tot">{fmt(o.ordenes)}</td><td className="tot">{fmt(o.unidades)}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(o.pv)}</td>
-                    </tr>
-                    {open && <tr className="subrow"><td colSpan={6} style={{ padding: '6px 10px 12px' }}>
-                      <div className="sub" style={{ margin: '0 0 4px' }}>Órdenes de <b>{o.cliente}</b> · {o.marca} <span className="unit">({o.ords.length})</span></div>
-                      <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 900, fontSize: 12 }}>
-                        <thead><tr><th className="l">PO</th><th className="l">Temp.</th><th className="l">Status</th><th className="l">Order type</th><th className="l">Order date</th><th className="l">Encargado</th><th>Unidades</th><th>Costo</th><th>Venta PV</th><th className="l">XF</th><th className="l">ETA</th><th className="l">Est. Delivery</th><th className="l">Logística</th></tr></thead>
-                        <tbody>
-                          {o.ords.map((r, i) => <tr key={i}><td className="l">{r.po || '—'}</td><td className="l">{r.tempC}</td><td className="l">{r.status}</td><td className="l">{r.tipo || '—'}</td><td className="l">{r.orderDate || '—'}</td><td className="l">{r.encargado || '—'}</td><td className="tot">{fmt(r.unidades)}</td><td className="tot">{r.cost ? fmt(r.cost) : '—'}</td><td className="tot">{fmt(r.pv)}</td><td className="l">{r.xf || '—'}</td><td className="l">{r.eta || '—'}</td><td className="l">{r.edd || '—'}</td><td className="l">{r.logStatus || '—'}</td></tr>)}
-                        </tbody>
-                      </table></div>
-                    </td></tr>}
-                  </Fragment2> })}
-                  <tr className="grandrow"><td></td><td className="l">TOTAL ({lista.length} filas)</td><td></td><td className="tot">{fmt(fil.length)}</td><td className="tot">{fmt(totU)}</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(totPV)}</td></tr>
-                </tbody>
-              </table>
-            </div>}
-        </div>
-        <div className="panel">
           <h3 style={{ color: '#0e7490', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>📋 Detalle de órdenes <span className="unit">(Monday · {fmt(fil.length)} órdenes con los filtros actuales{stamp ? ` · datos al ${stamp}` : ''})</span></span></h3>
           {load ? <div className="sub no-ayuda">Cargando…</div> : fil.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay órdenes para este filtro.</div> :
             <div className="tablewrap" style={{ marginTop: 6, maxHeight: '70vh' }}>
@@ -5935,7 +5904,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
                 <tbody>
                   {[...fil].sort((a, b) => (a.marca || '').localeCompare(b.marca || '') || b.pv - a.pv).slice(0, 2000).map((r, i) => { const cliR = armOn ? armDe(cliReal(r)).arm : cliReal(r); return (
                     <tr key={i}>
-                      <td className="l">{r.marca}</td><td className="l sub2">{cliR}</td><td className="l">{r.cliente}</td><td className="l">{r.clienteSF || '—'}</td><td className="l">{r.po || '—'}</td><td className="l">{r.tempC}</td><td className="l">{r.status}</td><td className="l">{r.tipo || '—'}</td><td className="l">{r.termino || '—'}</td><td className="l">{r.orderDate || '—'}</td><td className="l">{r.encargado || '—'}</td><td className="tot">{fmt(r.unidades)}</td><td className="tot">{r.cost ? fmt(r.cost) : '—'}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(r.pv)}</td><td className="l">{r.xf || '—'}</td><td className="l">{r.eta || '—'}</td><td className="l">{r.edd || '—'}</td><td className="l">{r.logStatus || '—'}</td>
+                      <td className="l">{r.marca}</td><td className="l sub2">{cliR}</td><td className="l">{r.cliente}</td><td className="l">{r.clienteSF || '—'}</td><td className="l">{r.po || '—'}</td><td className="l">{r.tempC}</td><td className="l">{monPill(r.status, 'status')}</td><td className="l">{monPill(r.tipo, 'tipo')}</td><td className="l">{r.termino || '—'}</td><td className="l">{r.orderDate || '—'}</td><td className="l">{r.encargado || '—'}</td><td className="tot">{fmt(r.unidades)}</td><td className="tot">{r.cost ? fmt(r.cost) : '—'}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(r.pv)}</td><td className="l">{r.xf || '—'}</td><td className="l">{r.eta || '—'}</td><td className="l">{r.edd || '—'}</td><td className="l">{monPill(r.logStatus, 'log')}</td>
                     </tr>
                   ) })}
                 </tbody>
@@ -5944,6 +5913,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
           {fil.length > 2000 && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginTop: 4 }}>Mostrando las primeras 2,000 órdenes. Afina los filtros para ver menos.</div>}
         </div>
         <MondayTracking />
+        <CobrosScreen />
         </div>
       </div>}
     </div>
