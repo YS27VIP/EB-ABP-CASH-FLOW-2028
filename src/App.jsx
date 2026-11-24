@@ -807,7 +807,7 @@ export default function App() {
     )
   }
 
-  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'holding' && roleId !== 'calendario' && roleId !== 'aprobaciones' && roleId !== 'guia' && roleId !== 'ebpevo') {
+  if (!role && !String(roleId || '').startsWith('sbu:') && roleId !== 'config' && roleId !== 'historico' && roleId !== 'bitacora' && roleId !== 'comercial' && roleId !== 'gerencia' && roleId !== 'holding' && roleId !== 'calendario' && roleId !== 'aprobaciones' && roleId !== 'guia' && roleId !== 'ebpevo' && roleId !== 'cobros') {
     return (
       <>
         <header><div className="brand"><span className="logo">A</span> ABP <span style={{ opacity: .8, fontWeight: 500 }}>· Presupuesto</span></div><span className="yr">2028</span></header>
@@ -869,6 +869,10 @@ export default function App() {
             {empresa === 'ENERGY BRANDS' && esAdmin && <button className="app" onClick={() => setRoleId('ebpevo')}>
               <span className="appicon" style={{ background: '#0e7490' }}>📊</span>
               <span className="applabel">EBP Evolution</span>
+            </button>}
+            {empresa === 'ENERGY BRANDS' && (esAdmin || puede('Finanzas')) && <button className="app" onClick={() => setRoleId('cobros')}>
+              <span className="appicon" style={{ background: '#2e7d32' }}>💰</span>
+              <span className="applabel">Cobros</span>
             </button>}
             {puede('Bitácora') && <button className="app" onClick={() => setRoleId('bitacora')}>
               <span className="appicon" style={{ background: '#455a64' }}>📝</span>
@@ -945,6 +949,17 @@ export default function App() {
           <span className="rolechip" style={{ background: '#0e7490' }}>📊 EBP Evolution</span>
           <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
         <main><EbpEvolutionScreen empresa={empresa} sbus={sbus} /></main>
+      </>
+    )
+  }
+
+  if (roleId === 'cobros') {
+    return (
+      <>
+        <header><div className="brand"><span className="logo">A</span> ABP</div><span className="yr">2028</span><span className="empchip">{empresa}</span><div className="spacer"></div>
+          <span className="rolechip" style={{ background: '#2e7d32' }}>💰 Cobros</span>
+          <button className="back" onClick={() => setRoleId(null)}>← Volver al menú</button></header>
+        <main><CobrosScreen /></main>
       </>
     )
   }
@@ -5682,6 +5697,100 @@ function MondayTracking() {
               </table>
             </div> })()}
         </>)}
+    </div>
+  )
+}
+
+// ===== Paso 3: Planilla de Cobros (Finanzas). Columnas de Monday (auto) + sección Pagos (Finanzas). Pestaña Cobros_Finanzas. =====
+const COBROS_HEAD = ['Name', 'Status', 'Temporada', 'Marca', 'Cliente', 'Units', 'Costo Marca', 'Cost', 'COST EUR', 'Cost USD', 'Price', 'Customer XFD', 'ETA', 'Estimated Delivery', 'Pagos', 'Pagados', 'Pagos pendientes', 'Semana pago', 'Comentarios']
+const COBROS_FIN = ['Pagos', 'Pagados', 'Pagos pendientes', 'Semana pago', 'Comentarios'] // columnas que llena Finanzas
+const COBROS_NUM = ['Units', 'Costo Marca', 'Cost', 'COST EUR', 'Cost USD', 'Price']
+function CobrosScreen() {
+  const [rows, setRows] = useState([]); const [load, setLoad] = useState(true); const [err, setErr] = useState('')
+  const [edits, setEdits] = useState({}); const [saving, setSaving] = useState(false); const [upd, setUpd] = useState(false); const [msg, setMsg] = useState(null); const [busca, setBusca] = useState('')
+  const cargar = async () => {
+    setLoad(true); setErr('')
+    try {
+      const j = await gReadTab('Cobros_Finanzas')
+      if (j && j.ok && j.values && j.values.length) {
+        const head = j.values[0].map((h) => String(h || ''))
+        const body = j.values.slice(1).filter((r) => (r || []).some((x) => x !== '' && x != null)).map((r) => { const o = {}; head.forEach((h, i) => o[h] = (r[i] != null ? r[i] : '')); return o })
+        setRows(body)
+      } else setRows([])
+    } catch (e) { setErr(String(e && e.message || e)) }
+    setLoad(false)
+  }
+  useEffect(() => { cargar() }, [])
+  const kOf = (o) => String(o['Name'] || '')
+  const fget = (o, c) => { const k = kOf(o); const e = edits[k]; return (e && e[c] !== undefined) ? e[c] : (o[c] != null ? o[c] : '') }
+  const setF = (o, c, v) => { const k = kOf(o); setEdits((s) => ({ ...s, [k]: { ...(s[k] || {}), [c]: v } })) }
+  const hayEdits = Object.keys(edits).length > 0
+  const buildMatrix = (rws) => { const out = [COBROS_HEAD]; rws.forEach((o) => out.push(COBROS_HEAD.map((c) => COBROS_FIN.includes(c) ? fget(o, c) : (o[c] != null ? o[c] : '')))); return out }
+  const guardar = async () => { setSaving(true); setMsg(null); try { await gWriteReport('Cobros_Finanzas', buildMatrix(rows)); setEdits({}); setMsg({ t: 'ok', x: 'Guardado en el Sheet (lo ve Finanzas).' }); await cargar() } catch (e) { setMsg({ t: 'bad', x: 'No se pudo guardar: ' + (e && e.message) }) } setSaving(false) }
+  // Trae de Monday (última foto de Monday_Hist): agrega órdenes nuevas y actualiza montos, CONSERVANDO lo que Finanzas llenó en Pagos.
+  const actualizar = async () => {
+    setUpd(true); setMsg(null)
+    try {
+      const j = await gReadTab('Monday_Hist')
+      if (!j || !j.ok || !j.values || j.values.length < 2) { setMsg({ t: 'bad', x: 'No hay foto de Monday (Monday_Hist) todavía.' }); setUpd(false); return }
+      const H = j.values[0].map((h) => String(h || '').toUpperCase()); const ix = (n) => H.indexOf(n)
+      const iF = ix('FECHA_SNAPSHOT'), iIt = ix('ITEM'), iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS'), iTc = ix('TEMP_CORTA'), iXF = ix('XF'), iETA = ix('ETA'), iCost = ix('COST'), iEDD = ix('EDD')
+      const toF = (v) => { const s = String(v == null ? '' : v); const nn = Number(s); if (s && !isNaN(nn) && nn > 30000 && nn < 90000) { return new Date(Date.UTC(1899, 11, 30) + Math.round(nn) * 86400000).toISOString().slice(0, 10) } return s }
+      const body = j.values.slice(1).filter((r) => r[iF])
+      const fechas = [...new Set(body.map((r) => toF(r[iF])))].filter(Boolean).sort(); const ultima = fechas[fechas.length - 1]
+      const mon = {}; body.forEach((r) => { if (toF(r[iF]) !== ultima) return; const name = String((iIt >= 0 ? r[iIt] : '') || (iPO >= 0 ? r[iPO] : '') || '').trim(); if (!name) return; const o = mon[name] || (mon[name] = { Name: name, Status: iS >= 0 ? r[iS] : '', Temporada: iTc >= 0 ? r[iTc] : '', Marca: iM >= 0 ? r[iM] : '', Cliente: iC >= 0 ? r[iC] : '', Units: 0, Cost: 0, Price: 0, 'Customer XFD': iXF >= 0 ? toF(r[iXF]) : '', ETA: iETA >= 0 ? toF(r[iETA]) : '', 'Estimated Delivery': iEDD >= 0 ? toF(r[iEDD]) : '' }); o.Units += num(r[iU]); o.Price += num(r[iPV]); if (iCost >= 0) o.Cost += num(r[iCost]) })
+      // merge con lo existente: conserva Pagos
+      const prev = {}; rows.forEach((o) => { prev[kOf(o)] = o })
+      const names = [...new Set([...Object.keys(mon), ...Object.keys(prev)])]
+      const merged = names.map((nm) => {
+        const m = mon[nm], p = prev[nm] || {}
+        const base = m ? { Name: nm, Status: m.Status, Temporada: m.Temporada, Marca: m.Marca, Cliente: m.Cliente, Units: m.Units, 'Costo Marca': m.Units ? Math.round(m.Cost / m.Units * 100) / 100 : '', Cost: m.Cost || '', 'COST EUR': '', 'Cost USD': m.Cost || '', Price: m.Price || '', 'Customer XFD': m['Customer XFD'], ETA: m.ETA, 'Estimated Delivery': m['Estimated Delivery'] } : { Name: nm, Status: p.Status, Temporada: p.Temporada, Marca: p.Marca, Cliente: p.Cliente, Units: p.Units, 'Costo Marca': p['Costo Marca'], Cost: p.Cost, 'COST EUR': p['COST EUR'], 'Cost USD': p['Cost USD'], Price: p.Price, 'Customer XFD': p['Customer XFD'], ETA: p.ETA, 'Estimated Delivery': p['Estimated Delivery'] }
+        COBROS_FIN.forEach((c) => base[c] = (p[c] != null ? p[c] : ''))
+        return base
+      })
+      merged.sort((a, b) => String(a.Cliente || '').localeCompare(String(b.Cliente || '')))
+      await gWriteReport('Cobros_Finanzas', [COBROS_HEAD, ...merged.map((o) => COBROS_HEAD.map((c) => o[c] != null ? o[c] : ''))])
+      setEdits({}); setMsg({ t: 'ok', x: `Actualizado desde Monday (foto ${ultima}): ${Object.keys(mon).length} órdenes. Lo de Pagos se conservó.` }); await cargar()
+    } catch (e) { setMsg({ t: 'bad', x: 'No se pudo actualizar: ' + (e && e.message) }) }
+    setUpd(false)
+  }
+  const exportar = () => { const aoa = buildMatrix(filtered); exportXlsx(aoa, 'Cobros_Finanzas.xlsx') }
+  const filtered = rows.filter((o) => !busca.trim() || (String(o['Cliente'] || '') + ' ' + String(o['Name'] || '')).toUpperCase().indexOf(busca.toUpperCase()) >= 0)
+  const money = (v) => { const n = Number(v); return (v === '' || v == null || isNaN(n)) ? (v || '') : fmt(Math.round(n)) }
+  return (
+    <div>
+      <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
+        <span className="empchip" style={{ background: '#2e7d32', marginLeft: 0, fontSize: 14, padding: '5px 14px' }}>💰 Cobros — Planilla de Finanzas</span>
+        <span className="unit" style={{ alignSelf: 'center' }}>Realidad de cobro por orden/cliente. Finanzas llena la sección <b>Pagos</b>.</span>
+        <div className="spacer"></div>
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔍 cliente o orden…" style={{ minWidth: 160 }} />
+        <button className="btn" disabled={upd} onClick={actualizar} title="Trae de Monday las órdenes (agrega nuevas, actualiza montos). Conserva lo que Finanzas llenó en Pagos.">{upd ? 'Actualizando…' : '🔄 Actualizar desde Monday'}</button>
+        <button className="btn" onClick={exportar}>⬇ Excel</button>
+        <button className="btn primary" disabled={saving || !hayEdits} onClick={guardar}>{saving ? 'Guardando…' : '💾 Guardar pagos'}</button>
+      </div>
+      {msg && <div className={'note no-ayuda ' + msg.t} style={{ marginBottom: 8 }}>{msg.x}</div>}
+      {err && <div className="banner">⚠️ {err}</div>}
+      <div className="panel">
+        {load ? <div className="sub no-ayuda">Cargando…</div> : rows.length === 0 ?
+          <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>La planilla está vacía. Dale <b>🔄 Actualizar desde Monday</b> para traer las órdenes; luego Finanzas llena los Pagos.</div> :
+          <div className="tablewrap" style={{ maxHeight: '72vh' }}>
+            <table className="vfix gridcols" style={{ width: 'auto', minWidth: 1500, fontSize: 12 }}>
+              <thead>
+                <tr><th className="l" colSpan={14} style={{ background: '#eef2f7' }}>De Monday (automático)</th><th colSpan={5} style={{ background: '#e7f4ea', color: '#2e7d32' }}>Pagos (Finanzas)</th></tr>
+                <tr><th className="l">Name</th><th className="l">Status</th><th className="l">Temp.</th><th className="l">Marca</th><th className="l">Cliente</th><th>Units</th><th>Costo Marca</th><th>Cost</th><th>COST EUR</th><th>Cost USD</th><th>Price</th><th className="l">Customer XFD</th><th className="l">ETA</th><th className="l">Est. Delivery</th><th className="l">Pagos</th><th>Pagados</th><th>Pagos pend.</th><th className="l">Semana pago</th><th className="l">Comentarios</th></tr>
+              </thead>
+              <tbody>
+                {filtered.slice(0, 2500).map((o, i) => <tr key={o.Name + i}>
+                  <td className="l">{o['Name']}</td><td className="l">{o['Status']}</td><td className="l">{o['Temporada']}</td><td className="l">{o['Marca']}</td><td className="l sub2">{o['Cliente']}</td>
+                  <td className="tot">{money(o['Units'])}</td><td className="tot">{money(o['Costo Marca'])}</td><td className="tot">{money(o['Cost'])}</td><td className="tot">{money(o['COST EUR'])}</td><td className="tot">{money(o['Cost USD'])}</td><td className="tot" style={{ fontWeight: 700 }}>{money(o['Price'])}</td>
+                  <td className="l">{o['Customer XFD']}</td><td className="l">{o['ETA']}</td><td className="l">{o['Estimated Delivery']}</td>
+                  {COBROS_FIN.map((c) => <td key={c} className="cell" style={{ background: '#f3faf5' }}><input value={fget(o, c)} onChange={(e) => setF(o, c, e.target.value)} style={{ width: c === 'Comentarios' ? 160 : 90, textAlign: c === 'Comentarios' || c === 'Semana pago' ? 'left' : 'right' }} /></td>)}
+                </tr>)}
+              </tbody>
+            </table>
+          </div>}
+        {filtered.length > 2500 && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginTop: 4 }}>Mostrando 2,500 filas. Usa el buscador para acotar.</div>}
+      </div>
     </div>
   )
 }
