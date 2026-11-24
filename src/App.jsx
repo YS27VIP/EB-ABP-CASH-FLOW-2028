@@ -5810,7 +5810,7 @@ function CobrosScreen() {
 
       {vista === 'planilla' ? <>
         <div className="panel" style={{ marginBottom: 10 }}>
-          <div className="sub" style={{ fontWeight: 700, marginBottom: 6 }}>{esOut ? '➕ Registrar pago a proveedor' : '➕ Registrar cobro de cliente'}</div>
+          <div className="sub no-ayuda" style={{ fontWeight: 700, marginBottom: 6 }}>{esOut ? '➕ Registrar pago a proveedor' : '➕ Registrar cobro de cliente'}</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <label className="no-ayuda" style={{ fontSize: 11 }}>Fecha<br /><input type="date" value={form.fecha} onChange={(e) => setForm((f) => ({ ...f, fecha: e.target.value }))} /></label>
             <label className="no-ayuda" style={{ fontSize: 11 }}>Nivel<br /><select value={form.nivel} onChange={(e) => setForm((f) => ({ ...f, nivel: e.target.value }))}><option value="Orden">Por orden</option><option value="Entidad">Consolidado por {entLbl.toLowerCase()}</option></select></label>
@@ -5820,12 +5820,15 @@ function CobrosScreen() {
             <label className="no-ayuda" style={{ fontSize: 11 }}>Semana<br /><input value={form.semana} onChange={(e) => setForm((f) => ({ ...f, semana: e.target.value }))} placeholder="ej. 04 Abril" style={{ width: 110 }} /></label>
             <label className="no-ayuda" style={{ fontSize: 11 }}>Comentario<br /><input value={form.comentario} onChange={(e) => setForm((f) => ({ ...f, comentario: e.target.value }))} style={{ width: 160 }} /></label>
             <button className="btn primary" disabled={savingPago} onClick={registrarPago}>{savingPago ? 'Guardando…' : (esOut ? '➕ Registrar pago' : '➕ Registrar cobro')}</button>
+            <div style={{ flex: '1 1 10px' }}></div>
+            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔍 marca, cliente u orden…" style={{ minWidth: 190 }} />
+            <button className="btn" onClick={exportarPlanilla}>⬇ Excel</button>
           </div>
           <div className="sub no-ayuda" style={{ color: 'var(--muted)', fontSize: 11, marginTop: 6 }}>Puedes registrar varias cuotas para la misma orden o {entLbl.toLowerCase()}. El pendiente se recalcula solo.</div>
         </div>
 
         {curLog.length > 0 && <div className="panel" style={{ marginBottom: 10 }}>
-          <div className="sub" style={{ fontWeight: 700, marginBottom: 6 }}>{esOut ? 'Pagos' : 'Cobros'} registrados ({curLog.length})</div>
+          <div className="sub no-ayuda" style={{ fontWeight: 700, marginBottom: 6 }}>{esOut ? 'Pagos' : 'Cobros'} registrados ({curLog.length})</div>
           <div className="tablewrap" style={{ maxHeight: '28vh' }}>
             <table className="vfix gridcols" style={{ fontSize: 12, minWidth: 760 }}>
               <thead><tr><th className="l">Fecha</th><th className="l">Nivel</th><th className="l">{entLbl}</th><th className="l">Orden</th><th>Monto</th><th className="l">Semana</th><th className="l">Comentario</th><th></th></tr></thead>
@@ -5834,12 +5837,6 @@ function CobrosScreen() {
           </div>
         </div>}
 
-        <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
-          <span className="unit" style={{ alignSelf: 'center' }}>{esOut ? <>Compras abiertas (Monday). <b>Costo</b> = lo que se debe a la marca; <b>Pagado</b>/<b>Pendiente</b> salen de los pagos.</> : <>Ventas abiertas (Monday). <b>Por cobrar</b> = venta PV al cliente; <b>Cobrado</b>/<b>Pendiente</b> salen de los cobros.</>}</span>
-          <div className="spacer"></div>
-          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔍 marca, cliente u orden…" style={{ minWidth: 180 }} />
-          <button className="btn" onClick={exportarPlanilla}>⬇ Excel</button>
-        </div>
         <div className="panel">
           {load ? <div className="sub no-ayuda">Cargando…</div> : baseRows.length === 0 ?
             <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay {esOut ? 'compras' : 'ventas'} abiertas. Dale <b>🔄 Actualizar desde Monday</b>.</div> :
