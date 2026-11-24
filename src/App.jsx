@@ -5613,6 +5613,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
   const [rows, setRows] = useState([]); const [load, setLoad] = useState(true); const [err, setErr] = useState(null); const [stamp, setStamp] = useState('')
   const [selMarca, setSelMarca] = useState(() => new Set()); const [selTemp, setSelTemp] = useState(() => new Set()); const [selStat, setSelStat] = useState(() => new Set()); const [buscar, setBuscar] = useState(''); const [inited, setInited] = useState(false)
   const [selTipo, setSelTipo] = useState(() => new Set(ALL_ORDER_TYPES))
+  const [expKey, setExpKey] = useState(null)
   const cargar = async () => {
     setLoad(true); setErr(null)
     try {
@@ -5621,11 +5622,13 @@ function EbpEvolutionScreen({ empresa, sbus }) {
         const head = j.values[0].map((h) => String(h || '').toUpperCase()); const ix = (n) => head.indexOf(n)
         const iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS'), iT = ix('TERMINO'), iTe = ix('TEMPORADA'), iTc = ix('TEMP_CORTA')
         const iTO = ix('ORDER_TYPE') >= 0 ? ix('ORDER_TYPE') : ix('TIPO_ORDEN')
+        const iOD = ix('ORDER_DATE'), iEnc = ix('ENCARGADO'), iCost = ix('COST'), iXF = ix('XF'), iETA = ix('ETA'), iEDD = ix('EDD') >= 0 ? ix('EDD') : ix('ESTIMATED_DELIVERY'), iLog = ix('LOG_STATUS')
+        const g = (r, i) => i >= 0 ? String(r[i] || '').trim() : ''
         const out = []; let st = ''
         j.values.slice(1).forEach((r) => {
           if (String(r[0] || '').toLowerCase().indexOf('actualizado') === 0) { st = String(r[1] || ''); return }
           if (!r[iC] && !r[iM]) return
-          out.push({ marca: String(r[iM] || ''), cliente: String(r[iC] || '').trim(), po: String(r[iPO] || ''), unidades: num(r[iU]), pv: num(r[iPV]), status: String(r[iS] || '').toUpperCase(), termino: String(r[iT] || ''), tipo: iTO >= 0 ? String(r[iTO] || '').trim() : '', temp: String(r[iTe] || ''), tempC: String(r[iTc] || (iTe >= 0 ? r[iTe] : '')).toUpperCase() })
+          out.push({ marca: String(r[iM] || ''), cliente: String(r[iC] || '').trim(), po: String(r[iPO] || ''), unidades: num(r[iU]), pv: num(r[iPV]), status: String(r[iS] || '').toUpperCase(), termino: String(r[iT] || ''), tipo: iTO >= 0 ? String(r[iTO] || '').trim() : '', temp: String(r[iTe] || ''), tempC: String(r[iTc] || (iTe >= 0 ? r[iTe] : '')).toUpperCase(), orderDate: g(r, iOD), encargado: g(r, iEnc), cost: num(iCost >= 0 ? r[iCost] : 0), xf: g(r, iXF), eta: g(r, iETA), edd: g(r, iEDD), logStatus: g(r, iLog) })
         })
         setRows(out); setStamp(st)
       } else { setRows([]); setErr('La pestaña Monday_SS27 aún no tiene datos. Corre la tarea "Sync Monday" y vuelve.') }
@@ -5660,9 +5663,9 @@ function EbpEvolutionScreen({ empresa, sbus }) {
   const porCli = {}; fil.forEach((r) => {
     const real = cliReal(r); const a = armOn ? armDe(real) : { arm: real, ok: true }
     const cli = a.arm || '(sin cliente)'; const key = cli + '␟' + (r.marca || ''); const canal = upper(r.cliente) === 'TAHO' ? '' : r.cliente
-    const o = porCli[key] || (porCli[key] = { cliente: cli, marca: r.marca || '', canal, pais: a.pais || '', mapped: a.ok, ordenes: 0, unidades: 0, pv: 0, terms: {} })
+    const o = porCli[key] || (porCli[key] = { key, cliente: cli, marca: r.marca || '', canal, pais: a.pais || '', mapped: a.ok, ordenes: 0, unidades: 0, pv: 0, terms: {}, ords: [] })
     if (!o.mapped && a.ok) o.mapped = true
-    o.ordenes++; o.unidades += r.unidades; o.pv += r.pv; if (r.termino) o.terms[r.termino] = (o.terms[r.termino] || 0) + 1
+    o.ordenes++; o.unidades += r.unidades; o.pv += r.pv; if (r.termino) o.terms[r.termino] = (o.terms[r.termino] || 0) + 1; o.ords.push(r)
   })
   const sinArm = armOn ? Object.values(porCli).filter((o) => !o.mapped).length : 0
   const lista = Object.values(porCli).sort((a, b) => b.pv - a.pv || b.unidades - a.unidades)
@@ -5707,13 +5710,28 @@ function EbpEvolutionScreen({ empresa, sbus }) {
           {planMaster == null && marcaUnica && <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay Master importado para <b>{marcaUnica}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
         </div>
         <div className="panel">
-          <h3 style={{ color: '#0e7490' }}>Realidad por cliente <span className="unit">(Monday · {selStat.size ? [...selStat].join(', ') : 'todos los estatus'})</span></h3>
+          <h3 style={{ color: '#0e7490' }}>Realidad por cliente <span className="unit">(Monday · {selStat.size ? [...selStat].join(', ') : 'todos los estatus'} · clic en una fila para ver sus órdenes)</span></h3>
           {load ? <div className="sub no-ayuda">Cargando…</div> : lista.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay órdenes para este filtro.</div> :
             <div className="tablewrap" style={{ marginTop: 6 }}>
               <table className="vfix" style={{ width: 'auto', minWidth: 620 }}>
                 <thead><tr><th className="l">Término</th><th className="l">Cliente</th><th className="l">Marca</th><th>Órdenes</th><th>Unidades</th><th>Venta PV ($)</th></tr></thead>
                 <tbody>
-                  {lista.map((o) => <tr key={o.cliente + '|' + o.marca}><td className="l">{termDe(o)}</td><td className="l sub2">{armOn && !o.mapped && <span title="Sin match en la base armonizada del EBP" style={{ marginRight: 4 }}>🔸</span>}{o.cliente}{o.pais && <span className="unit" style={{ fontWeight: 400, textTransform: 'none', marginLeft: 6 }}>📍 {o.pais}</span>}{o.canal && upper(o.canal) !== upper(o.cliente) && <div className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>canal: {o.canal}</div>}</td><td className="l">{o.marca}</td><td className="tot">{fmt(o.ordenes)}</td><td className="tot">{fmt(o.unidades)}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(o.pv)}</td></tr>)}
+                  {lista.map((o) => { const open = expKey === o.key; return <Fragment2 key={o.key}>
+                    <tr className={'rowline' + (open ? ' open' : '')} style={{ cursor: 'pointer' }} onClick={() => setExpKey(open ? null : o.key)}>
+                      <td className="l">{termDe(o)}</td>
+                      <td className="l sub2"><span className="caret">▶</span> {armOn && !o.mapped && <span title="Sin match en la base armonizada del EBP" style={{ marginRight: 4 }}>🔸</span>}{o.cliente}{o.pais && <span className="unit" style={{ fontWeight: 400, textTransform: 'none', marginLeft: 6 }}>📍 {o.pais}</span>}{o.canal && upper(o.canal) !== upper(o.cliente) && <div className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>canal: {o.canal}</div>}</td>
+                      <td className="l">{o.marca}</td><td className="tot">{fmt(o.ordenes)}</td><td className="tot">{fmt(o.unidades)}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(o.pv)}</td>
+                    </tr>
+                    {open && <tr className="subrow"><td colSpan={6} style={{ padding: '6px 10px 12px' }}>
+                      <div className="sub" style={{ margin: '0 0 4px' }}>Órdenes de <b>{o.cliente}</b> · {o.marca} <span className="unit">({o.ords.length})</span></div>
+                      <div className="tablewrap"><table className="vfix" style={{ width: 'auto', minWidth: 900, fontSize: 12 }}>
+                        <thead><tr><th className="l">PO</th><th className="l">Temp.</th><th className="l">Status</th><th className="l">Order type</th><th className="l">Order date</th><th className="l">Encargado</th><th>Unidades</th><th>Costo</th><th>Venta PV</th><th className="l">XF</th><th className="l">ETA</th><th className="l">Est. Delivery</th><th className="l">Logística</th></tr></thead>
+                        <tbody>
+                          {o.ords.map((r, i) => <tr key={i}><td className="l">{r.po || '—'}</td><td className="l">{r.tempC}</td><td className="l">{r.status}</td><td className="l">{r.tipo || '—'}</td><td className="l">{r.orderDate || '—'}</td><td className="l">{r.encargado || '—'}</td><td className="tot">{fmt(r.unidades)}</td><td className="tot">{r.cost ? fmt(r.cost) : '—'}</td><td className="tot">{fmt(r.pv)}</td><td className="l">{r.xf || '—'}</td><td className="l">{r.eta || '—'}</td><td className="l">{r.edd || '—'}</td><td className="l">{r.logStatus || '—'}</td></tr>)}
+                        </tbody>
+                      </table></div>
+                    </td></tr>}
+                  </Fragment2> })}
                   <tr className="grandrow"><td></td><td className="l">TOTAL ({lista.length} filas)</td><td></td><td className="tot">{fmt(fil.length)}</td><td className="tot">{fmt(totU)}</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(totPV)}</td></tr>
                 </tbody>
               </table>
