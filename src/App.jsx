@@ -5617,9 +5617,10 @@ function MondayTracking() {
       const j = await gReadTab('Monday_Hist')
       if (j && j.ok && j.values && j.values.length > 1) {
         const head = j.values[0].map((h) => String(h || '').toUpperCase()); const ix = (n) => head.indexOf(n)
-        const iF = ix('FECHA_SNAPSHOT'), iId = ix('ITEM_ID'), iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS')
+        const iF = ix('FECHA_SNAPSHOT'), iIt = ix('ITEM'), iId = ix('ITEM_ID'), iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS')
         if (iF < 0) { setHist([]); setLoad(false); return }
-        const rows = j.values.slice(1).filter((r) => r[iF]).map((r) => ({ fecha: String(r[iF]).slice(0, 10), id: String((iId >= 0 ? r[iId] : '') || (iPO >= 0 ? r[iPO] : '') || ''), marca: String(r[iM] || ''), cliente: String(r[iC] || ''), po: iPO >= 0 ? String(r[iPO] || '') : '', unidades: num(r[iU]), pv: num(r[iPV]), status: String(r[iS] || '').toUpperCase() }))
+        const gv = (r, i) => i >= 0 ? String(r[i] || '') : ''
+        const rows = j.values.slice(1).filter((r) => r[iF]).map((r) => ({ fecha: String(r[iF]).slice(0, 10), id: (gv(r, iIt) || gv(r, iId) || gv(r, iPO)).trim(), marca: gv(r, iM), cliente: gv(r, iC), po: gv(r, iPO), unidades: num(r[iU]), pv: num(r[iPV]), status: gv(r, iS).toUpperCase() }))
         setHist(rows)
       } else setHist([])
     } catch (e) { setErr(String(e && e.message || e)) }
@@ -5806,7 +5807,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
             </div>}
         </div>
         <div className="panel">
-          <h3 style={{ color: '#0e7490', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>📋 Detalle de órdenes <span className="unit">(Monday · {fmt(fil.length)} órdenes con los filtros actuales)</span></span></h3>
+          <h3 style={{ color: '#0e7490', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>📋 Detalle de órdenes <span className="unit">(Monday · {fmt(fil.length)} órdenes con los filtros actuales{stamp ? ` · datos al ${stamp}` : ''})</span></span></h3>
           {load ? <div className="sub no-ayuda">Cargando…</div> : fil.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay órdenes para este filtro.</div> :
             <div className="tablewrap" style={{ marginTop: 6, maxHeight: '70vh' }}>
               <table className="vfix gridcols" style={{ width: 'auto', minWidth: 1200, fontSize: 12 }}>
