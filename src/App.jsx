@@ -5908,7 +5908,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
         const gF = (r, i) => { if (i < 0) return ''; const v = r[i]; const s = String(v == null ? '' : v); const nn = Number(s); if (s && !isNaN(nn) && nn > 30000 && nn < 90000) { return new Date(Date.UTC(1899, 11, 30) + Math.round(nn) * 86400000).toISOString().slice(0, 10) } return s.trim() }
         const out = []; let st = ''
         j.values.slice(1).forEach((r) => {
-          if (String(r[0] || '').toLowerCase().indexOf('actualizado') === 0) { st = String(r[1] || ''); return }
+          if (String(r[0] || '').toLowerCase().indexOf('actualizado') === 0) { const sv = r[1]; const nn = Number(sv); if (sv !== '' && sv != null && !isNaN(nn) && nn > 30000 && nn < 90000) { const d = new Date(Date.UTC(1899, 11, 30) + nn * 86400000); st = d.toISOString().slice(0, 16).replace('T', ' ') } else { st = String(sv || '') } return }
           if (!r[iC] && !r[iM]) return
           out.push({ marca: String(r[iM] || ''), cliente: String(r[iC] || '').trim(), po: String(r[iPO] || ''), unidades: num(r[iU]), pv: num(r[iPV]), status: String(r[iS] || '').toUpperCase(), termino: String(r[iT] || ''), tipo: iTO >= 0 ? String(r[iTO] || '').trim() : '', temp: String(r[iTe] || ''), tempC: String(r[iTc] || (iTe >= 0 ? r[iTe] : '')).toUpperCase(), orderDate: gF(r, iOD), encargado: g(r, iEnc), cost: num(iCost >= 0 ? r[iCost] : 0), xf: gF(r, iXF), eta: gF(r, iETA), edd: gF(r, iEDD), logStatus: g(r, iLog), clienteSF: g(r, iSF) })
         })
@@ -5993,7 +5993,6 @@ function EbpEvolutionScreen({ empresa, sbus }) {
           </div>
         </div>
         <div>
-          {armOn && sinArm > 0 && <div className="sub no-ayuda" style={{ color: '#b45309', marginBottom: 6 }}>🔸 {sinArm} cliente(s) sin match en la base armonizada del EBP (se muestran con su nombre de Monday). Agrégalo en la hoja "BASE DE DATOS CLIENTE Y PAIS" del EBP si debería cuadrar.</div>}
           {planMaster != null && <div className="sub no-ayuda" style={{ marginBottom: 6 }}>🎯 <b>Plan Master:</b> {fmt(planMaster)} · Real Monday: {fmt(totPV)}{dev != null && <span className={dev >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}> · {(dev >= 0 ? '+' : '') + dev.toFixed(0)}% vs plan</span>}</div>}
           {planMaster == null && marcaUnica && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginBottom: 6 }}>No hay Master importado para <b>{marcaUnica}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
         <div className="panel">
@@ -6013,8 +6012,9 @@ function EbpEvolutionScreen({ empresa, sbus }) {
             </div>}
           {fil.length > 2000 && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginTop: 4 }}>Mostrando las primeras 2,000 órdenes. Afina los filtros para ver menos.</div>}
         </div>
-        <MondayTracking />
         <CobrosScreen />
+        <MondayTracking />
+        {armOn && sinArm > 0 && <div className="sub no-ayuda" style={{ color: '#b45309', marginTop: 10 }}>🔸 {sinArm} cliente(s) sin match en la base armonizada del EBP (se muestran con su nombre de Monday). Agrégalo en la hoja "BASE DE DATOS CLIENTE Y PAIS" del EBP si debería cuadrar.</div>}
         </div>
       </div>}
     </div>
