@@ -5740,6 +5740,13 @@ function CobrosScreen() {
   const amtOf = (o) => num(o[amtField])
   const amtEnt = (e) => baseRows.filter((o) => bU(o[dimField]) === bU(e)).reduce((a, o) => a + amtOf(o), 0)
   const entidades = [...new Set(baseRows.map((o) => String(o[dimField] || '').trim()).filter(Boolean))].sort()
+  // Proyección: fecha de pago sugerida = XFD + días del término de la marca
+  const parseDias = (t) => { const s = String(t || '').toLowerCase(); if (/contado|anticip|contra/.test(s)) return 0; const m = s.match(/(\d+)/); return m ? parseInt(m[1], 10) : 0 }
+  const aDate = (v) => { if (v == null || v === '') return null; const s = String(v); const nn = Number(s); if (!isNaN(nn) && nn > 30000 && nn < 90000) return new Date(Date.UTC(1899, 11, 30) + Math.round(nn) * 86400000); const d = new Date(s); return isNaN(d.getTime()) ? null : d }
+  const ym = (d) => d ? d.toISOString().slice(0, 7) : ''
+  const mesLbl = (k) => { const [y, m] = k.split('-'); const nm = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']; return nm[parseInt(m, 10) - 1] + ' ' + y }
+  const pagoSugerido = (o) => { const base = aDate(o['Customer XFD']); if (!base) return null; const d = new Date(base.getTime()); d.setUTCDate(d.getUTCDate() + parseDias(termOf(o['Marca']))); return d }
+  const proj = (() => { const map = {}; const meses = new Set(); let sinFecha = 0; baseRows.forEach((o) => { const d = pagoSugerido(o); const amt = Math.max(0, amtOf(o) - pagosOrden(o.Name)); if (amt <= 0.5) return; if (!d) { sinFecha += amt; return } const k = ym(d); meses.add(k); const mc = o.Marca || '(sin marca)'; (map[mc] || (map[mc] = {}))[k] = (map[mc][k] || 0) + amt }); return { map, cols: [...meses].sort(), marcas: Object.keys(map).sort(), sinFecha } })()
   const marcas = [...new Set(rows.map((o) => String(o.Marca || '').trim()).filter(Boolean))].sort()
   const hayTermEdits = Object.keys(termEdits).length > 0
   const guardarTerminos = async () => { const tm = { ...termMap }; Object.keys(termEdits).forEach((k) => tm[k] = termEdits[k]); const ms = [...new Set([...marcas.map(bU), ...Object.keys(tm)])].sort(); const mat = [['MARCA', 'TERMINO_PROVEEDOR'], ...ms.map((m) => [m, tm[m] || ''])]; await gWriteReport('Config_TerminoMarca', mat); setTermMap(tm); setTermEdits({}); return tm }
@@ -5809,7 +5816,7 @@ function CobrosScreen() {
       {err && <div className="banner">⚠️ {err}</div>}
 
       {vista === 'planilla' ? <>
-        <div className="panel" style={{ marginBottom: 10 }}>
+        <div className="panel">
           <div className="sub no-ayuda" style={{ fontWeight: 700, marginBottom: 6 }}>{esOut ? '➕ Registrar pago a proveedor' : '➕ Registrar cobro de cliente'}</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <label className="no-ayuda" style={{ fontSize: 11 }}>Fecha<br /><input type="date" value={form.fecha} onChange={(e) => setForm((f) => ({ ...f, fecha: e.target.value }))} /></label>
@@ -5822,9 +5829,8 @@ function CobrosScreen() {
             <button className="btn primary" disabled={savingPago} onClick={registrarPago}>{savingPago ? 'Guardando…' : (esOut ? '➕ Registrar pago' : '➕ Registrar cobro')}</button>
           </div>
           <div className="sub no-ayuda" style={{ color: 'var(--muted)', fontSize: 11, marginTop: 6 }}>Puedes registrar varias cuotas para la misma orden o {entLbl.toLowerCase()}. El pendiente se recalcula solo.</div>
-        </div>
 
-        {curLog.length > 0 && <div className="panel" style={{ marginBottom: 10 }}>
+        {curLog.length > 0 && <div style={{ borderTop: '1px solid var(--line)', marginTop: 12, paddingTop: 10 }}>
           <div className="sub no-ayuda" style={{ fontWeight: 700, marginBottom: 6 }}>{esOut ? 'Pagos' : 'Cobros'} registrados ({curLog.length})</div>
           <div className="tablewrap" style={{ maxHeight: '28vh' }}>
             <table className="vfix gridcols" style={{ fontSize: 12, minWidth: 760 }}>
@@ -5834,7 +5840,7 @@ function CobrosScreen() {
           </div>
         </div>}
 
-        <div className="panel">
+        <div style={{ borderTop: '1px solid var(--line)', marginTop: 12, paddingTop: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
             <span className="sub no-ayuda" style={{ fontWeight: 700, color: esOut ? '#c0392b' : '#2e7d32' }}>{esOut ? '🔻 Compras por pagar' : '🔺 Ventas por cobrar'} <span className="unit" style={{ fontWeight: 400 }}>({fmt(baseRows.length)} órdenes)</span></span>
             <div className="spacer"></div>
@@ -5861,6 +5867,7 @@ function CobrosScreen() {
               </table>
             </div>}
           {filtered.length > 2500 && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginTop: 4 }}>Mostrando 2,500 filas. Usa el buscador para acotar.</div>}
+        </div>
         </div>
       </> : <>
         <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
@@ -5998,6 +6005,8 @@ function EbpEvolutionScreen({ empresa, sbus }) {
         <div>
           {planMaster != null && <div className="sub no-ayuda" style={{ marginBottom: 6 }}>🎯 <b>Plan Master:</b> {fmt(planMaster)} · Real Monday: {fmt(totPV)}{dev != null && <span className={dev >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}> · {(dev >= 0 ? '+' : '') + dev.toFixed(0)}% vs plan</span>}</div>}
           {planMaster == null && marcaUnica && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginBottom: 6 }}>No hay Master importado para <b>{marcaUnica}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
+        <CobrosScreen />
+        <MondayTracking />
         <div className="panel">
           <h3 style={{ color: '#0e7490', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>📋 Detalle de órdenes <span className="unit">(Monday · {fmt(fil.length)} órdenes con los filtros actuales{stamp ? ` · datos al ${stamp}` : ''})</span></span></h3>
           {load ? <div className="sub no-ayuda">Cargando…</div> : fil.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay órdenes para este filtro.</div> :
@@ -6015,8 +6024,6 @@ function EbpEvolutionScreen({ empresa, sbus }) {
             </div>}
           {fil.length > 2000 && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginTop: 4 }}>Mostrando las primeras 2,000 órdenes. Afina los filtros para ver menos.</div>}
         </div>
-        <CobrosScreen />
-        <MondayTracking />
         {armOn && sinArm > 0 && <div className="sub no-ayuda" style={{ color: '#b45309', marginTop: 10 }}>🔸 {sinArm} cliente(s) sin match en la base armonizada del EBP (se muestran con su nombre de Monday). Agrégalo en la hoja "BASE DE DATOS CLIENTE Y PAIS" del EBP si debería cuadrar.</div>}
         </div>
       </div>}
