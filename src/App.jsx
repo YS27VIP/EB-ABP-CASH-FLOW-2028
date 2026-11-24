@@ -5692,7 +5692,7 @@ function MondayTracking() {
 }
 
 // ===== Paso 3: Pagos a proveedores (marcas) + reporte. Órdenes de Monday (ref) + registro de pagos en varias cuotas (Pagos_Log). =====
-const COBROS_HEAD = ['Name', 'Status', 'Temporada', 'Marca', 'Término Marca', 'Cliente', 'Units', 'Costo Marca', 'Cost', 'COST EUR', 'Cost USD', 'Price', 'Customer XFD', 'ETA', 'Estimated Delivery']
+const COBROS_HEAD = ['Name', 'Status', 'Order Type', 'Temporada', 'Marca', 'Término Marca', 'Cliente', 'Units', 'Costo Marca', 'Cost', 'COST EUR', 'Cost USD', 'Price', 'Customer XFD', 'ETA', 'Estimated Delivery']
 const PAGOS_HEAD = ['Fecha', 'Nivel', 'Marca', 'Orden', 'Monto', 'Semana', 'Comentario']
 function CobrosScreen() {
   const [rows, setRows] = useState([]); const [pagos, setPagos] = useState([])
@@ -5752,11 +5752,11 @@ function CobrosScreen() {
       const j = await gReadTab('Monday_SS27')
       if (!j || !j.ok || !j.values || j.values.length < 2) { setMsg({ t: 'bad', x: 'No hay datos de Monday (Monday_SS27) todavía.' }); setUpd(false); return }
       const H = j.values[0].map((h) => String(h || '').toUpperCase()); const ix = (n) => H.indexOf(n)
-      const iIt = ix('ITEM'), iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS'), iTc = ix('TEMP_CORTA'), iXF = ix('XF'), iETA = ix('ETA'), iCost = ix('COST'), iEDD = ix('EDD')
+      const iIt = ix('ITEM'), iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS'), iTO = ix('ORDER_TYPE'), iTc = ix('TEMP_CORTA'), iXF = ix('XF'), iETA = ix('ETA'), iCost = ix('COST'), iEDD = ix('EDD')
       const toF = (v) => { const s = String(v == null ? '' : v); const nn = Number(s); if (s && !isNaN(nn) && nn > 30000 && nn < 90000) { return new Date(Date.UTC(1899, 11, 30) + Math.round(nn) * 86400000).toISOString().slice(0, 10) } return s }
       const body = j.values.slice(1).filter((r) => (r[iC] || r[iM]) && String(r[0] || '').toLowerCase().indexOf('actualizado') !== 0)
-      const mon = {}; body.forEach((r) => { if (String(iS >= 0 ? r[iS] : '').toUpperCase() !== 'OPEN') return; const name = String((iIt >= 0 ? r[iIt] : '') || (iPO >= 0 ? r[iPO] : '') || '').trim(); if (!name) return; const o = mon[name] || (mon[name] = { Name: name, Status: iS >= 0 ? r[iS] : '', Temporada: iTc >= 0 ? r[iTc] : '', Marca: iM >= 0 ? r[iM] : '', Cliente: iC >= 0 ? r[iC] : '', Units: 0, Cost: 0, Price: 0, 'Customer XFD': iXF >= 0 ? toF(r[iXF]) : '', ETA: iETA >= 0 ? toF(r[iETA]) : '', 'Estimated Delivery': iEDD >= 0 ? toF(r[iEDD]) : '' }); o.Units += num(r[iU]); o.Price += num(r[iPV]); if (iCost >= 0) o.Cost += num(r[iCost]) })
-      const merged = Object.values(mon).map((m) => ({ Name: m.Name, Status: m.Status, Temporada: m.Temporada, Marca: m.Marca, 'Término Marca': termOf(m.Marca), Cliente: m.Cliente, Units: m.Units, 'Costo Marca': m.Units ? Math.round(m.Cost / m.Units * 100) / 100 : '', Cost: m.Cost || '', 'COST EUR': '', 'Cost USD': m.Cost || '', Price: m.Price || '', 'Customer XFD': m['Customer XFD'], ETA: m.ETA, 'Estimated Delivery': m['Estimated Delivery'] }))
+      const mon = {}; body.forEach((r) => { if (String(iS >= 0 ? r[iS] : '').toUpperCase() !== 'OPEN') return; const name = String((iIt >= 0 ? r[iIt] : '') || (iPO >= 0 ? r[iPO] : '') || '').trim(); if (!name) return; const o = mon[name] || (mon[name] = { Name: name, Status: iS >= 0 ? r[iS] : '', 'Order Type': iTO >= 0 ? r[iTO] : '', Temporada: iTc >= 0 ? r[iTc] : '', Marca: iM >= 0 ? r[iM] : '', Cliente: iC >= 0 ? r[iC] : '', Units: 0, Cost: 0, Price: 0, 'Customer XFD': iXF >= 0 ? toF(r[iXF]) : '', ETA: iETA >= 0 ? toF(r[iETA]) : '', 'Estimated Delivery': iEDD >= 0 ? toF(r[iEDD]) : '' }); o.Units += num(r[iU]); o.Price += num(r[iPV]); if (iCost >= 0) o.Cost += num(r[iCost]) })
+      const merged = Object.values(mon).map((m) => ({ Name: m.Name, Status: m.Status, 'Order Type': m['Order Type'], Temporada: m.Temporada, Marca: m.Marca, 'Término Marca': termOf(m.Marca), Cliente: m.Cliente, Units: m.Units, 'Costo Marca': m.Units ? Math.round(m.Cost / m.Units * 100) / 100 : '', Cost: m.Cost || '', 'COST EUR': '', 'Cost USD': m.Cost || '', Price: m.Price || '', 'Customer XFD': m['Customer XFD'], ETA: m.ETA, 'Estimated Delivery': m['Estimated Delivery'] }))
       merged.sort((a, b) => String(a.Marca || '').localeCompare(String(b.Marca || '')))
       await gWriteReport('Cobros_Finanzas', [COBROS_HEAD, ...merged.map((o) => COBROS_HEAD.map((c) => o[c] != null ? o[c] : ''))])
       setMsg({ t: 'ok', x: `Actualizado desde Monday: ${merged.length} órdenes abiertas. Los pagos registrados se conservan.` }); await cargar()
@@ -5828,12 +5828,12 @@ function CobrosScreen() {
             <div className="tablewrap" style={{ maxHeight: '60vh' }}>
               <table className="vfix gridcols" style={{ width: 'auto', minWidth: 1200, fontSize: 12 }}>
                 <thead>
-                  <tr><th className="l" colSpan={6} style={{ background: '#eef2f7' }}>De Monday</th><th style={{ background: '#e8f0fe', color: '#1458b3' }}>Config</th><th colSpan={4} style={{ background: '#e7f4ea', color: '#2e7d32' }}>Pagos a proveedor</th></tr>
-                  <tr><th className="l">Orden</th><th className="l">Status</th><th className="l">Temp.</th><th className="l">Marca</th><th className="l">Cliente</th><th>Costo</th><th className="l">Término Marca</th><th>Pagado</th><th>Pendiente</th><th className="l">Estado</th><th></th></tr>
+                  <tr><th className="l" colSpan={7} style={{ background: '#eef2f7' }}>De Monday</th><th style={{ background: '#e8f0fe', color: '#1458b3' }}>Config</th><th colSpan={4} style={{ background: '#e7f4ea', color: '#2e7d32' }}>Pagos a proveedor</th></tr>
+                  <tr><th className="l">Orden</th><th className="l">Status</th><th className="l">Order Type</th><th className="l">Temp.</th><th className="l">Marca</th><th className="l">Cliente</th><th>Costo</th><th className="l">Término Marca</th><th>Pagado</th><th>Pendiente</th><th className="l">Estado</th><th></th></tr>
                 </thead>
                 <tbody>
                   {filtered.slice(0, 2500).map((o, i) => { const pg = pagosOrden(o.Name); const co = num(o.Cost); const pend = co - pg; const est = pend <= 0.5 ? 'Pagada' : 'Pendiente'; return <tr key={o.Name + i}>
-                    <td className="l">{o['Name']}</td><td className="l">{o['Status']}</td><td className="l">{o['Temporada']}</td><td className="l">{o['Marca']}</td><td className="l sub2">{o['Cliente']}</td>
+                    <td className="l">{o['Name']}</td><td className="l">{o['Status']}</td><td className="l">{o['Order Type']}</td><td className="l">{o['Temporada']}</td><td className="l">{o['Marca']}</td><td className="l sub2">{o['Cliente']}</td>
                     <td className="tot" style={{ fontWeight: 700 }}>{money(o['Cost'])}</td>
                     <td className="cell" style={{ background: '#eef4ff' }}><input value={termOf(o['Marca'])} onChange={(e) => setTerm(o['Marca'], e.target.value)} placeholder="ej. 60 días" style={{ width: 100, textAlign: 'left' }} /></td>
                     <td className="tot" style={{ color: '#2e7d32' }}>{pg ? money(pg) : '—'}</td><td className="tot" style={{ fontWeight: 700, color: pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(pend)}</td><td className="l"><Pill estado={est} /></td>
