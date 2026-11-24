@@ -5608,6 +5608,70 @@ function FiltroGrupo({ titulo, items, sel, setSel, color = '#0e7490', cols = 150
   )
 }
 
+// ===== Tracking semanal: compara la foto más reciente de Monday contra la anterior (pestaña Monday_Hist). =====
+function MondayTracking() {
+  const [hist, setHist] = useState(null); const [load, setLoad] = useState(true); const [err, setErr] = useState('')
+  const cargar = async () => {
+    setLoad(true); setErr('')
+    try {
+      const j = await gReadTab('Monday_Hist')
+      if (j && j.ok && j.values && j.values.length > 1) {
+        const head = j.values[0].map((h) => String(h || '').toUpperCase()); const ix = (n) => head.indexOf(n)
+        const iF = ix('FECHA_SNAPSHOT'), iId = ix('ITEM_ID'), iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS')
+        if (iF < 0) { setHist([]); setLoad(false); return }
+        const rows = j.values.slice(1).filter((r) => r[iF]).map((r) => ({ fecha: String(r[iF]).slice(0, 10), id: String((iId >= 0 ? r[iId] : '') || (iPO >= 0 ? r[iPO] : '') || ''), marca: String(r[iM] || ''), cliente: String(r[iC] || ''), po: iPO >= 0 ? String(r[iPO] || '') : '', unidades: num(r[iU]), pv: num(r[iPV]), status: String(r[iS] || '').toUpperCase() }))
+        setHist(rows)
+      } else setHist([])
+    } catch (e) { setErr(String(e && e.message || e)) }
+    setLoad(false)
+  }
+  useEffect(() => { cargar() }, [])
+  const fechas = hist ? [...new Set(hist.map((r) => r.fecha))].filter(Boolean).sort() : []
+  const fNew = fechas[fechas.length - 1], fOld = fechas[fechas.length - 2]
+  const mapOf = (f) => { const m = {}; (hist || []).forEach((r) => { if (r.fecha === f && r.id) { const o = m[r.id] || (m[r.id] = { ...r, unidades: 0, pv: 0 }); o.unidades += r.unidades; o.pv += r.pv } }); return m }
+  const aNew = fNew ? mapOf(fNew) : {}, aOld = fOld ? mapOf(fOld) : {}
+  const cambios = []
+  if (fNew && fOld) {
+    const ids = new Set([...Object.keys(aNew), ...Object.keys(aOld)])
+    ids.forEach((id) => {
+      const n = aNew[id], o = aOld[id]
+      if (n && !o) cambios.push({ tipo: 'Nueva', id, r: n, dU: n.unidades, dPV: n.pv })
+      else if (!n && o) cambios.push({ tipo: 'Eliminada', id, r: o, dU: -o.unidades, dPV: -o.pv })
+      else if (n && o) { const dU = n.unidades - o.unidades, dPV = n.pv - o.pv, ds = n.status !== o.status; if (Math.abs(dU) > 0.5 || Math.abs(dPV) > 0.5 || ds) cambios.push({ tipo: ds ? ('Status ' + o.status + '→' + n.status) : 'Cambio', id, r: n, dU, dPV, o }) }
+    })
+  }
+  cambios.sort((a, b) => Math.abs(b.dPV) - Math.abs(a.dPV))
+  const sum = (arr, f) => arr.reduce((a, c) => a + f(c), 0)
+  const totNew = cambios.filter((c) => c.tipo === 'Nueva'), totDel = cambios.filter((c) => c.tipo === 'Eliminada'), totChg = cambios.filter((c) => c.tipo !== 'Nueva' && c.tipo !== 'Eliminada')
+  return (
+    <div className="panel" style={{ borderLeftColor: '#be185d' }}>
+      <h3 style={{ color: '#be185d', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>🔁 Cambios vs semana pasada <span className="unit">{fNew && fOld ? `(${fOld} → ${fNew})` : '(tracking semanal)'}</span></span><button className="btn" disabled={load} onClick={cargar} style={{ marginLeft: 'auto' }}>{load ? 'Cargando…' : '🔄'}</button></h3>
+      {err && <div className="banner">⚠️ {err}</div>}
+      {!err && (load ? <div className="sub no-ayuda">Cargando…</div> :
+        !fNew ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>Aún no hay fotos guardadas. Cuando corra la tarea semanal, aquí se acumularán y verás los cambios.</div> :
+        !fOld ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>Ya hay <b>1 foto</b> ({fNew}). La comparación aparece cuando haya <b>una segunda semana</b> para comparar.</div> :
+        <>
+          <div className="sub">Comparando la foto del <b>{fNew}</b> contra la del <b>{fOld}</b>. Diferencia en unidades y venta PV por orden.</div>
+          <div className="kpis" style={{ marginBottom: 8 }}>
+            <div className="kpi"><div className="k">🆕 Nuevas</div><div className="v">{fmt(totNew.length)}</div><div className="s">{fmt(sum(totNew, (c) => c.dPV))} PV</div></div>
+            <div className="kpi"><div className="k">❌ Eliminadas</div><div className="v">{fmt(totDel.length)}</div><div className="s">{fmt(sum(totDel, (c) => c.dPV))} PV</div></div>
+            <div className="kpi"><div className="k">✏️ Con cambios</div><div className="v">{fmt(totChg.length)}</div><div className="s">{fmt(sum(totChg, (c) => c.dPV))} PV</div></div>
+            <div className="kpi"><div className="k">Δ Venta PV total</div><div className="v">{fmt(sum(cambios, (c) => c.dPV))}</div></div>
+          </div>
+          {cambios.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>Sin cambios entre las dos fotos.</div> :
+            <div className="tablewrap" style={{ marginTop: 6, maxHeight: '50vh' }}>
+              <table className="vfix gridcols" style={{ width: 'auto', minWidth: 760, fontSize: 12 }}>
+                <thead><tr><th className="l">Cambio</th><th className="l">Orden / PO</th><th className="l">Cliente</th><th className="l">Marca</th><th>Δ Unidades</th><th>Δ Venta PV</th></tr></thead>
+                <tbody>
+                  {cambios.slice(0, 1500).map((c, i) => <tr key={i}><td className="l" style={{ fontWeight: 600, color: c.tipo === 'Nueva' ? '#15803d' : c.tipo === 'Eliminada' ? '#b91c1c' : '#b45309' }}>{c.tipo}</td><td className="l">{c.r.po || c.id}</td><td className="l sub2">{c.r.cliente}</td><td className="l">{c.r.marca}</td><td className="tot" style={{ color: c.dU > 0 ? '#15803d' : c.dU < 0 ? '#b91c1c' : 'var(--muted)', fontWeight: 700 }}>{c.dU > 0 ? '+' : ''}{fmt(c.dU)}</td><td className="tot" style={{ color: c.dPV > 0 ? '#15803d' : c.dPV < 0 ? '#b91c1c' : 'var(--muted)', fontWeight: 700 }}>{c.dPV > 0 ? '+' : ''}{fmt(c.dPV)}</td></tr>)}
+                </tbody>
+              </table>
+            </div>}
+        </>)}
+    </div>
+  )
+}
+
 // ===== EBP Evolution: compara el plan (Master) con la realidad de Monday (pestaña Monday_SS27). Solo Energy Brands. =====
 function EbpEvolutionScreen({ empresa, sbus }) {
   const [rows, setRows] = useState([]); const [load, setLoad] = useState(true); const [err, setErr] = useState(null); const [stamp, setStamp] = useState('')
@@ -5758,6 +5822,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
             </div>}
           {fil.length > 2000 && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginTop: 4 }}>Mostrando las primeras 2,000 órdenes. Afina los filtros para ver menos.</div>}
         </div>
+        <MondayTracking />
       </>}
     </div>
   )
