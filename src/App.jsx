@@ -5580,23 +5580,30 @@ function FlujoPiramide() {
 // Todos los order type del tablero de Monday (para los filtros de EBP Evolution).
 const ALL_ORDER_TYPES = ['Pre-Venta', 'PROYECCION', 'Venta de Stock', 'SAMPLES', 'STOCK', 'Compra', 'COMPRA COMPLEMENTARIA', 'COMPRA SAMPLES', 'Freight', 'Consolidacion', 'DESPACHO', 'ALMACENAJE', 'CONSIGNACION', 'MARKETING', 'FALTANTE/ANOMALIA', 'SOBRANTES', 'Credit Note', 'Debit Note', 'Orden x Comisión', 'ZLVTAOFI', 'INVENT. OFICINA', 'DPR', 'DMC', 'X', 'CANCELLED']
 const CASH_PRESET = ['Pre-Venta', 'PROYECCION', 'Venta de Stock', 'SAMPLES']  // preselección para cash flow
-// Grupo de filtro con checkboxes (estilo compacto): título, botones Todos/Ninguno y una grilla de opciones.
-function FiltroGrupo({ titulo, items, sel, setSel, color = '#0e7490', cols = 150, extra = null }) {
+// Grupo de filtro colapsable con checkboxes (compacto): botón con conteo que despliega la lista al hacer clic.
+function FiltroGrupo({ titulo, items, sel, setSel, color = '#0e7490', cols = 150, extra = null, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen)
   const vals = items.map((it) => Array.isArray(it) ? it[1] : it)
+  const nSel = vals.filter((v) => sel.has(v)).length
   const tog = (v) => setSel((s) => { const n = new Set(s); n.has(v) ? n.delete(v) : n.add(v); return n })
   return (
-    <div style={{ border: '1.5px solid ' + color + '33', borderRadius: 14, padding: '9px 13px', background: color + '0a', flex: '1 1 auto', minWidth: 150 }}>
-      <div style={{ textAlign: 'center', fontWeight: 800, fontSize: 11, letterSpacing: .6, color, textTransform: 'uppercase', marginBottom: 7 }}>{titulo}</div>
-      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-        <button className="seg" style={{ fontSize: 11, padding: '2px 9px', borderColor: '#bfe0ea' }} onClick={() => setSel(new Set(vals))}>✓ Todos</button>
-        <button className="seg" style={{ fontSize: 11, padding: '2px 9px', borderColor: '#f3c9c9', color: '#b91c1c' }} onClick={() => setSel(new Set())}>✗ Ninguno</button>
-        {extra}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill,minmax(${cols}px,1fr))`, gap: '3px 14px' }}>
-        {items.map((it) => { const v = Array.isArray(it) ? it[1] : it; const lbl = Array.isArray(it) ? it[0] : it; return (
-          <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12.5, padding: '1px 0' }}><input type="checkbox" checked={sel.has(v)} onChange={() => tog(v)} style={{ accentColor: color }} />{lbl}</label>
-        ) })}
-      </div>
+    <div style={{ border: '1.5px solid ' + color + '33', borderRadius: 12, background: color + '0a', minWidth: 190, alignSelf: 'flex-start', overflow: 'hidden' }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: 'transparent', border: 'none', cursor: 'pointer', padding: '8px 12px' }}>
+        <span style={{ fontWeight: 800, fontSize: 11, letterSpacing: .6, color, textTransform: 'uppercase' }}>{titulo}</span>
+        <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>{nSel}/{vals.length} <span style={{ color, fontSize: 10 }}>{open ? '▲' : '▼'}</span></span>
+      </button>
+      {open && <div style={{ padding: '0 12px 10px' }}>
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+          <button className="seg" style={{ fontSize: 11, padding: '2px 9px', borderColor: '#bfe0ea' }} onClick={() => setSel(new Set(vals))}>✓ Todos</button>
+          <button className="seg" style={{ fontSize: 11, padding: '2px 9px', borderColor: '#f3c9c9', color: '#b91c1c' }} onClick={() => setSel(new Set())}>✗ Ninguno</button>
+          {extra}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill,minmax(${cols}px,1fr))`, gap: '3px 14px', maxHeight: 230, overflow: 'auto' }}>
+          {items.map((it) => { const v = Array.isArray(it) ? it[1] : it; const lbl = Array.isArray(it) ? it[0] : it; return (
+            <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12.5, padding: '1px 0' }}><input type="checkbox" checked={sel.has(v)} onChange={() => tog(v)} style={{ accentColor: color }} />{lbl}</label>
+          ) })}
+        </div>
+      </div>}
     </div>
   )
 }
@@ -5683,7 +5690,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
       {err && <div className="banner" style={{ marginBottom: 12 }}>⚠️ {err}</div>}
       {!err && <>
         <div className="panel">
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10, alignItems: 'stretch' }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10, alignItems: 'flex-start' }}>
             <FiltroGrupo titulo="Order type" items={ALL_ORDER_TYPES} sel={selTipo} setSel={setSelTipo} color="#0e7490" cols={160}
               extra={<button className="seg" style={{ fontSize: 11, padding: '2px 9px', background: '#0e7490', color: '#fff', borderColor: '#0e7490', fontWeight: 700 }} title="Deja marcados solo los tipos que entran al cash flow: Preventa, Proyección, Venta de Stock y Muestras." onClick={() => setSelTipo(new Set(CASH_PRESET))}>💧 Preselección cash flow</button>} />
             <FiltroGrupo titulo="Marca" items={marcas} sel={selMarca} setSel={setSelMarca} color="#7c3aed" cols={120} />
