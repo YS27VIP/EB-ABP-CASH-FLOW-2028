@@ -5613,6 +5613,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
   const [rows, setRows] = useState([]); const [load, setLoad] = useState(true); const [err, setErr] = useState(null); const [stamp, setStamp] = useState('')
   const [selMarca, setSelMarca] = useState(() => new Set()); const [selTemp, setSelTemp] = useState(() => new Set()); const [selStat, setSelStat] = useState(() => new Set()); const [buscar, setBuscar] = useState(''); const [inited, setInited] = useState(false)
   const [selTipo, setSelTipo] = useState(() => new Set(ALL_ORDER_TYPES))
+  const [selVia, setSelVia] = useState(() => new Set(['TAHO', 'MARKAI', 'INTERGLOBAL', 'OTROS']))
   const [expKey, setExpKey] = useState(null)
   const cargar = async () => {
     setLoad(true); setErr(null)
@@ -5622,13 +5623,13 @@ function EbpEvolutionScreen({ empresa, sbus }) {
         const head = j.values[0].map((h) => String(h || '').toUpperCase()); const ix = (n) => head.indexOf(n)
         const iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS'), iT = ix('TERMINO'), iTe = ix('TEMPORADA'), iTc = ix('TEMP_CORTA')
         const iTO = ix('ORDER_TYPE') >= 0 ? ix('ORDER_TYPE') : ix('TIPO_ORDEN')
-        const iOD = ix('ORDER_DATE'), iEnc = ix('ENCARGADO'), iCost = ix('COST'), iXF = ix('XF'), iETA = ix('ETA'), iEDD = ix('EDD') >= 0 ? ix('EDD') : ix('ESTIMATED_DELIVERY'), iLog = ix('LOG_STATUS')
+        const iOD = ix('ORDER_DATE'), iEnc = ix('ENCARGADO'), iCost = ix('COST'), iXF = ix('XF'), iETA = ix('ETA'), iEDD = ix('EDD') >= 0 ? ix('EDD') : ix('ESTIMATED_DELIVERY'), iLog = ix('LOG_STATUS'), iSF = ix('CLIENTE_SF')
         const g = (r, i) => i >= 0 ? String(r[i] || '').trim() : ''
         const out = []; let st = ''
         j.values.slice(1).forEach((r) => {
           if (String(r[0] || '').toLowerCase().indexOf('actualizado') === 0) { st = String(r[1] || ''); return }
           if (!r[iC] && !r[iM]) return
-          out.push({ marca: String(r[iM] || ''), cliente: String(r[iC] || '').trim(), po: String(r[iPO] || ''), unidades: num(r[iU]), pv: num(r[iPV]), status: String(r[iS] || '').toUpperCase(), termino: String(r[iT] || ''), tipo: iTO >= 0 ? String(r[iTO] || '').trim() : '', temp: String(r[iTe] || ''), tempC: String(r[iTc] || (iTe >= 0 ? r[iTe] : '')).toUpperCase(), orderDate: g(r, iOD), encargado: g(r, iEnc), cost: num(iCost >= 0 ? r[iCost] : 0), xf: g(r, iXF), eta: g(r, iETA), edd: g(r, iEDD), logStatus: g(r, iLog) })
+          out.push({ marca: String(r[iM] || ''), cliente: String(r[iC] || '').trim(), po: String(r[iPO] || ''), unidades: num(r[iU]), pv: num(r[iPV]), status: String(r[iS] || '').toUpperCase(), termino: String(r[iT] || ''), tipo: iTO >= 0 ? String(r[iTO] || '').trim() : '', temp: String(r[iTe] || ''), tempC: String(r[iTc] || (iTe >= 0 ? r[iTe] : '')).toUpperCase(), orderDate: g(r, iOD), encargado: g(r, iEnc), cost: num(iCost >= 0 ? r[iCost] : 0), xf: g(r, iXF), eta: g(r, iETA), edd: g(r, iEDD), logStatus: g(r, iLog), clienteSF: g(r, iSF) })
         })
         setRows(out); setStamp(st)
       } else { setRows([]); setErr('La pestaña Monday_SS27 aún no tiene datos. Corre la tarea "Sync Monday" y vuelve.') }
@@ -5658,7 +5659,9 @@ function EbpEvolutionScreen({ empresa, sbus }) {
   const tipoOk = (r) => !hayTipo ? true : (!inited ? true : selTipo.has(r.tipo))
   // Cliente real: en Monday el cliente real está en la columna PO, SALVO para TAHO (donde PO es el nº de orden y el cliente es TAHO). Si PO viene vacío, se usa el canal (CLIENTE).
   const cliReal = (r) => (upper(r.cliente) === 'TAHO') ? 'TAHO' : (r.po && r.po.trim() ? r.po.trim() : (r.cliente || '(sin cliente)'))
-  const fil = rows.filter((r) => inSel(selMarca, r.marca) && inSel(selTemp, r.tempC) && inSel(selStat, r.status) && tipoOk(r) && (!buscar.trim() || upper(cliReal(r)).indexOf(upper(buscar)) >= 0 || upper(r.cliente).indexOf(upper(buscar)) >= 0))
+  // Vía / importador: por quién entra la orden (del Customer y Customer SF de Monday).
+  const viaDe = (r) => { const t = (upper(r.clienteSF || '') + ' ' + upper(r.cliente || '')); if (t.indexOf('TAHO') >= 0) return 'TAHO'; if (t.indexOf('MARKAI') >= 0) return 'MARKAI'; if (t.indexOf('INTERGLOBAL') >= 0) return 'INTERGLOBAL'; return 'OTROS' }
+  const fil = rows.filter((r) => inSel(selMarca, r.marca) && inSel(selTemp, r.tempC) && inSel(selStat, r.status) && tipoOk(r) && selVia.has(viaDe(r)) && (!buscar.trim() || upper(cliReal(r)).indexOf(upper(buscar)) >= 0 || upper(r.cliente).indexOf(upper(buscar)) >= 0))
   // Agrupa por cliente armonizado + marca (la marca va en columna)
   const porCli = {}; fil.forEach((r) => {
     const real = cliReal(r); const a = armOn ? armDe(real) : { arm: real, ok: true }
@@ -5699,6 +5702,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
             <FiltroGrupo titulo="Marca" items={marcas} sel={selMarca} setSel={setSelMarca} color="#7c3aed" cols={120} />
             <FiltroGrupo titulo="Temporada" items={temps} sel={selTemp} setSel={setSelTemp} color="#b45309" cols={90} />
             <FiltroGrupo titulo="Estatus" items={estados} sel={selStat} setSel={setSelStat} color="#15803d" cols={100} />
+            <FiltroGrupo titulo="Vía" items={['TAHO', 'MARKAI', 'INTERGLOBAL', 'OTROS']} sel={selVia} setSel={setSelVia} color="#be185d" cols={110} />
           </div>
           <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8, padding: '4px 2px' }}>
             <label className="who" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>🔍 Buscar cliente
@@ -5736,6 +5740,23 @@ function EbpEvolutionScreen({ empresa, sbus }) {
                 </tbody>
               </table>
             </div>}
+        </div>
+        <div className="panel">
+          <h3 style={{ color: '#0e7490', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>📋 Detalle de órdenes <span className="unit">(Monday · {fmt(fil.length)} órdenes con los filtros actuales)</span></span></h3>
+          {load ? <div className="sub no-ayuda">Cargando…</div> : fil.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay órdenes para este filtro.</div> :
+            <div className="tablewrap" style={{ marginTop: 6, maxHeight: '70vh' }}>
+              <table className="vfix gridcols" style={{ width: 'auto', minWidth: 1200, fontSize: 12 }}>
+                <thead><tr><th className="l">Marca</th><th className="l">Cliente</th><th className="l">Customer</th><th className="l">Customer SF</th><th className="l">PO</th><th className="l">Temp.</th><th className="l">Status</th><th className="l">Order type</th><th className="l">Término</th><th className="l">Order date</th><th className="l">Encargado</th><th>Unidades</th><th>Costo</th><th>Venta PV</th><th className="l">XF</th><th className="l">ETA</th><th className="l">Est. Delivery</th><th className="l">Logística</th></tr></thead>
+                <tbody>
+                  {[...fil].sort((a, b) => (a.marca || '').localeCompare(b.marca || '') || b.pv - a.pv).slice(0, 2000).map((r, i) => { const cliR = armOn ? armDe(cliReal(r)).arm : cliReal(r); return (
+                    <tr key={i}>
+                      <td className="l">{r.marca}</td><td className="l sub2">{cliR}</td><td className="l">{r.cliente}</td><td className="l">{r.clienteSF || '—'}</td><td className="l">{r.po || '—'}</td><td className="l">{r.tempC}</td><td className="l">{r.status}</td><td className="l">{r.tipo || '—'}</td><td className="l">{r.termino || '—'}</td><td className="l">{r.orderDate || '—'}</td><td className="l">{r.encargado || '—'}</td><td className="tot">{fmt(r.unidades)}</td><td className="tot">{r.cost ? fmt(r.cost) : '—'}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(r.pv)}</td><td className="l">{r.xf || '—'}</td><td className="l">{r.eta || '—'}</td><td className="l">{r.edd || '—'}</td><td className="l">{r.logStatus || '—'}</td>
+                    </tr>
+                  ) })}
+                </tbody>
+              </table>
+            </div>}
+          {fil.length > 2000 && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginTop: 4 }}>Mostrando las primeras 2,000 órdenes. Afina los filtros para ver menos.</div>}
         </div>
       </>}
     </div>
