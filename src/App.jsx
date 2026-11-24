@@ -5692,7 +5692,7 @@ function MondayTracking() {
 }
 
 // ===== Cash Out (cuentas por pagar / compras) y Cash In (cuentas por cobrar / ventas). Órdenes de Monday + cuotas. =====
-const COBROS_HEAD = ['Name', 'Status', 'Order Type', 'Temporada', 'Marca', 'Término Marca', 'Cliente', 'Units', 'Costo Marca', 'Cost', 'COST EUR', 'Cost USD', 'Price', 'Customer XFD', 'ETA', 'Estimated Delivery']
+const COBROS_HEAD = ['Name', 'Status', 'Order Type', 'Temporada', 'Marca', 'Término Marca', 'Cliente', 'Termino', 'Units', 'Costo Marca', 'Cost', 'COST EUR', 'Cost USD', 'Price', 'Customer XFD', 'ETA', 'Estimated Delivery']
 const PAGOS_HEAD = ['Fecha', 'Nivel', 'Entidad', 'Orden', 'Monto', 'Semana', 'Comentario']
 function CobrosScreen() {
   const [rows, setRows] = useState([]); const [logOut, setLogOut] = useState([]); const [logIn, setLogIn] = useState([])
@@ -5745,7 +5745,8 @@ function CobrosScreen() {
   const aDate = (v) => { if (v == null || v === '') return null; const s = String(v); const nn = Number(s); if (!isNaN(nn) && nn > 30000 && nn < 90000) return new Date(Date.UTC(1899, 11, 30) + Math.round(nn) * 86400000); const d = new Date(s); return isNaN(d.getTime()) ? null : d }
   const ym = (d) => d ? d.toISOString().slice(0, 7) : ''
   const mesLbl = (k) => { const [y, m] = k.split('-'); const nm = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']; return nm[parseInt(m, 10) - 1] + ' ' + y }
-  const pagoSugerido = (o) => { const base = aDate(o['Customer XFD']); if (!base) return null; const d = new Date(base.getTime()); d.setUTCDate(d.getUTCDate() + parseDias(termOf(o['Marca']))); return d }
+  const diasDe = (o) => esOut ? parseDias(termOf(o['Marca'])) : parseDias(o['Termino'])
+  const pagoSugerido = (o) => { const base = aDate(o['Customer XFD']); if (!base) return null; const d = new Date(base.getTime()); d.setUTCDate(d.getUTCDate() + diasDe(o)); return d }
   const proj = (() => { const map = {}; const meses = new Set(); let sinFecha = 0; baseRows.forEach((o) => { const d = pagoSugerido(o); const amt = Math.max(0, amtOf(o) - pagosOrden(o.Name)); if (amt <= 0.5) return; if (!d) { sinFecha += amt; return } const k = ym(d); meses.add(k); const mc = o.Marca || '(sin marca)'; (map[mc] || (map[mc] = {}))[k] = (map[mc][k] || 0) + amt }); return { map, cols: [...meses].sort(), marcas: Object.keys(map).sort(), sinFecha } })()
   const marcas = [...new Set(rows.map((o) => String(o.Marca || '').trim()).filter(Boolean))].sort()
   const hayTermEdits = Object.keys(termEdits).length > 0
@@ -5774,11 +5775,11 @@ function CobrosScreen() {
       const j = await gReadTab('Monday_SS27')
       if (!j || !j.ok || !j.values || j.values.length < 2) { setMsg({ t: 'bad', x: 'No hay datos de Monday (Monday_SS27) todavía.' }); setUpd(false); return }
       const H = j.values[0].map((h) => String(h || '').toUpperCase()); const ix = (n) => H.indexOf(n)
-      const iIt = ix('ITEM'), iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS'), iTO = ix('ORDER_TYPE'), iTc = ix('TEMP_CORTA'), iXF = ix('XF'), iETA = ix('ETA'), iCost = ix('COST'), iEDD = ix('EDD')
+      const iIt = ix('ITEM'), iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS'), iTO = ix('ORDER_TYPE'), iTerm = ix('TERMINO'), iTc = ix('TEMP_CORTA'), iXF = ix('XF'), iETA = ix('ETA'), iCost = ix('COST'), iEDD = ix('EDD')
       const toF = (v) => { const s = String(v == null ? '' : v); const nn = Number(s); if (s && !isNaN(nn) && nn > 30000 && nn < 90000) { return new Date(Date.UTC(1899, 11, 30) + Math.round(nn) * 86400000).toISOString().slice(0, 10) } return s }
       const body = j.values.slice(1).filter((r) => (r[iC] || r[iM]) && String(r[0] || '').toLowerCase().indexOf('actualizado') !== 0)
-      const mon = {}; body.forEach((r) => { if (String(iS >= 0 ? r[iS] : '').toUpperCase() !== 'OPEN') return; const name = String((iIt >= 0 ? r[iIt] : '') || (iPO >= 0 ? r[iPO] : '') || '').trim(); if (!name) return; const o = mon[name] || (mon[name] = { Name: name, Status: iS >= 0 ? r[iS] : '', 'Order Type': iTO >= 0 ? r[iTO] : '', Temporada: iTc >= 0 ? r[iTc] : '', Marca: iM >= 0 ? r[iM] : '', Cliente: iC >= 0 ? r[iC] : '', Units: 0, Cost: 0, Price: 0, 'Customer XFD': iXF >= 0 ? toF(r[iXF]) : '', ETA: iETA >= 0 ? toF(r[iETA]) : '', 'Estimated Delivery': iEDD >= 0 ? toF(r[iEDD]) : '' }); o.Units += num(r[iU]); o.Price += num(r[iPV]); if (iCost >= 0) o.Cost += num(r[iCost]) })
-      const merged = Object.values(mon).map((m) => ({ Name: m.Name, Status: m.Status, 'Order Type': m['Order Type'], Temporada: m.Temporada, Marca: m.Marca, 'Término Marca': termOf(m.Marca), Cliente: m.Cliente, Units: m.Units, 'Costo Marca': m.Units ? Math.round(m.Cost / m.Units * 100) / 100 : '', Cost: m.Cost || '', 'COST EUR': '', 'Cost USD': m.Cost || '', Price: m.Price || '', 'Customer XFD': m['Customer XFD'], ETA: m.ETA, 'Estimated Delivery': m['Estimated Delivery'] }))
+      const mon = {}; body.forEach((r) => { if (String(iS >= 0 ? r[iS] : '').toUpperCase() !== 'OPEN') return; const name = String((iIt >= 0 ? r[iIt] : '') || (iPO >= 0 ? r[iPO] : '') || '').trim(); if (!name) return; const o = mon[name] || (mon[name] = { Name: name, Status: iS >= 0 ? r[iS] : '', 'Order Type': iTO >= 0 ? r[iTO] : '', Temporada: iTc >= 0 ? r[iTc] : '', Marca: iM >= 0 ? r[iM] : '', Cliente: iC >= 0 ? r[iC] : '', Termino: iTerm >= 0 ? r[iTerm] : '', Units: 0, Cost: 0, Price: 0, 'Customer XFD': iXF >= 0 ? toF(r[iXF]) : '', ETA: iETA >= 0 ? toF(r[iETA]) : '', 'Estimated Delivery': iEDD >= 0 ? toF(r[iEDD]) : '' }); o.Units += num(r[iU]); o.Price += num(r[iPV]); if (iCost >= 0) o.Cost += num(r[iCost]) })
+      const merged = Object.values(mon).map((m) => ({ Name: m.Name, Status: m.Status, 'Order Type': m['Order Type'], Temporada: m.Temporada, Marca: m.Marca, 'Término Marca': termOf(m.Marca), Cliente: m.Cliente, Termino: m.Termino, Units: m.Units, 'Costo Marca': m.Units ? Math.round(m.Cost / m.Units * 100) / 100 : '', Cost: m.Cost || '', 'COST EUR': '', 'Cost USD': m.Cost || '', Price: m.Price || '', 'Customer XFD': m['Customer XFD'], ETA: m.ETA, 'Estimated Delivery': m['Estimated Delivery'] }))
       merged.sort((a, b) => String(a.Marca || '').localeCompare(String(b.Marca || '')))
       await gWriteReport('Cobros_Finanzas', [COBROS_HEAD, ...merged.map((o) => COBROS_HEAD.map((c) => o[c] != null ? o[c] : ''))])
       setMsg({ t: 'ok', x: `Actualizado desde Monday: ${merged.length} órdenes abiertas. Los pagos registrados se conservan.` }); await cargar()
@@ -5796,6 +5797,7 @@ function CobrosScreen() {
     if (repNivel === 'ent') { const aoa = [[entLbl, 'Término', 'Órdenes', amtLbl, verbo, 'Pendiente', 'Estado'], ...filEstado(repEnt).map((r) => [r.ent, r.termino, r.ordenes, r.costo, r.pagado, r.pend, r.estado]), ['TOTAL', '', '', tot.costo, tot.pagado, tot.pend, '']]; exportXlsx(aoa, pref + '_por_' + entLbl + '.xlsx') }
     else { const aoa = [['Orden', 'Marca', 'Cliente', amtLbl, verbo, 'Pendiente', 'Estado'], ...filEstado(repOrden).map((r) => [r.name, r.marca, r.cliente, r.costo, r.pagado, r.pend, r.estado]), ['TOTAL', '', '', tot.costo, tot.pagado, tot.pend, '']]; exportXlsx(aoa, pref + '_por_orden.xlsx') }
   }
+  const exportarProyeccion = () => { const aoa = [['Marca', ...proj.cols.map(mesLbl), 'Total'], ...proj.marcas.map((mc) => { const rt = proj.cols.reduce((a, c) => a + (proj.map[mc][c] || 0), 0); return [mc, ...proj.cols.map((c) => proj.map[mc][c] || 0), rt] }), ['TOTAL', ...proj.cols.map((c) => proj.marcas.reduce((a, mc) => a + (proj.map[mc][c] || 0), 0)), proj.marcas.reduce((a, mc) => a + proj.cols.reduce((b, c) => b + (proj.map[mc][c] || 0), 0), 0)]]; exportXlsx(aoa, 'Proyeccion_Pagos.xlsx') }
   const exportarPlanilla = () => { const aoa = [['Orden', 'Status', 'Order Type', 'Temp.', 'Marca', 'Cliente', amtLbl, ...(esOut ? ['Término Marca'] : []), verbo, 'Pendiente', 'Estado'], ...baseRows.map((o) => { const pg = pagosOrden(o.Name); const co = amtOf(o); return [o.Name, o.Status, o['Order Type'], o.Temporada, o.Marca, o.Cliente, co, ...(esOut ? [termOf(o.Marca)] : []), pg, co - pg, (co - pg) <= 0.5 ? okEst : 'Pendiente'] })]; exportXlsx(aoa, (esOut ? 'CashOut_PorPagar' : 'CashIn_PorCobrar') + '.xlsx') }
   const filtered = baseRows.filter((o) => !busca.trim() || (String(o['Cliente'] || '') + ' ' + String(o['Name'] || '') + ' ' + String(o['Marca'] || '')).toUpperCase().indexOf(busca.toUpperCase()) >= 0)
   const ordenesDeEnt = baseRows.filter((o) => bU(o[dimField]) === bU(form.entidad)).map((o) => String(o.Name || ''))
@@ -5809,6 +5811,7 @@ function CobrosScreen() {
         <div className="spacer"></div>
         <button className="btn" onClick={() => setVista('planilla')} style={vista === 'planilla' ? { background: '#374151', color: '#fff' } : {}}>Planilla</button>
         <button className="btn" onClick={() => setVista('reporte')} style={vista === 'reporte' ? { background: '#374151', color: '#fff' } : {}}>📊 Reporte</button>
+        <button className="btn" onClick={() => setVista('proyeccion')} style={vista === 'proyeccion' ? { background: '#374151', color: '#fff' } : {}}>📅 {esOut ? 'Proyección de pago' : 'Proyección de cobro'}</button>
         <button className="btn" disabled={upd} onClick={actualizar} title="Trae de Monday las órdenes abiertas (referencia). No toca lo registrado.">{upd ? 'Actualizando…' : '🔄 Actualizar desde Monday'}</button>
         {esOut && <button className="btn primary" disabled={saving || !hayTermEdits} onClick={guardar} title="Guarda los términos de pago por marca">{saving ? 'Guardando…' : '💾 Guardar términos'}</button>}
       </div>
@@ -5869,7 +5872,7 @@ function CobrosScreen() {
           {filtered.length > 2500 && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginTop: 4 }}>Mostrando 2,500 filas. Usa el buscador para acotar.</div>}
         </div>
         </div>
-      </> : <>
+      </> : vista === 'reporte' ? <>
         <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
           <span className="empchip" style={{ background: esOut ? '#c0392b' : '#2e7d32', marginLeft: 0, fontSize: 13, padding: '4px 12px' }}>{esOut ? '🔻 Cash Out · por pagar' : '🔺 Cash In · por cobrar'}</span>
           <span className="unit" style={{ alignSelf: 'center' }}>Vista:</span>
@@ -5892,6 +5895,26 @@ function CobrosScreen() {
                     <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l">TOTAL</td><td></td><td></td><td className="tot">{money(tot.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{money(tot.pagado)}</td><td className="tot" style={{ color: tot.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(tot.pend)}</td><td></td></tr></tbody></>}
             </table>
           </div>
+        </div>
+      </> : <>
+        <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
+          <span className="empchip" style={{ background: esOut ? '#c0392b' : '#2e7d32', marginLeft: 0, fontSize: 13, padding: '4px 12px' }}>📅 {esOut ? 'Proyección de pago (Cash Out)' : 'Proyección de cobro (Cash In)'}</span>
+          <span className="unit" style={{ alignSelf: 'center' }}>{esOut ? 'Fecha sugerida = XFD + término de la marca.' : 'Fecha sugerida = XFD + término del cliente.'} Monto = {esOut ? 'costo' : 'venta'} pendiente.</span>
+          <div className="spacer"></div>
+          <button className="btn" onClick={exportarProyeccion}>⬇ Excel</button>
+        </div>
+        <div className="panel">
+          {proj.cols.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay proyección todavía: falta cargar {esOut ? <>el <b>Término</b> por marca</> : <>el <b>término del cliente</b></>} y/o la fecha <b>XFD</b> en las órdenes de Monday.</div> :
+            <div className="tablewrap" style={{ maxHeight: '66vh' }}>
+              <table className="vfix gridcols" style={{ fontSize: 12.5, minWidth: 820 }}>
+                <thead><tr><th className="l">{esOut ? 'Marca' : 'Cliente'}</th>{proj.cols.map((c) => <th key={c}>{mesLbl(c)}</th>)}<th>Total</th></tr></thead>
+                <tbody>
+                  {proj.marcas.map((mc) => { const rt = proj.cols.reduce((a, c) => a + (proj.map[mc][c] || 0), 0); return <tr key={mc}><td className="l" style={{ fontWeight: 600 }}>{mc}</td>{proj.cols.map((c) => <td key={c} className="tot">{proj.map[mc][c] ? money(proj.map[mc][c]) : ''}</td>)}<td className="tot" style={{ fontWeight: 700 }}>{money(rt)}</td></tr> })}
+                  <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l">TOTAL</td>{proj.cols.map((c) => { const ct = proj.marcas.reduce((a, mc) => a + (proj.map[mc][c] || 0), 0); return <td key={c} className="tot">{money(ct)}</td> })}<td className="tot">{money(proj.marcas.reduce((a, mc) => a + proj.cols.reduce((b, c) => b + (proj.map[mc][c] || 0), 0), 0))}</td></tr>
+                </tbody>
+              </table>
+            </div>}
+          {proj.sinFecha > 0.5 && <div className="sub no-ayuda" style={{ color: '#b45309', marginTop: 8 }}>🔸 {money(proj.sinFecha)} en {esOut ? 'compras' : 'ventas'} sin fecha XFD en Monday (no se proyectan hasta que tengan XFD).</div>}
         </div>
       </>}
     </div>
