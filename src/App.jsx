@@ -5750,6 +5750,8 @@ function CobrosScreen() {
   const aDate = (v) => { if (v == null || v === '') return null; const s = String(v); const nn = Number(s); if (!isNaN(nn) && nn > 30000 && nn < 90000) return new Date(Date.UTC(1899, 11, 30) + Math.round(nn) * 86400000); const d = new Date(s); return isNaN(d.getTime()) ? null : d }
   const ym = (d) => d ? d.toISOString().slice(0, 7) : ''
   const mesLbl = (k) => { const [y, m] = k.split('-'); const nm = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']; return nm[parseInt(m, 10) - 1] + ' ' + y }
+  const diasFactura = (o) => { const d = aDate(o['Customer XFD']); if (!d) return null; return Math.floor((Date.now() - d.getTime()) / 86400000) }
+  const plazoDe = (o) => { const dias = diasFactura(o); if (dias == null) return ''; const s = String(o['Termino'] || '').toLowerCase(); if (/consign/.test(s)) return 'Consignación'; return dias > parseDias(o['Termino']) ? 'Fuera de plazo' : 'Dentro de plazo' }
   const diasDe = (o) => esOut ? parseDias(termOf(o['Marca'])) : parseDias(o['Termino'])
   const pagoSugerido = (o) => { const base = aDate(o['Customer XFD']); if (!base) return null; const d = new Date(base.getTime()); d.setUTCDate(d.getUTCDate() + diasDe(o)); return d }
   const colLbl = (k) => (k === 'Vencido' || k === 'Posterior') ? k : mesLbl(k)
@@ -5867,8 +5869,8 @@ function CobrosScreen() {
             <div className="tablewrap" style={{ maxHeight: '60vh' }}>
               <table className="vfix gridcols" style={{ width: 'auto', minWidth: 1100, fontSize: 12 }}>
                 <thead>
-                  <tr><th className="l" colSpan={esOut ? 7 : 6} style={{ background: '#eef2f7' }}>De Monday</th>{esOut && <th style={{ background: '#e8f0fe', color: '#1458b3' }}>Config</th>}<th colSpan={4} style={{ background: esOut ? '#fdecec' : '#e7f4ea', color: esOut ? '#c0392b' : '#2e7d32' }}>{esOut ? 'Cash Out (por pagar)' : 'Cash In (por cobrar)'}</th></tr>
-                  <tr><th className="l">Orden</th><th className="l">Status</th><th className="l">Order Type</th><th className="l">Temp.</th><th className="l">Marca</th><th className="l">Cliente</th><th>{amtLbl}</th>{esOut && <th className="l">Término Marca</th>}<th>{verbo}</th><th>Pendiente</th><th className="l">Estado</th><th></th></tr>
+                  <tr><th className="l" colSpan={esOut ? 7 : 6} style={{ background: '#eef2f7' }}>De Monday</th>{esOut && <th style={{ background: '#e8f0fe', color: '#1458b3' }}>Config</th>}<th colSpan={esOut ? 4 : 6} style={{ background: esOut ? '#fdecec' : '#e7f4ea', color: esOut ? '#c0392b' : '#2e7d32' }}>{esOut ? 'Cash Out (por pagar)' : 'Cash In (por cobrar)'}</th></tr>
+                  <tr><th className="l">Orden</th><th className="l">Status</th><th className="l">Order Type</th><th className="l">Temp.</th><th className="l">Marca</th><th className="l">Cliente</th><th>{amtLbl}</th>{esOut && <th className="l">Término Marca</th>}<th>{verbo}</th><th>Pendiente</th><th className="l">Estado</th>{!esOut && <th>Días</th>}{!esOut && <th className="l">Plazo</th>}<th></th></tr>
                 </thead>
                 <tbody>
                   {filtered.slice(0, 2500).map((o, i) => { const pg = pagEff(o); const co = amtOf(o); const pend = co - pg; const est = pend <= 0.5 ? okEst : 'Pendiente'; return <tr key={o.Name + i}>
@@ -5876,6 +5878,8 @@ function CobrosScreen() {
                     <td className="tot" style={{ fontWeight: 700 }}>{money(co)}</td>
                     {esOut && <td className="cell" style={{ background: '#eef4ff' }}><input value={termOf(o['Marca'])} onChange={(e) => setTerm(o['Marca'], e.target.value)} placeholder="ej. 60 días" style={{ width: 100, textAlign: 'left' }} /></td>}
                     <td className="tot" style={{ color: '#2e7d32' }}>{pg ? money(pg) : '—'}</td><td className="tot" style={{ fontWeight: 700, color: pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(pend)}</td><td className="l"><Pill estado={est} /></td>
+                    {!esOut && <td className="tot">{diasFactura(o) == null ? '' : fmt(diasFactura(o))}</td>}
+                    {!esOut && (() => { const pl = plazoDe(o); const fuera = pl === 'Fuera de plazo'; return <td className="l"><span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: fuera ? '#fdecea' : pl === 'Consignación' ? '#eef2f7' : '#e7f4ea', color: fuera ? '#c0392b' : pl === 'Consignación' ? '#555' : '#2e7d32' }}>{pl || '—'}</span></td> })()}
                     <td><button className="btn" style={{ padding: '2px 8px' }} onClick={() => addPagoOrden(o)} title={esOut ? 'Registrar un pago' : 'Registrar un cobro'}>{esOut ? '➕ Pago' : '➕ Cobro'}</button></td>
                   </tr> })}
                 </tbody>
