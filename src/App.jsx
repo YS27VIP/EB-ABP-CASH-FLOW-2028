@@ -5740,6 +5740,11 @@ function CobrosScreen() {
   const amtOf = (o) => num(o[amtField])
   const amtEnt = (e) => baseRows.filter((o) => bU(o[dimField]) === bU(e)).reduce((a, o) => a + amtOf(o), 0)
   const entidades = [...new Set(baseRows.map((o) => String(o[dimField] || '').trim()).filter(Boolean))].sort()
+  // Monday ya marca el pago: Pago Enviado=YES (Cash Out) / Pago Recibido=YES (Cash In) => pagado completo
+  const yaPagado = (o) => esOut ? bU(o['Pago Enviado']) === 'YES' : bU(o['Pago Recibido']) === 'YES'
+  const pagEff = (o) => yaPagado(o) ? num(o[amtField]) : pagosOrden(o.Name)
+  const pagEntEff = (e) => pagosEnt(e) + baseRows.filter((o) => bU(o[dimField]) === bU(e) && yaPagado(o) && pagosOrden(o.Name) <= 0.5).reduce((a, o) => a + num(o[amtField]), 0)
+  const termEnt = (e) => esOut ? termOf(e) : ((baseRows.find((o) => bU(o.Cliente) === bU(e) && String(o.Termino || '').trim()) || {}).Termino || '')
   // Proyección: fecha de pago sugerida = XFD + días del término de la marca
   const parseDias = (t) => { const s = String(t || '').toLowerCase(); if (/contado|anticip|contra/.test(s)) return 0; const m = s.match(/(\d+)/); return m ? parseInt(m[1], 10) : 0 }
   const aDate = (v) => { if (v == null || v === '') return null; const s = String(v); const nn = Number(s); if (!isNaN(nn) && nn > 30000 && nn < 90000) return new Date(Date.UTC(1899, 11, 30) + Math.round(nn) * 86400000); const d = new Date(s); return isNaN(d.getTime()) ? null : d }
@@ -5751,7 +5756,7 @@ function CobrosScreen() {
   const proj = (() => {
     const b = new Date(); const startMs = Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1); const horizonMs = Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + 12, 1)
     const map = {}; const meses = new Set(); let sinFecha = 0, venc = false, post = false
-    baseRows.forEach((o) => { const d = pagoSugerido(o); const amt = Math.max(0, amtOf(o) - pagosOrden(o.Name)); if (amt <= 0.5) return; if (!d) { sinFecha += amt; return } const t = d.getTime(); let k; if (t < startMs) { k = 'Vencido'; venc = true } else if (t >= horizonMs) { k = 'Posterior'; post = true } else { k = ym(d); meses.add(k) } const mc = (esOut ? o.Marca : o.Cliente) || '(sin)'; (map[mc] || (map[mc] = {}))[k] = (map[mc][k] || 0) + amt })
+    baseRows.forEach((o) => { const d = pagoSugerido(o); const amt = Math.max(0, amtOf(o) - pagEff(o)); if (amt <= 0.5) return; if (!d) { sinFecha += amt; return } const t = d.getTime(); let k; if (t < startMs) { k = 'Vencido'; venc = true } else if (t >= horizonMs) { k = 'Posterior'; post = true } else { k = ym(d); meses.add(k) } const mc = (esOut ? o.Marca : o.Cliente) || '(sin)'; (map[mc] || (map[mc] = {}))[k] = (map[mc][k] || 0) + amt })
     const cols = [...(venc ? ['Vencido'] : []), ...[...meses].sort(), ...(post ? ['Posterior'] : [])]
     return { map, cols, marcas: Object.keys(map).sort(), sinFecha }
   })()
@@ -5794,8 +5799,8 @@ function CobrosScreen() {
     setUpd(false)
   }
   // Reporte
-  const repEnt = entidades.map((e) => { const costo = amtEnt(e); const pagado = pagosEnt(e); const pend = costo - pagado; return { k: e, ent: e, termino: esOut ? termOf(e) : '', ordenes: baseRows.filter((o) => bU(o[dimField]) === bU(e)).length, costo, pagado, pend, estado: pend <= 0.5 ? okEst : 'Pendiente' } })
-  const repOrden = baseRows.map((o) => { const costo = amtOf(o); const pagado = pagosOrden(o.Name); const pend = costo - pagado; return { k: o.Name, name: o.Name, marca: o.Marca, cliente: o.Cliente, costo, pagado, pend, estado: pend <= 0.5 ? okEst : 'Pendiente' } })
+  const repEnt = entidades.map((e) => { const costo = amtEnt(e); const pagado = pagEntEff(e); const pend = costo - pagado; return { k: e, ent: e, termino: esOut ? termOf(e) : '', ordenes: baseRows.filter((o) => bU(o[dimField]) === bU(e)).length, costo, pagado, pend, estado: pend <= 0.5 ? okEst : 'Pendiente' } })
+  const repOrden = baseRows.map((o) => { const costo = amtOf(o); const pagado = pagEff(o); const pend = costo - pagado; return { k: o.Name, name: o.Name, marca: o.Marca, cliente: o.Cliente, costo, pagado, pend, estado: pend <= 0.5 ? okEst : 'Pendiente' } })
   const filEstado = (arr) => arr.filter((r) => repFiltro === 'todas' || (repFiltro === 'pendientes' ? r.estado === 'Pendiente' : r.estado !== 'Pendiente'))
   const repData = filEstado(repNivel === 'ent' ? repEnt : repOrden)
   const tot = repData.reduce((a, r) => ({ costo: a.costo + r.costo, pagado: a.pagado + r.pagado, pend: a.pend + r.pend }), { costo: 0, pagado: 0, pend: 0 })
@@ -5804,8 +5809,8 @@ function CobrosScreen() {
     if (repNivel === 'ent') { const aoa = [[entLbl, 'Término', 'Órdenes', amtLbl, verbo, 'Pendiente', 'Estado'], ...filEstado(repEnt).map((r) => [r.ent, r.termino, r.ordenes, r.costo, r.pagado, r.pend, r.estado]), ['TOTAL', '', '', tot.costo, tot.pagado, tot.pend, '']]; exportXlsx(aoa, pref + '_por_' + entLbl + '.xlsx') }
     else { const aoa = [['Orden', 'Marca', 'Cliente', amtLbl, verbo, 'Pendiente', 'Estado'], ...filEstado(repOrden).map((r) => [r.name, r.marca, r.cliente, r.costo, r.pagado, r.pend, r.estado]), ['TOTAL', '', '', tot.costo, tot.pagado, tot.pend, '']]; exportXlsx(aoa, pref + '_por_orden.xlsx') }
   }
-  const exportarProyeccion = () => { const aoa = [['Marca', ...proj.cols.map(mesLbl), 'Total'], ...proj.marcas.map((mc) => { const rt = proj.cols.reduce((a, c) => a + (proj.map[mc][c] || 0), 0); return [mc, ...proj.cols.map((c) => proj.map[mc][c] || 0), rt] }), ['TOTAL', ...proj.cols.map((c) => proj.marcas.reduce((a, mc) => a + (proj.map[mc][c] || 0), 0)), proj.marcas.reduce((a, mc) => a + proj.cols.reduce((b, c) => b + (proj.map[mc][c] || 0), 0), 0)]]; exportXlsx(aoa, 'Proyeccion_Pagos.xlsx') }
-  const exportarPlanilla = () => { const aoa = [['Orden', 'Status', 'Order Type', 'Temp.', 'Marca', 'Cliente', amtLbl, ...(esOut ? ['Término Marca'] : []), verbo, 'Pendiente', 'Estado'], ...baseRows.map((o) => { const pg = pagosOrden(o.Name); const co = amtOf(o); return [o.Name, o.Status, o['Order Type'], o.Temporada, o.Marca, o.Cliente, co, ...(esOut ? [termOf(o.Marca)] : []), pg, co - pg, (co - pg) <= 0.5 ? okEst : 'Pendiente'] })]; exportXlsx(aoa, (esOut ? 'CashOut_PorPagar' : 'CashIn_PorCobrar') + '.xlsx') }
+  const exportarProyeccion = () => { const aoa = [['Término', (esOut ? 'Marca' : 'Cliente'), ...proj.cols.map(colLbl), 'Total'], ...proj.marcas.map((mc) => { const rt = proj.cols.reduce((a, c) => a + (proj.map[mc][c] || 0), 0); return [termEnt(mc), mc, ...proj.cols.map((c) => proj.map[mc][c] || 0), rt] }), ['', 'TOTAL', ...proj.cols.map((c) => proj.marcas.reduce((a, mc) => a + (proj.map[mc][c] || 0), 0)), proj.marcas.reduce((a, mc) => a + proj.cols.reduce((b, c) => b + (proj.map[mc][c] || 0), 0), 0)]]; exportXlsx(aoa, (esOut ? 'Proyeccion_Pagos' : 'Proyeccion_Cobros') + '.xlsx') }
+  const exportarPlanilla = () => { const aoa = [['Orden', 'Status', 'Order Type', 'Temp.', 'Marca', 'Cliente', amtLbl, ...(esOut ? ['Término Marca'] : []), verbo, 'Pendiente', 'Estado'], ...baseRows.map((o) => { const pg = pagEff(o); const co = amtOf(o); return [o.Name, o.Status, o['Order Type'], o.Temporada, o.Marca, o.Cliente, co, ...(esOut ? [termOf(o.Marca)] : []), pg, co - pg, (co - pg) <= 0.5 ? okEst : 'Pendiente'] })]; exportXlsx(aoa, (esOut ? 'CashOut_PorPagar' : 'CashIn_PorCobrar') + '.xlsx') }
   const filtered = baseRows.filter((o) => !busca.trim() || (String(o['Cliente'] || '') + ' ' + String(o['Name'] || '') + ' ' + String(o['Marca'] || '')).toUpperCase().indexOf(busca.toUpperCase()) >= 0)
   const ordenesDeEnt = baseRows.filter((o) => bU(o[dimField]) === bU(form.entidad)).map((o) => String(o.Name || ''))
   const Pill = ({ estado }) => <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: estado === 'Pendiente' ? '#fdecea' : '#e7f4ea', color: estado === 'Pendiente' ? '#c0392b' : '#2e7d32' }}>{estado}</span>
@@ -5866,7 +5871,7 @@ function CobrosScreen() {
                   <tr><th className="l">Orden</th><th className="l">Status</th><th className="l">Order Type</th><th className="l">Temp.</th><th className="l">Marca</th><th className="l">Cliente</th><th>{amtLbl}</th>{esOut && <th className="l">Término Marca</th>}<th>{verbo}</th><th>Pendiente</th><th className="l">Estado</th><th></th></tr>
                 </thead>
                 <tbody>
-                  {filtered.slice(0, 2500).map((o, i) => { const pg = pagosOrden(o.Name); const co = amtOf(o); const pend = co - pg; const est = pend <= 0.5 ? okEst : 'Pendiente'; return <tr key={o.Name + i}>
+                  {filtered.slice(0, 2500).map((o, i) => { const pg = pagEff(o); const co = amtOf(o); const pend = co - pg; const est = pend <= 0.5 ? okEst : 'Pendiente'; return <tr key={o.Name + i}>
                     <td className="l">{o['Name']}</td><td className="l">{o['Status']}</td><td className="l">{o['Order Type']}</td><td className="l">{o['Temporada']}</td><td className="l">{o['Marca']}</td><td className="l sub2">{o['Cliente']}</td>
                     <td className="tot" style={{ fontWeight: 700 }}>{money(co)}</td>
                     {esOut && <td className="cell" style={{ background: '#eef4ff' }}><input value={termOf(o['Marca'])} onChange={(e) => setTerm(o['Marca'], e.target.value)} placeholder="ej. 60 días" style={{ width: 100, textAlign: 'left' }} /></td>}
@@ -5915,18 +5920,21 @@ function CobrosScreen() {
             <div className="tablewrap" style={{ maxHeight: '66vh', overflow: 'auto' }}>
               <table style={{ borderCollapse: 'collapse', fontSize: 12, tableLayout: 'auto' }}>
                 <thead><tr>
-                  <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#f7fafb', textAlign: 'left', padding: '6px 10px', minWidth: 150, borderBottom: '2px solid var(--line)' }}>{esOut ? 'Marca' : 'Cliente'}</th>
+                  <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#f7fafb', textAlign: 'center', padding: '6px 10px', minWidth: 90, borderBottom: '2px solid var(--line)' }}>{esOut ? 'Término' : 'Término cobro'}</th>
+                  <th style={{ position: 'sticky', left: 90, zIndex: 2, background: '#f7fafb', textAlign: 'center', padding: '6px 10px', minWidth: 150, borderBottom: '2px solid var(--line)' }}>{esOut ? 'Marca' : 'Cliente'}</th>
                   {proj.cols.map((c) => <th key={c} style={{ padding: '6px 10px', minWidth: 78, textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '2px solid var(--line)', color: c === 'Vencido' ? '#c0392b' : '#444', background: '#f7fafb' }}>{colLbl(c)}</th>)}
                   <th style={{ padding: '6px 10px', minWidth: 90, textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '2px solid var(--line)', background: '#eef2f7' }}>Total</th>
                 </tr></thead>
                 <tbody>
                   {proj.marcas.map((mc) => { const rt = proj.cols.reduce((a, c) => a + (proj.map[mc][c] || 0), 0); return <tr key={mc}>
-                    <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', fontWeight: 600, padding: '5px 10px', borderBottom: '1px solid #eef1f4', whiteSpace: 'nowrap' }}>{mc}</td>
+                    <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', textAlign: 'center', color: '#555', padding: '5px 10px', borderBottom: '1px solid #eef1f4', whiteSpace: 'nowrap' }}>{termEnt(mc) || '—'}</td>
+                    <td style={{ position: 'sticky', left: 90, zIndex: 1, background: '#fff', fontWeight: 600, padding: '5px 10px', borderBottom: '1px solid #eef1f4', whiteSpace: 'nowrap' }}>{mc}</td>
                     {proj.cols.map((c) => <td key={c} style={{ padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '1px solid #eef1f4', color: c === 'Vencido' && proj.map[mc][c] ? '#c0392b' : '#222' }}>{proj.map[mc][c] ? fmt(Math.round(proj.map[mc][c])) : ''}</td>)}
                     <td style={{ padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, borderBottom: '1px solid #eef1f4', background: '#fafbfc' }}>{fmt(Math.round(rt))}</td>
                   </tr> })}
                   <tr style={{ fontWeight: 800, background: '#eef2f7' }}>
-                    <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#eef2f7', padding: '6px 10px', whiteSpace: 'nowrap' }}>TOTAL</td>
+                    <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#eef2f7', padding: '6px 10px', whiteSpace: 'nowrap' }}></td>
+                    <td style={{ position: 'sticky', left: 90, zIndex: 1, background: '#eef2f7', padding: '6px 10px', whiteSpace: 'nowrap' }}>TOTAL</td>
                     {proj.cols.map((c) => { const ct = proj.marcas.reduce((a, mc) => a + (proj.map[mc][c] || 0), 0); return <td key={c} style={{ padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: c === 'Vencido' ? '#c0392b' : '#222' }}>{fmt(Math.round(ct))}</td> })}
                     <td style={{ padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(Math.round(proj.marcas.reduce((a, mc) => a + proj.cols.reduce((b, c) => b + (proj.map[mc][c] || 0), 0), 0)))}</td>
                   </tr>
