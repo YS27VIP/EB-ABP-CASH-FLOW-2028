@@ -5580,7 +5580,9 @@ function FlujoPiramide() {
 // ===== EBP Evolution: compara el plan (Master) con la realidad de Monday (pestaña Monday_SS27). Solo Energy Brands. =====
 function EbpEvolutionScreen({ empresa, sbus }) {
   const [rows, setRows] = useState([]); const [load, setLoad] = useState(true); const [err, setErr] = useState(null); const [stamp, setStamp] = useState('')
-  const [fMarca, setFMarca] = useState('(todas)'); const [fTemp, setFTemp] = useState('(todas)'); const [fStatus, setFStatus] = useState('OPEN'); const [buscar, setBuscar] = useState(''); const [fTipo, setFTipo] = useState('CASHFLOW')
+  const [selMarca, setSelMarca] = useState(() => new Set()); const [selTemp, setSelTemp] = useState(() => new Set()); const [selStat, setSelStat] = useState(() => new Set(['OPEN'])); const [buscar, setBuscar] = useState('')
+  const [selTipo, setSelTipo] = useState(() => new Set(['PREVENTA', 'PROYECCION', 'VENTADESTOCK', 'MUESTRAS', 'SAMPLES', 'STOCK']))
+  const toggleSel = (setter, val) => setter((s) => { const n = new Set(s); n.has(val) ? n.delete(val) : n.add(val); return n })
   const cargar = async () => {
     setLoad(true); setErr(null)
     try {
@@ -5615,15 +5617,18 @@ function EbpEvolutionScreen({ empresa, sbus }) {
   const marcas = [...new Set(rows.map((r) => r.marca).filter(Boolean))].sort()
   const temps = [...new Set(rows.map((r) => r.tempC).filter(Boolean))].sort()
   const estados = [...new Set(rows.map((r) => r.status).filter(Boolean))].sort()
-  // Order Type (para cash flow): por defecto solo Preventa / Proyección / Venta de Stock / Muestras.
+  // Order Type (la selección es AQUÍ en la herramienta, no en Monday). Por defecto: Preventa / Proyección / Venta de Stock / Muestras.
   const normTipo = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z]/g, '')
-  const CASH_TIPOS = new Set(['PREVENTA', 'PROYECCION', 'VENTADESTOCK', 'STOCK', 'SAMPLES', 'MUESTRAS'])
   const hayTipo = rows.some((r) => r.tipo)
-  const tiposList = [...new Set(rows.map((r) => r.tipo).filter(Boolean))].sort()
-  const tipoOk = (r) => { if (!hayTipo) return true; if (fTipo === '(todos)') return true; if (fTipo === 'CASHFLOW') return CASH_TIPOS.has(normTipo(r.tipo)); return r.tipo === fTipo }
+  // Chips de order type: los 4 fijos de cash flow + los demás tipos que vengan en los datos.
+  const CASH_CHIPS = [['Preventa', 'PREVENTA'], ['Proyección', 'PROYECCION'], ['Venta de Stock', 'VENTADESTOCK'], ['Muestras', 'MUESTRAS']]
+  const tipoChips = (() => { const out = [...CASH_CHIPS]; const seen = new Set(out.map((c) => c[1])); rows.forEach((r) => { if (!r.tipo) return; const n = normTipo(r.tipo); if (n === 'SAMPLES') return; if (!seen.has(n)) { seen.add(n); out.push([r.tipo, n]) } }); return out })()
+  // multi-selección: un Set vacío = todo; si tiene elementos, filtra por esos.
+  const inSel = (s, v) => s.size === 0 || s.has(v)
+  const tipoOk = (r) => { if (!hayTipo || selTipo.size === 0) return true; const n = normTipo(r.tipo); return selTipo.has(n) || (n === 'SAMPLES' && selTipo.has('MUESTRAS')) }
   // Cliente real: en Monday el cliente real está en la columna PO, SALVO para TAHO (donde PO es el nº de orden y el cliente es TAHO). Si PO viene vacío, se usa el canal (CLIENTE).
   const cliReal = (r) => (upper(r.cliente) === 'TAHO') ? 'TAHO' : (r.po && r.po.trim() ? r.po.trim() : (r.cliente || '(sin cliente)'))
-  const fil = rows.filter((r) => (fMarca === '(todas)' || upper(r.marca) === upper(fMarca)) && (fTemp === '(todas)' || upper(r.tempC) === upper(fTemp)) && (fStatus === '(todos)' || r.status === fStatus) && tipoOk(r) && (!buscar.trim() || upper(cliReal(r)).indexOf(upper(buscar)) >= 0 || upper(r.cliente).indexOf(upper(buscar)) >= 0))
+  const fil = rows.filter((r) => inSel(selMarca, r.marca) && inSel(selTemp, r.tempC) && inSel(selStat, r.status) && tipoOk(r) && (!buscar.trim() || upper(cliReal(r)).indexOf(upper(buscar)) >= 0 || upper(r.cliente).indexOf(upper(buscar)) >= 0))
   // Agrupa por cliente armonizado + marca (la marca va en columna)
   const porCli = {}; fil.forEach((r) => {
     const real = cliReal(r); const a = armOn ? armDe(real) : { arm: real, ok: true }
@@ -5637,11 +5642,12 @@ function EbpEvolutionScreen({ empresa, sbus }) {
   const termDe = (o) => { const e = Object.entries(o.terms).sort((a, b) => b[1] - a[1])[0]; return e ? e[0] : '—' }
   const totU = fil.reduce((a, r) => a + r.unidades, 0), totPV = fil.reduce((a, r) => a + r.pv, 0)
   // Plan del Master (si hay una marca seleccionada y su Master está importado en Producto → Saldos)
+  const marcaUnica = selMarca.size === 1 ? [...selMarca][0] : null
   const planMaster = (() => {
-    if (fMarca === '(todas)') return null
+    if (!marcaUnica) return null
     let saldo = {}; try { saldo = JSON.parse(localStorage.getItem('saldos_ENERGY BRANDS') || '{}') } catch { }
-    const key = Object.keys(saldo || {}).find((k) => upper(k) === upper(fMarca)); if (!key) return null
-    const mcs = (saldo[key].masterCliS) || {}; const seasons = fTemp === '(todas)' ? Object.keys(mcs) : [fTemp]
+    const key = Object.keys(saldo || {}).find((k) => upper(k) === upper(marcaUnica)); if (!key) return null
+    const mcs = (saldo[key].masterCliS) || {}; const seasons = selTemp.size ? [...selTemp] : Object.keys(mcs)
     let total = 0, hay = false; seasons.forEach((s) => { const o = mcs[s] || {}; Object.values(o).forEach((v) => { total += num(v); hay = true }) })
     return hay ? total : null
   })()
@@ -5657,25 +5663,31 @@ function EbpEvolutionScreen({ empresa, sbus }) {
       {err && <div className="banner" style={{ marginBottom: 12 }}>⚠️ {err}</div>}
       {!err && <>
         <div className="panel">
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 10 }}>
-            <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>Marca
-              <select value={fMarca} onChange={(e) => setFMarca(e.target.value)}><option>(todas)</option>{marcas.map((m) => <option key={m}>{m}</option>)}</select></label>
-            <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>Temporada
-              <select value={fTemp} onChange={(e) => setFTemp(e.target.value)}><option>(todas)</option>{temps.map((t) => <option key={t}>{t}</option>)}</select></label>
-            <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>Estatus
-              <select value={fStatus} onChange={(e) => setFStatus(e.target.value)}><option>(todos)</option>{estados.map((s) => <option key={s}>{s}</option>)}</select></label>
-            {hayTipo && <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }} title="Para cash flow, por defecto solo Preventa, Proyección, Venta de Stock y Muestras. Cambia a (todos) para ver todos los order type.">Order type
-              <select value={fTipo} onChange={(e) => setFTipo(e.target.value)}><option value="CASHFLOW">💧 Cash flow (Preventa, Proyección, Stock, Muestras)</option><option value="(todos)">(todos)</option>{tiposList.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>}
-            <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>Buscar cliente
-              <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 cliente…" style={{ minWidth: 180 }} /></label>
-            <label className="who" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} title="Agrupa por el CLIENTE ARMONIZADO del EBP (mismo nombre que usa el EBP)."><input type="checkbox" checked={armOn} onChange={(e) => setArmOn(e.target.checked)} /> Armonizar clientes (EBP)</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
+            <div>
+              <div className="who" style={{ marginBottom: 4 }}>💧 Order type <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>(para cash flow · elige varios)</span>{!hayTipo && <span className="unit" style={{ fontWeight: 400, textTransform: 'none', color: '#b45309' }}> · corre el sync de Monday para traer los tipos reales</span>}</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {tipoChips.map(([lbl, n]) => <button key={n} className={'seg' + (selTipo.has(n) ? ' active' : '')} onClick={() => toggleSel(setSelTipo, n)}>{lbl}</button>)}
+                <button className={'seg' + (selTipo.size === 0 ? ' active' : '')} onClick={() => setSelTipo(new Set())}>Todos</button>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+              <div><div className="who" style={{ marginBottom: 4 }}>Marca</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{marcas.map((m) => <button key={m} className={'seg' + (selMarca.has(m) ? ' active' : '')} onClick={() => toggleSel(setSelMarca, m)}>{m}</button>)}<button className={'seg' + (selMarca.size === 0 ? ' active' : '')} onClick={() => setSelMarca(new Set())}>Todas</button></div></div>
+              <div><div className="who" style={{ marginBottom: 4 }}>Temporada</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{temps.map((t) => <button key={t} className={'seg' + (selTemp.has(t) ? ' active' : '')} onClick={() => toggleSel(setSelTemp, t)}>{t}</button>)}<button className={'seg' + (selTemp.size === 0 ? ' active' : '')} onClick={() => setSelTemp(new Set())}>Todas</button></div></div>
+              <div><div className="who" style={{ marginBottom: 4 }}>Estatus</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{estados.map((s) => <button key={s} className={'seg' + (selStat.has(s) ? ' active' : '')} onClick={() => toggleSel(setSelStat, s)}>{s}</button>)}<button className={'seg' + (selStat.size === 0 ? ' active' : '')} onClick={() => setSelStat(new Set())}>Todos</button></div></div>
+            </div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+              <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>Buscar cliente
+                <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 cliente…" style={{ minWidth: 180 }} /></label>
+              <label className="who" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} title="Agrupa por el CLIENTE ARMONIZADO del EBP (mismo nombre que usa el EBP)."><input type="checkbox" checked={armOn} onChange={(e) => setArmOn(e.target.checked)} /> Armonizar clientes (EBP)</label>
+            </div>
           </div>
           {armOn && sinArm > 0 && <div className="sub no-ayuda" style={{ color: '#b45309', marginBottom: 2 }}>🔸 {sinArm} cliente(s) sin match en la base armonizada del EBP (se muestran con su nombre de Monday). Si alguno debería cuadrar, agrégalo en la hoja "BASE DE DATOS CLIENTE Y PAIS" del EBP.</div>}
           {planMaster != null && <div className="sub no-ayuda" style={{ marginBottom: 2 }}>🎯 <b>Plan Master:</b> {fmt(planMaster)} · Real Monday: {fmt(totPV)}{dev != null && <span className={dev >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}> · {(dev >= 0 ? '+' : '') + dev.toFixed(0)}% vs plan</span>}</div>}
-          {planMaster == null && fMarca !== '(todas)' && <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay Master importado para <b>{fMarca}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
+          {planMaster == null && marcaUnica && <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay Master importado para <b>{marcaUnica}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
         </div>
         <div className="panel">
-          <h3 style={{ color: '#0e7490' }}>Realidad por cliente <span className="unit">(Monday · {fStatus === '(todos)' ? 'todos los estatus' : fStatus})</span></h3>
+          <h3 style={{ color: '#0e7490' }}>Realidad por cliente <span className="unit">(Monday · {selStat.size ? [...selStat].join(', ') : 'todos los estatus'})</span></h3>
           {load ? <div className="sub no-ayuda">Cargando…</div> : lista.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay órdenes para este filtro.</div> :
             <div className="tablewrap" style={{ marginTop: 6 }}>
               <table className="vfix" style={{ width: 'auto', minWidth: 620 }}>
