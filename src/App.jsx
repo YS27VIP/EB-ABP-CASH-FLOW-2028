@@ -5703,7 +5703,7 @@ function CobrosScreen() {
   const [repNivel, setRepNivel] = useState('ent'); const [repFiltro, setRepFiltro] = useState('todas')
   const [form, setForm] = useState({ fecha: new Date().toISOString().slice(0, 10), nivel: 'Orden', entidad: '', orden: '', monto: '', semana: '', comentario: '' })
   const [savingPago, setSavingPago] = useState(false)
-  const [saldoIni, setSaldoIni] = useState(0)
+  const [saldoIni, setSaldoIni] = useState(0); const [grpFlujo, setGrpFlujo] = useState('ambos')
   const bU = (b) => String(b || '').trim().toUpperCase()
   const termOf = (b) => { const k = bU(b); return termEdits[k] !== undefined ? termEdits[k] : (termMap[k] || '') }
   const setTerm = (b, v) => { const k = bU(b); setTermEdits((s) => ({ ...s, [k]: v })) }
@@ -5773,12 +5773,17 @@ function CobrosScreen() {
   const flujo = (() => {
     const b = new Date(); const startMs = Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1); const horizonMs = Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + 12, 1)
     const ing = {}, egr = {}; const meses = new Set(); const fl = { v: false, p: false, s: false }
-    const add = (store, o, out) => { const amt = pendM(o, out); if (amt <= 0.5) return; const d = dueDateM(o, out); const temp = (String(o['Temporada'] || '').trim() || '(sin temporada)'); let k; if (!d) { k = 'Sin fecha'; fl.s = true } else { const t = d.getTime(); if (t < startMs) { k = 'Vencido'; fl.v = true } else if (t >= horizonMs) { k = 'Posterior'; fl.p = true } else { k = ym(d); meses.add(k) } } (store[temp] || (store[temp] = {}))[k] = (store[temp][k] || 0) + amt }
+    const add = (store, o, out) => { const amt = pendM(o, out); if (amt <= 0.5) return; const d = dueDateM(o, out); const temp = (String(o['Temporada'] || '').trim() || '(sin temporada)'); const mca = (String(o['Marca'] || '').trim() || '(sin marca)'); let k; if (!d) { k = 'Sin fecha'; fl.s = true } else { const t = d.getTime(); if (t < startMs) { k = 'Vencido'; fl.v = true } else if (t >= horizonMs) { k = 'Posterior'; fl.p = true } else { k = ym(d); meses.add(k) } } const tt = store[temp] || (store[temp] = {}); const mm = tt[mca] || (tt[mca] = {}); mm[k] = (mm[k] || 0) + amt }
     rowsIn.forEach((o) => add(ing, o, false)); rowsOut.forEach((o) => add(egr, o, true))
     const cols = [...(fl.v ? ['Vencido'] : []), ...[...meses].sort(), ...(fl.p ? ['Posterior'] : []), ...(fl.s ? ['Sin fecha'] : [])]
-    const sum = (store, c) => Object.keys(store).reduce((a, t) => a + (store[t][c] || 0), 0)
-    return { ing, egr, cols, tempsIng: Object.keys(ing).sort(), tempsEgr: Object.keys(egr).sort(), sum }
+    const sumTempCol = (store, t, c) => Object.keys(store[t] || {}).reduce((a, m) => a + ((store[t][m] || {})[c] || 0), 0)
+    const sumCol = (store, c) => Object.keys(store).reduce((a, t) => a + sumTempCol(store, t, c), 0)
+    const marcasDe = (store, t) => Object.keys(store[t] || {}).sort()
+    const allMarcas = (store) => [...new Set(Object.values(store).flatMap((tt) => Object.keys(tt)))].sort()
+    const sumMarcaCol = (store, m, c) => Object.keys(store).reduce((a, t) => a + ((store[t][m] || {})[c] || 0), 0)
+    return { ing, egr, cols, temps: { ing: Object.keys(ing).sort(), egr: Object.keys(egr).sort() }, sumTempCol, sumCol, marcasDe, allMarcas, sumMarcaCol }
   })()
+  const flujoRows = (store, temps) => { const out = []; if (grpFlujo === 'temp') { temps.forEach((t) => out.push({ label: t, bold: true, get: (c) => flujo.sumTempCol(store, t, c) })) } else if (grpFlujo === 'marca') { flujo.allMarcas(store).forEach((m) => out.push({ label: m, get: (c) => flujo.sumMarcaCol(store, m, c) })) } else { temps.forEach((t) => { out.push({ label: t, bold: true, get: (c) => flujo.sumTempCol(store, t, c) }); flujo.marcasDe(store, t).forEach((m) => out.push({ label: m, indent: true, get: (c) => (store[t][m] || {})[c] || 0 })) }) } return out }
   const marcas = [...new Set(rows.map((o) => String(o.Marca || '').trim()).filter(Boolean))].sort()
   const hayTermEdits = Object.keys(termEdits).length > 0
   const guardarTerminos = async () => { const tm = { ...termMap }; Object.keys(termEdits).forEach((k) => tm[k] = termEdits[k]); const ms = [...new Set([...marcas.map(bU), ...Object.keys(tm)])].sort(); const mat = [['MARCA', 'TERMINO_PROVEEDOR'], ...ms.map((m) => [m, tm[m] || ''])]; await gWriteReport('Config_TerminoMarca', mat); setTermMap(tm); setTermEdits({}); return tm }
@@ -5831,16 +5836,16 @@ function CobrosScreen() {
   const exportarProyeccion = () => { const aoa = [['Término', (esOut ? 'Marca' : 'Cliente'), ...proj.cols.map(colLbl), 'Total'], ...proj.marcas.map((mc) => { const rt = proj.cols.reduce((a, c) => a + (proj.map[mc][c] || 0), 0); return [termEnt(mc), mc, ...proj.cols.map((c) => proj.map[mc][c] || 0), rt] }), ['', 'TOTAL', ...proj.cols.map((c) => proj.marcas.reduce((a, mc) => a + (proj.map[mc][c] || 0), 0)), proj.marcas.reduce((a, mc) => a + proj.cols.reduce((b, c) => b + (proj.map[mc][c] || 0), 0), 0)]]; exportXlsx(aoa, (esOut ? 'Proyeccion_Pagos' : 'Proyeccion_Cobros') + '.xlsx') }
   const exportarFlujo = () => {
     const cols = flujo.cols; const ini = {}, fin = {}; let prev = num(saldoIni)
-    cols.forEach((c) => { ini[c] = prev; const net = flujo.sum(flujo.ing, c) - flujo.sum(flujo.egr, c); fin[c] = prev + net; prev = fin[c] })
+    cols.forEach((c) => { ini[c] = prev; const net = flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c); fin[c] = prev + net; prev = fin[c] })
     const aoa = [['Flujo de fondos', ...cols.map(colLbl)]]
     aoa.push(['Saldo inicial', ...cols.map((c) => Math.round(ini[c]))])
     aoa.push(['INGRESOS (cobros)', ...cols.map(() => '')])
-    flujo.tempsIng.forEach((t) => aoa.push([t, ...cols.map((c) => Math.round(flujo.ing[t][c] || 0))]))
-    aoa.push(['Total ingresos', ...cols.map((c) => Math.round(flujo.sum(flujo.ing, c)))])
+    flujoRows(flujo.ing, flujo.temps.ing).forEach((r) => aoa.push([(r.indent ? '   ' : '') + r.label, ...cols.map((c) => Math.round(r.get(c) || 0))]))
+    aoa.push(['Total ingresos', ...cols.map((c) => Math.round(flujo.sumCol(flujo.ing, c)))])
     aoa.push(['EGRESOS (pagos)', ...cols.map(() => '')])
-    flujo.tempsEgr.forEach((t) => aoa.push([t, ...cols.map((c) => Math.round(flujo.egr[t][c] || 0))]))
-    aoa.push(['Total egresos', ...cols.map((c) => Math.round(flujo.sum(flujo.egr, c)))])
-    aoa.push(['Flujo neto', ...cols.map((c) => Math.round(flujo.sum(flujo.ing, c) - flujo.sum(flujo.egr, c)))])
+    flujoRows(flujo.egr, flujo.temps.egr).forEach((r) => aoa.push([(r.indent ? '   ' : '') + r.label, ...cols.map((c) => Math.round(r.get(c) || 0))]))
+    aoa.push(['Total egresos', ...cols.map((c) => Math.round(flujo.sumCol(flujo.egr, c)))])
+    aoa.push(['Flujo neto', ...cols.map((c) => Math.round(flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c)))])
     aoa.push(['Saldo final', ...cols.map((c) => Math.round(fin[c]))])
     exportXlsx(aoa, 'Flujo_de_fondos.xlsx')
   }
@@ -5985,6 +5990,8 @@ function CobrosScreen() {
           <span className="empchip" style={{ background: '#1d4ed8', marginLeft: 0, fontSize: 13, padding: '4px 12px' }}>💵 Flujo de fondos proyectado</span>
           <span className="unit" style={{ alignSelf: 'center' }}>Saldo inicial:</span>
           <input type="number" value={saldoIni} onChange={(e) => setSaldoIni(Number(e.target.value) || 0)} onBlur={() => { gWriteReport('Config_Flujo', [['CLAVE', 'VALOR'], ['SALDO_INICIAL', saldoIni]]).catch(() => { }) }} style={{ width: 130, textAlign: 'right' }} />
+          <span className="unit" style={{ alignSelf: 'center', marginLeft: 8 }}>Desglose:</span>
+          <select value={grpFlujo} onChange={(e) => setGrpFlujo(e.target.value)}><option value="temp">Por temporada</option><option value="marca">Por marca</option><option value="ambos">Temporada › Marca</option></select>
           <div className="spacer"></div>
           <button className="btn" onClick={exportarFlujo}>⬇ Excel</button>
         </div>
@@ -5992,9 +5999,9 @@ function CobrosScreen() {
           {flujo.cols.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay flujo proyectado todavía (faltan XFD/términos en Monday).</div> :
             (() => {
               const cols = flujo.cols; const ini = {}, fin = {}; let prev = num(saldoIni)
-              cols.forEach((c) => { ini[c] = prev; const net = flujo.sum(flujo.ing, c) - flujo.sum(flujo.egr, c); fin[c] = prev + net; prev = fin[c] })
+              cols.forEach((c) => { ini[c] = prev; const net = flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c); fin[c] = prev + net; prev = fin[c] })
               const cel = (v, opts = {}) => <td style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '1px solid #eef1f4', ...opts }}>{v ? fmt(Math.round(v)) : ''}</td>
-              const H = (txt, bg, bold = true) => <td style={{ position: 'sticky', left: 0, zIndex: 1, background: bg || '#fff', padding: '4px 10px', whiteSpace: 'nowrap', fontWeight: bold ? 700 : 400, borderBottom: '1px solid #eef1f4' }}>{txt}</td>
+              const H = (txt, bg, bold = true, indent = false) => <td style={{ position: 'sticky', left: 0, zIndex: 1, background: bg || '#fff', padding: indent ? '4px 10px 4px 26px' : '4px 10px', whiteSpace: 'nowrap', fontWeight: bold ? 700 : 400, color: indent ? '#444' : '#111', borderBottom: '1px solid #eef1f4' }}>{txt}</td>
               return <div className="tablewrap" style={{ maxHeight: '70vh', overflow: 'auto' }}>
                 <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead><tr>
