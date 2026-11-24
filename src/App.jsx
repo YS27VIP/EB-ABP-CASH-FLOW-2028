@@ -5802,11 +5802,12 @@ function EbpEvolutionScreen({ empresa, sbus }) {
         const iTO = ix('ORDER_TYPE') >= 0 ? ix('ORDER_TYPE') : ix('TIPO_ORDEN')
         const iOD = ix('ORDER_DATE'), iEnc = ix('ENCARGADO'), iCost = ix('COST'), iXF = ix('XF'), iETA = ix('ETA'), iEDD = ix('EDD') >= 0 ? ix('EDD') : ix('ESTIMATED_DELIVERY'), iLog = ix('LOG_STATUS'), iSF = ix('CLIENTE_SF')
         const g = (r, i) => i >= 0 ? String(r[i] || '').trim() : ''
+        const gF = (r, i) => { if (i < 0) return ''; const v = r[i]; const s = String(v == null ? '' : v); const nn = Number(s); if (s && !isNaN(nn) && nn > 30000 && nn < 90000) { return new Date(Date.UTC(1899, 11, 30) + Math.round(nn) * 86400000).toISOString().slice(0, 10) } return s.trim() }
         const out = []; let st = ''
         j.values.slice(1).forEach((r) => {
           if (String(r[0] || '').toLowerCase().indexOf('actualizado') === 0) { st = String(r[1] || ''); return }
           if (!r[iC] && !r[iM]) return
-          out.push({ marca: String(r[iM] || ''), cliente: String(r[iC] || '').trim(), po: String(r[iPO] || ''), unidades: num(r[iU]), pv: num(r[iPV]), status: String(r[iS] || '').toUpperCase(), termino: String(r[iT] || ''), tipo: iTO >= 0 ? String(r[iTO] || '').trim() : '', temp: String(r[iTe] || ''), tempC: String(r[iTc] || (iTe >= 0 ? r[iTe] : '')).toUpperCase(), orderDate: g(r, iOD), encargado: g(r, iEnc), cost: num(iCost >= 0 ? r[iCost] : 0), xf: g(r, iXF), eta: g(r, iETA), edd: g(r, iEDD), logStatus: g(r, iLog), clienteSF: g(r, iSF) })
+          out.push({ marca: String(r[iM] || ''), cliente: String(r[iC] || '').trim(), po: String(r[iPO] || ''), unidades: num(r[iU]), pv: num(r[iPV]), status: String(r[iS] || '').toUpperCase(), termino: String(r[iT] || ''), tipo: iTO >= 0 ? String(r[iTO] || '').trim() : '', temp: String(r[iTe] || ''), tempC: String(r[iTc] || (iTe >= 0 ? r[iTe] : '')).toUpperCase(), orderDate: gF(r, iOD), encargado: g(r, iEnc), cost: num(iCost >= 0 ? r[iCost] : 0), xf: gF(r, iXF), eta: gF(r, iETA), edd: gF(r, iEDD), logStatus: g(r, iLog), clienteSF: g(r, iSF) })
         })
         setRows(out); setStamp(st)
       } else { setRows([]); setErr('La pestaña Monday_SS27 aún no tiene datos. Corre la tarea "Sync Monday" y vuelve.') }
