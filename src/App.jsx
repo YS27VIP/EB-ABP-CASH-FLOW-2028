@@ -5703,6 +5703,7 @@ function CobrosScreen() {
   const [repNivel, setRepNivel] = useState('ent'); const [repFiltro, setRepFiltro] = useState('todas')
   const [form, setForm] = useState({ fecha: new Date().toISOString().slice(0, 10), nivel: 'Orden', entidad: '', orden: '', monto: '', semana: '', comentario: '' })
   const [savingPago, setSavingPago] = useState(false)
+  const [saldoIni, setSaldoIni] = useState(0)
   const bU = (b) => String(b || '').trim().toUpperCase()
   const termOf = (b) => { const k = bU(b); return termEdits[k] !== undefined ? termEdits[k] : (termMap[k] || '') }
   const setTerm = (b, v) => { const k = bU(b); setTermEdits((s) => ({ ...s, [k]: v })) }
@@ -5720,6 +5721,7 @@ function CobrosScreen() {
     setLoad(true); setErr('')
     try {
       try { const tj = await gReadTab('Config_TerminoMarca'); if (tj && tj.ok && tj.values && tj.values.length > 1) { const tm = {}; tj.values.slice(1).forEach((r) => { if (r && r[0]) tm[bU(r[0])] = String(r[1] || '') }); setTermMap(tm) } } catch { }
+      try { const fj = await gReadTab('Config_Flujo'); if (fj && fj.ok && fj.values) { const row = fj.values.find((r) => bU(r[0]) === 'SALDO_INICIAL'); if (row) setSaldoIni(num(row[1])) } } catch { }
       const leeLog = async (tab) => { try { const pj = await gReadTab(tab); const arr = []; if (pj && pj.ok && pj.values && pj.values.length > 1) { const H = pj.values[0].map((h) => String(h || '')); pj.values.slice(1).forEach((r) => { if ((r || []).some((x) => x !== '' && x != null)) { const o = {}; H.forEach((h, i) => o[h] = (r[i] != null ? r[i] : '')); if (o.Marca && !o.Entidad) o.Entidad = o.Marca; arr.push(o) } }) } return arr } catch { return [] } }
       setLogOut(await leeLog('Pagos_Log')); setLogIn(await leeLog('Cobros_Log'))
       const j = await gReadTab('Cobros_Finanzas')
@@ -5754,13 +5756,28 @@ function CobrosScreen() {
   const plazoDe = (o) => { const dias = diasFactura(o); if (dias == null) return ''; const s = String(o['Termino'] || '').toLowerCase(); if (/consign/.test(s)) return 'Consignación'; return dias > parseDias(o['Termino']) ? 'Fuera de plazo' : 'Dentro de plazo' }
   const diasDe = (o) => esOut ? parseDias(termOf(o['Marca'])) : parseDias(o['Termino'])
   const pagoSugerido = (o) => { const base = aDate(o['Customer XFD']); if (!base) return null; const d = new Date(base.getTime()); d.setUTCDate(d.getUTCDate() + diasDe(o)); return d }
-  const colLbl = (k) => (k === 'Vencido' || k === 'Posterior') ? k : mesLbl(k)
+  const colLbl = (k) => (k === 'Vencido' || k === 'Posterior' || k === 'Sin fecha') ? k : mesLbl(k)
   const proj = (() => {
     const b = new Date(); const startMs = Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1); const horizonMs = Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + 12, 1)
     const map = {}; const meses = new Set(); let sinFecha = 0, venc = false, post = false
     baseRows.forEach((o) => { const d = pagoSugerido(o); const amt = Math.max(0, amtOf(o) - pagEff(o)); if (amt <= 0.5) return; if (!d) { sinFecha += amt; return } const t = d.getTime(); let k; if (t < startMs) { k = 'Vencido'; venc = true } else if (t >= horizonMs) { k = 'Posterior'; post = true } else { k = ym(d); meses.add(k) } const mc = (esOut ? o.Marca : o.Cliente) || '(sin)'; (map[mc] || (map[mc] = {}))[k] = (map[mc][k] || 0) + amt })
     const cols = [...(venc ? ['Vencido'] : []), ...[...meses].sort(), ...(post ? ['Posterior'] : [])]
     return { map, cols, marcas: Object.keys(map).sort(), sinFecha }
+  })()
+  // ===== Flujo de fondos proyectado (combina Cash In = ingresos y Cash Out = egresos), mes a mes con saldo arrastrado =====
+  const rowsOut = rows.filter((o) => bU(o['Order Type']) === 'COMPRA')
+  const rowsIn = rows.filter((o) => bU(o['Order Type']) !== 'COMPRA' && num(o['Price']) > 0)
+  const pagOrdenLog = (name, log) => log.filter((p) => String(p.Nivel) === 'Orden' && bU(p.Orden) === bU(name)).reduce((a, p) => a + num(p.Monto), 0)
+  const dueDateM = (o, out) => { const base = aDate(o['Customer XFD']); if (!base) return null; const d = new Date(base.getTime()); d.setUTCDate(d.getUTCDate() + (out ? parseDias(termOf(o['Marca'])) : parseDias(o['Termino']))); return d }
+  const pendM = (o, out) => { const amt = num(out ? o['Cost'] : o['Price']); const flag = out ? bU(o['Pago Enviado']) === 'YES' : bU(o['Pago Recibido']) === 'YES'; return Math.max(0, amt - (flag ? amt : pagOrdenLog(o.Name, out ? logOut : logIn))) }
+  const flujo = (() => {
+    const b = new Date(); const startMs = Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1); const horizonMs = Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + 12, 1)
+    const ing = {}, egr = {}; const meses = new Set(); const fl = { v: false, p: false, s: false }
+    const add = (store, o, out) => { const amt = pendM(o, out); if (amt <= 0.5) return; const d = dueDateM(o, out); const temp = (String(o['Temporada'] || '').trim() || '(sin temporada)'); let k; if (!d) { k = 'Sin fecha'; fl.s = true } else { const t = d.getTime(); if (t < startMs) { k = 'Vencido'; fl.v = true } else if (t >= horizonMs) { k = 'Posterior'; fl.p = true } else { k = ym(d); meses.add(k) } } (store[temp] || (store[temp] = {}))[k] = (store[temp][k] || 0) + amt }
+    rowsIn.forEach((o) => add(ing, o, false)); rowsOut.forEach((o) => add(egr, o, true))
+    const cols = [...(fl.v ? ['Vencido'] : []), ...[...meses].sort(), ...(fl.p ? ['Posterior'] : []), ...(fl.s ? ['Sin fecha'] : [])]
+    const sum = (store, c) => Object.keys(store).reduce((a, t) => a + (store[t][c] || 0), 0)
+    return { ing, egr, cols, tempsIng: Object.keys(ing).sort(), tempsEgr: Object.keys(egr).sort(), sum }
   })()
   const marcas = [...new Set(rows.map((o) => String(o.Marca || '').trim()).filter(Boolean))].sort()
   const hayTermEdits = Object.keys(termEdits).length > 0
@@ -5801,17 +5818,32 @@ function CobrosScreen() {
     setUpd(false)
   }
   // Reporte
-  const repEnt = entidades.map((e) => { const costo = amtEnt(e); const pagado = pagEntEff(e); const pend = costo - pagado; return { k: e, ent: e, termino: esOut ? termOf(e) : '', ordenes: baseRows.filter((o) => bU(o[dimField]) === bU(e)).length, costo, pagado, pend, estado: pend <= 0.5 ? okEst : 'Pendiente' } })
-  const repOrden = baseRows.map((o) => { const costo = amtOf(o); const pagado = pagEff(o); const pend = costo - pagado; return { k: o.Name, name: o.Name, marca: o.Marca, cliente: o.Cliente, costo, pagado, pend, estado: pend <= 0.5 ? okEst : 'Pendiente' } })
+  const repEnt = entidades.map((e) => { const costo = amtEnt(e); const pagado = pagEntEff(e); const pend = costo - pagado; const vencido = esOut ? 0 : baseRows.filter((o) => bU(o[dimField]) === bU(e) && plazoDe(o) === 'Fuera de plazo').reduce((a, o) => a + Math.max(0, amtOf(o) - pagEff(o)), 0); return { k: e, ent: e, termino: termEnt(e), ordenes: baseRows.filter((o) => bU(o[dimField]) === bU(e)).length, costo, pagado, pend, vencido, estado: pend <= 0.5 ? okEst : 'Pendiente' } })
+  const repOrden = baseRows.map((o) => { const costo = amtOf(o); const pagado = pagEff(o); const pend = costo - pagado; return { k: o.Name, name: o.Name, marca: o.Marca, cliente: o.Cliente, costo, pagado, pend, dias: diasFactura(o), plazo: plazoDe(o), estado: pend <= 0.5 ? okEst : 'Pendiente' } })
   const filEstado = (arr) => arr.filter((r) => repFiltro === 'todas' || (repFiltro === 'pendientes' ? r.estado === 'Pendiente' : r.estado !== 'Pendiente'))
   const repData = filEstado(repNivel === 'ent' ? repEnt : repOrden)
   const tot = repData.reduce((a, r) => ({ costo: a.costo + r.costo, pagado: a.pagado + r.pagado, pend: a.pend + r.pend }), { costo: 0, pagado: 0, pend: 0 })
   const pref = esOut ? 'CashOut' : 'CashIn'
   const exportarReporte = () => {
-    if (repNivel === 'ent') { const aoa = [[entLbl, 'Término', 'Órdenes', amtLbl, verbo, 'Pendiente', 'Estado'], ...filEstado(repEnt).map((r) => [r.ent, r.termino, r.ordenes, r.costo, r.pagado, r.pend, r.estado]), ['TOTAL', '', '', tot.costo, tot.pagado, tot.pend, '']]; exportXlsx(aoa, pref + '_por_' + entLbl + '.xlsx') }
-    else { const aoa = [['Orden', 'Marca', 'Cliente', amtLbl, verbo, 'Pendiente', 'Estado'], ...filEstado(repOrden).map((r) => [r.name, r.marca, r.cliente, r.costo, r.pagado, r.pend, r.estado]), ['TOTAL', '', '', tot.costo, tot.pagado, tot.pend, '']]; exportXlsx(aoa, pref + '_por_orden.xlsx') }
+    if (repNivel === 'ent') { const aoa = [[entLbl, 'Término', 'Órdenes', amtLbl, verbo, 'Pendiente', ...(!esOut ? ['Fuera de plazo'] : []), 'Estado'], ...filEstado(repEnt).map((r) => [r.ent, r.termino, r.ordenes, r.costo, r.pagado, r.pend, ...(!esOut ? [r.vencido || 0] : []), r.estado]), ['TOTAL', '', '', tot.costo, tot.pagado, tot.pend, ...(!esOut ? [filEstado(repEnt).reduce((a, r) => a + (r.vencido || 0), 0)] : []), '']]; exportXlsx(aoa, pref + '_por_' + entLbl + '.xlsx') }
+    else { const aoa = [['Orden', 'Marca', 'Cliente', amtLbl, verbo, 'Pendiente', 'Estado', ...(!esOut ? ['Días', 'Plazo'] : [])], ...filEstado(repOrden).map((r) => [r.name, r.marca, r.cliente, r.costo, r.pagado, r.pend, r.estado, ...(!esOut ? [r.dias == null ? '' : r.dias, r.plazo] : [])]), ['TOTAL', '', '', tot.costo, tot.pagado, tot.pend, '']]; exportXlsx(aoa, pref + '_por_orden.xlsx') }
   }
   const exportarProyeccion = () => { const aoa = [['Término', (esOut ? 'Marca' : 'Cliente'), ...proj.cols.map(colLbl), 'Total'], ...proj.marcas.map((mc) => { const rt = proj.cols.reduce((a, c) => a + (proj.map[mc][c] || 0), 0); return [termEnt(mc), mc, ...proj.cols.map((c) => proj.map[mc][c] || 0), rt] }), ['', 'TOTAL', ...proj.cols.map((c) => proj.marcas.reduce((a, mc) => a + (proj.map[mc][c] || 0), 0)), proj.marcas.reduce((a, mc) => a + proj.cols.reduce((b, c) => b + (proj.map[mc][c] || 0), 0), 0)]]; exportXlsx(aoa, (esOut ? 'Proyeccion_Pagos' : 'Proyeccion_Cobros') + '.xlsx') }
+  const exportarFlujo = () => {
+    const cols = flujo.cols; const ini = {}, fin = {}; let prev = num(saldoIni)
+    cols.forEach((c) => { ini[c] = prev; const net = flujo.sum(flujo.ing, c) - flujo.sum(flujo.egr, c); fin[c] = prev + net; prev = fin[c] })
+    const aoa = [['Flujo de fondos', ...cols.map(colLbl)]]
+    aoa.push(['Saldo inicial', ...cols.map((c) => Math.round(ini[c]))])
+    aoa.push(['INGRESOS (cobros)', ...cols.map(() => '')])
+    flujo.tempsIng.forEach((t) => aoa.push([t, ...cols.map((c) => Math.round(flujo.ing[t][c] || 0))]))
+    aoa.push(['Total ingresos', ...cols.map((c) => Math.round(flujo.sum(flujo.ing, c)))])
+    aoa.push(['EGRESOS (pagos)', ...cols.map(() => '')])
+    flujo.tempsEgr.forEach((t) => aoa.push([t, ...cols.map((c) => Math.round(flujo.egr[t][c] || 0))]))
+    aoa.push(['Total egresos', ...cols.map((c) => Math.round(flujo.sum(flujo.egr, c)))])
+    aoa.push(['Flujo neto', ...cols.map((c) => Math.round(flujo.sum(flujo.ing, c) - flujo.sum(flujo.egr, c)))])
+    aoa.push(['Saldo final', ...cols.map((c) => Math.round(fin[c]))])
+    exportXlsx(aoa, 'Flujo_de_fondos.xlsx')
+  }
   const exportarPlanilla = () => { const aoa = [['Orden', 'Status', 'Order Type', 'Temp.', 'Marca', 'Cliente', amtLbl, ...(esOut ? ['Término Marca'] : ['Término']), verbo, 'Pendiente', 'Estado', ...(!esOut ? ['Días', 'Plazo'] : [])], ...baseRows.map((o) => { const pg = pagEff(o); const co = amtOf(o); return [o.Name, o.Status, o['Order Type'], o.Temporada, o.Marca, o.Cliente, co, ...(esOut ? [termOf(o.Marca)] : [String(o['Termino'] || '')]), pg, co - pg, (co - pg) <= 0.5 ? okEst : 'Pendiente', ...(!esOut ? [diasFactura(o) == null ? '' : diasFactura(o), plazoDe(o)] : [])] })]; exportXlsx(aoa, (esOut ? 'CashOut_PorPagar' : 'CashIn_PorCobrar') + '.xlsx') }
   const filtered = baseRows.filter((o) => !busca.trim() || (String(o['Cliente'] || '') + ' ' + String(o['Name'] || '') + ' ' + String(o['Marca'] || '')).toUpperCase().indexOf(busca.toUpperCase()) >= 0)
   const ordenesDeEnt = baseRows.filter((o) => bU(o[dimField]) === bU(form.entidad)).map((o) => String(o.Name || ''))
@@ -5826,6 +5858,7 @@ function CobrosScreen() {
         <button className="btn" onClick={() => setVista('planilla')} style={vista === 'planilla' ? { background: '#374151', color: '#fff' } : {}}>Planilla</button>
         <button className="btn" onClick={() => setVista('reporte')} style={vista === 'reporte' ? { background: '#374151', color: '#fff' } : {}}>📊 Reporte</button>
         <button className="btn" onClick={() => setVista('proyeccion')} style={vista === 'proyeccion' ? { background: '#374151', color: '#fff' } : {}}>📅 {esOut ? 'Proyección de pago' : 'Proyección de cobro'}</button>
+        <button className="btn" onClick={() => setVista('flujo')} style={vista === 'flujo' ? { background: '#1d4ed8', color: '#fff' } : {}}>💵 Flujo de fondos</button>
         <button className="btn" disabled={upd} onClick={actualizar} title="Trae de Monday las órdenes abiertas (referencia). No toca lo registrado.">{upd ? 'Actualizando…' : '🔄 Actualizar desde Monday'}</button>
         {esOut && <button className="btn primary" disabled={saving || !hayTermEdits} onClick={guardar} title="Guarda los términos de pago por marca">{saving ? 'Guardando…' : '💾 Guardar términos'}</button>}
       </div>
@@ -5903,16 +5936,16 @@ function CobrosScreen() {
           <div className="tablewrap" style={{ maxHeight: '68vh' }}>
             <table className="vfix gridcols" style={{ fontSize: 12.5, minWidth: 820 }}>
               {repNivel === 'ent' ?
-                <><thead><tr><th className="l">{entLbl}</th>{esOut && <th className="l">Término</th>}<th>Órdenes</th><th>{amtLbl}</th><th>{verbo}</th><th>Pendiente</th><th className="l">Estado</th></tr></thead>
-                  <tbody>{repData.map((r) => <tr key={r.k}><td className="l" style={{ fontWeight: 600 }}>{r.ent}</td>{esOut && <td className="l">{r.termino || '—'}</td>}<td className="tot">{r.ordenes}</td><td className="tot">{money(r.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{money(r.pagado)}</td><td className="tot" style={{ fontWeight: 700, color: r.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(r.pend)}</td><td className="l"><Pill estado={r.estado} /></td></tr>)}
-                    <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l">TOTAL</td>{esOut && <td></td>}<td></td><td className="tot">{money(tot.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{money(tot.pagado)}</td><td className="tot" style={{ color: tot.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(tot.pend)}</td><td></td></tr></tbody></> :
-                <><thead><tr><th className="l">Orden</th><th className="l">Marca</th><th className="l">Cliente</th><th>{amtLbl}</th><th>{verbo}</th><th>Pendiente</th><th className="l">Estado</th></tr></thead>
-                  <tbody>{repData.slice(0, 3000).map((r) => <tr key={r.k}><td className="l">{r.name}</td><td className="l">{r.marca}</td><td className="l sub2">{r.cliente}</td><td className="tot">{money(r.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{r.pagado ? money(r.pagado) : '—'}</td><td className="tot" style={{ fontWeight: 700, color: r.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(r.pend)}</td><td className="l"><Pill estado={r.estado} /></td></tr>)}
-                    <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l">TOTAL</td><td></td><td></td><td className="tot">{money(tot.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{money(tot.pagado)}</td><td className="tot" style={{ color: tot.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(tot.pend)}</td><td></td></tr></tbody></>}
+                <><thead><tr><th className="l">{entLbl}</th><th className="l">Término</th><th>Órdenes</th><th>{amtLbl}</th><th>{verbo}</th><th>Pendiente</th>{!esOut && <th>Fuera de plazo</th>}<th className="l">Estado</th></tr></thead>
+                  <tbody>{repData.map((r) => <tr key={r.k}><td className="l" style={{ fontWeight: 600 }}>{r.ent}</td><td className="l">{r.termino || '—'}</td><td className="tot">{r.ordenes}</td><td className="tot">{money(r.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{money(r.pagado)}</td><td className="tot" style={{ fontWeight: 700, color: r.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(r.pend)}</td>{!esOut && <td className="tot" style={{ color: '#c0392b', fontWeight: 600 }}>{r.vencido ? money(r.vencido) : '—'}</td>}<td className="l"><Pill estado={r.estado} /></td></tr>)}
+                    <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l">TOTAL</td><td></td><td></td><td className="tot">{money(tot.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{money(tot.pagado)}</td><td className="tot" style={{ color: tot.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(tot.pend)}</td>{!esOut && <td className="tot" style={{ color: '#c0392b' }}>{money(repData.reduce((a, r) => a + (r.vencido || 0), 0))}</td>}<td></td></tr></tbody></> :
+                <><thead><tr><th className="l">Orden</th><th className="l">Marca</th><th className="l">Cliente</th><th>{amtLbl}</th><th>{verbo}</th><th>Pendiente</th><th className="l">Estado</th>{!esOut && <th>Días</th>}{!esOut && <th className="l">Plazo</th>}</tr></thead>
+                  <tbody>{repData.slice(0, 3000).map((r) => { const fuera = r.plazo === 'Fuera de plazo'; return <tr key={r.k}><td className="l">{r.name}</td><td className="l">{r.marca}</td><td className="l sub2">{r.cliente}</td><td className="tot">{money(r.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{r.pagado ? money(r.pagado) : '—'}</td><td className="tot" style={{ fontWeight: 700, color: r.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(r.pend)}</td><td className="l"><Pill estado={r.estado} /></td>{!esOut && <td className="tot">{r.dias == null ? '' : fmt(r.dias)}</td>}{!esOut && <td className="l" style={{ color: fuera ? '#c0392b' : r.plazo === 'Consignación' ? '#555' : '#2e7d32', fontWeight: 600 }}>{r.plazo || '—'}</td>}</tr> })}
+                    <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l">TOTAL</td><td></td><td></td><td className="tot">{money(tot.costo)}</td><td className="tot" style={{ color: '#2e7d32' }}>{money(tot.pagado)}</td><td className="tot" style={{ color: tot.pend > 0.5 ? '#c0392b' : '#2e7d32' }}>{money(tot.pend)}</td><td></td>{!esOut && <td></td>}{!esOut && <td></td>}</tr></tbody></>}
             </table>
           </div>
         </div>
-      </> : <>
+      </> : vista === 'proyeccion' ? <>
         <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
           <span className="empchip" style={{ background: esOut ? '#c0392b' : '#2e7d32', marginLeft: 0, fontSize: 13, padding: '4px 12px' }}>📅 {esOut ? 'Proyección de pago (Cash Out)' : 'Proyección de cobro (Cash In)'}</span>
           <span className="unit" style={{ alignSelf: 'center' }}>{esOut ? 'Fecha sugerida = XFD + término de la marca.' : 'Fecha sugerida = XFD + término del cliente.'} Monto = {esOut ? 'costo' : 'venta'} pendiente.</span>
@@ -5946,6 +5979,42 @@ function CobrosScreen() {
               </table>
             </div>}
           {proj.sinFecha > 0.5 && <div className="sub no-ayuda" style={{ color: '#b45309', marginTop: 8 }}>🔸 {money(proj.sinFecha)} en {esOut ? 'compras' : 'ventas'} sin fecha XFD en Monday (no se proyectan hasta que tengan XFD).</div>}
+        </div>
+      </> : <>
+        <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="empchip" style={{ background: '#1d4ed8', marginLeft: 0, fontSize: 13, padding: '4px 12px' }}>💵 Flujo de fondos proyectado</span>
+          <span className="unit" style={{ alignSelf: 'center' }}>Saldo inicial:</span>
+          <input type="number" value={saldoIni} onChange={(e) => setSaldoIni(Number(e.target.value) || 0)} onBlur={() => { gWriteReport('Config_Flujo', [['CLAVE', 'VALOR'], ['SALDO_INICIAL', saldoIni]]).catch(() => { }) }} style={{ width: 130, textAlign: 'right' }} />
+          <div className="spacer"></div>
+          <button className="btn" onClick={exportarFlujo}>⬇ Excel</button>
+        </div>
+        <div className="panel">
+          {flujo.cols.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay flujo proyectado todavía (faltan XFD/términos en Monday).</div> :
+            (() => {
+              const cols = flujo.cols; const ini = {}, fin = {}; let prev = num(saldoIni)
+              cols.forEach((c) => { ini[c] = prev; const net = flujo.sum(flujo.ing, c) - flujo.sum(flujo.egr, c); fin[c] = prev + net; prev = fin[c] })
+              const cel = (v, opts = {}) => <td style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '1px solid #eef1f4', ...opts }}>{v ? fmt(Math.round(v)) : ''}</td>
+              const H = (txt, bg, bold = true) => <td style={{ position: 'sticky', left: 0, zIndex: 1, background: bg || '#fff', padding: '4px 10px', whiteSpace: 'nowrap', fontWeight: bold ? 700 : 400, borderBottom: '1px solid #eef1f4' }}>{txt}</td>
+              return <div className="tablewrap" style={{ maxHeight: '70vh', overflow: 'auto' }}>
+                <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead><tr>
+                    <th style={{ position: 'sticky', left: 0, zIndex: 3, background: '#eef2f7', textAlign: 'left', padding: '6px 10px', minWidth: 190, borderBottom: '2px solid var(--line)' }}>Flujo de fondos</th>
+                    {cols.map((c) => <th key={c} style={{ padding: '6px 10px', minWidth: 92, textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '2px solid var(--line)', background: '#eef2f7', color: c === 'Vencido' ? '#c0392b' : '#333' }}>{colLbl(c)}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    <tr style={{ background: '#eaf1fb' }}>{H('Saldo inicial', '#eaf1fb')}{cols.map((c) => <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700 }}>{fmt(Math.round(ini[c]))}</td>)}</tr>
+                    <tr style={{ background: '#e7f4ea' }}>{H('INGRESOS (cobros)', '#e7f4ea')}{cols.map((c) => <td key={c} style={{ background: '#e7f4ea' }}></td>)}</tr>
+                    {flujo.tempsIng.map((t) => <tr key={'i' + t}>{H(t, '#fff', false)}{cols.map((c) => cel(flujo.ing[t][c], { color: '#2e7d32' }))}</tr>)}
+                    <tr>{H('Total ingresos', '#f3f6fa')}{cols.map((c) => <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: '#2e7d32', borderBottom: '1px solid #eef1f4' }}>{fmt(Math.round(flujo.sum(flujo.ing, c)))}</td>)}</tr>
+                    <tr style={{ background: '#fdecec' }}>{H('EGRESOS (pagos)', '#fdecec')}{cols.map((c) => <td key={c} style={{ background: '#fdecec' }}></td>)}</tr>
+                    {flujo.tempsEgr.map((t) => <tr key={'e' + t}>{H(t, '#fff', false)}{cols.map((c) => cel(flujo.egr[t][c], { color: '#c0392b' }))}</tr>)}
+                    <tr>{H('Total egresos', '#f3f6fa')}{cols.map((c) => <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: '#c0392b', borderBottom: '1px solid #eef1f4' }}>{fmt(Math.round(flujo.sum(flujo.egr, c)))}</td>)}</tr>
+                    <tr style={{ background: '#fffbe6' }}>{H('Flujo neto', '#fffbe6')}{cols.map((c) => { const n = flujo.sum(flujo.ing, c) - flujo.sum(flujo.egr, c); return <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: n < 0 ? '#c0392b' : '#2e7d32' }}>{fmt(Math.round(n))}</td> })}</tr>
+                    <tr style={{ background: '#dbe7fb' }}>{H('Saldo final', '#dbe7fb')}{cols.map((c) => <td key={c} style={{ padding: '5px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 800, color: fin[c] < 0 ? '#c0392b' : '#1d4ed8' }}>{fmt(Math.round(fin[c]))}</td>)}</tr>
+                  </tbody>
+                </table>
+              </div>
+            })()}
         </div>
       </>}
     </div>
