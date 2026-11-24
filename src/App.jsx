@@ -603,17 +603,10 @@ export default function App() {
     return off
   }, [])
 
-  // Botón flotante ℹ️ "Ayudas": oculta por defecto las instrucciones/comentarios (cajas .note y subtítulos .sub) para ganar espacio; se muestran al activarlo. Distinto del 💡 (origen del dato al pasar sobre un número).
+  // Ayudas: las instrucciones/comentarios (.note y subtítulos .sub) salen colapsados como un chip "ℹ️ Ayuda"; al tocarlo se muestran en una tarjeta flotante. (Sin botón global.)
   useEffect(() => {
-    let mostrar = false; try { mostrar = localStorage.getItem('abp_ayudas') === '1' } catch { }
-    const apply = () => document.body.classList.toggle('sin-ayudas', !mostrar)
-    const btn = document.createElement('button')
-    btn.className = 'ayuda-toggle'
-    const label = () => { btn.textContent = mostrar ? 'ℹ️ Ocultar ayudas' : 'ℹ️ Ver ayudas' }
-    apply(); label()
-    btn.onclick = () => { mostrar = !mostrar; try { localStorage.setItem('abp_ayudas', mostrar ? '1' : '0') } catch { } apply(); label() }
-    document.body.appendChild(btn)
-    // Clic en un chip ℹ️: muestra ese comentario en una tarjeta flotante (no empuja el contenido). Solo cuando las ayudas están colapsadas.
+    document.body.classList.add('sin-ayudas')
+    // Clic en un chip ℹ️: muestra ese comentario en una tarjeta flotante (no empuja el contenido).
     let pop = null
     const closePop = () => { if (pop) { try { pop.remove() } catch { } pop = null } }
     const onClick = (e) => {
@@ -635,7 +628,7 @@ export default function App() {
     const onKey = (e) => { if (e.key === 'Escape') closePop() }
     document.addEventListener('click', onClick, true)
     document.addEventListener('keydown', onKey)
-    return () => { try { btn.remove(); document.body.classList.remove('sin-ayudas'); document.removeEventListener('click', onClick, true); document.removeEventListener('keydown', onKey); closePop() } catch { } }
+    return () => { try { document.body.classList.remove('sin-ayudas'); document.removeEventListener('click', onClick, true); document.removeEventListener('keydown', onKey); closePop() } catch { } }
   }, [])
 
   // Baja el estado del modelo (Cap_Estado) del Sheet a localStorage antes de mostrar los tableros
