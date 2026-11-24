@@ -5863,7 +5863,6 @@ function CobrosScreen() {
         <button className="btn" onClick={() => setVista('planilla')} style={vista === 'planilla' ? { background: '#374151', color: '#fff' } : {}}>Planilla</button>
         <button className="btn" onClick={() => setVista('reporte')} style={vista === 'reporte' ? { background: '#374151', color: '#fff' } : {}}>📊 Reporte</button>
         <button className="btn" onClick={() => setVista('proyeccion')} style={vista === 'proyeccion' ? { background: '#374151', color: '#fff' } : {}}>📅 {esOut ? 'Proyección de pago' : 'Proyección de cobro'}</button>
-        <button className="btn" onClick={() => setVista('flujo')} style={vista === 'flujo' ? { background: '#1d4ed8', color: '#fff' } : {}}>💵 Flujo de fondos</button>
         <button className="btn" disabled={upd} onClick={actualizar} title="Trae de Monday las órdenes abiertas (referencia). No toca lo registrado.">{upd ? 'Actualizando…' : '🔄 Actualizar desde Monday'}</button>
         {esOut && <button className="btn primary" disabled={saving || !hayTermEdits} onClick={guardar} title="Guarda los términos de pago por marca">{saving ? 'Guardando…' : '💾 Guardar términos'}</button>}
       </div>
