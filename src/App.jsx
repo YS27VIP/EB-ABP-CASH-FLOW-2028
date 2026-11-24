@@ -5577,12 +5577,35 @@ function FlujoPiramide() {
 }
 
 /* ===== GUÍA POR ROL: mapa de dónde llena cada quién (solo Energy Brands) ===== */
+// Todos los order type del tablero de Monday (para los filtros de EBP Evolution).
+const ALL_ORDER_TYPES = ['Pre-Venta', 'PROYECCION', 'Venta de Stock', 'SAMPLES', 'STOCK', 'Compra', 'COMPRA COMPLEMENTARIA', 'COMPRA SAMPLES', 'Freight', 'Consolidacion', 'DESPACHO', 'ALMACENAJE', 'CONSIGNACION', 'MARKETING', 'FALTANTE/ANOMALIA', 'SOBRANTES', 'Credit Note', 'Debit Note', 'Orden x Comisión', 'ZLVTAOFI', 'INVENT. OFICINA', 'DPR', 'DMC', 'X', 'CANCELLED']
+const CASH_PRESET = ['Pre-Venta', 'PROYECCION', 'Venta de Stock', 'SAMPLES']  // preselección para cash flow
+// Grupo de filtro con checkboxes (estilo compacto): título, botones Todos/Ninguno y una grilla de opciones.
+function FiltroGrupo({ titulo, items, sel, setSel, color = '#0e7490', cols = 150, extra = null }) {
+  const vals = items.map((it) => Array.isArray(it) ? it[1] : it)
+  const tog = (v) => setSel((s) => { const n = new Set(s); n.has(v) ? n.delete(v) : n.add(v); return n })
+  return (
+    <div style={{ border: '1.5px solid ' + color + '33', borderRadius: 14, padding: '9px 13px', background: color + '0a', flex: '1 1 auto', minWidth: 150 }}>
+      <div style={{ textAlign: 'center', fontWeight: 800, fontSize: 11, letterSpacing: .6, color, textTransform: 'uppercase', marginBottom: 7 }}>{titulo}</div>
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+        <button className="seg" style={{ fontSize: 11, padding: '2px 9px', borderColor: '#bfe0ea' }} onClick={() => setSel(new Set(vals))}>✓ Todos</button>
+        <button className="seg" style={{ fontSize: 11, padding: '2px 9px', borderColor: '#f3c9c9', color: '#b91c1c' }} onClick={() => setSel(new Set())}>✗ Ninguno</button>
+        {extra}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill,minmax(${cols}px,1fr))`, gap: '3px 14px' }}>
+        {items.map((it) => { const v = Array.isArray(it) ? it[1] : it; const lbl = Array.isArray(it) ? it[0] : it; return (
+          <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12.5, padding: '1px 0' }}><input type="checkbox" checked={sel.has(v)} onChange={() => tog(v)} style={{ accentColor: color }} />{lbl}</label>
+        ) })}
+      </div>
+    </div>
+  )
+}
+
 // ===== EBP Evolution: compara el plan (Master) con la realidad de Monday (pestaña Monday_SS27). Solo Energy Brands. =====
 function EbpEvolutionScreen({ empresa, sbus }) {
   const [rows, setRows] = useState([]); const [load, setLoad] = useState(true); const [err, setErr] = useState(null); const [stamp, setStamp] = useState('')
-  const [selMarca, setSelMarca] = useState(() => new Set()); const [selTemp, setSelTemp] = useState(() => new Set()); const [selStat, setSelStat] = useState(() => new Set(['OPEN'])); const [buscar, setBuscar] = useState('')
-  const [selTipo, setSelTipo] = useState(() => new Set(['PREVENTA', 'PROYECCION', 'VENTADESTOCK', 'MUESTRAS', 'SAMPLES', 'STOCK']))
-  const toggleSel = (setter, val) => setter((s) => { const n = new Set(s); n.has(val) ? n.delete(val) : n.add(val); return n })
+  const [selMarca, setSelMarca] = useState(() => new Set()); const [selTemp, setSelTemp] = useState(() => new Set()); const [selStat, setSelStat] = useState(() => new Set()); const [buscar, setBuscar] = useState(''); const [inited, setInited] = useState(false)
+  const [selTipo, setSelTipo] = useState(() => new Set(ALL_ORDER_TYPES))
   const cargar = async () => {
     setLoad(true); setErr(null)
     try {
@@ -5617,15 +5640,12 @@ function EbpEvolutionScreen({ empresa, sbus }) {
   const marcas = [...new Set(rows.map((r) => r.marca).filter(Boolean))].sort()
   const temps = [...new Set(rows.map((r) => r.tempC).filter(Boolean))].sort()
   const estados = [...new Set(rows.map((r) => r.status).filter(Boolean))].sort()
-  // Order Type (la selección es AQUÍ en la herramienta, no en Monday). Por defecto: Preventa / Proyección / Venta de Stock / Muestras.
-  const normTipo = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z]/g, '')
   const hayTipo = rows.some((r) => r.tipo)
-  // Chips de order type: los 4 fijos de cash flow + los demás tipos que vengan en los datos.
-  const CASH_CHIPS = [['Preventa', 'PREVENTA'], ['Proyección', 'PROYECCION'], ['Venta de Stock', 'VENTADESTOCK'], ['Muestras', 'MUESTRAS']]
-  const tipoChips = (() => { const out = [...CASH_CHIPS]; const seen = new Set(out.map((c) => c[1])); rows.forEach((r) => { if (!r.tipo) return; const n = normTipo(r.tipo); if (n === 'SAMPLES') return; if (!seen.has(n)) { seen.add(n); out.push([r.tipo, n]) } }); return out })()
-  // multi-selección: un Set vacío = todo; si tiene elementos, filtra por esos.
-  const inSel = (s, v) => s.size === 0 || s.has(v)
-  const tipoOk = (r) => { if (!hayTipo || selTipo.size === 0) return true; const n = normTipo(r.tipo); return selTipo.has(n) || (n === 'SAMPLES' && selTipo.has('MUESTRAS')) }
+  // Al cargar los datos por primera vez, marca todo (marca/temporada/estatus). Order Type ya arranca con todos marcados.
+  useEffect(() => { if (!inited && rows.length) { setSelMarca(new Set(marcas)); setSelTemp(new Set(temps)); setSelStat(new Set(estados)); setInited(true) } }, [rows])
+  // Mientras no esté inicializado, no filtra (muestra todo). Order Type se ignora si los datos aún no traen la columna.
+  const inSel = (s, v) => !inited ? true : s.has(v)
+  const tipoOk = (r) => !hayTipo ? true : (!inited ? true : selTipo.has(r.tipo))
   // Cliente real: en Monday el cliente real está en la columna PO, SALVO para TAHO (donde PO es el nº de orden y el cliente es TAHO). Si PO viene vacío, se usa el canal (CLIENTE).
   const cliReal = (r) => (upper(r.cliente) === 'TAHO') ? 'TAHO' : (r.po && r.po.trim() ? r.po.trim() : (r.cliente || '(sin cliente)'))
   const fil = rows.filter((r) => inSel(selMarca, r.marca) && inSel(selTemp, r.tempC) && inSel(selStat, r.status) && tipoOk(r) && (!buscar.trim() || upper(cliReal(r)).indexOf(upper(buscar)) >= 0 || upper(r.cliente).indexOf(upper(buscar)) >= 0))
@@ -5663,23 +5683,16 @@ function EbpEvolutionScreen({ empresa, sbus }) {
       {err && <div className="banner" style={{ marginBottom: 12 }}>⚠️ {err}</div>}
       {!err && <>
         <div className="panel">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
-            <div>
-              <div className="who" style={{ marginBottom: 4 }}>💧 Order type <span className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>(para cash flow · elige varios)</span>{!hayTipo && <span className="unit" style={{ fontWeight: 400, textTransform: 'none', color: '#b45309' }}> · corre el sync de Monday para traer los tipos reales</span>}</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {tipoChips.map(([lbl, n]) => <button key={n} className={'seg' + (selTipo.has(n) ? ' active' : '')} onClick={() => toggleSel(setSelTipo, n)}>{lbl}</button>)}
-                <button className={'seg' + (selTipo.size === 0 ? ' active' : '')} onClick={() => setSelTipo(new Set())}>Todos</button>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-              <div><div className="who" style={{ marginBottom: 4 }}>Marca</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{marcas.map((m) => <button key={m} className={'seg' + (selMarca.has(m) ? ' active' : '')} onClick={() => toggleSel(setSelMarca, m)}>{m}</button>)}<button className={'seg' + (selMarca.size === 0 ? ' active' : '')} onClick={() => setSelMarca(new Set())}>Todas</button></div></div>
-              <div><div className="who" style={{ marginBottom: 4 }}>Temporada</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{temps.map((t) => <button key={t} className={'seg' + (selTemp.has(t) ? ' active' : '')} onClick={() => toggleSel(setSelTemp, t)}>{t}</button>)}<button className={'seg' + (selTemp.size === 0 ? ' active' : '')} onClick={() => setSelTemp(new Set())}>Todas</button></div></div>
-              <div><div className="who" style={{ marginBottom: 4 }}>Estatus</div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{estados.map((s) => <button key={s} className={'seg' + (selStat.has(s) ? ' active' : '')} onClick={() => toggleSel(setSelStat, s)}>{s}</button>)}<button className={'seg' + (selStat.size === 0 ? ' active' : '')} onClick={() => setSelStat(new Set())}>Todos</button></div></div>
-            </div>
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10, alignItems: 'stretch' }}>
+            <FiltroGrupo titulo="Order type" items={ALL_ORDER_TYPES} sel={selTipo} setSel={setSelTipo} color="#0e7490" cols={160}
+              extra={<button className="seg" style={{ fontSize: 11, padding: '2px 9px', background: '#0e7490', color: '#fff', borderColor: '#0e7490', fontWeight: 700 }} title="Deja marcados solo los tipos que entran al cash flow: Preventa, Proyección, Venta de Stock y Muestras." onClick={() => setSelTipo(new Set(CASH_PRESET))}>💧 Preselección cash flow</button>} />
+            <FiltroGrupo titulo="Marca" items={marcas} sel={selMarca} setSel={setSelMarca} color="#7c3aed" cols={120} />
+            <FiltroGrupo titulo="Temporada" items={temps} sel={selTemp} setSel={setSelTemp} color="#b45309" cols={90} />
+            <FiltroGrupo titulo="Estatus" items={estados} sel={selStat} setSel={setSelStat} color="#15803d" cols={100} />
+            <div style={{ border: '1.5px solid #e5e7eb', borderRadius: 14, padding: '9px 13px', background: '#fafafa', display: 'flex', flexDirection: 'column', gap: 8, justifyContent: 'center', minWidth: 170 }}>
               <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>Buscar cliente
-                <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 cliente…" style={{ minWidth: 180 }} /></label>
-              <label className="who" style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} title="Agrupa por el CLIENTE ARMONIZADO del EBP (mismo nombre que usa el EBP)."><input type="checkbox" checked={armOn} onChange={(e) => setArmOn(e.target.checked)} /> Armonizar clientes (EBP)</label>
+                <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="🔍 cliente…" style={{ minWidth: 150 }} /></label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5 }} title="Agrupa por el CLIENTE ARMONIZADO del EBP."><input type="checkbox" checked={armOn} onChange={(e) => setArmOn(e.target.checked)} style={{ accentColor: '#0e7490' }} /> Armonizar (EBP)</label>
             </div>
           </div>
           {armOn && sinArm > 0 && <div className="sub no-ayuda" style={{ color: '#b45309', marginBottom: 2 }}>🔸 {sinArm} cliente(s) sin match en la base armonizada del EBP (se muestran con su nombre de Monday). Si alguno debería cuadrar, agrégalo en la hoja "BASE DE DATOS CLIENTE Y PAIS" del EBP.</div>}
@@ -5691,10 +5704,10 @@ function EbpEvolutionScreen({ empresa, sbus }) {
           {load ? <div className="sub no-ayuda">Cargando…</div> : lista.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay órdenes para este filtro.</div> :
             <div className="tablewrap" style={{ marginTop: 6 }}>
               <table className="vfix" style={{ width: 'auto', minWidth: 620 }}>
-                <thead><tr><th className="l">Cliente</th><th className="l">Marca</th><th>Órdenes</th><th>Unidades</th><th>Venta PV ($)</th><th className="l">Término</th></tr></thead>
+                <thead><tr><th className="l">Término</th><th className="l">Cliente</th><th className="l">Marca</th><th>Órdenes</th><th>Unidades</th><th>Venta PV ($)</th></tr></thead>
                 <tbody>
-                  {lista.map((o) => <tr key={o.cliente + '|' + o.marca}><td className="l sub2">{armOn && !o.mapped && <span title="Sin match en la base armonizada del EBP" style={{ marginRight: 4 }}>🔸</span>}{o.cliente}{o.pais && <span className="unit" style={{ fontWeight: 400, textTransform: 'none', marginLeft: 6 }}>📍 {o.pais}</span>}{o.canal && upper(o.canal) !== upper(o.cliente) && <div className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>canal: {o.canal}</div>}</td><td className="l">{o.marca}</td><td className="tot">{fmt(o.ordenes)}</td><td className="tot">{fmt(o.unidades)}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(o.pv)}</td><td className="l">{termDe(o)}</td></tr>)}
-                  <tr className="grandrow"><td className="l">TOTAL ({lista.length} filas)</td><td></td><td className="tot">{fmt(fil.length)}</td><td className="tot">{fmt(totU)}</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(totPV)}</td><td></td></tr>
+                  {lista.map((o) => <tr key={o.cliente + '|' + o.marca}><td className="l">{termDe(o)}</td><td className="l sub2">{armOn && !o.mapped && <span title="Sin match en la base armonizada del EBP" style={{ marginRight: 4 }}>🔸</span>}{o.cliente}{o.pais && <span className="unit" style={{ fontWeight: 400, textTransform: 'none', marginLeft: 6 }}>📍 {o.pais}</span>}{o.canal && upper(o.canal) !== upper(o.cliente) && <div className="unit" style={{ fontWeight: 400, textTransform: 'none' }}>canal: {o.canal}</div>}</td><td className="l">{o.marca}</td><td className="tot">{fmt(o.ordenes)}</td><td className="tot">{fmt(o.unidades)}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(o.pv)}</td></tr>)}
+                  <tr className="grandrow"><td></td><td className="l">TOTAL ({lista.length} filas)</td><td></td><td className="tot">{fmt(fil.length)}</td><td className="tot">{fmt(totU)}</td><td className="tot" style={{ fontWeight: 800 }}>{fmt(totPV)}</td></tr>
                 </tbody>
               </table>
             </div>}
