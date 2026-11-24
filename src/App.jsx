@@ -6024,6 +6024,7 @@ function CobrosScreen() {
 // ===== EBP Evolution: compara el plan (Master) con la realidad de Monday (pestaña Monday_SS27). Solo Energy Brands. =====
 function EbpEvolutionScreen({ empresa, sbus }) {
   const [rows, setRows] = useState([]); const [load, setLoad] = useState(true); const [err, setErr] = useState(null); const [stamp, setStamp] = useState('')
+  const [verDetalle, setVerDetalle] = useState(false); const [verCambios, setVerCambios] = useState(false)
   const [selMarca, setSelMarca] = useState(() => new Set()); const [selTemp, setSelTemp] = useState(() => new Set()); const [selStat, setSelStat] = useState(() => new Set()); const [buscar, setBuscar] = useState(''); const [inited, setInited] = useState(false)
   const [selTipo, setSelTipo] = useState(() => new Set(ALL_ORDER_TYPES))
   const [selVia, setSelVia] = useState(() => new Set(['TAHO', 'MARKAI', 'INTERGLOBAL', 'OTROS']))
@@ -6129,8 +6130,14 @@ function EbpEvolutionScreen({ empresa, sbus }) {
           {planMaster != null && <div className="sub no-ayuda" style={{ marginBottom: 6 }}>🎯 <b>Plan Master:</b> {fmt(planMaster)} · Real Monday: {fmt(totPV)}{dev != null && <span className={dev >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}> · {(dev >= 0 ? '+' : '') + dev.toFixed(0)}% vs plan</span>}</div>}
           {planMaster == null && marcaUnica && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginBottom: 6 }}>No hay Master importado para <b>{marcaUnica}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
         <CobrosScreen />
-        <MondayTracking />
-        <div className="panel">
+        <div style={{ marginTop: 14, marginBottom: verCambios ? 6 : 0 }}>
+          <button className="btn" onClick={() => setVerCambios((v) => !v)} style={{ fontWeight: 700, color: '#be185d' }}>{verCambios ? '▾' : '▸'} 🔁 Cambios vs semana pasada</button>
+        </div>
+        {verCambios && <MondayTracking />}
+        <div style={{ marginTop: 14, marginBottom: verDetalle ? 6 : 0 }}>
+          <button className="btn" onClick={() => setVerDetalle((v) => !v)} style={{ fontWeight: 700, color: '#0e7490' }}>{verDetalle ? '▾' : '▸'} 📋 Detalle de órdenes <span className="unit">({fmt(fil.length)} órdenes)</span></button>
+        </div>
+        {verDetalle && <div className="panel">
           <h3 style={{ color: '#0e7490', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}><span>📋 Detalle de órdenes <span className="unit">(Monday · {fmt(fil.length)} órdenes con los filtros actuales{stamp ? ` · datos al ${stamp}` : ''})</span></span></h3>
           {load ? <div className="sub no-ayuda">Cargando…</div> : fil.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay órdenes para este filtro.</div> :
             <div className="tablewrap" style={{ marginTop: 6, maxHeight: '70vh' }}>
@@ -6146,7 +6153,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
               </table>
             </div>}
           {fil.length > 2000 && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginTop: 4 }}>Mostrando las primeras 2,000 órdenes. Afina los filtros para ver menos.</div>}
-        </div>
+        </div>}
         {armOn && sinArm > 0 && <div className="sub no-ayuda" style={{ color: '#b45309', marginTop: 10 }}>🔸 {sinArm} cliente(s) sin match en la base armonizada del EBP (se muestran con su nombre de Monday). Agrégalo en la hoja "BASE DE DATOS CLIENTE Y PAIS" del EBP si debería cuadrar.</div>}
         </div>
       </div>}
