@@ -5783,7 +5783,7 @@ function CobrosScreen() {
     const sumMarcaCol = (store, m, c) => Object.keys(store).reduce((a, t) => a + ((store[t][m] || {})[c] || 0), 0)
     return { ing, egr, cols, temps: { ing: Object.keys(ing).sort(), egr: Object.keys(egr).sort() }, sumTempCol, sumCol, marcasDe, allMarcas, sumMarcaCol }
   })()
-  const flujoRows = (store, temps) => { const out = []; if (grpFlujo === 'temp') { temps.forEach((t) => out.push({ label: t, bold: true, get: (c) => flujo.sumTempCol(store, t, c) })) } else if (grpFlujo === 'marca') { flujo.allMarcas(store).forEach((m) => out.push({ label: m, get: (c) => flujo.sumMarcaCol(store, m, c) })) } else { temps.forEach((t) => { out.push({ label: t, bold: true, get: (c) => flujo.sumTempCol(store, t, c) }); flujo.marcasDe(store, t).forEach((m) => out.push({ label: m, indent: true, get: (c) => (store[t][m] || {})[c] || 0 })) }) } return out }
+  const flujoRows = (store, temps) => { const out = []; if (grpFlujo === 'temp') { temps.forEach((t) => out.push({ temp: t, marca: '', bold: true, get: (c) => flujo.sumTempCol(store, t, c) })) } else if (grpFlujo === 'marca') { flujo.allMarcas(store).forEach((m) => out.push({ temp: '', marca: m, get: (c) => flujo.sumMarcaCol(store, m, c) })) } else { temps.forEach((t) => { flujo.marcasDe(store, t).forEach((m, i) => out.push({ temp: i === 0 ? t : '', marca: m, get: (c) => (store[t][m] || {})[c] || 0 })) }) } return out }
   const marcas = [...new Set(rows.map((o) => String(o.Marca || '').trim()).filter(Boolean))].sort()
   const hayTermEdits = Object.keys(termEdits).length > 0
   const guardarTerminos = async () => { const tm = { ...termMap }; Object.keys(termEdits).forEach((k) => tm[k] = termEdits[k]); const ms = [...new Set([...marcas.map(bU), ...Object.keys(tm)])].sort(); const mat = [['MARCA', 'TERMINO_PROVEEDOR'], ...ms.map((m) => [m, tm[m] || ''])]; await gWriteReport('Config_TerminoMarca', mat); setTermMap(tm); setTermEdits({}); return tm }
@@ -5837,16 +5837,16 @@ function CobrosScreen() {
   const exportarFlujo = () => {
     const cols = flujo.cols; const ini = {}, fin = {}; let prev = num(saldoIni)
     cols.forEach((c) => { ini[c] = prev; const net = flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c); fin[c] = prev + net; prev = fin[c] })
-    const aoa = [['Flujo de fondos', ...cols.map(colLbl)]]
-    aoa.push(['Saldo inicial', ...cols.map((c) => Math.round(ini[c]))])
-    aoa.push(['INGRESOS (cobros)', ...cols.map(() => '')])
-    flujoRows(flujo.ing, flujo.temps.ing).forEach((r) => aoa.push([(r.indent ? '   ' : '') + r.label, ...cols.map((c) => Math.round(r.get(c) || 0))]))
-    aoa.push(['Total ingresos', ...cols.map((c) => Math.round(flujo.sumCol(flujo.ing, c)))])
-    aoa.push(['EGRESOS (pagos)', ...cols.map(() => '')])
-    flujoRows(flujo.egr, flujo.temps.egr).forEach((r) => aoa.push([(r.indent ? '   ' : '') + r.label, ...cols.map((c) => Math.round(r.get(c) || 0))]))
-    aoa.push(['Total egresos', ...cols.map((c) => Math.round(flujo.sumCol(flujo.egr, c)))])
-    aoa.push(['Flujo neto', ...cols.map((c) => Math.round(flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c)))])
-    aoa.push(['Saldo final', ...cols.map((c) => Math.round(fin[c]))])
+    const aoa = [['Temporada', 'Marca', ...cols.map(colLbl)]]
+    aoa.push(['Saldo inicial', '', ...cols.map((c) => Math.round(ini[c]))])
+    aoa.push(['INGRESOS (cobros)', '', ...cols.map(() => '')])
+    flujoRows(flujo.ing, flujo.temps.ing).forEach((r) => aoa.push([r.temp || '', r.marca || '', ...cols.map((c) => Math.round(r.get(c) || 0))]))
+    aoa.push(['Total ingresos', '', ...cols.map((c) => Math.round(flujo.sumCol(flujo.ing, c)))])
+    aoa.push(['EGRESOS (pagos)', '', ...cols.map(() => '')])
+    flujoRows(flujo.egr, flujo.temps.egr).forEach((r) => aoa.push([r.temp || '', r.marca || '', ...cols.map((c) => Math.round(r.get(c) || 0))]))
+    aoa.push(['Total egresos', '', ...cols.map((c) => Math.round(flujo.sumCol(flujo.egr, c)))])
+    aoa.push(['Flujo neto', '', ...cols.map((c) => Math.round(flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c)))])
+    aoa.push(['Saldo final', '', ...cols.map((c) => Math.round(fin[c]))])
     exportXlsx(aoa, 'Flujo_de_fondos.xlsx')
   }
   const exportarPlanilla = () => { const aoa = [['Orden', 'Status', 'Order Type', 'Temp.', 'Marca', 'Cliente', amtLbl, ...(esOut ? ['Término Marca'] : ['Término']), verbo, 'Pendiente', 'Estado', ...(!esOut ? ['Días', 'Plazo'] : [])], ...baseRows.map((o) => { const pg = pagEff(o); const co = amtOf(o); return [o.Name, o.Status, o['Order Type'], o.Temporada, o.Marca, o.Cliente, co, ...(esOut ? [termOf(o.Marca)] : [String(o['Termino'] || '')]), pg, co - pg, (co - pg) <= 0.5 ? okEst : 'Pendiente', ...(!esOut ? [diasFactura(o) == null ? '' : diasFactura(o), plazoDe(o)] : [])] })]; exportXlsx(aoa, (esOut ? 'CashOut_PorPagar' : 'CashIn_PorCobrar') + '.xlsx') }
@@ -5858,7 +5858,6 @@ function CobrosScreen() {
       <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
         <button className="btn" onClick={() => { setModo('out'); setForm((f) => ({ ...f, entidad: '', orden: '' })) }} style={{ fontWeight: 700, ...(esOut ? { background: '#c0392b', color: '#fff', borderColor: '#c0392b' } : {}) }} title="Cuentas por pagar: las compras a las marcas (proveedores).">🔻 Cash Out · por pagar</button>
         <button className="btn" onClick={() => { setModo('in'); setForm((f) => ({ ...f, entidad: '', orden: '' })) }} style={{ fontWeight: 700, ...(!esOut ? { background: '#2e7d32', color: '#fff', borderColor: '#2e7d32' } : {}) }} title="Cuentas por cobrar: lo que los clientes van pagando por las ventas.">🔺 Cash In · por cobrar</button>
-        <span className="unit" style={{ alignSelf: 'center' }}>{esOut ? 'Compras a proveedores (lo que EB debe pagar a las marcas).' : 'Ventas a clientes (lo que los clientes deben pagar a EB).'}</span>
         <div className="spacer"></div>
         <button className="btn" onClick={() => setVista('planilla')} style={vista === 'planilla' ? { background: '#374151', color: '#fff' } : {}}>Planilla</button>
         <button className="btn" onClick={() => setVista('reporte')} style={vista === 'reporte' ? { background: '#374151', color: '#fff' } : {}}>📊 Reporte</button>
@@ -6067,20 +6066,20 @@ function FlujoScreen() {
     const sumMarcaCol = (store, m, c) => Object.keys(store).reduce((a, t) => a + ((store[t][m] || {})[c] || 0), 0)
     return { ing, egr, cols, temps: { ing: Object.keys(ing).sort(), egr: Object.keys(egr).sort() }, sumTempCol, sumCol, marcasDe, allMarcas, sumMarcaCol }
   })()
-  const flujoRows = (store, temps) => { const out = []; if (grpFlujo === 'temp') { temps.forEach((t) => out.push({ label: t, bold: true, get: (c) => flujo.sumTempCol(store, t, c) })) } else if (grpFlujo === 'marca') { flujo.allMarcas(store).forEach((m) => out.push({ label: m, get: (c) => flujo.sumMarcaCol(store, m, c) })) } else { temps.forEach((t) => { out.push({ label: t, bold: true, get: (c) => flujo.sumTempCol(store, t, c) }); flujo.marcasDe(store, t).forEach((m) => out.push({ label: m, indent: true, get: (c) => (store[t][m] || {})[c] || 0 })) }) } return out }
+  const flujoRows = (store, temps) => { const out = []; if (grpFlujo === 'temp') { temps.forEach((t) => out.push({ temp: t, marca: '', bold: true, get: (c) => flujo.sumTempCol(store, t, c) })) } else if (grpFlujo === 'marca') { flujo.allMarcas(store).forEach((m) => out.push({ temp: '', marca: m, get: (c) => flujo.sumMarcaCol(store, m, c) })) } else { temps.forEach((t) => { flujo.marcasDe(store, t).forEach((m, i) => out.push({ temp: i === 0 ? t : '', marca: m, get: (c) => (store[t][m] || {})[c] || 0 })) }) } return out }
   const exportarFlujo = () => {
     const cols = flujo.cols; const ini = {}, fin = {}; let prev = num(saldoIni)
     cols.forEach((c) => { ini[c] = prev; const net = flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c); fin[c] = prev + net; prev = fin[c] })
-    const aoa = [['Flujo de fondos', ...cols.map(colLbl)]]
-    aoa.push(['Saldo inicial', ...cols.map((c) => Math.round(ini[c]))])
-    aoa.push(['INGRESOS (cobros)', ...cols.map(() => '')])
-    flujoRows(flujo.ing, flujo.temps.ing).forEach((r) => aoa.push([(r.indent ? '   ' : '') + r.label, ...cols.map((c) => Math.round(r.get(c) || 0))]))
-    aoa.push(['Total ingresos', ...cols.map((c) => Math.round(flujo.sumCol(flujo.ing, c)))])
-    aoa.push(['EGRESOS (pagos)', ...cols.map(() => '')])
-    flujoRows(flujo.egr, flujo.temps.egr).forEach((r) => aoa.push([(r.indent ? '   ' : '') + r.label, ...cols.map((c) => Math.round(r.get(c) || 0))]))
-    aoa.push(['Total egresos', ...cols.map((c) => Math.round(flujo.sumCol(flujo.egr, c)))])
-    aoa.push(['Flujo neto', ...cols.map((c) => Math.round(flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c)))])
-    aoa.push(['Saldo final', ...cols.map((c) => Math.round(fin[c]))])
+    const aoa = [['Temporada', 'Marca', ...cols.map(colLbl)]]
+    aoa.push(['Saldo inicial', '', ...cols.map((c) => Math.round(ini[c]))])
+    aoa.push(['INGRESOS (cobros)', '', ...cols.map(() => '')])
+    flujoRows(flujo.ing, flujo.temps.ing).forEach((r) => aoa.push([r.temp || '', r.marca || '', ...cols.map((c) => Math.round(r.get(c) || 0))]))
+    aoa.push(['Total ingresos', '', ...cols.map((c) => Math.round(flujo.sumCol(flujo.ing, c)))])
+    aoa.push(['EGRESOS (pagos)', '', ...cols.map(() => '')])
+    flujoRows(flujo.egr, flujo.temps.egr).forEach((r) => aoa.push([r.temp || '', r.marca || '', ...cols.map((c) => Math.round(r.get(c) || 0))]))
+    aoa.push(['Total egresos', '', ...cols.map((c) => Math.round(flujo.sumCol(flujo.egr, c)))])
+    aoa.push(['Flujo neto', '', ...cols.map((c) => Math.round(flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c)))])
+    aoa.push(['Saldo final', '', ...cols.map((c) => Math.round(fin[c]))])
     exportXlsx(aoa, 'Flujo_de_fondos.xlsx')
   }
   const cols = flujo.cols; const ini = {}, fin = {}; let prev = num(saldoIni)
@@ -6106,19 +6105,22 @@ function FlujoScreen() {
           <div className="tablewrap" style={{ maxHeight: '72vh', overflow: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
               <thead><tr>
-                <th style={{ position: 'sticky', left: 0, zIndex: 3, background: '#eef2f7', textAlign: 'left', padding: '6px 10px', minWidth: 190, borderBottom: '2px solid var(--line)' }}>Flujo de fondos</th>
+                <th style={{ position: 'sticky', left: 0, zIndex: 3, background: '#eef2f7', textAlign: 'left', padding: '6px 10px', minWidth: 150, borderBottom: '2px solid var(--line)' }}>Temporada</th>
+                <th style={{ position: 'sticky', left: 150, zIndex: 3, background: '#eef2f7', textAlign: 'left', padding: '6px 10px', minWidth: 150, borderBottom: '2px solid var(--line)' }}>Marca</th>
                 {cols.map((c) => <th key={c} style={{ padding: '6px 10px', minWidth: 92, textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '2px solid var(--line)', background: '#eef2f7', color: c === 'Vencido' ? '#c0392b' : '#333' }}>{colLbl(c)}</th>)}
               </tr></thead>
               <tbody>
-                <tr style={{ background: '#eaf1fb' }}>{H('Saldo inicial', '#eaf1fb')}{cols.map((c) => <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700 }}>{fmt(Math.round(ini[c]))}</td>)}</tr>
-                <tr style={{ background: '#e7f4ea' }}>{H('INGRESOS (cobros)', '#e7f4ea')}{cols.map((c) => <td key={c} style={{ background: '#e7f4ea' }}></td>)}</tr>
-                {flujoRows(flujo.ing, flujo.temps.ing).map((r, idx) => <tr key={'i' + idx} style={r.bold ? { background: '#f6faf7' } : {}}>{H(r.label, r.bold ? '#f6faf7' : '#fff', !!r.bold, !!r.indent)}{cols.map((c) => cel(r.get(c), { color: '#2e7d32', fontWeight: r.bold ? 700 : 400 }))}</tr>)}
-                <tr>{H('Total ingresos', '#f3f6fa')}{cols.map((c) => <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: '#2e7d32', borderBottom: '1px solid #eef1f4' }}>{fmt(Math.round(flujo.sumCol(flujo.ing, c)))}</td>)}</tr>
-                <tr style={{ background: '#fdecec' }}>{H('EGRESOS (pagos)', '#fdecec')}{cols.map((c) => <td key={c} style={{ background: '#fdecec' }}></td>)}</tr>
-                {flujoRows(flujo.egr, flujo.temps.egr).map((r, idx) => <tr key={'e' + idx} style={r.bold ? { background: '#fdf4f4' } : {}}>{H(r.label, r.bold ? '#fdf4f4' : '#fff', !!r.bold, !!r.indent)}{cols.map((c) => cel(r.get(c), { color: '#c0392b', fontWeight: r.bold ? 700 : 400 }))}</tr>)}
-                <tr>{H('Total egresos', '#f3f6fa')}{cols.map((c) => <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: '#c0392b', borderBottom: '1px solid #eef1f4' }}>{fmt(Math.round(flujo.sumCol(flujo.egr, c)))}</td>)}</tr>
-                <tr style={{ background: '#fffbe6' }}>{H('Flujo neto', '#fffbe6')}{cols.map((c) => { const n = flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c); return <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: n < 0 ? '#c0392b' : '#2e7d32' }}>{fmt(Math.round(n))}</td> })}</tr>
-                <tr style={{ background: '#dbe7fb' }}>{H('Saldo final', '#dbe7fb')}{cols.map((c) => <td key={c} style={{ padding: '5px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 800, color: fin[c] < 0 ? '#c0392b' : '#1d4ed8' }}>{fmt(Math.round(fin[c]))}</td>)}</tr>
+                {(() => { const sec = (txt, bg, pad = '4px 10px') => <td colSpan={2} style={{ position: 'sticky', left: 0, zIndex: 1, background: bg, padding: pad, whiteSpace: 'nowrap', fontWeight: 700, borderBottom: '1px solid #eef1f4' }}>{txt}</td>; const lbl = (r) => <><td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', padding: '4px 10px', whiteSpace: 'nowrap', fontWeight: 700, color: '#111', borderBottom: '1px solid #eef1f4' }}>{r.temp}</td><td style={{ position: 'sticky', left: 150, zIndex: 1, background: '#fff', padding: '4px 10px', whiteSpace: 'nowrap', color: '#333', borderBottom: '1px solid #eef1f4' }}>{r.marca}</td></>; return <>
+                  <tr style={{ background: '#eaf1fb' }}>{sec('Saldo inicial', '#eaf1fb')}{cols.map((c) => <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700 }}>{fmt(Math.round(ini[c]))}</td>)}</tr>
+                  <tr style={{ background: '#e7f4ea' }}>{sec('INGRESOS (cobros)', '#e7f4ea')}{cols.map((c) => <td key={c} style={{ background: '#e7f4ea' }}></td>)}</tr>
+                  {flujoRows(flujo.ing, flujo.temps.ing).map((r, idx) => <tr key={'i' + idx}>{lbl(r)}{cols.map((c) => cel(r.get(c), { color: '#2e7d32' }))}</tr>)}
+                  <tr>{sec('Total ingresos', '#f3f6fa')}{cols.map((c) => <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: '#2e7d32', borderBottom: '1px solid #eef1f4' }}>{fmt(Math.round(flujo.sumCol(flujo.ing, c)))}</td>)}</tr>
+                  <tr style={{ background: '#fdecec' }}>{sec('EGRESOS (pagos)', '#fdecec')}{cols.map((c) => <td key={c} style={{ background: '#fdecec' }}></td>)}</tr>
+                  {flujoRows(flujo.egr, flujo.temps.egr).map((r, idx) => <tr key={'e' + idx}>{lbl(r)}{cols.map((c) => cel(r.get(c), { color: '#c0392b' }))}</tr>)}
+                  <tr>{sec('Total egresos', '#f3f6fa')}{cols.map((c) => <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: '#c0392b', borderBottom: '1px solid #eef1f4' }}>{fmt(Math.round(flujo.sumCol(flujo.egr, c)))}</td>)}</tr>
+                  <tr style={{ background: '#fffbe6' }}>{sec('Flujo neto', '#fffbe6')}{cols.map((c) => { const n = flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c); return <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: n < 0 ? '#c0392b' : '#2e7d32' }}>{fmt(Math.round(n))}</td> })}</tr>
+                  <tr style={{ background: '#dbe7fb' }}>{sec('Saldo final', '#dbe7fb', '5px 10px')}{cols.map((c) => <td key={c} style={{ padding: '5px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 800, color: fin[c] < 0 ? '#c0392b' : '#1d4ed8' }}>{fmt(Math.round(fin[c]))}</td>)}</tr>
+                </> })()}
               </tbody>
             </table>
           </div>}
