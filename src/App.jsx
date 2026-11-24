@@ -5611,6 +5611,9 @@ function FiltroGrupo({ titulo, items, sel, setSel, color = '#0e7490', cols = 150
 // ===== Tracking semanal: compara la foto más reciente de Monday contra la anterior (pestaña Monday_Hist). =====
 function MondayTracking() {
   const [hist, setHist] = useState(null); const [load, setLoad] = useState(true); const [err, setErr] = useState('')
+  const [selCambio, setSelCambio] = useState(() => new Set(['Nueva', 'Eliminada', 'Cambio']))
+  const catDe = (c) => c.tipo === 'Nueva' ? 'Nueva' : c.tipo === 'Eliminada' ? 'Eliminada' : 'Cambio'
+  const togCambio = (v) => setSelCambio((s) => { const n = new Set(s); n.has(v) ? n.delete(v) : n.add(v); return n })
   const cargar = async () => {
     setLoad(true); setErr('')
     try {
@@ -5652,22 +5655,21 @@ function MondayTracking() {
         !fNew ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>Aún no hay fotos guardadas. Cuando corra la tarea semanal, aquí se acumularán y verás los cambios.</div> :
         !fOld ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>Ya hay <b>1 foto</b> ({fNew}). La comparación aparece cuando haya <b>una segunda semana</b> para comparar.</div> :
         <>
-          <div className="sub">Comparando la foto del <b>{fNew}</b> contra la del <b>{fOld}</b>. Diferencia en unidades y venta PV por orden.</div>
-          <div className="kpis" style={{ marginBottom: 8 }}>
-            <div className="kpi"><div className="k">🆕 Nuevas</div><div className="v">{fmt(totNew.length)}</div><div className="s">{fmt(sum(totNew, (c) => c.dPV))} PV</div></div>
-            <div className="kpi"><div className="k">❌ Eliminadas</div><div className="v">{fmt(totDel.length)}</div><div className="s">{fmt(sum(totDel, (c) => c.dPV))} PV</div></div>
-            <div className="kpi"><div className="k">✏️ Con cambios</div><div className="v">{fmt(totChg.length)}</div><div className="s">{fmt(sum(totChg, (c) => c.dPV))} PV</div></div>
-            <div className="kpi"><div className="k">Δ Venta PV total</div><div className="v">{fmt(sum(cambios, (c) => c.dPV))}</div></div>
+          <div className="sub">Comparando la foto del <b>{fNew}</b> contra la del <b>{fOld}</b>. Filtra por tipo de cambio:</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '6px 0 10px' }}>
+            {[['Nueva', '🆕 Nuevas', totNew, '#15803d'], ['Eliminada', '❌ Eliminadas', totDel, '#b91c1c'], ['Cambio', '✏️ Con cambios', totChg, '#b45309']].map(([k, lbl, arr, col]) =>
+              <button key={k} className={'seg' + (selCambio.has(k) ? ' active' : '')} onClick={() => togCambio(k)} style={selCambio.has(k) ? { borderColor: col, color: col, fontWeight: 700 } : { opacity: .6 }}>{lbl} ({fmt(arr.length)}) · {fmt(sum(arr, (c) => c.dPV))} PV</button>)}
+            <span className="unit" style={{ alignSelf: 'center', marginLeft: 'auto', fontWeight: 700 }}>Δ PV total: {fmt(sum(cambios.filter((c) => selCambio.has(catDe(c))), (c) => c.dPV))}</span>
           </div>
-          {cambios.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>Sin cambios entre las dos fotos.</div> :
+          {(() => { const vis = cambios.filter((c) => selCambio.has(catDe(c))); return vis.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>Sin cambios para este filtro.</div> :
             <div className="tablewrap" style={{ marginTop: 6, maxHeight: '50vh' }}>
               <table className="vfix gridcols" style={{ width: 'auto', minWidth: 760, fontSize: 12 }}>
                 <thead><tr><th className="l">Cambio</th><th className="l">Orden / PO</th><th className="l">Cliente</th><th className="l">Marca</th><th>Δ Unidades</th><th>Δ Venta PV</th></tr></thead>
                 <tbody>
-                  {cambios.slice(0, 1500).map((c, i) => <tr key={i}><td className="l" style={{ fontWeight: 600, color: c.tipo === 'Nueva' ? '#15803d' : c.tipo === 'Eliminada' ? '#b91c1c' : '#b45309' }}>{c.tipo}</td><td className="l">{c.r.po || c.id}</td><td className="l sub2">{c.r.cliente}</td><td className="l">{c.r.marca}</td><td className="tot" style={{ color: c.dU > 0 ? '#15803d' : c.dU < 0 ? '#b91c1c' : 'var(--muted)', fontWeight: 700 }}>{c.dU > 0 ? '+' : ''}{fmt(c.dU)}</td><td className="tot" style={{ color: c.dPV > 0 ? '#15803d' : c.dPV < 0 ? '#b91c1c' : 'var(--muted)', fontWeight: 700 }}>{c.dPV > 0 ? '+' : ''}{fmt(c.dPV)}</td></tr>)}
+                  {vis.slice(0, 1500).map((c, i) => <tr key={i}><td className="l" style={{ fontWeight: 600, color: c.tipo === 'Nueva' ? '#15803d' : c.tipo === 'Eliminada' ? '#b91c1c' : '#b45309' }}>{c.tipo}</td><td className="l">{c.r.po || c.id}</td><td className="l sub2">{c.r.cliente}</td><td className="l">{c.r.marca}</td><td className="tot" style={{ color: c.dU > 0 ? '#15803d' : c.dU < 0 ? '#b91c1c' : 'var(--muted)', fontWeight: 700 }}>{c.dU > 0 ? '+' : ''}{fmt(c.dU)}</td><td className="tot" style={{ color: c.dPV > 0 ? '#15803d' : c.dPV < 0 ? '#b91c1c' : 'var(--muted)', fontWeight: 700 }}>{c.dPV > 0 ? '+' : ''}{fmt(c.dPV)}</td></tr>)}
                 </tbody>
               </table>
-            </div>}
+            </div> })()}
         </>)}
     </div>
   )
@@ -5759,9 +5761,11 @@ function EbpEvolutionScreen({ empresa, sbus }) {
         <button className="btn" disabled={load} onClick={cargar}>{load ? 'Cargando…' : '🔄 Recargar'}</button>
       </div>
       {err && <div className="banner" style={{ marginBottom: 12 }}>⚠️ {err}</div>}
-      {!err && <>
-        <div className="panel">
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10, alignItems: 'flex-start' }}>
+      {!err && <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+        <div style={{ flex: '0 0 250px', position: 'sticky', top: 56, maxHeight: 'calc(100vh - 70px)', overflow: 'auto' }}>
+        <div className="panel" style={{ padding: '12px', marginBottom: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: 12, color: '#0e7490', marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>🔎 Filtros</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
             <FiltroGrupo titulo="Order type" items={ALL_ORDER_TYPES} sel={selTipo} setSel={setSelTipo} color="#0e7490" cols={160}
               extra={<button className="seg" style={{ fontSize: 11, padding: '2px 9px', background: '#0e7490', color: '#fff', borderColor: '#0e7490', fontWeight: 700 }} title="Deja marcados solo los tipos que entran al cash flow: Preventa, Proyección, Venta de Stock y Muestras." onClick={() => setSelTipo(new Set(CASH_PRESET))}>💧 Preselección cash flow</button>} />
             <FiltroGrupo titulo="Marca" items={marcas} sel={selMarca} setSel={setSelMarca} color="#7c3aed" cols={120} />
@@ -5769,15 +5773,17 @@ function EbpEvolutionScreen({ empresa, sbus }) {
             <FiltroGrupo titulo="Estatus" items={estados} sel={selStat} setSel={setSelStat} color="#15803d" cols={100} />
             <FiltroGrupo titulo="Vía" items={['TAHO', 'MARKAI', 'INTERGLOBAL', 'OTROS']} sel={selVia} setSel={setSelVia} color="#be185d" cols={110} />
           </div>
-          <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8, padding: '4px 2px' }}>
-            <label className="who" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>🔍 Buscar cliente
-              <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="cliente…" style={{ minWidth: 220 }} /></label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+            <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>🔍 Buscar cliente
+              <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="cliente…" style={{ width: '100%' }} /></label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5 }} title="Agrupa por el CLIENTE ARMONIZADO del EBP."><input type="checkbox" checked={armOn} onChange={(e) => setArmOn(e.target.checked)} style={{ accentColor: '#0e7490' }} /> Armonizar clientes (EBP)</label>
           </div>
-          {armOn && sinArm > 0 && <div className="sub no-ayuda" style={{ color: '#b45309', marginBottom: 2 }}>🔸 {sinArm} cliente(s) sin match en la base armonizada del EBP (se muestran con su nombre de Monday). Si alguno debería cuadrar, agrégalo en la hoja "BASE DE DATOS CLIENTE Y PAIS" del EBP.</div>}
-          {planMaster != null && <div className="sub no-ayuda" style={{ marginBottom: 2 }}>🎯 <b>Plan Master:</b> {fmt(planMaster)} · Real Monday: {fmt(totPV)}{dev != null && <span className={dev >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}> · {(dev >= 0 ? '+' : '') + dev.toFixed(0)}% vs plan</span>}</div>}
-          {planMaster == null && marcaUnica && <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay Master importado para <b>{marcaUnica}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
         </div>
+        </div>
+        <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+          {armOn && sinArm > 0 && <div className="sub no-ayuda" style={{ color: '#b45309', marginBottom: 6 }}>🔸 {sinArm} cliente(s) sin match en la base armonizada del EBP (se muestran con su nombre de Monday). Agrégalo en la hoja "BASE DE DATOS CLIENTE Y PAIS" del EBP si debería cuadrar.</div>}
+          {planMaster != null && <div className="sub no-ayuda" style={{ marginBottom: 6 }}>🎯 <b>Plan Master:</b> {fmt(planMaster)} · Real Monday: {fmt(totPV)}{dev != null && <span className={dev >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}> · {(dev >= 0 ? '+' : '') + dev.toFixed(0)}% vs plan</span>}</div>}
+          {planMaster == null && marcaUnica && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginBottom: 6 }}>No hay Master importado para <b>{marcaUnica}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
         <div className="panel">
           <h3 style={{ color: '#0e7490' }}>Realidad por cliente <span className="unit">(Monday · {selStat.size ? [...selStat].join(', ') : 'todos los estatus'} · clic en una fila para ver sus órdenes)</span></h3>
           {load ? <div className="sub no-ayuda">Cargando…</div> : lista.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay órdenes para este filtro.</div> :
@@ -5824,7 +5830,8 @@ function EbpEvolutionScreen({ empresa, sbus }) {
           {fil.length > 2000 && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginTop: 4 }}>Mostrando las primeras 2,000 órdenes. Afina los filtros para ver menos.</div>}
         </div>
         <MondayTracking />
-      </>}
+        </div>
+      </div>}
     </div>
   )
 }
