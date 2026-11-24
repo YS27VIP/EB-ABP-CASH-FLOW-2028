@@ -5820,9 +5820,6 @@ function CobrosScreen() {
             <label className="no-ayuda" style={{ fontSize: 11 }}>Semana<br /><input value={form.semana} onChange={(e) => setForm((f) => ({ ...f, semana: e.target.value }))} placeholder="ej. 04 Abril" style={{ width: 110 }} /></label>
             <label className="no-ayuda" style={{ fontSize: 11 }}>Comentario<br /><input value={form.comentario} onChange={(e) => setForm((f) => ({ ...f, comentario: e.target.value }))} style={{ width: 160 }} /></label>
             <button className="btn primary" disabled={savingPago} onClick={registrarPago}>{savingPago ? 'Guardando…' : (esOut ? '➕ Registrar pago' : '➕ Registrar cobro')}</button>
-            <div style={{ flex: '1 1 10px' }}></div>
-            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔍 marca, cliente u orden…" style={{ minWidth: 190 }} />
-            <button className="btn" onClick={exportarPlanilla}>⬇ Excel</button>
           </div>
           <div className="sub no-ayuda" style={{ color: 'var(--muted)', fontSize: 11, marginTop: 6 }}>Puedes registrar varias cuotas para la misma orden o {entLbl.toLowerCase()}. El pendiente se recalcula solo.</div>
         </div>
@@ -5838,6 +5835,12 @@ function CobrosScreen() {
         </div>}
 
         <div className="panel">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+            <span className="sub no-ayuda" style={{ fontWeight: 700, color: esOut ? '#c0392b' : '#2e7d32' }}>{esOut ? '🔻 Compras por pagar' : '🔺 Ventas por cobrar'} <span className="unit" style={{ fontWeight: 400 }}>({fmt(baseRows.length)} órdenes)</span></span>
+            <div className="spacer"></div>
+            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔍 buscar marca, cliente u orden…" style={{ minWidth: 220 }} />
+            <button className="btn" onClick={exportarPlanilla}>⬇ Excel</button>
+          </div>
           {load ? <div className="sub no-ayuda">Cargando…</div> : baseRows.length === 0 ?
             <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay {esOut ? 'compras' : 'ventas'} abiertas. Dale <b>🔄 Actualizar desde Monday</b>.</div> :
             <div className="tablewrap" style={{ maxHeight: '60vh' }}>
@@ -6004,7 +6007,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
                 <tbody>
                   {[...fil].sort((a, b) => (a.marca || '').localeCompare(b.marca || '') || b.pv - a.pv).slice(0, 2000).map((r, i) => { const cliR = armOn ? armDe(cliReal(r)).arm : cliReal(r); return (
                     <tr key={i}>
-                      <td className="l">{r.marca}</td><td className="l sub2">{cliR}</td><td className="l">{r.cliente}</td><td className="l">{r.clienteSF || '—'}</td><td className="l">{r.po || '—'}</td><td className="l">{r.tempC}</td><td className="l">{monPill(r.status, 'status')}</td><td className="l">{monPill(r.tipo, 'tipo')}</td><td className="l">{r.termino || '—'}</td><td className="l">{r.orderDate || '—'}</td><td className="l">{r.encargado || '—'}</td><td className="tot">{fmt(r.unidades)}</td><td className="tot">{r.cost ? fmt(r.cost) : '—'}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(r.pv)}</td><td className="l">{r.xf || '—'}</td><td className="l">{r.eta || '—'}</td><td className="l">{r.edd || '—'}</td><td className="l">{monPill(r.logStatus, 'log')}</td>
+                      <td className="l">{r.marca}</td><td className="l sub2">{cliR}</td><td className="l">{r.cliente}</td><td className="l">{r.clienteSF || ''}</td><td className="l">{r.po || ''}</td><td className="l">{r.tempC}</td><td className="l">{monPill(r.status, 'status')}</td><td className="l">{monPill(r.tipo, 'tipo')}</td><td className="l">{r.termino || ''}</td><td className="l">{r.orderDate || ''}</td><td className="l">{r.encargado || ''}</td><td className="tot">{fmt(r.unidades)}</td><td className="tot">{r.cost ? fmt(r.cost) : ''}</td><td className="tot" style={{ fontWeight: 700 }}>{fmt(r.pv)}</td><td className="l">{r.xf || ''}</td><td className="l">{r.eta || ''}</td><td className="l">{r.edd || ''}</td><td className="l">{monPill(r.logStatus, 'log')}</td>
                     </tr>
                   ) })}
                 </tbody>
