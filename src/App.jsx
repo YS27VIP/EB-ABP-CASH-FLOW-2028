@@ -5747,7 +5747,14 @@ function CobrosScreen() {
   const mesLbl = (k) => { const [y, m] = k.split('-'); const nm = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']; return nm[parseInt(m, 10) - 1] + ' ' + y }
   const diasDe = (o) => esOut ? parseDias(termOf(o['Marca'])) : parseDias(o['Termino'])
   const pagoSugerido = (o) => { const base = aDate(o['Customer XFD']); if (!base) return null; const d = new Date(base.getTime()); d.setUTCDate(d.getUTCDate() + diasDe(o)); return d }
-  const proj = (() => { const map = {}; const meses = new Set(); let sinFecha = 0; baseRows.forEach((o) => { const d = pagoSugerido(o); const amt = Math.max(0, amtOf(o) - pagosOrden(o.Name)); if (amt <= 0.5) return; if (!d) { sinFecha += amt; return } const k = ym(d); meses.add(k); const mc = o.Marca || '(sin marca)'; (map[mc] || (map[mc] = {}))[k] = (map[mc][k] || 0) + amt }); return { map, cols: [...meses].sort(), marcas: Object.keys(map).sort(), sinFecha } })()
+  const colLbl = (k) => (k === 'Vencido' || k === 'Posterior') ? k : mesLbl(k)
+  const proj = (() => {
+    const b = new Date(); const startMs = Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1); const horizonMs = Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + 12, 1)
+    const map = {}; const meses = new Set(); let sinFecha = 0, venc = false, post = false
+    baseRows.forEach((o) => { const d = pagoSugerido(o); const amt = Math.max(0, amtOf(o) - pagosOrden(o.Name)); if (amt <= 0.5) return; if (!d) { sinFecha += amt; return } const t = d.getTime(); let k; if (t < startMs) { k = 'Vencido'; venc = true } else if (t >= horizonMs) { k = 'Posterior'; post = true } else { k = ym(d); meses.add(k) } const mc = (esOut ? o.Marca : o.Cliente) || '(sin)'; (map[mc] || (map[mc] = {}))[k] = (map[mc][k] || 0) + amt })
+    const cols = [...(venc ? ['Vencido'] : []), ...[...meses].sort(), ...(post ? ['Posterior'] : [])]
+    return { map, cols, marcas: Object.keys(map).sort(), sinFecha }
+  })()
   const marcas = [...new Set(rows.map((o) => String(o.Marca || '').trim()).filter(Boolean))].sort()
   const hayTermEdits = Object.keys(termEdits).length > 0
   const guardarTerminos = async () => { const tm = { ...termMap }; Object.keys(termEdits).forEach((k) => tm[k] = termEdits[k]); const ms = [...new Set([...marcas.map(bU), ...Object.keys(tm)])].sort(); const mat = [['MARCA', 'TERMINO_PROVEEDOR'], ...ms.map((m) => [m, tm[m] || ''])]; await gWriteReport('Config_TerminoMarca', mat); setTermMap(tm); setTermEdits({}); return tm }
@@ -5905,12 +5912,24 @@ function CobrosScreen() {
         </div>
         <div className="panel">
           {proj.cols.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay proyección todavía: falta cargar {esOut ? <>el <b>Término</b> por marca</> : <>el <b>término del cliente</b></>} y/o la fecha <b>XFD</b> en las órdenes de Monday.</div> :
-            <div className="tablewrap" style={{ maxHeight: '66vh' }}>
-              <table className="vfix gridcols" style={{ fontSize: 12.5, minWidth: 820 }}>
-                <thead><tr><th className="l">{esOut ? 'Marca' : 'Cliente'}</th>{proj.cols.map((c) => <th key={c}>{mesLbl(c)}</th>)}<th>Total</th></tr></thead>
+            <div className="tablewrap" style={{ maxHeight: '66vh', overflow: 'auto' }}>
+              <table style={{ borderCollapse: 'collapse', fontSize: 12, tableLayout: 'auto' }}>
+                <thead><tr>
+                  <th style={{ position: 'sticky', left: 0, zIndex: 2, background: '#f7fafb', textAlign: 'left', padding: '6px 10px', minWidth: 150, borderBottom: '2px solid var(--line)' }}>{esOut ? 'Marca' : 'Cliente'}</th>
+                  {proj.cols.map((c) => <th key={c} style={{ padding: '6px 10px', minWidth: 78, textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '2px solid var(--line)', color: c === 'Vencido' ? '#c0392b' : '#444', background: '#f7fafb' }}>{colLbl(c)}</th>)}
+                  <th style={{ padding: '6px 10px', minWidth: 90, textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '2px solid var(--line)', background: '#eef2f7' }}>Total</th>
+                </tr></thead>
                 <tbody>
-                  {proj.marcas.map((mc) => { const rt = proj.cols.reduce((a, c) => a + (proj.map[mc][c] || 0), 0); return <tr key={mc}><td className="l" style={{ fontWeight: 600 }}>{mc}</td>{proj.cols.map((c) => <td key={c} className="tot">{proj.map[mc][c] ? money(proj.map[mc][c]) : ''}</td>)}<td className="tot" style={{ fontWeight: 700 }}>{money(rt)}</td></tr> })}
-                  <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l">TOTAL</td>{proj.cols.map((c) => { const ct = proj.marcas.reduce((a, mc) => a + (proj.map[mc][c] || 0), 0); return <td key={c} className="tot">{money(ct)}</td> })}<td className="tot">{money(proj.marcas.reduce((a, mc) => a + proj.cols.reduce((b, c) => b + (proj.map[mc][c] || 0), 0), 0))}</td></tr>
+                  {proj.marcas.map((mc) => { const rt = proj.cols.reduce((a, c) => a + (proj.map[mc][c] || 0), 0); return <tr key={mc}>
+                    <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', fontWeight: 600, padding: '5px 10px', borderBottom: '1px solid #eef1f4', whiteSpace: 'nowrap' }}>{mc}</td>
+                    {proj.cols.map((c) => <td key={c} style={{ padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '1px solid #eef1f4', color: c === 'Vencido' && proj.map[mc][c] ? '#c0392b' : '#222' }}>{proj.map[mc][c] ? fmt(Math.round(proj.map[mc][c])) : ''}</td>)}
+                    <td style={{ padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, borderBottom: '1px solid #eef1f4', background: '#fafbfc' }}>{fmt(Math.round(rt))}</td>
+                  </tr> })}
+                  <tr style={{ fontWeight: 800, background: '#eef2f7' }}>
+                    <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#eef2f7', padding: '6px 10px', whiteSpace: 'nowrap' }}>TOTAL</td>
+                    {proj.cols.map((c) => { const ct = proj.marcas.reduce((a, mc) => a + (proj.map[mc][c] || 0), 0); return <td key={c} style={{ padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', color: c === 'Vencido' ? '#c0392b' : '#222' }}>{fmt(Math.round(ct))}</td> })}
+                    <td style={{ padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(Math.round(proj.marcas.reduce((a, mc) => a + proj.cols.reduce((b, c) => b + (proj.map[mc][c] || 0), 0), 0)))}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>}
