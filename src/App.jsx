@@ -5623,7 +5623,9 @@ function MondayTracking() {
         const iF = ix('FECHA_SNAPSHOT'), iIt = ix('ITEM'), iId = ix('ITEM_ID'), iM = ix('MARCA'), iC = ix('CLIENTE'), iPO = ix('PO'), iU = ix('UNIDADES'), iPV = ix('PV'), iS = ix('STATUS')
         if (iF < 0) { setHist([]); setLoad(false); return }
         const gv = (r, i) => i >= 0 ? String(r[i] || '') : ''
-        const rows = j.values.slice(1).filter((r) => r[iF]).map((r) => ({ fecha: String(r[iF]).slice(0, 10), id: (gv(r, iIt) || gv(r, iId) || gv(r, iPO)).trim(), marca: gv(r, iM), cliente: gv(r, iC), po: gv(r, iPO), unidades: num(r[iU]), pv: num(r[iPV]), status: gv(r, iS).toUpperCase() }))
+        // Google guarda las fechas como número serial; conviértelo a YYYY-MM-DD.
+        const toFecha = (v) => { const s = String(v == null ? '' : v); const nn = Number(s); if (s && !isNaN(nn) && nn > 30000 && nn < 90000) { const d = new Date(Date.UTC(1899, 11, 30) + Math.round(nn) * 86400000); return d.toISOString().slice(0, 10) } return s.slice(0, 10) }
+        const rows = j.values.slice(1).filter((r) => r[iF]).map((r) => ({ fecha: toFecha(r[iF]), id: (gv(r, iIt) || gv(r, iId) || gv(r, iPO)).trim(), marca: gv(r, iM), cliente: gv(r, iC), po: gv(r, iPO), unidades: num(r[iU]), pv: num(r[iPV]), status: gv(r, iS).toUpperCase() }))
         setHist(rows)
       } else setHist([])
     } catch (e) { setErr(String(e && e.message || e)) }
@@ -5639,9 +5641,9 @@ function MondayTracking() {
     const ids = new Set([...Object.keys(aNew), ...Object.keys(aOld)])
     ids.forEach((id) => {
       const n = aNew[id], o = aOld[id]
-      if (n && !o) cambios.push({ tipo: 'Nueva', id, r: n, dU: n.unidades, dPV: n.pv })
-      else if (!n && o) cambios.push({ tipo: 'Eliminada', id, r: o, dU: -o.unidades, dPV: -o.pv })
-      else if (n && o) { const dU = n.unidades - o.unidades, dPV = n.pv - o.pv, ds = n.status !== o.status; if (Math.abs(dU) > 0.5 || Math.abs(dPV) > 0.5 || ds) cambios.push({ tipo: ds ? ('Status ' + o.status + '→' + n.status) : 'Cambio', id, r: n, dU, dPV, o }) }
+      if (n && !o) cambios.push({ tipo: 'Nueva', id, r: n, uB: 0, uA: n.unidades, pvB: 0, pvA: n.pv, dU: n.unidades, dPV: n.pv })
+      else if (!n && o) cambios.push({ tipo: 'Eliminada', id, r: o, uB: o.unidades, uA: 0, pvB: o.pv, pvA: 0, dU: -o.unidades, dPV: -o.pv })
+      else if (n && o) { const dU = n.unidades - o.unidades, dPV = n.pv - o.pv, ds = n.status !== o.status; if (Math.abs(dU) > 0.5 || Math.abs(dPV) > 0.5 || ds) cambios.push({ tipo: ds ? ('Status ' + o.status + '→' + n.status) : 'Cambio', id, r: n, o, uB: o.unidades, uA: n.unidades, pvB: o.pv, pvA: n.pv, dU, dPV }) }
     })
   }
   cambios.sort((a, b) => Math.abs(b.dPV) - Math.abs(a.dPV))
@@ -5656,17 +5658,25 @@ function MondayTracking() {
         !fOld ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>Ya hay <b>1 foto</b> ({fNew}). La comparación aparece cuando haya <b>una segunda semana</b> para comparar.</div> :
         <>
           <div className="sub">Comparando la foto del <b>{fNew}</b> contra la del <b>{fOld}</b>. Filtra por tipo de cambio:</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '6px 0 10px' }}>
-            {[['Nueva', '🆕 Nuevas', totNew, '#15803d'], ['Eliminada', '❌ Eliminadas', totDel, '#b91c1c'], ['Cambio', '✏️ Con cambios', totChg, '#b45309']].map(([k, lbl, arr, col]) =>
-              <button key={k} className={'seg' + (selCambio.has(k) ? ' active' : '')} onClick={() => togCambio(k)} style={selCambio.has(k) ? { borderColor: col, color: col, fontWeight: 700 } : { opacity: .6 }}>{lbl} ({fmt(arr.length)}) · {fmt(sum(arr, (c) => c.dPV))} PV</button>)}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '6px 0 10px', alignItems: 'center' }}>
+            {[['Nueva', '🆕 Nuevas', totNew, '#15803d'], ['Eliminada', '❌ Eliminadas', totDel, '#b91c1c'], ['Cambio', '✏️ Con cambios', totChg, '#b45309']].map(([k, lbl, arr, col]) => { const on = selCambio.has(k); return (
+              <button key={k} onClick={() => togCambio(k)} style={{ cursor: 'pointer', borderRadius: 8, padding: '5px 12px', fontWeight: 700, fontSize: 12.5, border: '1.5px solid ' + (on ? col : '#d7dce1'), background: on ? col + '14' : '#f6f7f8', color: on ? col : '#9aa0a6' }}>{lbl} ({fmt(arr.length)})</button>) })}
             <span className="unit" style={{ alignSelf: 'center', marginLeft: 'auto', fontWeight: 700 }}>Δ PV total: {fmt(sum(cambios.filter((c) => selCambio.has(catDe(c))), (c) => c.dPV))}</span>
           </div>
           {(() => { const vis = cambios.filter((c) => selCambio.has(catDe(c))); return vis.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>Sin cambios para este filtro.</div> :
             <div className="tablewrap" style={{ marginTop: 6, maxHeight: '50vh' }}>
-              <table className="vfix gridcols" style={{ width: 'auto', minWidth: 760, fontSize: 12 }}>
-                <thead><tr><th className="l">Cambio</th><th className="l">Orden / PO</th><th className="l">Cliente</th><th className="l">Marca</th><th>Δ Unidades</th><th>Δ Venta PV</th></tr></thead>
+              <table className="vfix gridcols" style={{ width: 'auto', minWidth: 980, fontSize: 12 }}>
+                <thead>
+                  <tr><th className="l" rowSpan={2}>Cambio</th><th className="l" rowSpan={2}>Orden / PO</th><th className="l" rowSpan={2}>Cliente</th><th className="l" rowSpan={2}>Marca</th><th colSpan={3} style={{ borderBottom: '1px solid var(--line)' }}>Unidades</th><th colSpan={3}>Venta PV ($)</th></tr>
+                  <tr><th className="ya">{fOld}</th><th className="yb">{fNew}</th><th>Δ</th><th className="ya">{fOld}</th><th className="yb">{fNew}</th><th>Δ</th></tr>
+                </thead>
                 <tbody>
-                  {vis.slice(0, 1500).map((c, i) => <tr key={i}><td className="l" style={{ fontWeight: 600, color: c.tipo === 'Nueva' ? '#15803d' : c.tipo === 'Eliminada' ? '#b91c1c' : '#b45309' }}>{c.tipo}</td><td className="l">{c.r.po || c.id}</td><td className="l sub2">{c.r.cliente}</td><td className="l">{c.r.marca}</td><td className="tot" style={{ color: c.dU > 0 ? '#15803d' : c.dU < 0 ? '#b91c1c' : 'var(--muted)', fontWeight: 700 }}>{c.dU > 0 ? '+' : ''}{fmt(c.dU)}</td><td className="tot" style={{ color: c.dPV > 0 ? '#15803d' : c.dPV < 0 ? '#b91c1c' : 'var(--muted)', fontWeight: 700 }}>{c.dPV > 0 ? '+' : ''}{fmt(c.dPV)}</td></tr>)}
+                  {vis.slice(0, 1500).map((c, i) => <tr key={i}>
+                    <td className="l" style={{ fontWeight: 600, color: c.tipo === 'Nueva' ? '#15803d' : c.tipo === 'Eliminada' ? '#b91c1c' : '#b45309' }}>{c.tipo}</td>
+                    <td className="l">{c.r.po || c.id}</td><td className="l sub2">{c.r.cliente}</td><td className="l">{c.r.marca}</td>
+                    <td className="tot ya">{c.uB ? fmt(c.uB) : '—'}</td><td className="tot yb">{c.uA ? fmt(c.uA) : '—'}</td><td className="tot" style={{ color: c.dU > 0 ? '#15803d' : c.dU < 0 ? '#b91c1c' : 'var(--muted)', fontWeight: 700 }}>{c.dU > 0 ? '+' : ''}{fmt(c.dU)}</td>
+                    <td className="tot ya">{c.pvB ? fmt(c.pvB) : '—'}</td><td className="tot yb">{c.pvA ? fmt(c.pvA) : '—'}</td><td className="tot" style={{ color: c.dPV > 0 ? '#15803d' : c.dPV < 0 ? '#b91c1c' : 'var(--muted)', fontWeight: 700 }}>{c.dPV > 0 ? '+' : ''}{fmt(c.dPV)}</td>
+                  </tr>)}
                 </tbody>
               </table>
             </div> })()}
@@ -5732,9 +5742,10 @@ function EbpEvolutionScreen({ empresa, sbus }) {
   // Agrupa por cliente armonizado + marca (la marca va en columna)
   const porCli = {}; fil.forEach((r) => {
     const real = cliReal(r); const a = armOn ? armDe(real) : { arm: real, ok: true }
-    const cli = a.arm || '(sin cliente)'; const key = cli + '␟' + (r.marca || ''); const canal = upper(r.cliente) === 'TAHO' ? '' : r.cliente
-    const o = porCli[key] || (porCli[key] = { key, cliente: cli, marca: r.marca || '', canal, pais: a.pais || '', mapped: a.ok, ordenes: 0, unidades: 0, pv: 0, terms: {}, ords: [] })
-    if (!o.mapped && a.ok) o.mapped = true
+    const interno = upper(a.arm) === 'ENERGY BRANDS'  // EB somos nosotros: no es un cliente
+    const cli = interno ? (r.cliente || '(interno)') : (a.arm || '(sin cliente)'); const key = cli + '␟' + (r.marca || ''); const canal = (interno || upper(r.cliente) === 'TAHO') ? '' : r.cliente
+    const o = porCli[key] || (porCli[key] = { key, cliente: cli, interno, marca: r.marca || '', canal, pais: interno ? '' : (a.pais || ''), mapped: interno ? true : a.ok, ordenes: 0, unidades: 0, pv: 0, terms: {}, ords: [] })
+    if (!o.mapped && a.ok && !interno) o.mapped = true
     o.ordenes++; o.unidades += r.unidades; o.pv += r.pv; if (r.termino) o.terms[r.termino] = (o.terms[r.termino] || 0) + 1; o.ords.push(r)
   })
   const sinArm = armOn ? Object.values(porCli).filter((o) => !o.mapped).length : 0
