@@ -5960,26 +5960,23 @@ function EbpEvolutionScreen({ empresa, sbus }) {
         <button className="btn" disabled={load} onClick={cargar}>{load ? 'Cargando…' : '🔄 Recargar'}</button>
       </div>
       {err && <div className="banner" style={{ marginBottom: 12 }}>⚠️ {err}</div>}
-      {!err && <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-        <div style={{ flex: '0 0 250px', position: 'sticky', top: 56, maxHeight: 'calc(100vh - 70px)', overflow: 'auto' }}>
-        <div className="panel" style={{ padding: '12px', marginBottom: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 12, color: '#0e7490', marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>🔎 Filtros</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+      {!err && <div>
+        <div className="panel no-ayuda" style={{ padding: '10px 12px', marginBottom: 12, position: 'sticky', top: 0, zIndex: 20, boxShadow: '0 2px 8px rgba(0,0,0,.06)' }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ fontWeight: 800, fontSize: 12, color: '#0e7490', textTransform: 'uppercase', letterSpacing: .4, alignSelf: 'center' }}>🔎 Filtros</div>
             <FiltroGrupo titulo="Order type" items={ALL_ORDER_TYPES} sel={selTipo} setSel={setSelTipo} color="#0e7490" cols={160}
               extra={<button className="seg" style={{ fontSize: 11, padding: '2px 9px', background: '#0e7490', color: '#fff', borderColor: '#0e7490', fontWeight: 700 }} title="Deja marcados solo los tipos que entran al cash flow: Preventa, Proyección, Venta de Stock y Muestras." onClick={() => setSelTipo(new Set(CASH_PRESET))}>💧 Preselección cash flow</button>} />
             <FiltroGrupo titulo="Marca" items={marcas} sel={selMarca} setSel={setSelMarca} color="#7c3aed" cols={120} />
             <FiltroGrupo titulo="Temporada" items={temps} sel={selTemp} setSel={setSelTemp} color="#b45309" cols={90} />
             <FiltroGrupo titulo="Estatus" items={estados} sel={selStat} setSel={setSelStat} color="#15803d" cols={100} />
             <FiltroGrupo titulo="Vía" items={['TAHO', 'MARKAI', 'INTERGLOBAL', 'OTROS']} sel={selVia} setSel={setSelVia} color="#be185d" cols={110} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
-            <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>🔍 Buscar cliente
-              <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="cliente…" style={{ width: '100%' }} /></label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5 }} title="Agrupa por el CLIENTE ARMONIZADO del EBP."><input type="checkbox" checked={armOn} onChange={(e) => setArmOn(e.target.checked)} style={{ accentColor: '#0e7490' }} /> Armonizar clientes (EBP)</label>
+            <div style={{ flex: '1 1 10px' }}></div>
+            <label className="who" style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, alignSelf: 'center' }}>🔍 Buscar cliente
+              <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="cliente…" style={{ width: 160 }} /></label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, alignSelf: 'center' }} title="Agrupa por el CLIENTE ARMONIZADO del EBP."><input type="checkbox" checked={armOn} onChange={(e) => setArmOn(e.target.checked)} style={{ accentColor: '#0e7490' }} /> Armonizar clientes (EBP)</label>
           </div>
         </div>
-        </div>
-        <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+        <div>
           {armOn && sinArm > 0 && <div className="sub no-ayuda" style={{ color: '#b45309', marginBottom: 6 }}>🔸 {sinArm} cliente(s) sin match en la base armonizada del EBP (se muestran con su nombre de Monday). Agrégalo en la hoja "BASE DE DATOS CLIENTE Y PAIS" del EBP si debería cuadrar.</div>}
           {planMaster != null && <div className="sub no-ayuda" style={{ marginBottom: 6 }}>🎯 <b>Plan Master:</b> {fmt(planMaster)} · Real Monday: {fmt(totPV)}{dev != null && <span className={dev >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}> · {(dev >= 0 ? '+' : '') + dev.toFixed(0)}% vs plan</span>}</div>}
           {planMaster == null && marcaUnica && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginBottom: 6 }}>No hay Master importado para <b>{marcaUnica}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
