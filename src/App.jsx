@@ -6027,6 +6027,106 @@ function CobrosScreen() {
   )
 }
 
+// ===== Sección independiente: Flujo de fondos proyectado (Cash In - Cash Out), por temporada y marca, saldo arrastrado. =====
+function FlujoScreen() {
+  const [rows, setRows] = useState([]); const [logOut, setLogOut] = useState([]); const [logIn, setLogIn] = useState([])
+  const [termMap, setTermMap] = useState({}); const [saldoIni, setSaldoIni] = useState(0); const [grpFlujo, setGrpFlujo] = useState('ambos')
+  const [load, setLoad] = useState(true); const [abierto, setAbierto] = useState(true)
+  const bU = (b) => String(b || '').trim().toUpperCase()
+  const termOf = (m) => termMap[bU(m)] || ''
+  useEffect(() => { (async () => {
+    try {
+      const rj = await gReadTab('Cobros_Finanzas'); if (rj && rj.ok && rj.values && rj.values.length) { const head = rj.values[0].map((h) => String(h || '')); setRows(rj.values.slice(1).filter((r) => (r || []).some((x) => x !== '' && x != null) && String(r[0] || '').toLowerCase().indexOf('actualizado') !== 0).map((r) => { const o = {}; head.forEach((h, i) => o[h] = (r[i] != null ? r[i] : '')); return o })) }
+      const leeLog = async (tab) => { try { const pj = await gReadTab(tab); const arr = []; if (pj && pj.ok && pj.values && pj.values.length > 1) { const H = pj.values[0].map((h) => String(h || '')); pj.values.slice(1).forEach((r) => { if ((r || []).some((x) => x !== '' && x != null)) { const o = {}; H.forEach((h, i) => o[h] = (r[i] != null ? r[i] : '')); arr.push(o) } }) } return arr } catch { return [] } }
+      setLogOut(await leeLog('Pagos_Log')); setLogIn(await leeLog('Cobros_Log'))
+      try { const tj = await gReadTab('Config_TerminoMarca'); if (tj && tj.ok && tj.values && tj.values.length > 1) { const tm = {}; tj.values.slice(1).forEach((r) => { if (r && r[0]) tm[bU(r[0])] = String(r[1] || '') }); setTermMap(tm) } } catch { }
+      try { const fj = await gReadTab('Config_Flujo'); if (fj && fj.ok && fj.values) { const row = fj.values.find((r) => bU(r[0]) === 'SALDO_INICIAL'); if (row) setSaldoIni(num(row[1])) } } catch { }
+    } catch { }
+    setLoad(false)
+  })() }, [])
+  const parseDias = (t) => { const s = String(t || '').toLowerCase(); if (/contado|anticip|contra/.test(s)) return 0; const m = s.match(/(\d+)/); return m ? parseInt(m[1], 10) : 0 }
+  const aDate = (v) => { if (v == null || v === '') return null; const s = String(v); const nn = Number(s); if (!isNaN(nn) && nn > 30000 && nn < 90000) return new Date(Date.UTC(1899, 11, 30) + Math.round(nn) * 86400000); const d = new Date(s); return isNaN(d.getTime()) ? null : d }
+  const ym = (d) => d ? d.toISOString().slice(0, 7) : ''
+  const mesLbl = (k) => { const [y, m] = k.split('-'); const nm = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']; return nm[parseInt(m, 10) - 1] + ' ' + y }
+  const colLbl = (k) => (k === 'Vencido' || k === 'Posterior' || k === 'Sin fecha') ? k : mesLbl(k)
+  const rowsOut = rows.filter((o) => bU(o['Order Type']) === 'COMPRA')
+  const rowsIn = rows.filter((o) => bU(o['Order Type']) !== 'COMPRA' && num(o['Price']) > 0)
+  const pagOrdenLog = (name, log) => log.filter((p) => String(p.Nivel) === 'Orden' && bU(p.Orden) === bU(name)).reduce((a, p) => a + num(p.Monto), 0)
+  const dueDateM = (o, out) => { const base = aDate(o['Customer XFD']); if (!base) return null; const d = new Date(base.getTime()); d.setUTCDate(d.getUTCDate() + (out ? parseDias(termOf(o['Marca'])) : parseDias(o['Termino']))); return d }
+  const pendM = (o, out) => { const amt = num(out ? o['Cost'] : o['Price']); const flag = out ? bU(o['Pago Enviado']) === 'YES' : bU(o['Pago Recibido']) === 'YES'; return Math.max(0, amt - (flag ? amt : pagOrdenLog(o.Name, out ? logOut : logIn))) }
+  const flujo = (() => {
+    const b = new Date(); const startMs = Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1); const horizonMs = Date.UTC(b.getUTCFullYear(), b.getUTCMonth() + 12, 1)
+    const ing = {}, egr = {}; const meses = new Set(); const fl = { v: false, p: false, s: false }
+    const add = (store, o, out) => { const amt = pendM(o, out); if (amt <= 0.5) return; const d = dueDateM(o, out); const temp = (String(o['Temporada'] || '').trim() || '(sin temporada)'); const mca = (String(o['Marca'] || '').trim() || '(sin marca)'); let k; if (!d) { k = 'Sin fecha'; fl.s = true } else { const t = d.getTime(); if (t < startMs) { k = 'Vencido'; fl.v = true } else if (t >= horizonMs) { k = 'Posterior'; fl.p = true } else { k = ym(d); meses.add(k) } } const tt = store[temp] || (store[temp] = {}); const mm = tt[mca] || (tt[mca] = {}); mm[k] = (mm[k] || 0) + amt }
+    rowsIn.forEach((o) => add(ing, o, false)); rowsOut.forEach((o) => add(egr, o, true))
+    const cols = [...(fl.v ? ['Vencido'] : []), ...[...meses].sort(), ...(fl.p ? ['Posterior'] : []), ...(fl.s ? ['Sin fecha'] : [])]
+    const sumTempCol = (store, t, c) => Object.keys(store[t] || {}).reduce((a, m) => a + ((store[t][m] || {})[c] || 0), 0)
+    const sumCol = (store, c) => Object.keys(store).reduce((a, t) => a + sumTempCol(store, t, c), 0)
+    const marcasDe = (store, t) => Object.keys(store[t] || {}).sort()
+    const allMarcas = (store) => [...new Set(Object.values(store).flatMap((tt) => Object.keys(tt)))].sort()
+    const sumMarcaCol = (store, m, c) => Object.keys(store).reduce((a, t) => a + ((store[t][m] || {})[c] || 0), 0)
+    return { ing, egr, cols, temps: { ing: Object.keys(ing).sort(), egr: Object.keys(egr).sort() }, sumTempCol, sumCol, marcasDe, allMarcas, sumMarcaCol }
+  })()
+  const flujoRows = (store, temps) => { const out = []; if (grpFlujo === 'temp') { temps.forEach((t) => out.push({ label: t, bold: true, get: (c) => flujo.sumTempCol(store, t, c) })) } else if (grpFlujo === 'marca') { flujo.allMarcas(store).forEach((m) => out.push({ label: m, get: (c) => flujo.sumMarcaCol(store, m, c) })) } else { temps.forEach((t) => { out.push({ label: t, bold: true, get: (c) => flujo.sumTempCol(store, t, c) }); flujo.marcasDe(store, t).forEach((m) => out.push({ label: m, indent: true, get: (c) => (store[t][m] || {})[c] || 0 })) }) } return out }
+  const exportarFlujo = () => {
+    const cols = flujo.cols; const ini = {}, fin = {}; let prev = num(saldoIni)
+    cols.forEach((c) => { ini[c] = prev; const net = flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c); fin[c] = prev + net; prev = fin[c] })
+    const aoa = [['Flujo de fondos', ...cols.map(colLbl)]]
+    aoa.push(['Saldo inicial', ...cols.map((c) => Math.round(ini[c]))])
+    aoa.push(['INGRESOS (cobros)', ...cols.map(() => '')])
+    flujoRows(flujo.ing, flujo.temps.ing).forEach((r) => aoa.push([(r.indent ? '   ' : '') + r.label, ...cols.map((c) => Math.round(r.get(c) || 0))]))
+    aoa.push(['Total ingresos', ...cols.map((c) => Math.round(flujo.sumCol(flujo.ing, c)))])
+    aoa.push(['EGRESOS (pagos)', ...cols.map(() => '')])
+    flujoRows(flujo.egr, flujo.temps.egr).forEach((r) => aoa.push([(r.indent ? '   ' : '') + r.label, ...cols.map((c) => Math.round(r.get(c) || 0))]))
+    aoa.push(['Total egresos', ...cols.map((c) => Math.round(flujo.sumCol(flujo.egr, c)))])
+    aoa.push(['Flujo neto', ...cols.map((c) => Math.round(flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c)))])
+    aoa.push(['Saldo final', ...cols.map((c) => Math.round(fin[c]))])
+    exportXlsx(aoa, 'Flujo_de_fondos.xlsx')
+  }
+  const cols = flujo.cols; const ini = {}, fin = {}; let prev = num(saldoIni)
+  cols.forEach((c) => { ini[c] = prev; const net = flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c); fin[c] = prev + net; prev = fin[c] })
+  const cel = (v, opts = {}) => <td style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '1px solid #eef1f4', ...opts }}>{v ? fmt(Math.round(v)) : ''}</td>
+  const H = (txt, bg, bold = true, indent = false) => <td style={{ position: 'sticky', left: 0, zIndex: 1, background: bg || '#fff', padding: indent ? '4px 10px 4px 26px' : '4px 10px', whiteSpace: 'nowrap', fontWeight: bold ? 700 : 400, color: indent ? '#444' : '#111', borderBottom: '1px solid #eef1f4' }}>{txt}</td>
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ marginBottom: abierto ? 8 : 0 }}>
+        <button className="btn" onClick={() => setAbierto((v) => !v)} style={{ fontWeight: 700, color: '#1d4ed8' }}>{abierto ? '▾' : '▸'} 💵 Flujo de fondos proyectado</button>
+      </div>
+      {abierto && <div className="panel">
+        <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="empchip" style={{ background: '#1d4ed8', marginLeft: 0, fontSize: 13, padding: '4px 12px' }}>💵 Flujo de fondos proyectado</span>
+          <span className="unit" style={{ alignSelf: 'center' }}>Saldo inicial:</span>
+          <input type="number" value={saldoIni} onChange={(e) => setSaldoIni(Number(e.target.value) || 0)} onBlur={() => { gWriteReport('Config_Flujo', [['CLAVE', 'VALOR'], ['SALDO_INICIAL', saldoIni]]).catch(() => { }) }} style={{ width: 130, textAlign: 'right' }} />
+          <span className="unit" style={{ alignSelf: 'center', marginLeft: 8 }}>Desglose:</span>
+          <select value={grpFlujo} onChange={(e) => setGrpFlujo(e.target.value)}><option value="temp">Por temporada</option><option value="marca">Por marca</option><option value="ambos">Temporada › Marca</option></select>
+          <div className="spacer"></div>
+          <button className="btn" onClick={exportarFlujo}>⬇ Excel</button>
+        </div>
+        {load ? <div className="sub no-ayuda">Cargando…</div> : flujo.cols.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay flujo proyectado todavía (faltan XFD/términos en las órdenes de Monday).</div> :
+          <div className="tablewrap" style={{ maxHeight: '72vh', overflow: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead><tr>
+                <th style={{ position: 'sticky', left: 0, zIndex: 3, background: '#eef2f7', textAlign: 'left', padding: '6px 10px', minWidth: 190, borderBottom: '2px solid var(--line)' }}>Flujo de fondos</th>
+                {cols.map((c) => <th key={c} style={{ padding: '6px 10px', minWidth: 92, textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '2px solid var(--line)', background: '#eef2f7', color: c === 'Vencido' ? '#c0392b' : '#333' }}>{colLbl(c)}</th>)}
+              </tr></thead>
+              <tbody>
+                <tr style={{ background: '#eaf1fb' }}>{H('Saldo inicial', '#eaf1fb')}{cols.map((c) => <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700 }}>{fmt(Math.round(ini[c]))}</td>)}</tr>
+                <tr style={{ background: '#e7f4ea' }}>{H('INGRESOS (cobros)', '#e7f4ea')}{cols.map((c) => <td key={c} style={{ background: '#e7f4ea' }}></td>)}</tr>
+                {flujoRows(flujo.ing, flujo.temps.ing).map((r, idx) => <tr key={'i' + idx} style={r.bold ? { background: '#f6faf7' } : {}}>{H(r.label, r.bold ? '#f6faf7' : '#fff', !!r.bold, !!r.indent)}{cols.map((c) => cel(r.get(c), { color: '#2e7d32', fontWeight: r.bold ? 700 : 400 }))}</tr>)}
+                <tr>{H('Total ingresos', '#f3f6fa')}{cols.map((c) => <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: '#2e7d32', borderBottom: '1px solid #eef1f4' }}>{fmt(Math.round(flujo.sumCol(flujo.ing, c)))}</td>)}</tr>
+                <tr style={{ background: '#fdecec' }}>{H('EGRESOS (pagos)', '#fdecec')}{cols.map((c) => <td key={c} style={{ background: '#fdecec' }}></td>)}</tr>
+                {flujoRows(flujo.egr, flujo.temps.egr).map((r, idx) => <tr key={'e' + idx} style={r.bold ? { background: '#fdf4f4' } : {}}>{H(r.label, r.bold ? '#fdf4f4' : '#fff', !!r.bold, !!r.indent)}{cols.map((c) => cel(r.get(c), { color: '#c0392b', fontWeight: r.bold ? 700 : 400 }))}</tr>)}
+                <tr>{H('Total egresos', '#f3f6fa')}{cols.map((c) => <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: '#c0392b', borderBottom: '1px solid #eef1f4' }}>{fmt(Math.round(flujo.sumCol(flujo.egr, c)))}</td>)}</tr>
+                <tr style={{ background: '#fffbe6' }}>{H('Flujo neto', '#fffbe6')}{cols.map((c) => { const n = flujo.sumCol(flujo.ing, c) - flujo.sumCol(flujo.egr, c); return <td key={c} style={{ padding: '4px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 700, color: n < 0 ? '#c0392b' : '#2e7d32' }}>{fmt(Math.round(n))}</td> })}</tr>
+                <tr style={{ background: '#dbe7fb' }}>{H('Saldo final', '#dbe7fb')}{cols.map((c) => <td key={c} style={{ padding: '5px 9px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 800, color: fin[c] < 0 ? '#c0392b' : '#1d4ed8' }}>{fmt(Math.round(fin[c]))}</td>)}</tr>
+              </tbody>
+            </table>
+          </div>}
+      </div>}
+    </div>
+  )
+}
+
 // ===== EBP Evolution: compara el plan (Master) con la realidad de Monday (pestaña Monday_SS27). Solo Energy Brands. =====
 function EbpEvolutionScreen({ empresa, sbus }) {
   const [rows, setRows] = useState([]); const [load, setLoad] = useState(true); const [err, setErr] = useState(null); const [stamp, setStamp] = useState('')
@@ -6136,6 +6236,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
           {planMaster != null && <div className="sub no-ayuda" style={{ marginBottom: 6 }}>🎯 <b>Plan Master:</b> {fmt(planMaster)} · Real Monday: {fmt(totPV)}{dev != null && <span className={dev >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}> · {(dev >= 0 ? '+' : '') + dev.toFixed(0)}% vs plan</span>}</div>}
           {planMaster == null && marcaUnica && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginBottom: 6 }}>No hay Master importado para <b>{marcaUnica}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
         <CobrosScreen />
+        <FlujoScreen />
         <div style={{ marginTop: 14, marginBottom: verCambios ? 6 : 0 }}>
           <button className="btn" onClick={() => setVerCambios((v) => !v)} style={{ fontWeight: 700, color: '#be185d' }}>{verCambios ? '▾' : '▸'} 🔁 Cambios vs semana pasada</button>
         </div>
