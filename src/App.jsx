@@ -6129,6 +6129,65 @@ function FlujoScreen() {
   )
 }
 
+// ===== Sección: Resumen HOKA SS27 vs FW27 por cliente (del Excel del script) cruzado con estatus de Monday. =====
+const CH_HOKA = ['Cliente', 'Estado', 'Pedidos SS27', 'Unidades SS27', 'SS27 USD', 'Pedidos FW27', 'Unidades FW27', 'FW27 USD', 'Crec USD', 'Diferencia', 'Nombre original en el pedido']
+function CompHokaScreen() {
+  const [rows, setRows] = useState([]); const [mon, setMon] = useState({}); const [load, setLoad] = useState(true); const [abierto, setAbierto] = useState(false); const [busca, setBusca] = useState('')
+  const bU = (b) => String(b || '').trim().toUpperCase()
+  const norm = (s) => bU(s).replace(/[.,]/g, '').replace(/\b(S A S|S A|SAS|SA|C A|CA|INC|LLC|LTDA|SRL)\b/g, '').replace(/\s+/g, ' ').trim()
+  useEffect(() => { (async () => {
+    try {
+      const j = await gReadTab('Comp_HOKA'); if (j && j.ok && j.values && j.values.length > 1) { const head = j.values[0].map((h) => String(h || '')); const ix = (n) => head.indexOf(n); setRows(j.values.slice(1).filter((r) => String(r[0] || '').trim()).map((r) => ({ cliente: r[ix('Cliente')] || '', estado: r[ix('Estado')] || '', pedSS: r[ix('Pedidos SS27')] || '', uSS: num(r[ix('Unidades SS27')]), usdSS: num(r[ix('SS27 USD')]), pedFW: r[ix('Pedidos FW27')] || '', uFW: num(r[ix('Unidades FW27')]), usdFW: num(r[ix('FW27 USD')]), crecUsd: num(r[ix('Crec USD')]), dif: num(r[ix('Diferencia')]), orig: r[ix('Nombre original en el pedido')] || '' }))) }
+      const mj = await gReadTab('Monday_SS27')
+      if (mj && mj.ok && mj.values && mj.values.length > 1) { const H = mj.values[0].map((h) => bU(h)); const ix = (n) => H.indexOf(n); const iM = ix('MARCA'), iC = ix('CLIENTE'), iSF = ix('CLIENTE_SF'), iTc = ix('TEMP_CORTA'), iPR = ix('PAGO_RECIBIDO'); const m = {}; mj.values.slice(1).forEach((r) => { if (bU(r[iM]) !== 'HOKA') return; if (String(r[iTc] || '').toUpperCase().indexOf('SS27') < 0) return; [r[iC], r[iSF]].forEach((nm) => { const k = norm(nm); if (!k) return; const o = m[k] || (m[k] = { n: 0, cob: 0 }); }); const k = norm(r[iC]); if (k) { const o = m[k]; o.n += 1; if (bU(r[iPR]) === 'YES') o.cob += 1 } }); setMon(m) }
+    } catch { }
+    setLoad(false)
+  })() }, [])
+  const matchMon = (r) => { const cands = [r.cliente]; const s = String(r.orig || ''); const mm = s.match(/EN SS27:\s*([^]*?)(?:EN FW27:|$)/i); if (mm) mm[1].split('+').forEach((x) => cands.push(x)); let n = 0, cob = 0, hit = false; const seen = new Set(); cands.forEach((c) => { const k = norm(c); if (!k || seen.has(k)) return; seen.add(k); const o = mon[k]; if (o) { hit = true; n += o.n; cob += o.cob } }); return { hit, n, cob } }
+  const money = (v) => { const x = Number(v); return (v === '' || v == null || isNaN(x)) ? '' : fmt(Math.round(x)) }
+  const filtered = rows.filter((r) => !busca.trim() || norm(r.cliente + ' ' + r.orig).indexOf(norm(busca)) >= 0)
+  const tot = filtered.reduce((a, r) => ({ uSS: a.uSS + r.uSS, usdSS: a.usdSS + r.usdSS, uFW: a.uFW + r.uFW, usdFW: a.usdFW + r.usdFW }), { uSS: 0, usdSS: 0, uFW: 0, usdFW: 0 })
+  const exportar = () => { const aoa = [['Cliente', 'Estado', 'Unid SS27', 'SS27 USD', 'Unid FW27', 'FW27 USD', 'Crec USD %', 'Dif USD', 'En Monday SS27', 'Original'], ...filtered.map((r) => { const m = matchMon(r); return [r.cliente, r.estado, r.uSS, r.usdSS, r.uFW, r.usdFW, Math.round(r.crecUsd * 100), r.dif, m.hit ? (m.n + ' órd.' + (m.cob ? ' / ' + m.cob + ' cobradas' : '')) : 'no mapeado', r.orig] }), ['TOTAL', '', tot.uSS, tot.usdSS, tot.uFW, tot.usdFW, '', '', '', '']]; exportXlsx(aoa, 'Comparativo_HOKA_SS27_FW27.xlsx') }
+  const pct = (v) => (v === '' || v == null || isNaN(Number(v))) ? '' : ((v >= 0 ? '+' : '') + Math.round(v * 100) + '%')
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ marginBottom: abierto ? 8 : 0 }}>
+        <button className="btn" onClick={() => setAbierto((v) => !v)} style={{ fontWeight: 700, color: '#0e7490' }}>{abierto ? '▾' : '▸'} 👟 HOKA · SS27 vs FW27 por cliente</button>
+      </div>
+      {abierto && <div className="panel">
+        <div className="toolbar" style={{ marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="empchip" style={{ background: '#0e7490', marginLeft: 0, fontSize: 13, padding: '4px 12px' }}>👟 HOKA · SS27 vs FW27</span>
+          <span className="unit" style={{ alignSelf: 'center' }}>Comparativo por cliente (del master) cruzado con el estatus en Monday.</span>
+          <div className="spacer"></div>
+          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔍 cliente…" style={{ minWidth: 160 }} />
+          <button className="btn" onClick={exportar}>⬇ Excel</button>
+        </div>
+        {load ? <div className="sub no-ayuda">Cargando…</div> : rows.length === 0 ? <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay datos en la pestaña Comp_HOKA.</div> :
+          <div className="tablewrap" style={{ maxHeight: '72vh', overflow: 'auto' }}>
+            <table className="vfix gridcols" style={{ fontSize: 12, minWidth: 1100 }}>
+              <thead>
+                <tr><th className="l" rowSpan={2}>Cliente</th><th className="l" rowSpan={2}>Estado</th><th colSpan={3} style={{ background: '#eef6fb' }}>SS27</th><th colSpan={3} style={{ background: '#fdf3ec' }}>FW27</th><th rowSpan={2}>Crec USD</th><th className="l" rowSpan={2}>En Monday (SS27)</th></tr>
+                <tr><th style={{ background: '#eef6fb' }}>Pedidos</th><th style={{ background: '#eef6fb' }}>Unid.</th><th style={{ background: '#eef6fb' }}>USD</th><th style={{ background: '#fdf3ec' }}>Pedidos</th><th style={{ background: '#fdf3ec' }}>Unid.</th><th style={{ background: '#fdf3ec' }}>USD</th></tr>
+              </thead>
+              <tbody>
+                {filtered.map((r, i) => { const m = matchMon(r); return <tr key={i}>
+                  <td className="l" style={{ fontWeight: 600 }}>{r.cliente}{r.orig ? <div className="unit" style={{ fontSize: 10 }}>{r.orig}</div> : null}</td>
+                  <td className="l"><span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: bU(r.estado) === 'NUEVO' ? '#e7f4ea' : '#eef2f7', color: bU(r.estado) === 'NUEVO' ? '#2e7d32' : '#555' }}>{r.estado || '—'}</span></td>
+                  <td className="tot">{r.pedSS}</td><td className="tot">{fmt(r.uSS)}</td><td className="tot" style={{ fontWeight: 700 }}>{money(r.usdSS)}</td>
+                  <td className="tot">{r.pedFW}</td><td className="tot">{fmt(r.uFW)}</td><td className="tot" style={{ fontWeight: 700 }}>{money(r.usdFW)}</td>
+                  <td className="tot" style={{ color: r.crecUsd < 0 ? '#c0392b' : '#2e7d32', fontWeight: 600 }}>{pct(r.crecUsd)}</td>
+                  <td className="l">{m.hit ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: '#e7f4ea', color: '#2e7d32' }}>✓ {m.n} órd.{m.cob ? ` · ${m.cob} cobradas` : ''}</span> : <span style={{ fontSize: 11, color: '#999' }}>— no mapeado</span>}</td>
+                </tr> })}
+                <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l">TOTAL ({filtered.length})</td><td></td><td></td><td className="tot">{fmt(tot.uSS)}</td><td className="tot">{money(tot.usdSS)}</td><td></td><td className="tot">{fmt(tot.uFW)}</td><td className="tot">{money(tot.usdFW)}</td><td></td><td></td></tr>
+              </tbody>
+            </table>
+          </div>}
+        <div className="sub no-ayuda" style={{ color: 'var(--muted)', fontSize: 11, marginTop: 6 }}>FW27 aún no está en Monday (pendiente de subir). "En Monday (SS27)" cruza por nombre de cliente; las órdenes vía TAHO u otro distribuidor pueden salir "no mapeado".</div>
+      </div>}
+    </div>
+  )
+}
+
 // ===== EBP Evolution: compara el plan (Master) con la realidad de Monday (pestaña Monday_SS27). Solo Energy Brands. =====
 function EbpEvolutionScreen({ empresa, sbus }) {
   const [rows, setRows] = useState([]); const [load, setLoad] = useState(true); const [err, setErr] = useState(null); const [stamp, setStamp] = useState('')
@@ -6239,6 +6298,7 @@ function EbpEvolutionScreen({ empresa, sbus }) {
           {planMaster == null && marcaUnica && <div className="sub no-ayuda" style={{ color: 'var(--muted)', marginBottom: 6 }}>No hay Master importado para <b>{marcaUnica}</b> (impórtalo en Producto → 🧮 Saldos 2028 para comparar contra el plan).</div>}
         <CobrosScreen />
         <FlujoScreen />
+        <CompHokaScreen />
         <div style={{ marginTop: 14, marginBottom: verCambios ? 6 : 0 }}>
           <button className="btn" onClick={() => setVerCambios((v) => !v)} style={{ fontWeight: 700, color: '#be185d' }}>{verCambios ? '▾' : '▸'} 🔁 Cambios vs semana pasada</button>
         </div>
