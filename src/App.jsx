@@ -1732,8 +1732,23 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoH
     setSaving(false)
   }
   function exportar() {
-    const aoa = [['EMPRESA', 'CONCEPTO', 'SBU', 'MARCA', ...CF_MESES]]
-    marcas.forEach(({ sbu: sb, marca: mca }) => CF_GROUPS.forEach((gr) => gr.items.forEach((it) => aoa.push([empresa, it, sb, mca, ...CF_MESES.map((_, mi) => val(mca, it, mi))]))))
+    const M = CF_MESES
+    const aoa = [['Concepto', ...M, 'TOTAL']]
+    const push = (lbl, fn, showTot = true) => aoa.push([lbl, ...M.map((_, mi) => Math.round(fn(mi))), showTot ? Math.round(M.reduce((a, _, mi) => a + fn(mi), 0)) : ''])
+    aoa.push(['PSI · Purchases-Sales-Inventory'])
+    CF_GROUPS[0].items.forEach((it) => push(it, (mi) => cell(it, mi)))
+    aoa.push(['CASH FLOW'])
+    push('Cash Inicial', (mi) => cell(CASH_INI, mi), false)
+    push('Cash In (Cobros)', (mi) => cell(CASHIN, mi) + retailEbMes(mi))
+    push('Cash Out (Pagos)', (mi) => cell(CASH_OUT, mi))
+    push('Costos Operativos', (mi) => cell(CF_COSTOS_PARENT, mi))
+    cfCostos.forEach((sub) => push('   ' + sub, (mi) => cellRaw(sub, mi)))
+    push('Costos Financieros', (mi) => cell(CF_FIN_PARENT, mi))
+    push('Otros ingresos', (mi) => cell(CF_OTRO_ING, mi))
+    push('Otros gastos', (mi) => cell(CF_OTRO_GAS, mi))
+    if (hayRetailEb) push('Retail EB', (mi) => retailEbMes(mi))
+    push('= Flujo neto del mes', (mi) => flujoNeto(mi))
+    push('Cash Final', (mi) => cell(CASH_FIN, mi), false)
     exportXlsx(aoa, `${role.tab}_CASHFLOW.xlsx`)
   }
   function importar(ev) {
@@ -9897,6 +9912,32 @@ function exportXlsx(aoa, nombre) {
   const XLSX = window.XLSX
   if (!XLSX) { alert('Excel aún se está cargando, intenta de nuevo en un segundo.'); return }
   const ws = XLSX.utils.aoa_to_sheet(aoa)
+  try {
+    if (ws['!ref']) {
+      const range = XLSX.utils.decode_range(ws['!ref']); const ncol = range.e.c + 1
+      const TEAL = '0E7490', DARK = '0B5566', TOTBG = 'EEF2F7', SECBG = 'E8F0FE'
+      ws['!cols'] = Array.from({ length: ncol }, (_, c) => { let w = c === 0 ? 20 : 11; for (let r = 0; r <= range.e.r; r++) { const v = aoa[r] && aoa[r][c]; const L = (v == null ? 0 : String(v).length) + 2; if (L > w) w = Math.min(44, L) } return { wch: w } })
+      ws['!merges'] = ws['!merges'] || []
+      for (let r = range.s.r; r <= range.e.r; r++) {
+        const rowArr = aoa[r] || []; const label = String(rowArr[0] || '')
+        const nonEmpty = rowArr.filter((x) => x !== '' && x != null).length
+        const isHeader = r === 0
+        const isSection = !isHeader && nonEmpty === 1 && label
+        const isTot = !isHeader && /^(TOTAL|SALDO|RESULTADO|SUBTOTAL)/i.test(label)
+        if (isSection) ws['!merges'].push({ s: { r, c: 0 }, e: { r, c: ncol - 1 } })
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const addr = XLSX.utils.encode_cell({ r, c }); const cell = ws[addr]; if (!cell) continue
+          const s = { alignment: {} }
+          if (cell.t === 'n') { cell.z = '#,##0;[Red]-#,##0'; s.alignment.horizontal = 'right' }
+          if (isHeader) { s.font = { bold: true, color: { rgb: 'FFFFFF' } }; s.fill = { patternType: 'solid', fgColor: { rgb: TEAL } }; s.alignment = { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' }; s.border = { bottom: { style: 'thin', color: { rgb: DARK } } } }
+          else if (isSection) { s.font = { bold: true, color: { rgb: '1458B3' } }; s.fill = { patternType: 'solid', fgColor: { rgb: SECBG } }; s.alignment.horizontal = 'left' }
+          else { if (c === 0) s.alignment.horizontal = 'left'; if (isTot) { s.font = { bold: true }; s.fill = { patternType: 'solid', fgColor: { rgb: TOTBG } } } }
+          cell.s = s
+        }
+      }
+      ws['!freeze'] = { xSplit: 0, ySplit: 1 }
+    }
+  } catch { }
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Datos')
   XLSX.writeFile(wb, nombre)
