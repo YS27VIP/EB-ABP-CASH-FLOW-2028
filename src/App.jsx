@@ -9915,7 +9915,8 @@ function exportXlsx(aoa, nombre) {
   try {
     if (ws['!ref']) {
       const range = XLSX.utils.decode_range(ws['!ref']); const ncol = range.e.c + 1
-      const TEAL = '0E7490', DARK = '0B5566', TOTBG = 'EEF2F7', SECBG = 'E8F0FE'
+      const TEAL = '0E7490', DARK = '0B5566', TOTBG = 'EEF2F7', SECBG = 'E8F0FE', FAINT = 'E6E9ED'
+      const bAll = { top: { style: 'thin', color: { rgb: FAINT } }, bottom: { style: 'thin', color: { rgb: FAINT } }, left: { style: 'thin', color: { rgb: FAINT } }, right: { style: 'thin', color: { rgb: FAINT } } }
       ws['!cols'] = Array.from({ length: ncol }, (_, c) => { let w = c === 0 ? 20 : 11; for (let r = 0; r <= range.e.r; r++) { const v = aoa[r] && aoa[r][c]; const L = (v == null ? 0 : String(v).length) + 2; if (L > w) w = Math.min(44, L) } return { wch: w } })
       ws['!merges'] = ws['!merges'] || []
       for (let r = range.s.r; r <= range.e.r; r++) {
@@ -9927,15 +9928,17 @@ function exportXlsx(aoa, nombre) {
         if (isSection) ws['!merges'].push({ s: { r, c: 0 }, e: { r, c: ncol - 1 } })
         for (let c = range.s.c; c <= range.e.c; c++) {
           const addr = XLSX.utils.encode_cell({ r, c }); const cell = ws[addr]; if (!cell) continue
-          const s = { alignment: {} }
+          const s = { alignment: {}, border: { ...bAll } }
           if (cell.t === 'n') { cell.z = '#,##0;[Red]-#,##0'; s.alignment.horizontal = 'right' }
-          if (isHeader) { s.font = { bold: true, color: { rgb: 'FFFFFF' } }; s.fill = { patternType: 'solid', fgColor: { rgb: TEAL } }; s.alignment = { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' }; s.border = { bottom: { style: 'thin', color: { rgb: DARK } } } }
+          if (isHeader) { s.font = { bold: true, color: { rgb: 'FFFFFF' } }; s.fill = { patternType: 'solid', fgColor: { rgb: TEAL } }; s.alignment = { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' }; s.border = { ...bAll, bottom: { style: 'medium', color: { rgb: DARK } } } }
           else if (isSection) { s.font = { bold: true, color: { rgb: '1458B3' } }; s.fill = { patternType: 'solid', fgColor: { rgb: SECBG } }; s.alignment.horizontal = 'left' }
-          else { if (c === 0) s.alignment.horizontal = 'left'; if (isTot) { s.font = { bold: true }; s.fill = { patternType: 'solid', fgColor: { rgb: TOTBG } } } }
+          else if (isTot) { s.font = { bold: true }; s.fill = { patternType: 'solid', fgColor: { rgb: TOTBG } }; if (c === 0) s.alignment.horizontal = 'left' }
+          else { s.fill = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } }; if (c === 0) s.alignment.horizontal = 'left' }
           cell.s = s
         }
       }
       ws['!freeze'] = { xSplit: 0, ySplit: 1 }
+      ws['!sheetViews'] = [{ showGridLines: false }]
     }
   } catch { }
   const wb = XLSX.utils.book_new()
