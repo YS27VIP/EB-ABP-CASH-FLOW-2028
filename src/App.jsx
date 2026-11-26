@@ -5915,6 +5915,7 @@ function CobrosScreen() {
             <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="🔍 buscar marca, cliente u orden…" style={{ minWidth: 220 }} />
             <button className="btn" onClick={exportarPlanilla}>⬇ Excel</button>
           </div>
+          <div className="sub no-ayuda" style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 8, background: '#f7f9fb', border: '1px solid var(--line)', borderRadius: 6, padding: '6px 10px' }}>ℹ️ Una orden queda <b style={{ color: '#2e7d32' }}>{esOut ? 'Pagada' : 'Cobrada'}</b> cuando {esOut ? <>en Monday <b>Payment Sent = YES</b></> : <>en Monday <b>Payment Received = YES</b></>} (se toma el pago completo), o cuando la suma de {esOut ? 'pagos' : 'cobros'} registrados aquí cubre el {esOut ? 'costo' : 'monto'}. <b>Pendiente</b> = {esOut ? 'Costo' : 'Venta'} − {esOut ? 'pagado' : 'cobrado'}; si es ≤ 0 → {esOut ? 'Pagada' : 'Cobrada'}.</div>
           {load ? <div className="sub no-ayuda">Cargando…</div> : baseRows.length === 0 ?
             <div className="sub no-ayuda" style={{ color: 'var(--muted)' }}>No hay {esOut ? 'compras' : 'ventas'} abiertas. Dale <b>🔄 Actualizar desde Monday</b>.</div> :
             <div className="tablewrap" style={{ maxHeight: '60vh' }}>
@@ -6162,7 +6163,7 @@ function CompHokaScreen() {
   const money = (v) => { const x = Number(v); return (v === '' || v == null || isNaN(x)) ? '' : fmt(Math.round(x)) }
   const filtered = rows.filter((r) => !busca.trim() || norm(r.cliente + ' ' + r.orig).indexOf(norm(busca)) >= 0)
   const tot = filtered.reduce((a, r) => ({ uSS: a.uSS + r.uSS, usdSS: a.usdSS + r.usdSS, uFW: a.uFW + r.uFW, usdFW: a.usdFW + r.usdFW }), { uSS: 0, usdSS: 0, uFW: 0, usdFW: 0 })
-  const exportar = () => { const aoa = [['Cliente', 'Estado', 'Unid SS27', 'SS27 USD', 'Unid FW27', 'FW27 USD', 'En Monday SS27', 'Order Type', 'Logística', 'XFD', 'Original'], ...filtered.map((r) => { const m = matchMon(r); return [r.cliente, r.estado, r.uSS, r.usdSS, r.uFW, r.usdFW, m.hit ? (m.n + ' órd.' + (m.cob ? ' / ' + m.cob + ' cob.' : '')) : 'no mapeado', m.tipos.join(', '), m.logs.join(', '), m.xf, r.orig] }), ['TOTAL', '', tot.uSS, tot.usdSS, tot.uFW, tot.usdFW, '', '', '', '', '']]; exportXlsx(aoa, 'Comparativo_HOKA_SS27_FW27.xlsx') }
+  const exportar = () => { const aoa = [['Cliente', 'Unid SS27', 'SS27 USD', 'Unid FW27', 'FW27 USD', 'En Monday SS27', 'Order Type', 'Logística', 'XFD', 'Original'], ...filtered.map((r) => { const m = matchMon(r); return [r.cliente, r.uSS, r.usdSS, r.uFW, r.usdFW, m.hit ? (m.n + ' órd.' + (m.cob ? ' / ' + m.cob + ' cob.' : '')) : 'no mapeado', m.tipos.join(', '), m.logs.join(', '), m.xf, r.orig] }), ['TOTAL', tot.uSS, tot.usdSS, tot.uFW, tot.usdFW, '', '', '', '', '']]; exportXlsx(aoa, 'Comparativo_HOKA_SS27_FW27.xlsx') }
   const pct = (v) => (v === '' || v == null || isNaN(Number(v))) ? '' : ((v >= 0 ? '+' : '') + Math.round(v * 100) + '%')
   return (
     <div style={{ marginTop: 14 }}>
@@ -6181,21 +6182,20 @@ function CompHokaScreen() {
           <div className="tablewrap" style={{ maxHeight: '72vh', overflow: 'auto' }}>
             <table className="vfix gridcols" style={{ fontSize: 12, minWidth: 1100 }}>
               <thead>
-                <tr><th className="l" rowSpan={2}>Cliente</th><th className="l" rowSpan={2}>Estado</th><th colSpan={3} style={{ background: '#eef6fb' }}>SS27</th><th colSpan={3} style={{ background: '#fdf3ec' }}>FW27</th><th className="l" rowSpan={2}>En Monday</th><th className="l" rowSpan={2}>Order Type</th><th className="l" rowSpan={2}>Logística</th><th className="l" rowSpan={2}>XFD</th></tr>
-                <tr><th style={{ background: '#eef6fb' }}>Pedidos</th><th style={{ background: '#eef6fb' }}>Unid.</th><th style={{ background: '#eef6fb' }}>USD</th><th style={{ background: '#fdf3ec' }}>Pedidos</th><th style={{ background: '#fdf3ec' }}>Unid.</th><th style={{ background: '#fdf3ec' }}>USD</th></tr>
+                <tr><th className="l" rowSpan={2} style={{ position: 'sticky', left: 0, zIndex: 3, background: '#f7fafb', minWidth: 190 }}>Cliente</th><th colSpan={2} style={{ background: '#eef6fb' }}>SS27 (Master)</th><th colSpan={2} style={{ background: '#fdf3ec' }}>FW27 (Master)</th><th colSpan={4} style={{ background: '#e8f0fe', color: '#0e7490' }}>En Monday · SS27</th></tr>
+                <tr><th style={{ background: '#eef6fb' }}>Unid.</th><th style={{ background: '#eef6fb' }}>USD</th><th style={{ background: '#fdf3ec' }}>Unid.</th><th style={{ background: '#fdf3ec' }}>USD</th><th style={{ background: '#eef2f7' }}>Órdenes</th><th className="l" style={{ background: '#eef2f7' }}>Order Type</th><th className="l" style={{ background: '#eef2f7' }}>Logística</th><th className="l" style={{ background: '#eef2f7' }}>XFD</th></tr>
               </thead>
               <tbody>
                 {filtered.map((r, i) => { const m = matchMon(r); return <tr key={i}>
-                  <td className="l" style={{ fontWeight: 600 }}>{r.cliente}{r.orig ? <div className="unit" style={{ fontSize: 10 }}>{r.orig}</div> : null}</td>
-                  <td className="l"><span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: bU(r.estado) === 'NUEVO' ? '#e7f4ea' : '#eef2f7', color: bU(r.estado) === 'NUEVO' ? '#2e7d32' : '#555' }}>{r.estado || '—'}</span></td>
-                  <td className="tot">{r.pedSS}</td><td className="tot">{fmt(r.uSS)}</td><td className="tot" style={{ fontWeight: 700 }}>{money(r.usdSS)}</td>
-                  <td className="tot">{r.pedFW}</td><td className="tot">{fmt(r.uFW)}</td><td className="tot" style={{ fontWeight: 700 }}>{money(r.usdFW)}</td>
+                  <td className="l" style={{ fontWeight: 600, position: 'sticky', left: 0, zIndex: 1, background: '#fff' }}>{r.cliente}{r.orig ? <div className="unit" style={{ fontSize: 10 }}>{r.orig}</div> : null}</td>
+                  <td className="tot">{fmt(r.uSS)}</td><td className="tot" style={{ fontWeight: 700 }}>{money(r.usdSS)}</td>
+                  <td className="tot">{fmt(r.uFW)}</td><td className="tot" style={{ fontWeight: 700 }}>{money(r.usdFW)}</td>
                   <td className="l">{m.hit ? <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: '#e7f4ea', color: '#2e7d32' }}>✓ {m.n} órd.{m.cob ? ` · ${m.cob} cob.` : ''}</span> : <span style={{ fontSize: 11, color: '#999' }}>—</span>}</td>
                   <td className="l">{m.tipos.length ? m.tipos.map((t, j) => <span key={j} style={{ marginRight: 3 }}>{monPill(t, 'tipo')}</span>) : ''}</td>
                   <td className="l">{m.logs.length ? m.logs.map((t, j) => <span key={j} style={{ marginRight: 3 }}>{monPill(t, 'log')}</span>) : ''}</td>
                   <td className="l">{m.xf || ''}</td>
                 </tr> })}
-                <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l">TOTAL ({filtered.length})</td><td></td><td></td><td className="tot">{fmt(tot.uSS)}</td><td className="tot">{money(tot.usdSS)}</td><td></td><td className="tot">{fmt(tot.uFW)}</td><td className="tot">{money(tot.usdFW)}</td><td></td><td></td><td></td><td></td></tr>
+                <tr style={{ fontWeight: 800, background: '#f3f6fa' }}><td className="l" style={{ position: 'sticky', left: 0, zIndex: 1, background: '#f3f6fa' }}>TOTAL ({filtered.length})</td><td className="tot">{fmt(tot.uSS)}</td><td className="tot">{money(tot.usdSS)}</td><td className="tot">{fmt(tot.uFW)}</td><td className="tot">{money(tot.usdFW)}</td><td></td><td></td><td></td><td></td></tr>
               </tbody>
             </table>
           </div>}
