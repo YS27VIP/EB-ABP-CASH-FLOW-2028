@@ -5708,7 +5708,7 @@ function MondayTracking() {
 
 // ===== Cash Out (cuentas por pagar / compras) y Cash In (cuentas por cobrar / ventas). Órdenes de Monday + cuotas. =====
 const COBROS_HEAD = ['Name', 'Status', 'Order Type', 'Temporada', 'Marca', 'Término Marca', 'Cliente', 'Termino', 'Units', 'Costo Marca', 'Cost', 'COST EUR', 'Cost USD', 'Price', 'Customer XFD', 'ETA', 'Estimated Delivery']
-const PAGOS_HEAD = ['Fecha', 'Nivel', 'Entidad', 'Orden', 'Monto', 'Semana', 'Comentario']
+const PAGOS_HEAD = ['Fecha', 'Nivel', 'Entidad', 'Orden', 'Monto', 'Semana', 'Comentario', 'Registrado por', 'Registrado el']
 function CobrosScreen() {
   const [rows, setRows] = useState([]); const [logOut, setLogOut] = useState([]); const [logIn, setLogIn] = useState([])
   const [load, setLoad] = useState(true); const [err, setErr] = useState(''); const [saving, setSaving] = useState(false); const [upd, setUpd] = useState(false); const [msg, setMsg] = useState(null); const [busca, setBusca] = useState('')
@@ -5811,7 +5811,7 @@ function CobrosScreen() {
     if (form.nivel === 'Orden' && !form.orden) { setMsg({ t: 'bad', x: 'Elige la orden (o cambia el nivel a "' + entLbl + '").' }); return }
     setSavingPago(true); setMsg(null)
     try {
-      const nuevo = { Fecha: form.fecha, Nivel: form.nivel, Entidad: form.entidad, Orden: form.nivel === 'Orden' ? form.orden : '', Monto: m, Semana: form.semana, Comentario: form.comentario }
+      const nuevo = { Fecha: form.fecha, Nivel: form.nivel, Entidad: form.entidad, Orden: form.nivel === 'Orden' ? form.orden : '', Monto: m, Semana: form.semana, Comentario: form.comentario, 'Registrado por': (getName() || getEmail() || ''), 'Registrado el': new Date().toISOString().slice(0, 16).replace('T', ' ') }
       const arr = [...curLog, nuevo]; await writeLog(arr); setCurLog(arr)
       setForm((f) => ({ ...f, monto: '', semana: '', comentario: '' })); setMsg({ t: 'ok', x: (esOut ? 'Pago' : 'Cobro') + ' registrado.' })
     } catch (e) { setMsg({ t: 'bad', x: 'No se pudo registrar: ' + (e && e.message) }) }
@@ -5902,8 +5902,8 @@ function CobrosScreen() {
           <div className="sub no-ayuda" style={{ fontWeight: 700, marginBottom: 6 }}>{esOut ? 'Pagos' : 'Cobros'} registrados ({curLog.length})</div>
           <div className="tablewrap" style={{ maxHeight: '28vh' }}>
             <table className="vfix gridcols" style={{ fontSize: 12, minWidth: 760 }}>
-              <thead><tr><th className="l">Fecha</th><th className="l">Nivel</th><th className="l">{entLbl}</th><th className="l">Orden</th><th>Monto</th><th className="l">Semana</th><th className="l">Comentario</th><th></th></tr></thead>
-              <tbody>{curLog.map((p, i) => <tr key={i}><td className="l">{p.Fecha}</td><td className="l">{p.Nivel}</td><td className="l">{p.Entidad}</td><td className="l">{p.Orden}</td><td className="tot" style={{ fontWeight: 700 }}>{money(p.Monto)}</td><td className="l">{p.Semana}</td><td className="l">{p.Comentario}</td><td><button className="btn" style={{ padding: '2px 8px' }} onClick={() => borrarPago(i)} title="Borrar">🗑</button></td></tr>)}</tbody>
+              <thead><tr><th className="l">Fecha</th><th className="l">Nivel</th><th className="l">{entLbl}</th><th className="l">Orden</th><th>Monto</th><th className="l">Semana</th><th className="l">Comentario</th><th className="l">Registrado por</th><th className="l">Registrado el</th><th></th></tr></thead>
+              <tbody>{curLog.map((p, i) => <tr key={i}><td className="l">{p.Fecha}</td><td className="l">{p.Nivel}</td><td className="l">{p.Entidad}</td><td className="l">{p.Orden}</td><td className="tot" style={{ fontWeight: 700 }}>{money(p.Monto)}</td><td className="l">{p.Semana}</td><td className="l">{p.Comentario}</td><td className="l sub2">{p['Registrado por'] || ''}</td><td className="l sub2">{p['Registrado el'] || ''}</td><td><button className="btn" style={{ padding: '2px 8px' }} onClick={() => borrarPago(i)} title="Borrar">🗑</button></td></tr>)}</tbody>
             </table>
           </div>
         </div>}
