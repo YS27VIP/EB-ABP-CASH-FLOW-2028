@@ -6148,7 +6148,7 @@ function FlujoScreen() {
 // ===== Sección: Resumen HOKA SS27 vs FW27 por cliente (del Excel del script) cruzado con estatus de Monday. =====
 const CH_HOKA = ['Cliente', 'Estado', 'Pedidos SS27', 'Unidades SS27', 'SS27 USD', 'Pedidos FW27', 'Unidades FW27', 'FW27 USD', 'Crec USD', 'Diferencia', 'Nombre original en el pedido']
 function CompHokaScreen() {
-  const [rows, setRows] = useState([]); const [mon, setMon] = useState({}); const [load, setLoad] = useState(true); const [abierto, setAbierto] = useState(false); const [busca, setBusca] = useState('')
+  const [rows, setRows] = useState([]); const [mon, setMon] = useState({}); const [load, setLoad] = useState(true); const [abierto, setAbierto] = useState(true); const [busca, setBusca] = useState('')
   const bU = (b) => String(b || '').trim().toUpperCase()
   const norm = (s) => bU(s).replace(/[.,]/g, '').replace(/\b(S A S|S A|SAS|SA|C A|CA|INC|LLC|LTDA|SRL)\b/g, '').replace(/\s+/g, ' ').trim()
   useEffect(() => { (async () => {
