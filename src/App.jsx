@@ -216,6 +216,30 @@ function refCat(marca, cli, cat) {
   return tbl[key][upper(cat)] || null
 }
 
+// LISTA ÚNICA DE CLIENTES POR MARCA (consistente en TODA la empresa).
+// Unión: histórico 2025/2026 + Cap_Ventas (2028) + clientes nuevos (addcli) + Master_2026 (solo Energy Brands) + TUMAR.
+// Dedup por normCliente. Todas las vistas deben usar esta función para que la lista sea la misma en todos lados.
+function clientesMarca(mca, empresa, src) {
+  const { hist, ventas, master, tpCli } = src || {}
+  const set = new Set()
+  const A = (c) => { const s = String(c || '').trim(); if (s) set.add(s) }
+  ;(hist || []).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; A(r[8]) })
+  ;(ventas || []).forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; A(r[1]) })
+  try { const add = JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}'); (add[mca] || []).forEach(A) } catch { }
+  if (tpCli && tpCli.clientes && tpCli.clientes[upper(mca)]) Object.keys(tpCli.clientes[upper(mca)]).forEach(A)
+  if (upper(empresa) === 'ENERGY BRANDS') (master || []).forEach((r) => { if (upper(r[0]) !== upper(mca)) return; A(r[3]) })
+  const seen = {}, out = []
+  ;[...set].sort((a, b) => a.localeCompare(b)).forEach((c) => { const k = normCliente ? normCliente(c) : upper(c); if (!seen[k]) { seen[k] = 1; out.push(c) } })
+  return out
+}
+// Cache de Master_2026 en memoria (una sola lectura compartida por todas las vistas).
+let _masterCache = null, _masterAt = 0, _masterPromise = null
+async function gMaster2026() {
+  if (_masterCache && Date.now() - _masterAt < 300000) return _masterCache
+  if (!_masterPromise) _masterPromise = (async () => { try { const j = await gReadTab('Master_2026'); const v = (j && j.ok && j.values) ? j.values.slice(1) : []; _masterCache = v; _masterAt = Date.now(); return v } catch { return [] } finally { _masterPromise = null } })()
+  return _masterPromise
+}
+
 /* Gastos administrativos: centros de costo por defecto (código sub-rubro · nombre). Compartidos por todas las SBU. */
 const DEFAULT_GADMIN = [
   ['101', 'SALARIO'], ['103', 'PERFORMANCE BONO'], ['104', 'CARGA SOCIAL Y PASIVO LABORAL'], ['105', 'CAPACITACIONES'], ['106', 'SELECCIÓN DE PERSONAL'], ['107', 'ATENCIONES / CLIENTES / PROVEEDORES'], ['108', 'MEMBRESÍA TARJETA DE CRÉDITO'], ['109', 'PLAN CELULAR'], ['110', 'BENEFICIOS - SEGURO DE SALUD'], ['111', 'SEGURIDAD'], ['112', 'BENEFICIO - GIFT CARD ANNUAL'], ['114', 'GASTOS DE OFICINA'], ['115', 'ALQUILER OFICINA'], ['116', 'AGUA / LUZ'], ['117', 'INTERNET'], ['118', 'TELÉFONO OFICINA'], ['119', 'CARRIER / MENSAJERÍA'], ['120', 'LIMPIEZA'], ['121', 'REPARACIONES Y MANTENIMIENTOS'], ['122', 'CAFETERÍA - INSUMOS'], ['123', 'ACARREO / TRANSFERENCIA DE INVENTARIO'], ['124', 'SEGUROS'], ['125', 'CONTABLE - MICROSOFT 365 / LICENCIAS ADOBE'], ['126', 'SALESFORCE'], ['127', 'SISTEMA DE FACTURACIÓN ELECTRÓNICA'], ['128', 'ASESORÍA LEGAL'], ['129', 'ASESORÍA CONTABLE'], ['130', 'ASESORÍA FISCALES'], ['131', 'SERVICIOS DE RRHH'], ['132', 'SERVICIOS DE IT'], ['133', 'HONORARIOS PROFESIONALES'], ['134', 'OTROS'],
@@ -1497,6 +1521,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoH
   const [hist, setHist] = useState([])
   const [ventas, setVentas] = useState([])
   const [tpCli, setTpCli] = useState(null) // TUMAR: clientes reales de TUMAR Performance
+  const [master2026, setMaster2026] = useState([])
+  useEffect(() => { gMaster2026().then(setMaster2026) }, [])
   const [producto, setProducto] = useState([])
   const [cats, setCats] = useState({})
   const [temp, setTemp] = useState({})
@@ -1553,15 +1579,8 @@ function CashFlowForm({ role, rubro, usuario, empresa, sbus, fixedMarca, espejoH
   const logTotalMes = (mca) => { const a = logVentaMes(mca), b = logMuestrasMes(mca), c = logMantMes(mca); return MESES.map((_, m) => a[m] + b[m] + c[m]) }
   const logisticaMes = (mca) => logTotalMes(mca) // el total (venta + muestras + mantenimiento) alimenta la línea Logística de Costos Operativos
 
-  // Clientes de una marca: histórico 2025/2026 + nuevos capturados en Ventas (2028)
-  const clientesDe = (mca) => {
-    const set = new Set()
-    hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(mca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) set.add(cli) })
-    ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (cli) set.add(cli) })
-    try { const add = JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}'); (add[mca] || []).forEach((c) => { if (c) set.add(c) }) } catch { }
-    if (empresa === 'TUMAR' && tpCli && tpCli.clientes && tpCli.clientes[upper(mca)]) Object.keys(tpCli.clientes[upper(mca)]).forEach((c) => { if (c) set.add(c) }) // clientes reales de TUMAR Performance
-    return [...set].sort((a, b) => a.localeCompare(b))
-  }
+  // Clientes de una marca: lista ÚNICA compartida (histórico + Ventas + nuevos + Master_2026 + TUMAR)
+  const clientesDe = (mca) => clientesMarca(mca, empresa, { hist, ventas, master: master2026, tpCli })
 
   const key = (mca, concepto, mi) => `${mca}|${concepto}|${mi}`
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }))
@@ -2411,13 +2430,10 @@ function ReporteScreen({ empresa, sbus }) {
   const histAll = (() => { const s = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) s.add(upper(cli)) }); return s })()
   const esNew = (cli) => !histAll.has(upper(cli))
   const addcli = (() => { try { return JSON.parse(localStorage.getItem(`addcli_${empresa}`) || '{}') } catch { return {} } })()
-  // Universo = clientes que participan en la compra 2028: con unidades > 0, con plazo definido, o nuevos agregados en Ventas.
-  const clientesDe = (mca) => {
-    const set = new Set()
-    ventas.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli || cli.toUpperCase().startsWith('VIAJES')) return; let s = 0; for (let m = 0; m < 12; m++) s += Math.max(0, num(r[4 + m])); if (s > 0 || cf[`TERM|${mca}|${cli}`]) set.add(cli) })
-    ;(addcli[mca] || []).forEach((c) => { if (c) set.add(c) }) // clientes NUEVOS agregados en Ventas (aunque aún no tengan unidades)
-    return [...set].sort((a, b) => a.localeCompare(b))
-  }
+  const [master2026, setMaster2026] = useState([])
+  useEffect(() => { gMaster2026().then(setMaster2026) }, [])
+  // Lista ÚNICA compartida de clientes por marca (misma en todas las vistas).
+  const clientesDe = (mca) => clientesMarca(mca, empresa, { hist, ventas, master: master2026 })
   const term = (mca, cli) => cf[`TERM|${mca}|${cli}`] || ''
   const BUCKETS = ['Cash', '30 días', '60 días', '90 días', '120 días', '150 días', '180 días', 'Intercompañía']
   const BCOL = { 'Cash': '#0f766e', '30 días': '#2563eb', '60 días': '#7c3aed', '90 días': '#b45309', '120 días': '#be185d', '150 días': '#9a6a1a', '180 días': '#b91c1c', 'Intercompañía': '#64748b', 'Sin plazo': '#cbd5e1' }
@@ -3744,13 +3760,15 @@ function AprobacionesForm({ empresa, sbus }) {
   const [logd, setLogd] = useState({})
   const [cf, setCf] = useState({})
   const [hist, setHist] = useState([]); const [ven, setVen] = useState([])
+  const [master2026, setMaster2026] = useState([])
+  useEffect(() => { gMaster2026().then(setMaster2026) }, [])
   const [aprob, setAprob] = useState(() => { try { return JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}') } catch { return {} } })
   const [greq, setGreq] = useState(() => { try { return JSON.parse(localStorage.getItem(`gadmin_req_${empresa}`) || '{}') } catch { return {} } })
   const [msg, setMsg] = useState(null)
   useEffect(() => { try { setLogd(JSON.parse(localStorage.getItem(`logcost_${empresa}`) || '{}')) } catch { } try { setCf(JSON.parse(localStorage.getItem(`cf_${empresa}`) || '{}')) } catch { } try { setAprob(JSON.parse(localStorage.getItem(`aprob_${empresa}`) || '{}')) } catch { } try { setGreq(JSON.parse(localStorage.getItem(`gadmin_req_${empresa}`) || '{}')) } catch { } (async () => { try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { } try { const jv = await gReadTab('Cap_Ventas'); if (jv && jv.ok && jv.values) setVen(jv.values.slice(1)) } catch { } })() }, [empresa])
   const histAll = (() => { const s = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa)) return; if (upper(r[3]).indexOf('UNIDAD') < 0) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) s.add(upper(cli)) }); return s })()
   const esNew = (cli) => !histAll.has(upper(cli))
-  const clientesDe = (mca) => { const out = new Set(); ven.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(mca)) return; const cli = String(r[1] || '').trim(); if (!cli || cli.toUpperCase().startsWith('VIAJES')) return; let s = 0; for (let i = 0; i < 12; i++) s += Math.max(0, num(r[4 + i])); if (s > 0) out.add(cli) }); return [...out].sort((a, b) => a.localeCompare(b)) }
+  const clientesDe = (mca) => clientesMarca(mca, empresa, { hist, ventas: ven, master: master2026 })
   const g = (k) => num(logd[k])
   const isAprob = (mca) => !!aprob[`LOGISTICA|${mca}`]
   const toggle = (mca) => { const next = { ...aprob, [`LOGISTICA|${mca}`]: !isAprob(mca) }; setAprob(next); saveEstado(empresa, 'aprob', next); setMsg({ t: 'ok', x: (next[`LOGISTICA|${mca}`] ? 'Aprobado' : 'Aprobación quitada') + ' · ' + mca + '. Se refleja en Logística.' }) }
@@ -9148,7 +9166,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
   }
   const [catPct, setCatPct] = useState(() => { try { return JSON.parse(localStorage.getItem('catpct_' + empresa) || '{}') } catch { return {} } })
   useEffect(() => { try { localStorage.setItem('catpct_' + empresa, JSON.stringify(catPct)) } catch { } }, [catPct, empresa])
-  const clientes = (() => { const set = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(marca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) set.add(cli) }); ventasR.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; const cli = String(r[1] || '').trim(); if (cli) set.add(cli) }); try { const add = JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}'); (add[marca] || []).forEach((c) => { if (c) set.add(c) }) } catch { } const base = [...set].sort((a, b) => a.localeCompare(b)); const nmap = {}; base.forEach((c) => { nmap[normCliente ? normCliente(c) : upper(c)] = true }); const extra = []; masterClientesDe(marca).forEach((c) => { const k = normCliente ? normCliente(c) : upper(c); if (!nmap[k]) { nmap[k] = true; extra.push(c) } }); return [...base, ...extra.sort((a, b) => a.localeCompare(b))] })()
+  const clientes = clientesMarca(marca, empresa, { hist, ventas: ventasR, master: masterRef })
   const pctKey = (cli, cat) => cli + '|' + marca + '|' + cat
   const setPct = (cli, cat, v) => setCatPct({ ...catPct, [pctKey(cli, cat)]: v })
   async function guardar() {
@@ -9245,6 +9263,8 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const esInt = (cli) => !!interno[marca + '|' + cli]
   const toggleInt = (cli) => { const next = { ...interno, [marca + '|' + cli]: !esInt(cli) }; setInterno(next); saveEstado(empresa, 'interno', next) }
   const [baseCli, setBaseCli] = useState([]) // catálogo Base_Clientes (copia del EBP)
+  const [master2026, setMaster2026] = useState([])
+  useEffect(() => { gMaster2026().then(setMaster2026) }, [])
   const [tpCli, setTpCli] = useState(null) // TUMAR: clientes + unidades 2026 reales de TUMAR Performance
   useEffect(() => { if (empresa === 'TUMAR') { (async () => { try { setTpCli(await gTumarClientes()) } catch { } })() } }, [empresa])
   const [nuevoCli, setNuevoCli] = useState('')
@@ -9317,7 +9337,11 @@ function ProjectionForm({ role, usuario, empresa, sbus, fixedMarca }) {
   // Clientes semilla por empresa (ej. TUMAR, del Excel) que aún no están en histórico/hoja/agregados.
   const yaEn2 = new Set([...histClientes, ...addedFor, ...desdeHoja].map((c) => upper(c)))
   const seedCli = (SEED_CLIENTES[empresa] || []).filter((c) => !yaEn2.has(upper(c)))
-  let clientes = [...histClientes, ...addedFor, ...desdeHoja, ...seedCli]
+  // Clientes del Master_2026 (solo Energy Brands) que aún no están en ninguna de las fuentes anteriores: lista ÚNICA en toda la empresa.
+  const masterCliRaw = (upper(empresa) === 'ENERGY BRANDS') ? [...new Set(master2026.filter((r) => upper(r[0]) === upper(marca)).map((r) => String(r[3] || '').trim()).filter(Boolean))] : []
+  const yaEn3 = new Set([...histClientes, ...addedFor, ...desdeHoja, ...seedCli].map((c) => upper(c)))
+  const masterCli = masterCliRaw.filter((c) => !yaEn3.has(upper(c))).sort((a, b) => a.localeCompare(b))
+  let clientes = [...histClientes, ...addedFor, ...desdeHoja, ...seedCli, ...masterCli]
   if (useVend) clientes = clientes.slice().sort((a, b) => vendOf(a) - vendOf(b)) // agrupa por vendedor (V1 arriba, V2 abajo)
   const esNuevo = (cli) => !histSet.has(upper(cli)) // sin histórico 2026 → unidades 2028 manuales
   const g = (cli) => num(growth[cli + '|' + marca])
