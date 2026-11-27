@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import './App.css'
 // Rastreador global de "cambios sin guardar": lo marcan las celdas de captura y lo limpia Guardar.
 const ABP_DIRTY = { on: false }
@@ -9113,10 +9113,42 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
   const suma = lista.reduce((s, o) => s + num(o.peso), 0)
   // Clientes de la marca (para el % por cliente) + referencia FW26/SS26
   const [hist, setHist] = useState([]); const [ventasR, setVentasR] = useState([])
-  useEffect(() => { (async () => { try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { } try { const j2 = await gReadTab('Cap_Ventas'); if (j2 && j2.ok && j2.values) setVentasR(j2.values.slice(1)) } catch { } })() }, [empresa])
+  const [masterRef, setMasterRef] = useState([])
+  useEffect(() => { (async () => { try { const j = await gHistorico(); if (j && j.ok && j.values) setHist(j.values.slice(1)) } catch { } try { const j2 = await gReadTab('Cap_Ventas'); if (j2 && j2.ok && j2.values) setVentasR(j2.values.slice(1)) } catch { } try { const j3 = await gReadTab('Master_2026'); if (j3 && j3.ok && j3.values) setMasterRef(j3.values.slice(1)) } catch { } })() }, [empresa])
+  // Referencia real por cliente+categoría desde la pestaña Master_2026 (cantidad final despachada por marca·temporada·cliente·categoría ABP).
+  // Columnas Master_2026: MARCA(0) TEMPORADA(1) CANAL(2) CLIENTE(3) CODIGO(4) DESCRIPCION(5) CATEGORIA_ABP(6) CANTIDAD_FINAL(7)
+  const masterMap = useMemo(() => {
+    const m = {}
+    masterRef.forEach((r) => {
+      const mar = upper(r[0]); const temp = upper(r[1] || ''); const cli = String(r[3] || '').trim(); const cat = upper(r[6]); const q = num(r[7])
+      if (!mar || !cli || !cat || !q) return
+      const b = temp.indexOf('FW') >= 0 ? 'fw' : (temp.indexOf('SS') >= 0 ? 'ss' : null); if (!b) return
+      m[mar] = m[mar] || {}
+      const nk = normCliente ? normCliente(cli) : upper(cli)
+      m[mar][nk] = m[mar][nk] || { disp: cli, fw: {}, ss: {}, tfw: 0, tss: 0 }
+      m[mar][nk][b][cat] = (m[mar][nk][b][cat] || 0) + q
+      if (b === 'fw') m[mar][nk].tfw += q; else m[mar][nk].tss += q
+    })
+    return m
+  }, [masterRef])
+  // Clientes que vienen del master (por marca) para completar la lista de abajo.
+  const masterClientesDe = (mar) => { const tbl = masterMap[upper(mar)]; return tbl ? Object.values(tbl).map((e) => e.disp) : [] }
+  // Peso de la categoría por cliente, desde el master. % = uds de esa categoría / total del cliente, por temporada.
+  // Si el cliente no vendió esa categoría en una temporada, esa parte queda vacía (null).
+  const refMaster = (mar, cli, cat) => {
+    const tbl = masterMap[upper(mar)]; if (!tbl) return null
+    const nk = normCliente ? normCliente(cli) : upper(cli)
+    let key = tbl[nk] ? nk : Object.keys(tbl).find((k) => k === nk || (nk.length > 3 && (k.indexOf(nk) >= 0 || nk.indexOf(k) >= 0)))
+    if (!key) return null
+    const e = tbl[key]; const cu = upper(cat)
+    const fw = (e.tfw && e.fw[cu]) ? Math.round(e.fw[cu] / e.tfw * 100) : null
+    const ss = (e.tss && e.ss[cu]) ? Math.round(e.ss[cu] / e.tss * 100) : null
+    if (fw == null && ss == null) return null
+    return { fw, ss }
+  }
   const [catPct, setCatPct] = useState(() => { try { return JSON.parse(localStorage.getItem('catpct_' + empresa) || '{}') } catch { return {} } })
   useEffect(() => { try { localStorage.setItem('catpct_' + empresa, JSON.stringify(catPct)) } catch { } }, [catPct, empresa])
-  const clientes = (() => { const set = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(marca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) set.add(cli) }); ventasR.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; const cli = String(r[1] || '').trim(); if (cli) set.add(cli) }); try { const add = JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}'); (add[marca] || []).forEach((c) => { if (c) set.add(c) }) } catch { } return [...set].sort((a, b) => a.localeCompare(b)) })()
+  const clientes = (() => { const set = new Set(); hist.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[5]) !== upper(marca)) return; const y = String(r[1]); if (y !== '2025' && y !== '2026') return; const cli = String(r[8] || '').trim(); if (cli) set.add(cli) }); ventasR.forEach((r) => { if (upper(r[0]) !== upper(empresa) || upper(r[3]) !== upper(marca)) return; const cli = String(r[1] || '').trim(); if (cli) set.add(cli) }); try { const add = JSON.parse(localStorage.getItem('addcli_' + empresa) || '{}'); (add[marca] || []).forEach((c) => { if (c) set.add(c) }) } catch { } const base = [...set].sort((a, b) => a.localeCompare(b)); const nmap = {}; base.forEach((c) => { nmap[normCliente ? normCliente(c) : upper(c)] = true }); const extra = []; masterClientesDe(marca).forEach((c) => { const k = normCliente ? normCliente(c) : upper(c); if (!nmap[k]) { nmap[k] = true; extra.push(c) } }); return [...base, ...extra.sort((a, b) => a.localeCompare(b))] })()
   const pctKey = (cli, cat) => cli + '|' + marca + '|' + cat
   const setPct = (cli, cat, v) => setCatPct({ ...catPct, [pctKey(cli, cat)]: v })
   async function guardar() {
@@ -9170,7 +9202,7 @@ function CategoriasForm({ role, usuario, empresa, sbus, fixedMarca }) {
               {clientes.map((cli) => { const tot = lista.reduce((a, c) => a + num(catPct[pctKey(cli, c.cat)]), 0); const ok = Math.round(tot) === 100; const vacio = tot === 0; return <tr key={cli}><td className="l">{cli}</td>{lista.map((c) => { const ref = refCat(marca, cli, c.cat); return (
                 <td key={c.cat} style={{ textAlign: 'center' }}>
                   <div className="cell" style={{ display: 'inline-block' }}><input value={catPct[pctKey(cli, c.cat)] ?? ''} onChange={(e) => setPct(cli, c.cat, e.target.value)} inputMode="decimal" placeholder="%" style={{ width: 54 }} /></div>
-                  <div className="unit" style={{ fontSize: 10, marginTop: 3, whiteSpace: 'nowrap' }}>{ref ? <>ref FW26 {ref.fw != null ? ref.fw + '%' : '—'} · SS26 {ref.ss != null ? ref.ss + '%' : '—'}</> : 'ref —'}</div>
+                  <div className="unit" style={{ fontSize: 10, marginTop: 3, whiteSpace: 'nowrap', color: ref ? '#2563eb' : 'var(--muted)', fontWeight: ref ? 700 : 400 }}>{ref ? <>ref{ref.fw != null ? ' FW26 ' + ref.fw + '%' : ''}{ref.ss != null ? (ref.fw != null ? ' · ' : ' ') + 'SS26 ' + ref.ss + '%' : ''}</> : ''}</div>
                 </td>) })}<td className="tot" style={{ fontWeight: 800, color: vacio ? 'var(--muted)' : ok ? 'var(--ok)' : 'var(--bad)', background: vacio ? undefined : ok ? '#eef9f0' : '#fdeeee' }}>{vacio ? '—' : tot.toFixed(0) + '%'}{!vacio && (ok ? ' ✓' : ' ✗')}</td></tr> })}
             </tbody>
           </table>
